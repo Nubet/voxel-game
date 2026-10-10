@@ -51,6 +51,15 @@ public final class WorldChangeOverlay {
         return changes.size();
     }
 
+    public List<Change> changes() {
+        return changes.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparingInt(BlockPos::x)
+                        .thenComparingInt(BlockPos::y)
+                        .thenComparingInt(BlockPos::z)))
+                .map(entry -> new Change(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
     private static FarTilePos tile(BlockPos position, int tileSize) {
         if (tileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
         return new FarTilePos(Math.floorDiv(position.x(), tileSize), Math.floorDiv(position.z(), tileSize));
@@ -62,4 +71,6 @@ public final class WorldChangeOverlay {
     }
 
     public record FarTilePos(int x, int z) {}
+
+    public record Change(BlockPos position, byte value) {}
 }
