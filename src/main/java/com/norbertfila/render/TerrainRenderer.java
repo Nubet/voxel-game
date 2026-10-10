@@ -17,6 +17,7 @@ import org.lwjgl.system.MemoryStack;
 /** Intentionally tiny OpenGL backend. Resource ownership remains explicit. */
 public final class TerrainRenderer implements AutoCloseable {
     private final Map<ChunkPos, GpuMesh> meshes = new HashMap<>();
+    private final UploadQueue uploads = new UploadQueue();
     private final int matrixUniform;
     private int program;
     private boolean closed;
@@ -113,6 +114,28 @@ public final class TerrainRenderer implements AutoCloseable {
         }
     }
 
+    public void enqueueUpload(ChunkPos position, MeshData mesh) {
+        uploads.enqueue(position, mesh);
+    }
+
+    public UploadStats processUploads(long byteBudget, long timeBudgetNanos) {
+        if (byteBudget <= 0 || timeBudgetNanos <= 0) {
+            throw new IllegalArgumentException("Upload budgets must be positive");
+        }
+        long start = System.nanoTime();
+        long bytesUploaded = 0;
+        int uploadCount = 0;
+        while (true) {
+            UploadQueue.Request request = uploads.poll(byteBudget - bytesUploaded, uploadCount == 0);
+            if (request == null) break;
+            upload(request.position(), request.mesh());
+            bytesUploaded += request.bytes();
+            uploadCount++;
+            if (bytesUploaded >= byteBudget || System.nanoTime() - start >= timeBudgetNanos) break;
+        }
+        return new UploadStats(bytesUploaded, uploads.size(), System.nanoTime() - start, uploadCount);
+    }
+
     public void remove(ChunkPos position) {
         GpuMesh mesh = meshes.remove(Objects.requireNonNull(position));
         if (mesh != null) mesh.close();
@@ -140,4 +163,6 @@ public final class TerrainRenderer implements AutoCloseable {
         glDeleteProgram(program);
         meshes.clear();
     }
+
+    public record UploadStats(long bytesUploaded, int queueDepth, long uploadNanos, int uploadCount) {}
 }

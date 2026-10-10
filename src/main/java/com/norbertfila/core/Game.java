@@ -33,7 +33,7 @@ public final class Game {
                     BlockNeighborhood neighborhood = world.blockNeighborhood(position);
                     MeshData mesh =
                             mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
-                    renderer.upload(position, mesh);
+                    renderer.enqueueUpload(position, mesh);
                     vertices += mesh.vertexCount();
                     meshBytes += (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
                 }

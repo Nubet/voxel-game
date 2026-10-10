@@ -43,6 +43,8 @@ public final class GameLoop {
                 System.out.println("View demand center=" + update.center() + " sections=" + update.requested()
                         + " generated=" + update.generated() + " resident=" + chunkManager.residentCount());
             }
+            TerrainRenderer.UploadStats uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000);
+            metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

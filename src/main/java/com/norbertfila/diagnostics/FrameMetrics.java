@@ -10,6 +10,9 @@ public final class FrameMetrics {
     private double reportStartSeconds;
     private long frameCount;
     private double frameSeconds;
+    private long uploadBytes;
+    private long uploadNanos;
+    private int uploadQueueDepth;
 
     public FrameMetrics(int chunks, int vertices, long meshBytes, boolean debug, double startSeconds) {
         this.chunks = chunks;
@@ -32,6 +35,12 @@ public final class FrameMetrics {
         return frameCount == 0 ? 0.0 : frameSeconds * 1000.0 / frameCount;
     }
 
+    public void recordUploads(long bytes, int queueDepth, long nanos) {
+        uploadBytes += bytes;
+        uploadNanos += nanos;
+        uploadQueueDepth = queueDepth;
+    }
+
     public void reportIfDue(double nowSeconds) {
         double elapsedSeconds = nowSeconds - reportStartSeconds;
         if (elapsedSeconds < REPORT_INTERVAL_SECONDS) return;
@@ -39,13 +48,23 @@ public final class FrameMetrics {
         double frameTimeMillis = averageFrameTimeMillis();
         if (debug) {
             System.out.printf(
-                    "[debug] FPS: %.0f | frame: %.2f ms | sections: %d | vertices: %d | CPU mesh: %d bytes%n",
-                    fps, frameTimeMillis, chunks, vertices, meshBytes);
+                    "[debug] FPS: %.0f | frame: %.2f ms | sections: %d | vertices: %d | CPU mesh: %d bytes | GPU upload: %d bytes / %.2f ms | upload queue: %d%n",
+                    fps,
+                    frameTimeMillis,
+                    chunks,
+                    vertices,
+                    meshBytes,
+                    uploadBytes,
+                    uploadNanos / 1_000_000.0,
+                    uploadQueueDepth);
         } else {
             System.out.printf("FPS: %.0f | frame: %.2f ms | sections: %d%n", fps, frameTimeMillis, chunks);
         }
         frameCount = 0;
         frameSeconds = 0.0;
+        uploadBytes = 0;
+        uploadNanos = 0;
+        uploadQueueDepth = 0;
         reportStartSeconds = nowSeconds;
     }
 }
