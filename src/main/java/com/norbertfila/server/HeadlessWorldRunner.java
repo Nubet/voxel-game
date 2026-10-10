@@ -3,6 +3,7 @@ package com.norbertfila.server;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
@@ -47,7 +48,7 @@ public final class HeadlessWorldRunner {
         for (Command command : commands) {
             Objects.requireNonNull(command);
             if (command instanceof SetBlock setBlock) {
-                WorldEdit.Result result = edits.setBlock(setBlock.position(), setBlock.value());
+                BlockChangeResult result = edits.setBlock(setBlock.position(), setBlock.value());
                 if (result.changed()) {
                     changed++;
                     dirty.addAll(result.dirtyChunks());
