@@ -3,6 +3,7 @@ package com.norbertfila.interaction;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerPhysics;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -24,7 +25,14 @@ public final class BlockInteraction {
     }
 
     public Optional<BlockChangeResult> remove(
-            double originX, double originY, double originZ, double directionX, double directionY, double directionZ) {
+            PlayerController.Mode mode,
+            double originX,
+            double originY,
+            double originZ,
+            double directionX,
+            double directionY,
+            double directionZ) {
+        if (Objects.requireNonNull(mode) == PlayerController.Mode.SPECTATOR) return Optional.empty();
         return raycaster
                 .cast(world, originX, originY, originZ, directionX, directionY, directionZ, REACH)
                 .map(hit -> edit.setBlock(hit.block(), BlockId.AIR));
@@ -44,7 +52,7 @@ public final class BlockInteraction {
         Objects.requireNonNull(playerPosition);
         if (!BlockId.isValid(blockId))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
-        if (blockId == BlockId.AIR) return Optional.empty();
+        if (blockId == BlockId.AIR || mode == PlayerController.Mode.SPECTATOR) return Optional.empty();
         Optional<VoxelRaycaster.Hit> target =
                 raycaster.cast(world, originX, originY, originZ, directionX, directionY, directionZ, REACH);
         if (target.isEmpty()) return Optional.empty();
@@ -57,16 +65,13 @@ public final class BlockInteraction {
                 hit.block().z() + normal.z());
         if (!world.hasChunk(Coordinates.worldToChunk(position))
                 || world.getBlock(position).orElseThrow() != BlockId.AIR) return Optional.empty();
-        if (mode == PlayerController.Mode.SURVIVAL && overlapsPlayer(position, playerPosition)) return Optional.empty();
+        if (overlapsPlayer(position, playerPosition)) return Optional.empty();
         return Optional.of(edit.setBlock(position, blockId));
     }
 
     private static boolean overlapsPlayer(BlockPos block, PlayerState.Position player) {
-        return player.x() + PlayerPhysics.HALF_WIDTH > block.x()
-                && player.x() - PlayerPhysics.HALF_WIDTH < block.x() + 1.0
-                && player.y() + PlayerPhysics.HEIGHT > block.y()
-                && player.y() < block.y() + 1.0
-                && player.z() + PlayerPhysics.HALF_WIDTH > block.z()
-                && player.z() - PlayerPhysics.HALF_WIDTH < block.z() + 1.0;
+        return PlayerPhysics.body(player)
+                .intersects(
+                        new Aabb(block.x(), block.y(), block.z(), block.x() + 1.0, block.y() + 1.0, block.z() + 1.0));
     }
 }

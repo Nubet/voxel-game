@@ -27,7 +27,6 @@ class GameLoopTest {
         Camera camera = editingCamera();
         Hotbar hotbar = new Hotbar();
         PlayerController player = new PlayerController();
-        player.setMode(PlayerController.Mode.SURVIVAL);
         player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
 
         var result = GameLoop.updateBlockEditing(
@@ -58,7 +57,6 @@ class GameLoopTest {
     void placementUsesTheCurrentPlayerBodyRatherThanTheRenderedCameraPosition() {
         World world = editableWorld();
         PlayerController player = new PlayerController();
-        player.setMode(PlayerController.Mode.SURVIVAL);
         player.setPosition(new PlayerState.Position(8.5, 9, 7.5));
         Hotbar hotbar = new Hotbar();
         Camera camera = editingCamera();
@@ -67,7 +65,12 @@ class GameLoopTest {
         assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .isEmpty());
         assertEquals(0, world.changes().size());
-        player.setMode(PlayerController.Mode.SPECTATOR);
+        player.setMode(world, PlayerController.Mode.SPECTATOR);
+        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+                .isEmpty());
+        assertEquals(0, world.changes().size());
+        player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
+        assertTrue(player.setMode(world, PlayerController.Mode.CREATIVE));
         assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .orElseThrow()
                 .changed());
@@ -90,6 +93,21 @@ class GameLoopTest {
         assertTrue(removal.changed());
         assertEquals(BlockId.AIR, world.getBlock(new BlockPos(8, 9, 6)).orElseThrow());
         assertEquals(1, world.changes().size());
+    }
+
+    @Test
+    void spectatorClicksAndHotbarSelectionHaveNoEditingSideEffects() {
+        World world = editableWorld();
+        Hotbar hotbar = new Hotbar();
+        PlayerController player = new PlayerController();
+        player.setMode(world, PlayerController.Mode.SPECTATOR);
+        assertTrue(GameLoop.updateBlockEditing(
+                        editingCamera(), player, new BlockInteraction(world, 64), hotbar, false, true, true, 2)
+                .isEmpty());
+        assertEquals(0, hotbar.selectedSlot());
+        assertEquals(1, world.getChunk(new ChunkPos(0, 0, 0)).revision());
+        assertEquals(0, world.changes().size());
+        assertTrue(world.changes().drainDirtyTiles().isEmpty());
     }
 
     private static World editableWorld() {

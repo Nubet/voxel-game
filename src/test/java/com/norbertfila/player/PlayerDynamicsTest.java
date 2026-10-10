@@ -157,7 +157,6 @@ class PlayerDynamicsTest {
     private PlayerState scriptedMovement(int fps) {
         World world = flatWorld();
         PlayerController player = new PlayerController();
-        player.setMode(PlayerController.Mode.SURVIVAL);
         player.setPosition(standing().position());
         FixedSimulation simulation = new FixedSimulation(1.0 / 60, 8);
         int[] ticks = {0};
@@ -182,7 +181,7 @@ class PlayerDynamicsTest {
         return new PlayerState(new PlayerState.Position(.5, 1, .5), 0, 0, 0, true, 0);
     }
 
-    private static World flatWorld() {
+    static World flatWorld() {
         World world = new World();
         for (int x = -2; x <= 3; x++)
             for (int z = -2; z <= 3; z++)

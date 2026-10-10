@@ -63,6 +63,7 @@ public final class GameLoop {
                 window.framebufferSize(framebufferWidth, framebufferHeight);
                 if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
                     input.clearPlayerInput();
+                    player.clearInputGestures();
                     if (!sleepWhileMinimized()) return;
                     continue;
                 }
@@ -74,16 +75,14 @@ public final class GameLoop {
                             .info("Render distance changed to " + settingsPanel.renderDistance());
                 }
                 if (!settingsPanel.open() && input.focused() && input.toggleModePressed()) {
-                    player.setMode(
-                            player.mode() == PlayerController.Mode.SURVIVAL
-                                    ? PlayerController.Mode.SPECTATOR
-                                    : PlayerController.Mode.SURVIVAL);
-                    DiagnosticsLog.logger(GameLoop.class).info("Player mode changed to " + player.mode());
+                    player.requestNextMode();
                     input.clearPlayerInput();
                 }
                 boolean controlsBlocked = settingsPanel.open() || !input.focused();
-                if (controlsBlocked) input.clearPlayerInput();
-                else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
+                if (controlsBlocked) {
+                    input.clearPlayerInput();
+                    player.clearInputGestures();
+                } else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
                 ChunkPos playerChunk = playerChunk(player);
                 chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
                         input.peekPlayerTick(), FIXED_DELTA_SECONDS, camera.yaw(), camera.pitch()));
@@ -96,12 +95,19 @@ public final class GameLoop {
                     simulation.advance(deltaSeconds, fixedDelta -> {
                         if (chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
                                 input.peekPlayerTick(), fixedDelta, camera.yaw(), camera.pitch()))) {
+                            PlayerController.Mode before = player.mode();
+                            boolean wasFlying = player.flying();
                             player.tick(
                                     chunkManager.world(),
                                     input.nextPlayerTick(),
                                     fixedDelta,
                                     camera.yaw(),
                                     camera.pitch());
+                            if (player.mode() != before)
+                                DiagnosticsLog.logger(GameLoop.class).info("Player mode changed to " + player.mode());
+                            if (player.flying() != wasFlying)
+                                DiagnosticsLog.logger(GameLoop.class)
+                                        .info("Creative flight changed to " + player.flying());
                         } else player.pauseInterpolation();
                     });
                 }
@@ -112,7 +118,10 @@ public final class GameLoop {
                                 player,
                                 interaction,
                                 hotbar,
-                                controlsBlocked || input.settingsPressed(),
+                                controlsBlocked
+                                        || input.settingsPressed()
+                                        || input.toggleModePressed()
+                                        || player.modeChangePending(),
                                 input.leftMousePressed(),
                                 input.rightMousePressed(),
                                 input.hotbarSlotPressed())
@@ -168,13 +177,14 @@ public final class GameLoop {
             boolean removePressed,
             boolean placePressed,
             int slotPressed) {
-        if (blocked) return Optional.empty();
+        if (blocked || player.mode() == PlayerController.Mode.SPECTATOR) return Optional.empty();
         if (slotPressed >= 0) hotbar.select(slotPressed);
         if (!removePressed && (!placePressed || hotbar.selectedBlock() == BlockId.AIR)) return Optional.empty();
         var origin = camera.position();
         var direction = camera.direction();
         if (removePressed) {
-            return interaction.remove(origin.x(), origin.y(), origin.z(), direction.x(), direction.y(), direction.z());
+            return interaction.remove(
+                    player.mode(), origin.x(), origin.y(), origin.z(), direction.x(), direction.y(), direction.z());
         }
         return interaction.place(
                 origin.x(),

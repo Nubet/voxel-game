@@ -14,6 +14,10 @@ public final class PlayerPhysics {
     // Calibrated for a ~1.25-block apex with the production 1/60s semi-implicit step.
     public static final double JUMP_VELOCITY = 9.6;
     public static final double JUMP_COOLDOWN_SECONDS = 0.5;
+    public static final double FLIGHT_SPEED = 10.92;
+    private static final double SPRINT_MULTIPLIER = 1.3;
+    private static final double SPRINT_JUMP_IMPULSE = 4;
+    private static final double FLIGHT_DRAG = -Math.log(.6) / .05;
     private static final double GROUND_DRAG = -Math.log(.546) / .05;
     private static final double AIR_DRAG = -Math.log(.91) / .05;
     private static final double VERTICAL_DRAG = -Math.log(.98) / .05;
@@ -22,8 +26,35 @@ public final class PlayerPhysics {
 
     public PlayerState step(
             World world, PlayerState start, double inputX, double inputZ, boolean jump, double deltaSeconds) {
+        return step(world, start, inputX, inputZ, jump, false, 0, deltaSeconds);
+    }
+
+    public PlayerState step(
+            World world,
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sprint,
+            double yawDegrees,
+            double deltaSeconds) {
+        return resolve(
+                world, start, motion(start, inputX, inputZ, jump, sprint, yawDegrees, deltaSeconds), deltaSeconds);
+    }
+
+    public PlayerState fly(
+            World world,
+            PlayerState start,
+            double inputX,
+            double inputY,
+            double inputZ,
+            boolean sprint,
+            double deltaSeconds) {
+        return resolve(world, start, flightMotion(start, inputX, inputY, inputZ, sprint, deltaSeconds), deltaSeconds);
+    }
+
+    private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds) {
         Objects.requireNonNull(world);
-        Motion motion = motion(start, inputX, inputZ, jump, deltaSeconds);
         double moveX = motion.x * deltaSeconds, moveZ = motion.z * deltaSeconds;
         VoxelCollision.Result moved =
                 collision.move(world, body(start.position()), moveX, motion.y * deltaSeconds, moveZ);
@@ -35,8 +66,9 @@ public final class PlayerPhysics {
         double z = moved.blockedZ()
                 ? contactCenter(box.minZ(), box.maxZ(), moveZ)
                 : start.position().z() + moved.z();
+        double y = moved.blockedY() && motion.y > 0 ? belowFace(box.maxY(), HEIGHT) : box.minY();
         return new PlayerState(
-                new PlayerState.Position(x, box.minY(), z),
+                new PlayerState.Position(x, y, z),
                 moved.blockedX() ? 0 : motion.x,
                 moved.blockedY() ? 0 : motion.y,
                 moved.blockedZ() ? 0 : motion.z,
@@ -46,25 +78,55 @@ public final class PlayerPhysics {
 
     private static double contactCenter(double min, double max, double requested) {
         // Round outward if reconstructing the hitbox would cross the contacted face by one ULP.
-        if (requested > 0) {
-            double center = max - HALF_WIDTH;
-            return center + HALF_WIDTH > max ? Math.nextDown(center) : center;
-        }
+        if (requested > 0) return belowFace(max, HALF_WIDTH);
         double center = min + HALF_WIDTH;
         return center - HALF_WIDTH < min ? Math.nextUp(center) : center;
     }
 
+    private static double belowFace(double face, double offset) {
+        double position = face - offset;
+        return position + offset > face ? Math.nextDown(position) : position;
+    }
+
     public List<ChunkPos> requiredChunks(
             PlayerState start, double inputX, double inputZ, boolean jump, double deltaSeconds) {
-        Motion motion = motion(start, inputX, inputZ, jump, deltaSeconds);
+        return requiredChunks(start, inputX, inputZ, jump, false, 0, deltaSeconds);
+    }
+
+    public List<ChunkPos> requiredChunks(
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sprint,
+            double yawDegrees,
+            double deltaSeconds) {
+        return requiredChunks(
+                start, motion(start, inputX, inputZ, jump, sprint, yawDegrees, deltaSeconds), deltaSeconds);
+    }
+
+    public List<ChunkPos> requiredFlightChunks(
+            PlayerState start, double inputX, double inputY, double inputZ, boolean sprint, double deltaSeconds) {
+        return requiredChunks(start, flightMotion(start, inputX, inputY, inputZ, sprint, deltaSeconds), deltaSeconds);
+    }
+
+    private static List<ChunkPos> requiredChunks(PlayerState start, Motion motion, double deltaSeconds) {
         return VoxelCollision.requiredChunks(VoxelCollision.requiredRegion(
                 body(start.position()), motion.x * deltaSeconds, motion.y * deltaSeconds, motion.z * deltaSeconds));
     }
 
-    private static Motion motion(PlayerState start, double inputX, double inputZ, boolean jump, double deltaSeconds) {
+    private static Motion motion(
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sprint,
+            double yawDegrees,
+            double deltaSeconds) {
         Objects.requireNonNull(start);
         if (!Double.isFinite(inputX)
                 || !Double.isFinite(inputZ)
+                || !Double.isFinite(yawDegrees)
                 || !Double.isFinite(deltaSeconds)
                 || deltaSeconds <= 0) {
             throw new IllegalArgumentException("Physics values must be finite and delta must be positive");
@@ -76,18 +138,43 @@ public final class PlayerPhysics {
             inputZ /= length;
         }
         double drag = start.grounded() ? GROUND_DRAG : AIR_DRAG;
-        double acceleration = start.grounded() ? WALK_SPEED * drag : AIR_ACCELERATION;
+        double acceleration =
+                (start.grounded() ? WALK_SPEED * drag : AIR_ACCELERATION) * (sprint ? SPRINT_MULTIPLIER : 1);
         double decay = Math.exp(-drag * deltaSeconds);
         double response = -Math.expm1(-drag * deltaSeconds) / drag;
-        double x = start.velocityX() * decay + inputX * acceleration * response;
-        double z = start.velocityZ() * decay + inputZ * acceleration * response;
         double cooldown = Math.max(0, start.jumpCooldownSeconds() - deltaSeconds);
         boolean jumping = jump && start.grounded() && cooldown <= 1e-9;
+        double impulse = jumping && sprint ? SPRINT_JUMP_IMPULSE : 0;
+        double yaw = Math.toRadians(yawDegrees);
+        double x = (start.velocityX() + Math.cos(yaw) * impulse) * decay + inputX * acceleration * response;
+        double z = (start.velocityZ() + Math.sin(yaw) * impulse) * decay + inputZ * acceleration * response;
         double y = jumping ? JUMP_VELOCITY : start.velocityY();
         // Gravity before sweeping lets a stationary player detect downward floor contact every tick.
         y = y * Math.exp(-VERTICAL_DRAG * deltaSeconds)
                 + GRAVITY * (-Math.expm1(-VERTICAL_DRAG * deltaSeconds) / VERTICAL_DRAG);
         return new Motion(x, y, z, jumping ? JUMP_COOLDOWN_SECONDS : cooldown);
+    }
+
+    private static Motion flightMotion(
+            PlayerState start, double inputX, double inputY, double inputZ, boolean sprint, double dt) {
+        Objects.requireNonNull(start);
+        if (!Double.isFinite(inputX)
+                || !Double.isFinite(inputY)
+                || !Double.isFinite(inputZ)
+                || !Double.isFinite(dt)
+                || dt <= 0) {
+            throw new IllegalArgumentException("Flight values must be finite and delta must be positive");
+        }
+        double length = Math.hypot(Math.hypot(inputX, inputZ), inputY);
+        if (!Double.isFinite(length)) throw new IllegalArgumentException("Flight direction exceeds finite range");
+        double scale = FLIGHT_SPEED * (sprint ? 2 : 1) / Math.max(1, length);
+        double decay = Math.exp(-FLIGHT_DRAG * dt);
+        double response = -Math.expm1(-FLIGHT_DRAG * dt);
+        return new Motion(
+                start.velocityX() * decay + inputX * scale * response,
+                start.velocityY() * decay + inputY * scale * response,
+                start.velocityZ() * decay + inputZ * scale * response,
+                0);
     }
 
     private record Motion(double x, double y, double z, double jumpCooldownSeconds) {}

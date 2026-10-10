@@ -21,7 +21,6 @@ public final class Game {
             ViewDemand viewDemand = terrainDemand(terrainConfig);
             TerrainSource generator = new TerrainGenerator(0, terrainConfig);
             PlayerController player = new PlayerController();
-            player.setMode(PlayerController.Mode.SURVIVAL);
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             ChunkMesher mesher = new GreedyMesher();
             GameSettings settings = new GameSettings();

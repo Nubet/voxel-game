@@ -43,8 +43,9 @@ class BlockInteractionTest {
         assertEquals(BlockId.STONE, world.getBlock(support).orElseThrow());
         assertTrue(world.isSolid(placed));
 
-        BlockChangeResult removal =
-                interaction.remove(8.5, 8.5, 8.5, dx, dy, dz).orElseThrow();
+        BlockChangeResult removal = interaction
+                .remove(PlayerController.Mode.SURVIVAL, 8.5, 8.5, 8.5, dx, dy, dz)
+                .orElseThrow();
 
         assertTrue(removal.changed());
         assertEquals(BlockId.DIRT, removal.previous().orElseThrow());
@@ -123,7 +124,7 @@ class BlockInteractionTest {
     }
 
     @Test
-    void spectatorCanPlaceInsideItsPosition() {
+    void spectatorCannotPlaceOrRemoveEvenInsideItsPosition() {
         World world = worldWithBlock(new BlockPos(1, 1, 1));
         BlockInteraction interaction = new BlockInteraction(world, 8);
 
@@ -138,8 +139,12 @@ class BlockInteractionTest {
                         BlockId.STONE,
                         PlayerController.Mode.SPECTATOR,
                         new PlayerState.Position(.5, 1, 1.5))
-                .orElseThrow()
-                .changed());
+                .isEmpty());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.SPECTATOR, .5, 1.5, 1.5, 1, 0, 0)
+                .isEmpty());
+        assertEquals(0, world.changes().size());
+        assertEquals(1, world.getChunk(new ChunkPos(0, 0, 0)).revision());
     }
 
     @Test
@@ -150,12 +155,15 @@ class BlockInteractionTest {
         long revision = world.getChunk(new ChunkPos(0, 0, 0)).revision();
 
         assertTrue(interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SPECTATOR, DISTANT_PLAYER)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.CREATIVE, DISTANT_PLAYER)
                 .isEmpty());
         assertEquals(BlockId.STONE, world.getBlock(block).orElseThrow());
         assertEquals(revision, world.getChunk(new ChunkPos(0, 0, 0)).revision());
         assertEquals(0, world.changes().size());
-        assertTrue(interaction.remove(.5, 1.5, 1.5, 1, 0, 0).orElseThrow().changed());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.CREATIVE, .5, 1.5, 1.5, 1, 0, 0)
+                .orElseThrow()
+                .changed());
         assertEquals(BlockId.AIR, world.getBlock(block).orElseThrow());
     }
 
@@ -201,8 +209,12 @@ class BlockInteractionTest {
                 interaction
                         .place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
                         .isPresent());
-        if (reachable) interaction.remove(originX, 1.5, 1.5, 1, 0, 0);
-        assertEquals(reachable, interaction.remove(originX, 1.5, 1.5, 1, 0, 0).isPresent());
+        if (reachable) interaction.remove(PlayerController.Mode.SURVIVAL, originX, 1.5, 1.5, 1, 0, 0);
+        assertEquals(
+                reachable,
+                interaction
+                        .remove(PlayerController.Mode.SURVIVAL, originX, 1.5, 1.5, 1, 0, 0)
+                        .isPresent());
         assertEquals(
                 reachable ? BlockId.AIR : BlockId.STONE,
                 world.getBlock(new BlockPos(6, 1, 1)).orElseThrow());
@@ -217,17 +229,44 @@ class BlockInteractionTest {
         world.changes().drainDirtyTiles();
         BlockInteraction interaction = new BlockInteraction(world, 8);
 
-        assertTrue(interaction.remove(15.5, 1.5, 1.5, 1, 0, 0).isEmpty());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.SURVIVAL, 15.5, 1.5, 1.5, 1, 0, 0)
+                .isEmpty());
         assertTrue(interaction
                 .place(15.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
                 .isEmpty());
-        assertTrue(interaction.remove(16.5, 1.5, 1.5, 1, 0, 0).isEmpty());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.SURVIVAL, 16.5, 1.5, 1.5, 1, 0, 0)
+                .isEmpty());
         assertEquals(1, world.residentCount());
         assertEquals(0, world.getChunk(new ChunkPos(0, 0, 0)).revision());
         assertEquals(1, world.changes().size());
         assertEquals(BlockId.STONE, world.changes().get(new BlockPos(16, 1, 1)).orElseThrow());
         assertTrue(world.changes().drainDirtyTiles().isEmpty());
         assertFalse(world.isChunkRequested(new ChunkPos(1, 0, 0)));
+    }
+
+    @Test
+    void creativePlacementCannotEmbedThePlayerWhileRemovalIsAllowed() {
+        World world = worldWithBlock(new BlockPos(1, 1, 1));
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        assertTrue(interaction
+                .place(
+                        .5,
+                        1.5,
+                        1.5,
+                        1,
+                        0,
+                        0,
+                        BlockId.DIRT,
+                        PlayerController.Mode.CREATIVE,
+                        new PlayerState.Position(.5, 1, 1.5))
+                .isEmpty());
+        assertEquals(0, world.changes().size());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.CREATIVE, .5, 1.5, 1.5, 1, 0, 0)
+                .orElseThrow()
+                .changed());
     }
 
     private static World worldWithBlock(BlockPos position) {
