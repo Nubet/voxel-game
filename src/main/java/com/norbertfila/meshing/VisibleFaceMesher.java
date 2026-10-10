@@ -69,13 +69,13 @@ public final class VisibleFaceMesher implements ChunkMesher {
         };
     }
 
-    private static float[] color(byte block, int face) {
+    static float[] color(byte block, int face) {
         if (block == BlockId.GRASS) return face == 2 ? GRASS_TOP : GRASS_SIDE;
         if (block == BlockId.DIRT) return DIRT;
         return STONE;
     }
 
-    private static final class Floats {
+    static final class Floats {
         private float[] a;
         private int size;
 
