@@ -1,51 +1,56 @@
 package com.norbertfila.world;
 
 import com.norbertfila.meshing.BlockNeighborhood;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 
 public final class World {
-    private final Map<ChunkPos, Chunk> chunks = new HashMap<>();
+    private final ChunkStorage storage;
     private final Set<ChunkPos> requestedChunks = new HashSet<>();
 
+    public World() {
+        this(new ChunkStorage());
+    }
+
+    public World(ChunkStorage storage) {
+        this.storage = Objects.requireNonNull(storage);
+    }
+
     public void putChunk(ChunkPos position, Chunk chunk) {
-        chunks.put(Objects.requireNonNull(position), Objects.requireNonNull(chunk));
+        storage.put(Objects.requireNonNull(position), Objects.requireNonNull(chunk));
         requestedChunks.remove(position);
     }
 
     public Chunk getChunk(ChunkPos position) {
-        return chunks.get(position);
+        return storage.get(position);
     }
 
     public boolean hasChunk(ChunkPos position) {
-        return chunks.containsKey(position);
+        return storage.contains(position);
     }
 
     public Chunk removeChunk(ChunkPos position) {
         requestedChunks.remove(Objects.requireNonNull(position));
-        return chunks.remove(position);
+        return storage.remove(position);
     }
 
     public int residentCount() {
-        return chunks.size();
+        return storage.size();
     }
 
     public OptionalInt getBlock(BlockPos worldPosition) {
         Objects.requireNonNull(worldPosition);
-        Chunk chunk = chunks.get(Coordinates.worldToChunk(worldPosition));
+        Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
         if (chunk == null) return OptionalInt.empty();
         BlockPos local = Coordinates.worldToLocal(worldPosition);
         return OptionalInt.of(BlockId.toUnsignedInt(chunk.get(local.x(), local.y(), local.z())));
     }
 
     public void requestChunk(ChunkPos position) {
-        if (!chunks.containsKey(Objects.requireNonNull(position))) {
+        if (!storage.contains(Objects.requireNonNull(position))) {
             requestedChunks.add(position);
         }
     }
@@ -55,11 +60,7 @@ public final class World {
     }
 
     public List<ChunkPos> residentPositions() {
-        return chunks.keySet().stream()
-                .sorted(Comparator.comparingInt(ChunkPos::y)
-                        .thenComparingInt(ChunkPos::z)
-                        .thenComparingInt(ChunkPos::x))
-                .toList();
+        return storage.positions();
     }
 
     public BlockNeighborhood blockNeighborhood(ChunkPos position) {
@@ -79,7 +80,7 @@ public final class World {
     }
 
     private ChunkSnapshot snapshot(ChunkPos position) {
-        Chunk chunk = chunks.get(position);
+        Chunk chunk = storage.get(position);
         return chunk == null ? null : chunk.snapshot();
     }
 }

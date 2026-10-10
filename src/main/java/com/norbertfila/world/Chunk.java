@@ -4,6 +4,7 @@ import java.util.Objects;
 
 public final class Chunk {
     public static final int SIZE = 16;
+    public static final int BLOCK_BYTES = SIZE * SIZE * SIZE;
     private final byte[] blocks = new byte[SIZE * SIZE * SIZE];
     private long revision;
 
