@@ -17,6 +17,8 @@ public final class GameLoop {
             Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics, ChunkManager chunkManager) {
         double previous = window.time();
         Input input = new Input(window.handle());
+        String hardware =
+                System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
         while (!window.shouldClose()) {
@@ -55,7 +57,7 @@ public final class GameLoop {
             window.swapBuffers();
 
             metrics.recordFrame(deltaSeconds);
-            metrics.reportIfDue(now);
+            metrics.reportIfDue(now, framebufferWidth[0], framebufferHeight[0], hardware);
         }
     }
 
