@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.RegionPos;
 import org.joml.Matrix4fc;
 
 public final class Frustum {
@@ -55,6 +56,16 @@ public final class Frustum {
         float minY = position.y() * Chunk.SIZE;
         float minZ = position.z() * Chunk.SIZE;
         return intersects(minX, minY, minZ, minX + Chunk.SIZE, minY + Chunk.SIZE, minZ + Chunk.SIZE);
+    }
+
+    public boolean intersects(RegionPos.Bounds bounds) {
+        return intersects(
+                bounds.minX() * Chunk.SIZE,
+                bounds.minY() * Chunk.SIZE,
+                bounds.minZ() * Chunk.SIZE,
+                bounds.maxExclusiveX() * Chunk.SIZE,
+                bounds.maxExclusiveY() * Chunk.SIZE,
+                bounds.maxExclusiveZ() * Chunk.SIZE);
     }
 
     public boolean intersects(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {

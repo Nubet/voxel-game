@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.MeshData;
+import com.norbertfila.streaming.RegionIndex;
 import com.norbertfila.world.ChunkPos;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,11 +19,18 @@ import org.lwjgl.system.MemoryStack;
 public final class TerrainRenderer implements AutoCloseable {
     private final Map<ChunkPos, GpuMesh> meshes = new HashMap<>();
     private final UploadQueue uploads = new UploadQueue();
+    private final RegionIndex regionIndex;
+    private final RegionCuller regionCuller = new RegionCuller();
     private final int matrixUniform;
     private int program;
     private boolean closed;
 
     public TerrainRenderer() {
+        this(8);
+    }
+
+    public TerrainRenderer(int regionEdge) {
+        regionIndex = new RegionIndex(regionEdge);
         int vertex = 0;
         int fragment = 0;
         int linkedProgram = 0;
@@ -92,6 +100,7 @@ public final class TerrainRenderer implements AutoCloseable {
         Objects.requireNonNull(mesh);
         if (mesh.vertexCount() == 0) {
             GpuMesh previous = meshes.remove(position);
+            regionIndex.remove(position);
             if (previous != null) previous.close();
             return;
         }
@@ -109,6 +118,7 @@ public final class TerrainRenderer implements AutoCloseable {
                 glDeleteBuffers(buffer);
                 glDeleteVertexArrays(array);
             }));
+            regionIndex.add(position);
             if (previous != null) previous.close();
         } catch (RuntimeException | Error failure) {
             glDeleteBuffers(vbo);
@@ -151,20 +161,16 @@ public final class TerrainRenderer implements AutoCloseable {
             viewProjection.get(mat);
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
-        int visible = 0;
-        int culled = 0;
-        for (Map.Entry<ChunkPos, GpuMesh> entry : meshes.entrySet()) {
-            if (!frustum.intersects(entry.getKey())) {
-                culled++;
-                continue;
-            }
-            GpuMesh mesh = entry.getValue();
+        RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
+        for (ChunkPos position : culling.visible()) {
+            GpuMesh mesh = meshes.get(position);
+            if (mesh == null) continue;
             glBindVertexArray(mesh.vao());
             glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
-            visible++;
         }
         glBindVertexArray(0);
-        return new RenderStats(visible, culled, visible);
+        int visible = culling.visible().size();
+        return new RenderStats(visible, meshes.size() - visible, visible);
     }
 
     @Override
