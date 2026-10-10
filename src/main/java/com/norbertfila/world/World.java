@@ -64,7 +64,11 @@ public final class World {
 
     public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {
         Objects.requireNonNull(worldPosition);
+        if (!BlockId.isValid(value))
+            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
+        if (farTileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
         OptionalInt previous = getBlock(worldPosition);
+        if (previous.isPresent() && previous.getAsInt() == BlockId.toUnsignedInt(value)) return previous;
         Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
         if (chunk != null) {
             BlockPos local = Coordinates.worldToLocal(worldPosition);

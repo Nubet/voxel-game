@@ -2,6 +2,7 @@ package com.norbertfila.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.OptionalInt;
@@ -65,5 +66,38 @@ class WorldTest {
         assertEquals(BlockId.STONE, chunk.get(15, 0, 15));
         world.removeBlockOverride(block, 8);
         assertTrue(world.changes().dirtyTiles().size() >= 1);
+    }
+
+    @Test
+    void repeatedValueDoesNotCreateAnOverrideOrDirtyTile() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        chunk.set(1, 2, 3, BlockId.STONE);
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+
+        assertEquals(
+                BlockId.STONE,
+                world.setBlock(new BlockPos(1, 2, 3), BlockId.STONE, 8).orElseThrow());
+
+        assertEquals(1, chunk.revision());
+        assertEquals(0, world.changes().size());
+        assertTrue(world.changes().dirtyTiles().isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidEditsBeforeMutatingChunkOrOverlay() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        BlockPos position = new BlockPos(1, 2, 3);
+
+        assertThrows(IllegalArgumentException.class, () -> world.setBlock(position, BlockId.STONE, 0));
+        assertThrows(IllegalArgumentException.class, () -> world.setBlock(position, (byte) 255, 8));
+        assertThrows(IllegalArgumentException.class, () -> world.setBlock(new BlockPos(100, 0, 0), BlockId.STONE, 0));
+
+        assertEquals(BlockId.AIR, chunk.get(1, 2, 3));
+        assertEquals(0, chunk.revision());
+        assertEquals(0, world.changes().size());
+        assertTrue(world.changes().dirtyTiles().isEmpty());
     }
 }

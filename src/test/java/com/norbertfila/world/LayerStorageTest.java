@@ -1,6 +1,7 @@
 package com.norbertfila.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -26,5 +27,22 @@ class LayerStorageTest {
 
         assertEquals(0, storage.estimatedBytes());
         assertEquals(ChunkData.Kind.EMPTY, storage.kind());
+    }
+
+    @Test
+    void materializedLayersReuseDenseStorageForSubsequentEdits() {
+        for (ChunkData compact : new ChunkData[] {
+            ChunkData.empty(LayerStorage.LAYER_BLOCKS), new ChunkData.Uniform(BlockId.STONE, LayerStorage.LAYER_BLOCKS)
+        }) {
+            ChunkData dense = compact.set(0, BlockId.DIRT);
+            assertEquals(ChunkData.Kind.DENSE, dense.kind());
+            for (int index = 1; index < LayerStorage.LAYER_BLOCKS; index++) {
+                assertSame(dense, dense.set(index, BlockId.GRASS));
+                assertEquals(BlockId.GRASS, dense.get(index));
+            }
+            assertEquals(BlockId.DIRT, dense.get(0));
+            assertEquals(LayerStorage.LAYER_BLOCKS, dense.estimatedBytes());
+            assertEquals(compact.get(1), compact.get(0));
+        }
     }
 }
