@@ -72,6 +72,42 @@ class ChunkSchedulerTest {
         }
     }
 
+    @Test
+    void runsNearestQueuedTaskFirst() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 20, 20)) {
+            assertTrue(scheduler.submit(new ChunkTask(
+                    new ChunkPos(99, 0, 0),
+                    0,
+                    ChunkPriority.forPosition(new ChunkPos(99, 0, 0), new ChunkPos(0, 0, 0), 0, 0),
+                    () -> {
+                        release.await();
+                        return new MeshData(new float[0]);
+                    })));
+            waitForActiveTask(scheduler);
+            for (int x = 20; x >= 1; x--) {
+                ChunkPos position = new ChunkPos(x, 0, 0);
+                assertTrue(scheduler.submit(new ChunkTask(
+                        position,
+                        x,
+                        ChunkPriority.forPosition(position, new ChunkPos(0, 0, 0), 0, 0),
+                        () -> new MeshData(new float[0]))));
+            }
+            release.countDown();
+            waitForOutcome(scheduler);
+            ChunkTask.Outcome first = waitForOutcome(scheduler);
+            assertEquals(new ChunkPos(1, 0, 0), first.position());
+        }
+    }
+
+    @Test
+    void directionBonusPrefersChunkAheadAtEqualDistance() {
+        ChunkPriority ahead = ChunkPriority.forPosition(new ChunkPos(2, 0, 0), new ChunkPos(0, 0, 0), 1, 0);
+        ChunkPriority behind = ChunkPriority.forPosition(new ChunkPos(-2, 0, 0), new ChunkPos(0, 0, 0), 1, 0);
+
+        assertTrue(ahead.score() < behind.score());
+    }
+
     private static ChunkTask.Outcome waitForOutcome(ChunkScheduler scheduler) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
         ChunkTask.Outcome outcome;

@@ -5,9 +5,14 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 
-public record ChunkTask(ChunkPos position, long token, Callable<MeshData> work) {
+public record ChunkTask(ChunkPos position, long token, ChunkPriority priority, Callable<MeshData> work) {
+    public ChunkTask(ChunkPos position, long token, Callable<MeshData> work) {
+        this(position, token, ChunkPriority.unprioritized(), work);
+    }
+
     public ChunkTask {
         Objects.requireNonNull(position);
+        Objects.requireNonNull(priority);
         Objects.requireNonNull(work);
     }
 
