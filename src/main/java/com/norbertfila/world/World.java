@@ -1,5 +1,6 @@
 package com.norbertfila.world;
 
+import com.norbertfila.lod.WorldChangeOverlay;
 import com.norbertfila.meshing.BlockNeighborhood;
 import java.util.HashSet;
 import java.util.List;
@@ -9,14 +10,20 @@ import java.util.Set;
 
 public final class World {
     private final ChunkStorage storage;
+    private final WorldChangeOverlay changes;
     private final Set<ChunkPos> requestedChunks = new HashSet<>();
 
     public World() {
-        this(new ChunkStorage());
+        this(new ChunkStorage(), new WorldChangeOverlay());
     }
 
     public World(ChunkStorage storage) {
+        this(storage, new WorldChangeOverlay());
+    }
+
+    public World(ChunkStorage storage, WorldChangeOverlay changes) {
         this.storage = Objects.requireNonNull(storage);
+        this.changes = Objects.requireNonNull(changes);
     }
 
     public void putChunk(ChunkPos position, Chunk chunk) {
@@ -43,10 +50,32 @@ public final class World {
 
     public OptionalInt getBlock(BlockPos worldPosition) {
         Objects.requireNonNull(worldPosition);
+        OptionalInt changed = changes.get(worldPosition);
+        if (changed.isPresent()) return changed;
         Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
         if (chunk == null) return OptionalInt.empty();
         BlockPos local = Coordinates.worldToLocal(worldPosition);
         return OptionalInt.of(BlockId.toUnsignedInt(chunk.get(local.x(), local.y(), local.z())));
+    }
+
+    public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {
+        Objects.requireNonNull(worldPosition);
+        OptionalInt previous = getBlock(worldPosition);
+        Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
+        if (chunk != null) {
+            BlockPos local = Coordinates.worldToLocal(worldPosition);
+            chunk.set(local.x(), local.y(), local.z(), value);
+        }
+        changes.set(worldPosition, value, farTileSize);
+        return previous;
+    }
+
+    public OptionalInt removeBlockOverride(BlockPos worldPosition, int farTileSize) {
+        return changes.remove(Objects.requireNonNull(worldPosition), farTileSize);
+    }
+
+    public WorldChangeOverlay changes() {
+        return changes;
     }
 
     public void requestChunk(ChunkPos position) {

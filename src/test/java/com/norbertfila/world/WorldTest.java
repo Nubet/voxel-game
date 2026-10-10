@@ -52,4 +52,18 @@ class WorldTest {
         assertFalse(world.isChunkRequested(position));
         assertTrue(world.hasChunk(position));
     }
+
+    @Test
+    void blockOverrideWinsForResidentWorld() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        world.putChunk(new ChunkPos(-1, 0, -1), chunk);
+        BlockPos block = new BlockPos(-1, 0, -1);
+
+        assertEquals(BlockId.AIR, world.setBlock(block, BlockId.STONE, 8).orElseThrow());
+        assertEquals(BlockId.STONE, world.getBlock(block).orElseThrow());
+        assertEquals(BlockId.STONE, chunk.get(15, 0, 15));
+        world.removeBlockOverride(block, 8);
+        assertTrue(world.changes().dirtyTiles().size() >= 1);
+    }
 }
