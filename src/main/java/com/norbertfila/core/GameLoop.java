@@ -31,6 +31,7 @@ public final class GameLoop {
                 System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
+        boolean jumpQueued = false;
         while (!window.shouldClose()) {
             window.pollEvents();
             if (window.escapePressed()) {
@@ -46,6 +47,12 @@ public final class GameLoop {
                         player.mode() == PlayerController.Mode.SURVIVAL
                                 ? PlayerController.Mode.SPECTATOR
                                 : PlayerController.Mode.SURVIVAL);
+                System.out.println("Player mode: " + player.mode());
+            }
+            if (player.mode() == PlayerController.Mode.SURVIVAL) {
+                jumpQueued |= input.jumpPressed();
+            } else {
+                jumpQueued = false;
             }
             window.framebufferSize(framebufferWidth, framebufferHeight);
             if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
@@ -61,13 +68,15 @@ public final class GameLoop {
                     input.moveBackward(),
                     input.moveLeft(),
                     input.moveRight(),
-                    player.mode() == PlayerController.Mode.SPECTATOR ? input.moveUp() : input.jumpPressed(),
+                    player.mode() == PlayerController.Mode.SPECTATOR ? input.moveUp() : jumpQueued,
                     input.moveDown(),
                     input.sprint());
-            simulation.advance(
-                    deltaSeconds,
-                    fixedDelta ->
-                            player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch()));
+            boolean[] jumpForTick = {jumpQueued};
+            simulation.advance(deltaSeconds, fixedDelta -> {
+                player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch());
+                jumpForTick[0] = false;
+            });
+            jumpQueued = jumpForTick[0];
             PlayerController.Position renderPosition = player.renderPosition(simulation.interpolationAlpha());
             float eyeOffset = player.mode() == PlayerController.Mode.SURVIVAL ? Camera.PLAYER_EYE_HEIGHT : 0;
             camera.setPosition(
