@@ -18,10 +18,14 @@ public final class GameLoop {
     private static final int MAX_CATCH_UP_TICKS = 5;
 
     public void run(
-            Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics, ChunkManager chunkManager) {
+            Window window,
+            Camera camera,
+            TerrainRenderer renderer,
+            FrameMetrics metrics,
+            ChunkManager chunkManager,
+            PlayerController player) {
         double previous = window.time();
         Input input = new Input(window.handle());
-        PlayerController player = new PlayerController();
         FixedSimulation simulation = new FixedSimulation(FIXED_DELTA_SECONDS, MAX_CATCH_UP_TICKS);
         String hardware =
                 System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
@@ -37,6 +41,12 @@ public final class GameLoop {
             double deltaSeconds = clampDelta(now - previous);
             previous = now;
             input.update();
+            if (input.toggleModePressed()) {
+                player.setMode(
+                        player.mode() == PlayerController.Mode.SURVIVAL
+                                ? PlayerController.Mode.SPECTATOR
+                                : PlayerController.Mode.SURVIVAL);
+            }
             window.framebufferSize(framebufferWidth, framebufferHeight);
             if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
                 if (!sleepWhileMinimized()) {
@@ -51,7 +61,7 @@ public final class GameLoop {
                     input.moveBackward(),
                     input.moveLeft(),
                     input.moveRight(),
-                    input.moveUp(),
+                    player.mode() == PlayerController.Mode.SPECTATOR ? input.moveUp() : input.jumpPressed(),
                     input.moveDown(),
                     input.sprint());
             simulation.advance(
@@ -59,7 +69,9 @@ public final class GameLoop {
                     fixedDelta ->
                             player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch()));
             PlayerController.Position renderPosition = player.renderPosition(simulation.interpolationAlpha());
-            camera.setPosition((float) renderPosition.x(), (float) renderPosition.y(), (float) renderPosition.z());
+            float eyeOffset = player.mode() == PlayerController.Mode.SURVIVAL ? Camera.PLAYER_EYE_HEIGHT : 0;
+            camera.setPosition(
+                    (float) renderPosition.x(), (float) renderPosition.y() + eyeOffset, (float) renderPosition.z());
             ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());
             if (update.changed()) {
                 update.evicted().forEach(renderer::remove);

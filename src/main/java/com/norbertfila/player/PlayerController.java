@@ -12,11 +12,19 @@ public final class PlayerController {
     private final PlayerPhysics physics = new PlayerPhysics();
 
     public void setMode(Mode mode) {
-        this.mode = Objects.requireNonNull(mode);
+        Mode next = Objects.requireNonNull(mode);
+        if (this.mode != next) physics.resetMotion();
+        this.mode = next;
     }
 
     public Mode mode() {
         return mode;
+    }
+
+    public void setPosition(Position position) {
+        current = Objects.requireNonNull(position);
+        previous = current;
+        physics.resetMotion();
     }
 
     public void tick(InputState input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {

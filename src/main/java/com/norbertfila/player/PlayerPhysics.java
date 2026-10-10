@@ -55,6 +55,11 @@ public final class PlayerPhysics {
         return verticalVelocity;
     }
 
+    public void resetMotion() {
+        verticalVelocity = 0;
+        grounded = false;
+    }
+
     private AxisResult moveAxis(World world, PlayerController.Position start, double delta, Axis axis) {
         if (Math.abs(delta) <= EPSILON) return new AxisResult(start, false);
         int steps = Math.max(1, (int) Math.ceil(Math.abs(delta) / 0.25));

@@ -18,12 +18,16 @@ public final class Input {
     private boolean moveUp;
     private boolean moveDown;
     private boolean sprint;
+    private boolean previousToggleMode;
+    private boolean previousJump;
 
     public Input(long window) {
         this.window = window;
     }
 
     public void update() {
+        previousToggleMode = toggleMode();
+        previousJump = jumpHeld();
         glfwGetCursorPos(window, cursorX, cursorY);
         if (!mouseInitialized) {
             lastCursorX = cursorX[0];
@@ -78,6 +82,22 @@ public final class Input {
 
     public boolean sprint() {
         return sprint;
+    }
+
+    public boolean toggleModePressed() {
+        return toggleMode() && !previousToggleMode;
+    }
+
+    public boolean jumpPressed() {
+        return jumpHeld() && !previousJump;
+    }
+
+    private boolean toggleMode() {
+        return isPressed(GLFW_KEY_F4);
+    }
+
+    private boolean jumpHeld() {
+        return isPressed(GLFW_KEY_SPACE);
     }
 
     private boolean isPressed(int key) {

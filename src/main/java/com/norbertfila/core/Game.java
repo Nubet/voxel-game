@@ -4,6 +4,8 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.render.*;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
@@ -19,7 +21,10 @@ public final class Game {
             Camera camera = new Camera();
             ViewDemand viewDemand =
                     new ViewDemand(TERRAIN_RADIUS, TERRAIN_MIN_CHUNK_Y, TERRAIN_MAX_CHUNK_Y, ViewDemand.Shape.SQUARE);
-            WorldGenerator generator = new HillsGenerator();
+            HillsGenerator generator = new HillsGenerator();
+            PlayerController player = new PlayerController();
+            player.setMode(PlayerController.Mode.SURVIVAL);
+            player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             ChunkMesher mesher = new GreedyMesher();
             try (TerrainRenderer renderer = new TerrainRenderer()) {
                 long start = System.nanoTime();
@@ -41,7 +46,7 @@ public final class Game {
                         "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");
                 FrameMetrics metrics =
                         new FrameMetrics(chunks, vertices, meshBytes, Boolean.getBoolean("voxel.debug"), window.time());
-                new GameLoop().run(window, camera, renderer, metrics, chunkManager);
+                new GameLoop().run(window, camera, renderer, metrics, chunkManager, player);
             }
         }
     }

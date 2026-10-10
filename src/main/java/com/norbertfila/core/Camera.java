@@ -12,6 +12,7 @@ public final class Camera {
     private static final float WALK_SPEED = 12f;
     private static final float SPRINT_SPEED = 45f;
     private static final float MAX_PITCH = 89f;
+    public static final float PLAYER_EYE_HEIGHT = 1.62f;
     private final Vector3f position = new Vector3f(0, 22, 34);
     private final Vector3f forward = new Vector3f();
     private final Vector3f right = new Vector3f();
