@@ -41,6 +41,11 @@ public final class WorldEdit {
         if (local.y() == Chunk.SIZE - 1) dirty.add(new ChunkPos(chunk.x(), chunk.y() + 1, chunk.z()));
         if (local.z() == 0) dirty.add(new ChunkPos(chunk.x(), chunk.y(), chunk.z() - 1));
         if (local.z() == Chunk.SIZE - 1) dirty.add(new ChunkPos(chunk.x(), chunk.y(), chunk.z() + 1));
+        for (ChunkPos dirtyPosition : dirty) {
+            if (dirtyPosition.equals(chunk)) continue;
+            Chunk neighbor = world.getChunk(dirtyPosition);
+            if (neighbor != null) neighbor.invalidateMesh();
+        }
         List<ChunkPos> ordered = new ArrayList<>(dirty);
         ordered.sort(ORDER);
         return new BlockChangeResult(BlockChangeResult.Status.CHANGED, previous, ordered, revision(position));

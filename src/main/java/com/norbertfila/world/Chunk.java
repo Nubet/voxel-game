@@ -5,6 +5,7 @@ public final class Chunk {
     public static final int BLOCK_BYTES = SIZE * SIZE * SIZE;
     private LayerStorage data = new LayerStorage();
     private long revision;
+    private long meshDependencyRevision;
 
     public Chunk() {}
 
@@ -29,6 +30,7 @@ public final class Chunk {
         if (data.get(x, y, z) != value) {
             data.set(x, y, z, value);
             revision++;
+            invalidateMesh();
         }
     }
 
@@ -42,6 +44,14 @@ public final class Chunk {
 
     public long revision() {
         return revision;
+    }
+
+    public long meshDependencyRevision() {
+        return meshDependencyRevision;
+    }
+
+    void invalidateMesh() {
+        meshDependencyRevision++;
     }
 
     public long estimatedBytes() {
