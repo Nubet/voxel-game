@@ -66,7 +66,8 @@ public final class PlayerPhysics {
                 moveX,
                 motion.y * deltaSeconds,
                 moveZ,
-                walking && start.crouching() && start.grounded() && motion.y <= 0);
+                walking && start.crouching() && start.grounded() && motion.y <= 0,
+                walking && motion.y <= 0);
         if (!moved.available()) return start;
         Aabb box = moved.body();
         double x = moved.blockedX()

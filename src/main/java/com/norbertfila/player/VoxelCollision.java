@@ -52,24 +52,70 @@ public final class VoxelCollision {
     }
 
     Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge) {
-        if (!available(world, requiredRegion(body, x, y, z)))
-            return new Result(body, 0, 0, 0, false, false, false, false, false);
+        return move(world, body, x, y, z, protectEdge, false);
+    }
+
+    Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
+        Aabb region = requiredRegion(body, x, y, z);
+        if (!available(world, region)) return new Result(body, 0, 0, 0, false, false, false, false, false);
+        Bounds candidates = bounds(region);
+        return move(
+                body, x, y, z, protectEdge, allowStep, (box, delta, axis) -> clip(world, box, candidates, delta, axis));
+    }
+
+    Result move(List<Aabb> obstacles, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
+        bounds(requiredRegion(body, x, y, z));
+        List<Aabb> shapes = List.copyOf(obstacles);
+        return move(body, x, y, z, protectEdge, allowStep, (box, delta, axis) -> {
+            for (Aabb shape : shapes)
+                delta = clipAgainst(
+                        box,
+                        delta,
+                        axis,
+                        shape.minX(),
+                        shape.minY(),
+                        shape.minZ(),
+                        shape.maxX(),
+                        shape.maxY(),
+                        shape.maxZ());
+            return delta;
+        });
+    }
+
+    private static Result move(
+            Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep, Clipper clipper) {
         double requestedX = x, requestedZ = z;
-        if (protectEdge && supported(world, body, 0, 0)) {
-            while (x != 0 && !supported(world, body, x, 0)) x = towardZero(x);
-            while (z != 0 && !supported(world, body, 0, z)) z = towardZero(z);
-            while (x != 0 && z != 0 && !supported(world, body, x, z)) {
+        if (protectEdge && supported(clipper, body, 0, 0)) {
+            while (x != 0 && !supported(clipper, body, x, 0)) x = towardZero(x);
+            while (z != 0 && !supported(clipper, body, 0, z)) z = towardZero(z);
+            while (x != 0 && z != 0 && !supported(clipper, body, x, z)) {
                 x = towardZero(x);
                 z = towardZero(z);
             }
         }
-        Bounds candidates = bounds(body.swept(x, y, z));
-        double allowedY = clip(world, body, candidates, y, Axis.Y);
+        double allowedY = clipper.clip(body, y, Axis.Y);
         Aabb moved = body.move(0, allowedY, 0);
-        double allowedX = clip(world, moved, candidates, x, Axis.X);
+        double allowedX = clipper.clip(moved, x, Axis.X);
         moved = moved.move(allowedX, 0, 0);
-        double allowedZ = clip(world, moved, candidates, z, Axis.Z);
+        double allowedZ = clipper.clip(moved, z, Axis.Z);
         moved = moved.move(0, 0, allowedZ);
+        boolean grounded = allowedY != y && y < 0;
+        if (allowStep && y < 0 && grounded && (allowedX != x || allowedZ != z)) {
+            double up = clipper.clip(body, SUPPORT_AND_STEP_MARGIN, Axis.Y);
+            Aabb raised = body.move(0, up, 0);
+            double stepX = clipper.clip(raised, x, Axis.X);
+            raised = raised.move(stepX, 0, 0);
+            double stepZ = clipper.clip(raised, z, Axis.Z);
+            raised = raised.move(0, 0, stepZ);
+            double down = clipper.clip(raised, y - up, Axis.Y);
+            // A horizontal gain is valid only if the downward sweep actually lands on a surface.
+            if (down != y - up && Math.hypot(stepX, stepZ) > Math.hypot(allowedX, allowedZ)) {
+                moved = raised.move(0, down, 0);
+                allowedX = stepX;
+                allowedY = up + down;
+                allowedZ = stepZ;
+            }
+        }
         return new Result(
                 moved,
                 allowedX,
@@ -78,7 +124,7 @@ public final class VoxelCollision {
                 allowedX != requestedX,
                 allowedY != y,
                 allowedZ != requestedZ,
-                allowedY != y && y < 0,
+                grounded,
                 true);
     }
 
@@ -86,20 +132,8 @@ public final class VoxelCollision {
         return Math.abs(delta) <= EDGE_REDUCTION ? 0 : delta - Math.copySign(EDGE_REDUCTION, delta);
     }
 
-    private static boolean supported(World world, Aabb body, double x, double z) {
-        // Probe the whole footprint, but only below the feet: walls and ceilings are not support.
-        Bounds range = bounds(new Aabb(
-                body.minX() + x,
-                body.minY() - SUPPORT_AND_STEP_MARGIN,
-                body.minZ() + z,
-                body.maxX() + x,
-                body.minY(),
-                body.maxZ() + z));
-        for (long by = range.minY; by <= range.maxY; by++)
-            for (long bz = range.minZ; bz <= range.maxZ; bz++)
-                for (long bx = range.minX; bx <= range.maxX; bx++)
-                    if (solid(world, (int) bx, (int) by, (int) bz)) return true;
-        return false;
+    private static boolean supported(Clipper clipper, Aabb body, double x, double z) {
+        return clipper.clip(body.move(x, 0, z), -SUPPORT_AND_STEP_MARGIN, Axis.Y) != -SUPPORT_AND_STEP_MARGIN;
     }
 
     private static double clip(World world, Aabb body, Bounds range, double delta, Axis axis) {
@@ -108,43 +142,52 @@ public final class VoxelCollision {
             for (long z = range.minZ; z <= range.maxZ; z++) {
                 for (long x = range.minX; x <= range.maxX; x++) {
                     if (!solid(world, (int) x, (int) y, (int) z)) continue;
-                    double min, max, blockMin;
-                    boolean overlaps;
-                    switch (axis) {
-                        case X -> {
-                            min = body.minX();
-                            max = body.maxX();
-                            blockMin = x;
-                            overlaps = body.maxY() > y
-                                    && body.minY() < y + 1.0
-                                    && body.maxZ() > z
-                                    && body.minZ() < z + 1.0;
-                        }
-                        case Y -> {
-                            min = body.minY();
-                            max = body.maxY();
-                            blockMin = y;
-                            overlaps = body.maxX() > x
-                                    && body.minX() < x + 1.0
-                                    && body.maxZ() > z
-                                    && body.minZ() < z + 1.0;
-                        }
-                        case Z -> {
-                            min = body.minZ();
-                            max = body.maxZ();
-                            blockMin = z;
-                            overlaps = body.maxX() > x
-                                    && body.minX() < x + 1.0
-                                    && body.maxY() > y
-                                    && body.minY() < y + 1.0;
-                        }
-                        default -> throw new AssertionError(axis);
-                    }
-                    if (!overlaps) continue;
-                    if (delta > 0 && max <= blockMin) delta = Math.min(delta, blockMin - max);
-                    else if (delta < 0 && min >= blockMin + 1.0) delta = Math.max(delta, blockMin + 1.0 - min);
+                    delta = clipAgainst(body, delta, axis, x, y, z, x + 1.0, y + 1.0, z + 1.0);
                 }
             }
+        }
+        return delta;
+    }
+
+    private static double clipAgainst(
+            Aabb body,
+            double delta,
+            Axis axis,
+            double minX,
+            double minY,
+            double minZ,
+            double maxX,
+            double maxY,
+            double maxZ) {
+        double min, max, obstacleMin, obstacleMax;
+        boolean overlaps;
+        switch (axis) {
+            case X -> {
+                min = body.minX();
+                max = body.maxX();
+                obstacleMin = minX;
+                obstacleMax = maxX;
+                overlaps = body.maxY() > minY && body.minY() < maxY && body.maxZ() > minZ && body.minZ() < maxZ;
+            }
+            case Y -> {
+                min = body.minY();
+                max = body.maxY();
+                obstacleMin = minY;
+                obstacleMax = maxY;
+                overlaps = body.maxX() > minX && body.minX() < maxX && body.maxZ() > minZ && body.minZ() < maxZ;
+            }
+            case Z -> {
+                min = body.minZ();
+                max = body.maxZ();
+                obstacleMin = minZ;
+                obstacleMax = maxZ;
+                overlaps = body.maxX() > minX && body.minX() < maxX && body.maxY() > minY && body.minY() < maxY;
+            }
+            default -> throw new AssertionError(axis);
+        }
+        if (overlaps) {
+            if (delta > 0 && max <= obstacleMin) return Math.min(delta, obstacleMin - max);
+            if (delta < 0 && min >= obstacleMax) return Math.max(delta, obstacleMax - min);
         }
         return delta;
     }
@@ -228,6 +271,10 @@ public final class VoxelCollision {
         X,
         Y,
         Z
+    }
+
+    private interface Clipper {
+        double clip(Aabb body, double delta, Axis axis);
     }
 
     private record Bounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {}
