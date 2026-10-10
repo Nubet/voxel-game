@@ -14,26 +14,24 @@ class TerrainGeneratorTest {
     @Test
     void highMountainSurfaceAndLodShareTheSameGlobalHeight() {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
-        int height = generator.surfaceHeight(-192, 224);
-        assertTrue(height >= 72);
-        ChunkData data = generator.generate(new ChunkPos(-12, Math.floorDiv(height, Chunk.SIZE), 14));
-        int localY = Math.floorMod(height, Chunk.SIZE);
-        assertEquals(BlockId.GRASS, data.get(0, localY, 0));
-        assertEquals(BlockId.AIR, data.get(0, localY + 1, 0));
-        assertEquals(BlockId.DIRT, data.get(0, localY - 3, 0));
-        assertEquals(BlockId.STONE, data.get(0, localY - 4, 0));
-        var tile = new FarTerrainGenerator(generator, 64, 4, 0, 64).generate(-3, 3);
-        assertEquals(height, tile.heightAt(0, 8));
+        int height = generator.surfaceHeight(-272, 240);
+        assertTrue(height >= 200);
+        assertEquals(BlockId.GRASS, blockAt(generator, -272, height, 240));
+        assertEquals(BlockId.AIR, blockAt(generator, -272, height + 1, 240));
+        assertEquals(BlockId.DIRT, blockAt(generator, -272, height - 3, 240));
+        assertEquals(BlockId.STONE, blockAt(generator, -272, height - 4, 240));
+        var tile = new FarTerrainGenerator(generator, 64, 4, 0, 64).generate(-5, 3);
+        assertEquals(height, tile.heightAt(12, 12));
     }
 
     @Test
-    void preservesVersionThreeReferenceChunks() {
+    void classicPresetPreservesVersionThreeReferenceChunks() {
         ChunkPos[] positions = {new ChunkPos(0, 2, 0), new ChunkPos(-2, 2, 3), new ChunkPos(-12, 4, 14)};
         int[][] expected = {{-651217007, -1668689413, 1742602241}, {1851233293, 894635397, 1140572427}};
         long[] seeds = {0, 42};
         for (int i = 0; i < seeds.length; i++) {
-            TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.defaults());
-            assertEquals(3, generator.generatorVersion());
+            TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.classic());
+            assertEquals(4, generator.generatorVersion());
             for (int j = 0; j < positions.length; j++)
                 assertEquals(
                         expected[i][j],
@@ -97,7 +95,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(3, generator.generatorVersion());
+        assertEquals(4, generator.generatorVersion());
     }
 
     @Test
@@ -115,5 +113,12 @@ class TerrainGeneratorTest {
         assertThrows(
                 IllegalStateException.class,
                 () -> new TerrainGenerator(0, TerrainConfig.defaults(), (x, z) -> 2).surfaceHeight(0, 0));
+    }
+
+    private static byte blockAt(TerrainGenerator generator, int x, int y, int z) {
+        return generator
+                .generate(new ChunkPos(
+                        Math.floorDiv(x, Chunk.SIZE), Math.floorDiv(y, Chunk.SIZE), Math.floorDiv(z, Chunk.SIZE)))
+                .get(Math.floorMod(x, Chunk.SIZE), Math.floorMod(y, Chunk.SIZE), Math.floorMod(z, Chunk.SIZE));
     }
 }

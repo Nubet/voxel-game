@@ -102,13 +102,28 @@ public final class TerrainBenchmark {
         for (int z = -128; z < 128; z += 16)
             for (int x = -128; x < 128; x += 16) for (int y : new int[] {0, 2, 5}) positions.add(new ChunkPos(x, y, z));
         TerrainConfig defaults = TerrainConfig.defaults();
-        TerrainConfig fbm =
-                new TerrainConfig(defaults.baseHeight(), defaults.continental(), defaults.hills(), defaults.details());
+        TerrainConfig fbm = defaults.withoutMountains();
+        TerrainConfig classic = TerrainConfig.classic();
+        TerrainConfig unwarped = defaults.withoutWarp();
         System.out.println("config=" + defaults);
         List<Result> results = new ArrayList<>();
         for (long seed : new long[] {0, 42, -1}) {
             for (int repetition = 0; repetition < 3; repetition++) {
                 results.add(run("hills-v1-r" + repetition, new HillsGenerator(seed), positions, 3, 3, -1));
+                results.add(run(
+                        "classic-v3-r" + repetition,
+                        new TerrainGenerator(seed, classic),
+                        positions,
+                        3,
+                        3,
+                        countNoiseSamples(seed, classic, positions)));
+                results.add(run(
+                        "multiscale-no-warp-r" + repetition,
+                        new TerrainGenerator(seed, unwarped),
+                        positions,
+                        3,
+                        3,
+                        countNoiseSamples(seed, unwarped, positions)));
                 results.add(run(
                         "fbm-default-r" + repetition,
                         new TerrainGenerator(seed, fbm),
@@ -150,8 +165,7 @@ public final class TerrainBenchmark {
 
     private static void printLandscape(long seed, TerrainConfig config) {
         TerrainGenerator mountain = new TerrainGenerator(seed, config);
-        TerrainGenerator plains = new TerrainGenerator(
-                seed, new TerrainConfig(config.baseHeight(), config.continental(), config.hills(), config.details()));
+        TerrainGenerator plains = new TerrainGenerator(seed, config.withoutMountains());
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE, affected = 0, count = 0, maxStep = 0;
         int nearestX = 0, nearestZ = 0;
         long nearestDistance = Long.MAX_VALUE;
@@ -164,7 +178,7 @@ public final class TerrainBenchmark {
                 maxStep = Math.max(maxStep, Math.abs(height - mountain.surfaceHeight(x + 1, z)));
                 maxStep = Math.max(maxStep, Math.abs(height - mountain.surfaceHeight(x, z + 1)));
                 long distance = (long) x * x + (long) z * z;
-                if (height >= config.baseHeight() + 40 && distance < nearestDistance) {
+                if (height >= 200 && distance < nearestDistance) {
                     nearestDistance = distance;
                     nearestX = x;
                     nearestZ = z;

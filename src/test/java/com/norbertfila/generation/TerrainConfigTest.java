@@ -8,14 +8,42 @@ class TerrainConfigTest {
     @Test
     void declaresConservativeHeightBounds() {
         TerrainConfig config = TerrainConfig.defaults();
-        assertEquals(-8, config.minHeight());
-        assertEquals(147, config.maxHeight());
+        assertEquals(-18, config.minHeight());
+        assertEquals(300, config.maxHeight());
         TerrainGenerator generator = new TerrainGenerator(42, config);
         for (int z = -2048; z < 2048; z += 17)
             for (int x = -2048; x < 2048; x += 31) {
                 int height = generator.surfaceHeight(x, z);
                 assertTrue(height >= config.minHeight() && height <= config.maxHeight());
             }
+    }
+
+    @Test
+    void validatesShapingAndWarpedCoordinatePrecision() {
+        TerrainConfig config = TerrainConfig.defaults();
+        TerrainConfig.Mountains mountains = config.mountains();
+        for (double invalid : new double[] {0, -1, Double.NaN, Double.POSITIVE_INFINITY}) {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> new TerrainConfig.Mountains(
+                            mountains.region(), mountains.ridge(), .54, .62, mountains.ranges(), invalid, 1.25, true));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> new TerrainConfig.Mountains(
+                            mountains.region(), mountains.ridge(), .54, .62, mountains.ranges(), 3, invalid, true));
+        }
+        TerrainConfig.Layer hugeWarp = new TerrainConfig.Layer(.003, 3, .5, 2, Double.MAX_VALUE);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TerrainConfig(
+                        config.baseHeight(),
+                        config.continental(),
+                        config.hills(),
+                        config.details(),
+                        mountains,
+                        hugeWarp));
+        assertEquals(0, config.withoutWarp().warp().amplitude());
+        assertEquals(config.mountains(), config.withoutWarp().mountains());
     }
 
     @Test

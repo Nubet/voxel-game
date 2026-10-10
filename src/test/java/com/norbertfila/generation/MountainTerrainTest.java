@@ -20,23 +20,21 @@ class MountainTerrainTest {
     @Test
     void disabledMountainsDoNotSampleRegionOrRidge() {
         TerrainConfig defaults = TerrainConfig.defaults();
-        TerrainConfig plains =
-                new TerrainConfig(defaults.baseHeight(), defaults.continental(), defaults.hills(), defaults.details());
+        TerrainConfig plains = defaults.withoutMountains().withoutWarp();
         int[] calls = {0};
         TerrainGenerator generator = new TerrainGenerator(0, plains, (x, z) -> {
             calls[0]++;
             return .1;
         });
         generator.surfaceHeight(-17, 31);
-        assertEquals(9, calls[0]);
+        assertEquals(10, calls[0]);
     }
 
     @Test
     void terrainContainsRegionalHighMountainsAndLowerValleys() {
         TerrainConfig config = TerrainConfig.defaults();
         TerrainGenerator mountains = new TerrainGenerator(0, config);
-        TerrainGenerator plains = new TerrainGenerator(
-                0, new TerrainConfig(config.baseHeight(), config.continental(), config.hills(), config.details()));
+        TerrainGenerator plains = new TerrainGenerator(0, config.withoutMountains());
         int samples = 0;
         int affected = 0;
         int min = Integer.MAX_VALUE;
@@ -57,7 +55,63 @@ class MountainTerrainTest {
         assertTrue(affected > samples / 100);
         assertTrue(affected < samples / 3);
         assertTrue(min < config.baseHeight() - 5);
-        assertTrue(max > config.baseHeight() + 50);
-        assertTrue(maxStep <= 3, "Default mask must not introduce sharp region-boundary jumps");
+        assertTrue(max >= 200 && max <= 300);
+        assertTrue(maxStep > 3 && maxStep <= 16, "Multiscale peaks should have steep, bounded slopes");
+    }
+
+    @Test
+    void ridgeIsAppliedBeforeOctavesAreCombined() {
+        assertEquals(1, TerrainGenerator.ridged(0));
+        assertEquals(.5, TerrainGenerator.ridged(.25));
+        assertEquals(.5, TerrainGenerator.ridged(-.25));
+        assertEquals(0, TerrainGenerator.ridged(1));
+        TerrainConfig.Layer disabled = new TerrainConfig.Layer(.01, 1, .5, 2, 0);
+        TerrainConfig.Layer region = new TerrainConfig.Layer(1, 1, .5, 2, 1);
+        TerrainConfig.Layer ridge = new TerrainConfig.Layer(1, 2, 1, 2, 100);
+        TerrainConfig config = new TerrainConfig(
+                0,
+                disabled,
+                disabled,
+                disabled,
+                new TerrainConfig.Mountains(region, ridge, 0, .1, disabled, 1, 1, true));
+        Noise2D alternating = (x, z) -> x < 39.2 ? -.25 : .25;
+        assertEquals(62, new TerrainGenerator(0, config, alternating).surfaceHeight(1, 0));
+    }
+
+    @Test
+    void warpedElevationIsContinuousAcrossChunkBoundaries() {
+        TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
+        double epsilon = 1e-5;
+        for (int z = 192; z <= 288; z += 16)
+            for (int x = -320; x <= -224; x += 16) {
+                double height = generator.surfaceElevation(x, z);
+                assertEquals(height, generator.surfaceElevation(x - epsilon, z), .01);
+                assertEquals(height, generator.surfaceElevation(x + epsilon, z), .01);
+                assertEquals(height, generator.surfaceElevation(x, z - epsilon), .01);
+                assertEquals(height, generator.surfaceElevation(x, z + epsilon), .01);
+            }
+    }
+
+    @Test
+    void disablingWarpSkipsItsSamplesAndChangesOnlyCoordinates() {
+        TerrainConfig defaults = TerrainConfig.defaults();
+        TerrainConfig flat = defaults.withoutMountains();
+        int[] calls = {0};
+        Noise2D counting = (x, z) -> {
+            calls[0]++;
+            return .1;
+        };
+        int warped = new TerrainGenerator(0, flat, counting).surfaceHeight(-17, 31);
+        assertEquals(16, calls[0]);
+        calls[0] = 0;
+        int unwarped = new TerrainGenerator(0, flat.withoutWarp(), counting).surfaceHeight(-17, 31);
+        assertEquals(10, calls[0]);
+        assertEquals(warped, unwarped);
+        TerrainGenerator first = new TerrainGenerator(42, defaults);
+        TerrainGenerator second = new TerrainGenerator(42, defaults.withoutWarp());
+        boolean differs = false;
+        for (int z = -512; z <= 512; z += 31)
+            for (int x = -512; x <= 512; x += 17) differs |= first.surfaceHeight(x, z) != second.surfaceHeight(x, z);
+        assertTrue(differs);
     }
 }

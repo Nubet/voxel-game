@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class TerrainBenchmarkTest {
     @Test
     void countsActualOctavesIncludingMaskEarlyOut() {
-        TerrainConfig config = TerrainConfig.defaults();
+        TerrainConfig config = TerrainConfig.classic();
         List<ChunkPos> positions = List.of(new ChunkPos(0, 2, 0));
         TerrainConfig plains =
                 new TerrainConfig(config.baseHeight(), config.continental(), config.hills(), config.details());
@@ -36,7 +36,7 @@ class TerrainBenchmarkTest {
                 || result.snapshot().bytes() > result.generate().bytes());
         String csv = TerrainBenchmark.toCsv(List.of(result));
         assertTrue(csv.contains("heightBytesPerColumn"));
-        assertTrue(csv.contains("mountains,42,3,1,2,2,"));
+        assertTrue(csv.contains("mountains,42,4,1,2,2,"));
     }
 
     @Test
