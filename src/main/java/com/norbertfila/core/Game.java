@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
@@ -17,15 +18,22 @@ public final class Game {
             try (TerrainRenderer renderer = new TerrainRenderer()) {
                 long start = System.nanoTime();
                 int chunks = 0;
+                int vertices = 0;
+                long meshBytes = 0;
                 // Static 9x9 horizontal terrain at y=0 until chunk streaming is implemented.
                 for (int z = -TERRAIN_RADIUS; z <= TERRAIN_RADIUS; z++)
                     for (int x = -TERRAIN_RADIUS; x <= TERRAIN_RADIUS; x++) {
-                        renderer.upload(mesher.mesh(generator.generate(x, TERRAIN_CHUNK_Y, z), x, TERRAIN_CHUNK_Y, z));
+                        MeshData mesh = mesher.mesh(generator.generate(x, TERRAIN_CHUNK_Y, z), x, TERRAIN_CHUNK_Y, z);
+                        renderer.upload(mesh);
+                        vertices += mesh.vertexCount();
+                        meshBytes += (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
                         chunks++;
                     }
                 System.out.println(
                         "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");
-                new GameLoop().run(window, camera, renderer, chunks);
+                FrameMetrics metrics =
+                        new FrameMetrics(chunks, vertices, meshBytes, Boolean.getBoolean("voxel.debug"), window.time());
+                new GameLoop().run(window, camera, renderer, metrics);
             }
         }
     }

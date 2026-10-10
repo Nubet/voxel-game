@@ -2,6 +2,7 @@ package com.norbertfila.core;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.TerrainRenderer;
@@ -10,11 +11,9 @@ public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
     private static final long MINIMIZED_SLEEP_MILLIS = 16;
 
-    public void run(Window window, Camera camera, TerrainRenderer renderer, int chunks) {
+    public void run(Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics) {
         double previous = window.time();
-        double reportTime = previous;
         Input input = new Input(window.handle());
-        int frames = 0;
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
         while (!window.shouldClose()) {
@@ -42,12 +41,8 @@ public final class GameLoop {
             renderer.render(camera.viewProjection(framebufferWidth[0], framebufferHeight[0]));
             window.swapBuffers();
 
-            frames++;
-            if (now - reportTime >= 1.0) {
-                System.out.printf("FPS: %.0f | sections: %d%n", frames / (now - reportTime), chunks);
-                frames = 0;
-                reportTime = now;
-            }
+            metrics.recordFrame(deltaSeconds);
+            metrics.reportIfDue(now);
         }
     }
 
