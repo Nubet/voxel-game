@@ -6,6 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 
 public final class Camera {
     private static final float MOUSE_SENSITIVITY = 0.11f;
@@ -50,6 +51,15 @@ public final class Camera {
 
     public float pitch() {
         return pitch;
+    }
+
+    public Vector3fc position() {
+        return position;
+    }
+
+    public Vector3fc direction() {
+        getForward();
+        return forward;
     }
 
     private void getForward() {

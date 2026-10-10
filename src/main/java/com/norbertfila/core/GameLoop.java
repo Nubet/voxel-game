@@ -4,6 +4,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.diagnostics.DiagnosticsLog;
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.FixedSimulation;
@@ -12,15 +13,19 @@ import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.world.BlockChangeResult;
+import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import java.util.Optional;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
     private static final long MINIMIZED_SLEEP_MILLIS = 16;
     private static final double FIXED_DELTA_SECONDS = 1.0 / 60.0;
     private static final int MAX_CATCH_UP_TICKS = 5;
+    private static final int FAR_TILE_SIZE = 64;
 
     public void run(
             Window window,
@@ -33,6 +38,8 @@ public final class GameLoop {
             SettingsPanel settingsPanel) {
         double previous = window.time();
         Input input = new Input(window.handle());
+        Hotbar hotbar = new Hotbar();
+        BlockInteraction interaction = new BlockInteraction(chunkManager.world(), FAR_TILE_SIZE);
         FixedSimulation simulation = new FixedSimulation(FIXED_DELTA_SECONDS, MAX_CATCH_UP_TICKS);
         String hardware =
                 System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
@@ -105,6 +112,16 @@ public final class GameLoop {
             float eyeOffset = player.mode() == PlayerController.Mode.SURVIVAL ? Camera.PLAYER_EYE_HEIGHT : 0;
             camera.setPosition(
                     (float) renderPosition.x(), (float) renderPosition.y() + eyeOffset, (float) renderPosition.z());
+            updateBlockEditing(
+                            camera,
+                            player,
+                            interaction,
+                            hotbar,
+                            settingsPanel.open() || input.settingsPressed(),
+                            input.leftMousePressed(),
+                            input.rightMousePressed(),
+                            input.hotbarSlotPressed())
+                    .ifPresent(chunkManager::requestRemesh);
             if (update.changed()) {
                 update.evicted().forEach(renderer::remove);
                 DiagnosticsLog.logger(GameLoop.class)
@@ -136,12 +153,41 @@ public final class GameLoop {
             var viewProjection = camera.viewProjection(framebufferWidth[0], framebufferHeight[0]);
             TerrainRenderer.RenderStats renderStats = renderer.render(viewProjection, Frustum.from(viewProjection));
             metrics.recordCulling(renderStats.visible(), renderStats.culled(), renderStats.drawCalls());
-            uiRenderer.render(settingsPanel, framebufferWidth[0], framebufferHeight[0]);
+            uiRenderer.render(settingsPanel, hotbar, framebufferWidth[0], framebufferHeight[0]);
             window.swapBuffers();
 
             metrics.recordFrame(deltaSeconds);
             metrics.reportIfDue(now, framebufferWidth[0], framebufferHeight[0], hardware);
         }
+    }
+
+    static Optional<BlockChangeResult> updateBlockEditing(
+            Camera camera,
+            PlayerController player,
+            BlockInteraction interaction,
+            Hotbar hotbar,
+            boolean blocked,
+            boolean removePressed,
+            boolean placePressed,
+            int slotPressed) {
+        if (blocked) return Optional.empty();
+        if (slotPressed >= 0) hotbar.select(slotPressed);
+        if (!removePressed && (!placePressed || hotbar.selectedBlock() == BlockId.AIR)) return Optional.empty();
+        var origin = camera.position();
+        var direction = camera.direction();
+        if (removePressed) {
+            return interaction.remove(origin.x(), origin.y(), origin.z(), direction.x(), direction.y(), direction.z());
+        }
+        return interaction.place(
+                origin.x(),
+                origin.y(),
+                origin.z(),
+                direction.x(),
+                direction.y(),
+                direction.z(),
+                hotbar.selectedBlock(),
+                player.mode(),
+                player.renderPosition(1));
     }
 
     private static ChunkPos playerChunk(PlayerController player) {

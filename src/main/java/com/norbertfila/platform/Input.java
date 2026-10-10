@@ -23,6 +23,10 @@ public final class Input {
     private boolean settings;
     private boolean leftMouse;
     private boolean previousLeftMouse;
+    private boolean rightMouse;
+    private boolean previousRightMouse;
+    private int hotbarKeys;
+    private int previousHotbarKeys;
     private boolean previousToggleMode;
     private boolean previousJump;
     private boolean previousSettings;
@@ -35,7 +39,6 @@ public final class Input {
         previousToggleMode = toggleMode;
         previousJump = jump;
         previousSettings = settings;
-        previousLeftMouse = leftMouse;
         glfwGetCursorPos(window, cursorX, cursorY);
         if (!mouseInitialized) {
             lastCursorX = cursorX[0];
@@ -57,7 +60,32 @@ public final class Input {
         toggleMode = isPressed(GLFW_KEY_F4);
         jump = moveUp;
         settings = isPressed(GLFW_KEY_F10);
-        leftMouse = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        int slots = 0;
+        for (int slot = 0; slot < 9; slot++) {
+            if (isPressed(GLFW_KEY_1 + slot)) slots |= 1 << slot;
+        }
+        updateButtons(
+                glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
+                glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS,
+                slots);
+    }
+
+    void updateButtons(boolean left, boolean right, int slots) {
+        previousLeftMouse = leftMouse;
+        previousRightMouse = rightMouse;
+        previousHotbarKeys = hotbarKeys;
+        leftMouse = left;
+        rightMouse = right;
+        hotbarKeys = slots;
+    }
+
+    public boolean rightMousePressed() {
+        return rightMouse && !previousRightMouse;
+    }
+
+    public int hotbarSlotPressed() {
+        int pressed = hotbarKeys & ~previousHotbarKeys;
+        return pressed == 0 ? -1 : Integer.numberOfTrailingZeros(pressed);
     }
 
     public float mouseDeltaX() {

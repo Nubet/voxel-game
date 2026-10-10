@@ -2,7 +2,9 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.core.Hotbar;
 import com.norbertfila.core.SettingsPanel;
+import com.norbertfila.world.BlockId;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
@@ -10,6 +12,12 @@ import java.nio.charset.StandardCharsets;
 import org.lwjgl.system.MemoryStack;
 
 public final class UiRenderer implements AutoCloseable {
+    private static final int[] RECTANGLE_CORNERS = {0, 1, 2, 2, 3, 0};
+    private static final int[] DIGITS = {0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f};
+    private static final int[][] SEGMENTS = {
+        {0, 0, 6, 1}, {5, 0, 1, 6}, {5, 5, 1, 6}, {0, 10, 6, 1}, {0, 5, 1, 6}, {0, 0, 1, 6}, {0, 5, 6, 1}
+    };
+    private final float[] vertices = new float[36 * 96];
     private final int vao;
     private final int vbo;
     private final int program;
@@ -42,9 +50,7 @@ public final class UiRenderer implements AutoCloseable {
         glBindVertexArray(0);
     }
 
-    public void render(SettingsPanel panel, int width, int height) {
-        if (!panel.open()) return;
-        float[] vertices = new float[6 * 6 * 9];
+    private static int panelVertices(float[] vertices, SettingsPanel panel) {
         int offset = 0;
         offset = rectangle(
                 vertices,
@@ -136,7 +142,7 @@ public final class UiRenderer implements AutoCloseable {
                 panel.canIncrease() ? .94f : .3f,
                 panel.canIncrease() ? .96f : .3f,
                 1f);
-        rectangle(
+        offset = rectangle(
                 vertices,
                 offset,
                 SettingsPanel.PLUS_X + 9,
@@ -147,6 +153,66 @@ public final class UiRenderer implements AutoCloseable {
                 panel.canIncrease() ? .94f : .3f,
                 panel.canIncrease() ? .96f : .3f,
                 1f);
+        return offset;
+    }
+
+    static int hudVertices(float[] vertices, Hotbar hotbar, int width, int height) {
+        int offset = 0;
+        int centerX = width / 2;
+        int centerY = height / 2;
+        offset = rectangle(vertices, offset, centerX - 8, centerY - 2, 16, 4, 0, 0, 0, .8f);
+        offset = rectangle(vertices, offset, centerX - 2, centerY - 8, 4, 16, 0, 0, 0, .8f);
+        offset = rectangle(vertices, offset, centerX - 7, centerY - 1, 14, 2, 1, 1, 1, 1);
+        offset = rectangle(vertices, offset, centerX - 1, centerY - 7, 2, 14, 1, 1, 1, 1);
+        int gap = Math.min(4, width / (Hotbar.SLOTS * 16));
+        int size = Math.max(1, Math.min(48, (width - 2 * gap) / Hotbar.SLOTS - gap));
+        int startX = (width - Hotbar.SLOTS * size - (Hotbar.SLOTS - 1) * gap) / 2;
+        int y = Math.max(0, height - size - 16);
+        for (int slot = 0; slot < Hotbar.SLOTS; slot++) {
+            int x = startX + slot * (size + gap);
+            boolean selected = slot == hotbar.selectedSlot();
+            offset = rectangle(
+                    vertices,
+                    offset,
+                    x,
+                    y,
+                    size,
+                    size,
+                    selected ? .96f : .25f,
+                    selected ? .8f : .29f,
+                    selected ? .3f : .35f,
+                    1);
+            if (size < 8) continue;
+            offset = rectangle(vertices, offset, x + 2, y + 2, size - 4, size - 4, .06f, .08f, .11f, .92f);
+            byte block = hotbar.block(slot);
+            if (block != BlockId.AIR) {
+                float r = block == BlockId.GRASS ? .22f : block == BlockId.DIRT ? .55f : .6f;
+                float g = block == BlockId.GRASS ? .7f : block == BlockId.DIRT ? .35f : .62f;
+                float b = block == BlockId.GRASS ? .2f : block == BlockId.DIRT ? .18f : .65f;
+                offset = rectangle(vertices, offset, x + size / 4, y + 5, size / 2, Math.max(1, size - 23), r, g, b, 1);
+            }
+            if (size < 18) continue;
+            for (int segment = 0; segment < SEGMENTS.length; segment++) {
+                if ((DIGITS[slot] & (1 << segment)) == 0) continue;
+                int[] shape = SEGMENTS[segment];
+                offset = rectangle(
+                        vertices,
+                        offset,
+                        x + 5 + shape[0],
+                        y + size - 15 + shape[1],
+                        shape[2],
+                        shape[3],
+                        .94f,
+                        .94f,
+                        .94f,
+                        1);
+            }
+        }
+        return offset;
+    }
+
+    public void render(SettingsPanel panel, Hotbar hotbar, int width, int height) {
+        int count = panel.open() ? panelVertices(vertices, panel) : hudVertices(vertices, hotbar, width, height);
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
@@ -156,11 +222,11 @@ public final class UiRenderer implements AutoCloseable {
         glUniform2f(viewportUniform, width, height);
         glBindVertexArray(vao);
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            FloatBuffer buffer = stack.mallocFloat(vertices.length);
-            buffer.put(vertices).flip();
+            FloatBuffer buffer = stack.mallocFloat(count);
+            buffer.put(vertices, 0, count).flip();
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
-            glDrawArrays(GL_TRIANGLES, 0, vertices.length / 6);
+            glDrawArrays(GL_TRIANGLES, 0, count / 6);
         }
         glBindVertexArray(0);
         glDisable(GL_BLEND);
@@ -170,12 +236,10 @@ public final class UiRenderer implements AutoCloseable {
 
     private static int rectangle(
             float[] target, int offset, int x, int y, int width, int height, float r, float g, float b, float a) {
-        int[] indices = {0, 1, 2, 2, 3, 0};
-        float[] corners = {x, y, x + width, y, x + width, y + height, x, y + height};
         int cursor = offset;
-        for (int index : indices) {
-            target[cursor++] = corners[index * 2];
-            target[cursor++] = corners[index * 2 + 1];
+        for (int index : RECTANGLE_CORNERS) {
+            target[cursor++] = index == 1 || index == 2 ? x + width : x;
+            target[cursor++] = index >= 2 ? y + height : y;
             target[cursor++] = r;
             target[cursor++] = g;
             target[cursor++] = b;
