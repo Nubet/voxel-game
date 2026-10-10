@@ -2,6 +2,7 @@ package com.norbertfila.interaction;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import java.util.Objects;
 import java.util.Optional;
@@ -18,8 +19,12 @@ public final class VoxelRaycaster {
             double maxDistance) {
         Objects.requireNonNull(world);
         validate(originX, originY, originZ, directionX, directionY, directionZ, maxDistance);
+        double scale = Math.max(Math.abs(directionX), Math.max(Math.abs(directionY), Math.abs(directionZ)));
+        if (scale == 0) throw new IllegalArgumentException("Direction must not be zero");
+        directionX /= scale;
+        directionY /= scale;
+        directionZ /= scale;
         double length = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ);
-        if (length == 0) throw new IllegalArgumentException("Direction must not be zero");
         directionX /= length;
         directionY /= length;
         directionZ /= length;
@@ -28,11 +33,13 @@ public final class VoxelRaycaster {
         int y = floorToInt(originY);
         int z = floorToInt(originZ);
         BlockPos position = new BlockPos(x, y, z);
-        if (solid(world, position)) return Optional.of(new Hit(position, Normal.ZERO, 0, blockId(world, position)));
+        int blockId = blockId(world, position);
+        if (blockId < 0) return Optional.empty();
+        if (blockId != BlockId.AIR) return Optional.of(new Hit(position, Normal.ZERO, 0, blockId));
 
-        int stepX = Double.compare(directionX, 0);
-        int stepY = Double.compare(directionY, 0);
-        int stepZ = Double.compare(directionZ, 0);
+        int stepX = step(directionX);
+        int stepY = step(directionY);
+        int stepZ = step(directionZ);
         double tMaxX = firstBoundary(originX, x, directionX, stepX);
         double tMaxY = firstBoundary(originY, y, directionY, stepY);
         double tMaxZ = firstBoundary(originZ, z, directionZ, stepZ);
@@ -41,31 +48,31 @@ public final class VoxelRaycaster {
         double tDeltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : 1.0 / Math.abs(directionZ);
 
         while (true) {
+            double distance;
+            Normal normal;
             if (tMaxX <= tMaxY && tMaxX <= tMaxZ) {
                 if (tMaxX > maxDistance || stepX == 0 || x == boundary(stepX)) return Optional.empty();
                 x += stepX;
-                double distance = tMaxX;
+                distance = tMaxX;
                 tMaxX += tDeltaX;
-                position = new BlockPos(x, y, z);
-                if (solid(world, position))
-                    return Optional.of(new Hit(position, new Normal(-stepX, 0, 0), distance, blockId(world, position)));
+                normal = new Normal(-stepX, 0, 0);
             } else if (tMaxY <= tMaxZ) {
                 if (tMaxY > maxDistance || stepY == 0 || y == boundary(stepY)) return Optional.empty();
                 y += stepY;
-                double distance = tMaxY;
+                distance = tMaxY;
                 tMaxY += tDeltaY;
-                position = new BlockPos(x, y, z);
-                if (solid(world, position))
-                    return Optional.of(new Hit(position, new Normal(0, -stepY, 0), distance, blockId(world, position)));
+                normal = new Normal(0, -stepY, 0);
             } else {
                 if (tMaxZ > maxDistance || stepZ == 0 || z == boundary(stepZ)) return Optional.empty();
                 z += stepZ;
-                double distance = tMaxZ;
+                distance = tMaxZ;
                 tMaxZ += tDeltaZ;
-                position = new BlockPos(x, y, z);
-                if (solid(world, position))
-                    return Optional.of(new Hit(position, new Normal(0, 0, -stepZ), distance, blockId(world, position)));
+                normal = new Normal(0, 0, -stepZ);
             }
+            position = new BlockPos(x, y, z);
+            blockId = blockId(world, position);
+            if (blockId < 0) return Optional.empty();
+            if (blockId != BlockId.AIR) return Optional.of(new Hit(position, normal, distance, blockId));
         }
     }
 
@@ -79,12 +86,13 @@ public final class VoxelRaycaster {
         return step > 0 ? Integer.MAX_VALUE : Integer.MIN_VALUE;
     }
 
-    private static boolean solid(World world, BlockPos position) {
-        return blockId(world, position) != BlockId.AIR;
+    private static int step(double direction) {
+        return direction > 0 ? 1 : direction < 0 ? -1 : 0;
     }
 
     private static int blockId(World world, BlockPos position) {
-        return world.getBlock(position).orElse(BlockId.AIR & 0xFF);
+        if (!world.hasChunk(Coordinates.worldToChunk(position))) return -1;
+        return world.getBlock(position).orElse(-1);
     }
 
     private static int floorToInt(double value) {
