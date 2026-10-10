@@ -67,7 +67,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(2, generator.generatorVersion());
+        assertEquals(3, generator.generatorVersion());
     }
 
     @Test

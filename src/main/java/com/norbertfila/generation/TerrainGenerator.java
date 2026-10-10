@@ -6,12 +6,14 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 2;
+    private static final int GENERATOR_VERSION = 3;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
     private final Noise2D hills;
     private final Noise2D details;
+    private final Noise2D regions;
+    private final Noise2D ridges;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
@@ -24,6 +26,8 @@ public final class TerrainGenerator implements TerrainSource {
         continental = config.continental().fractal(noise);
         hills = config.hills().fractal(noise);
         details = config.details().fractal(noise);
+        regions = config.mountains().region().fractal(noise);
+        ridges = config.mountains().ridge().fractal(noise);
     }
 
     @Override
@@ -41,7 +45,8 @@ public final class TerrainGenerator implements TerrainSource {
         double height = config.baseHeight()
                 + layer(continental, config.continental(), worldX, worldZ)
                 + layer(hills, config.hills(), worldX, worldZ)
-                + layer(details, config.details(), worldX, worldZ);
+                + layer(details, config.details(), worldX, worldZ)
+                + mountainHeight(worldX, worldZ);
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
         return (int) Math.floor(height);
@@ -74,6 +79,21 @@ public final class TerrainGenerator implements TerrainSource {
 
     private static double layer(Noise2D noise, TerrainConfig.Layer layer, int x, int z) {
         return layer.amplitude() == 0 ? 0 : noise.sample(x, z) * layer.amplitude();
+    }
+
+    private double mountainHeight(int x, int z) {
+        TerrainConfig.Mountains mountains = config.mountains();
+        if (mountains.ridge().amplitude() == 0) return 0;
+        double region = (layer(regions, mountains.region(), x, z) + 1) * .5;
+        double mask = mountainMask(region, mountains.maskStart(), mountains.maskEnd());
+        if (mask == 0) return 0;
+        double ridge = 1 - Math.abs(ridges.sample(x, z));
+        return ridge * ridge * mask * mountains.ridge().amplitude();
+    }
+
+    static double mountainMask(double region, double start, double end) {
+        double t = Math.clamp((region - start) / (end - start), 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private static int origin(int chunkCoordinate) {

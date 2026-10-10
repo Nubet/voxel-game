@@ -9,7 +9,7 @@ class TerrainConfigTest {
     void declaresConservativeHeightBounds() {
         TerrainConfig config = TerrainConfig.defaults();
         assertEquals(-8, config.minHeight());
-        assertEquals(72, config.maxHeight());
+        assertEquals(147, config.maxHeight());
         TerrainGenerator generator = new TerrainGenerator(42, config);
         for (int z = -2048; z < 2048; z += 17)
             for (int x = -2048; x < 2048; x += 31) {
@@ -29,5 +29,11 @@ class TerrainConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new TerrainConfig.Layer(0x1p21, 1, .5, 2, 1));
         TerrainConfig.Layer huge = new TerrainConfig.Layer(.01, 4, .5, 2, Double.MAX_VALUE);
         assertThrows(IllegalArgumentException.class, () -> new TerrainConfig(0, huge, huge, huge));
+        for (double[] thresholds : new double[][] {
+            {-.1, .5}, {.5, .5}, {.7, .4}, {.5, 1.1}, {Double.NaN, .7}, {.5, Double.POSITIVE_INFINITY}
+        })
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> new TerrainConfig.Mountains(layer, layer, thresholds[0], thresholds[1]));
     }
 }
