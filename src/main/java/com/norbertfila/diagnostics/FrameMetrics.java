@@ -6,7 +6,7 @@ public final class FrameMetrics {
     private static final double REPORT_INTERVAL_SECONDS = 1.0;
     private static final int DEFAULT_WINDOW_SIZE = 240;
 
-    private final int chunks;
+    private int chunks;
     private final int vertices;
     private final long meshBytes;
     private final boolean debug;
@@ -85,6 +85,10 @@ public final class FrameMetrics {
         this.visible = visible;
         this.culled = culled;
         this.drawCalls = drawCalls;
+    }
+
+    public void recordResidentChunks(int chunks) {
+        this.chunks = chunks;
     }
 
     public void recordWorker(long nanos, int queueDepth) {

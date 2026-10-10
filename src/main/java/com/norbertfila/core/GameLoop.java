@@ -137,6 +137,7 @@ public final class GameLoop {
                 }
             }
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
+            metrics.recordResidentChunks(chunkManager.residentCount());
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
