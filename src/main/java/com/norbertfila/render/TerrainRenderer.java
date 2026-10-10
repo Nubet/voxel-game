@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
@@ -20,6 +22,7 @@ public final class TerrainRenderer implements AutoCloseable {
     private final UploadQueue uploads = new UploadQueue();
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
+    private final IndirectTerrainRenderer indirectRenderer = new IndirectTerrainRenderer();
     private final int matrixUniform;
     private int program;
     private boolean closed;
@@ -176,6 +179,17 @@ public final class TerrainRenderer implements AutoCloseable {
         glBindVertexArray(0);
         int visible = culling.visible().size();
         return new RenderStats(visible, meshPool.size() - visible, visible);
+    }
+
+    public IndirectTerrainRenderer.Result prepareIndirectCommands(Frustum frustum) {
+        RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
+        List<IndirectTerrainRenderer.Batch> batches =
+                new ArrayList<>(culling.visible().size());
+        for (ChunkPos position : culling.visible()) {
+            GpuMesh mesh = meshPool.get(position);
+            if (mesh != null) batches.add(new IndirectTerrainRenderer.Batch(position, 0, mesh.vertexCount()));
+        }
+        return indirectRenderer.build(batches, frustum);
     }
 
     @Override
