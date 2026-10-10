@@ -36,13 +36,29 @@ public final class WorldSave {
         Objects.requireNonNull(target);
         Objects.requireNonNull(world);
         if (generatorVersion < 0) throw new IllegalArgumentException("Generator version must not be negative");
-        List<ChunkDelta> deltas = chunkDeltas(world.changes().changes());
+        save(target, capture(seed, generatorVersion, world));
+    }
+
+    public static Snapshot capture(long seed, int generatorVersion, World world) {
+        Objects.requireNonNull(world);
+        if (generatorVersion < 0) throw new IllegalArgumentException("Generator version must not be negative");
+        return new Snapshot(
+                seed,
+                generatorVersion,
+                SCHEMA_VERSION,
+                chunkDeltas(world.changes().changes()));
+    }
+
+    public static void save(Path target, Snapshot snapshot) throws IOException {
+        Objects.requireNonNull(target);
+        Objects.requireNonNull(snapshot);
+        List<ChunkDelta> deltas = snapshot.deltas();
         Path absolute = target.toAbsolutePath();
         Path parent = absolute.getParent();
         if (parent != null) Files.createDirectories(parent);
         Path temporary = Files.createTempFile(parent, absolute.getFileName().toString(), ".tmp");
         try {
-            write(temporary, seed, generatorVersion, deltas);
+            write(temporary, snapshot, deltas);
             try {
                 Files.move(temporary, absolute, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
@@ -62,6 +78,7 @@ public final class WorldSave {
             if (schemaVersion != SCHEMA_VERSION) throw new IOException("Unsupported world save schema");
             long seed = input.readLong();
             int generatorVersion = input.readInt();
+            if (generatorVersion < 0) throw new IOException("Invalid generator version");
             int deltaCount = input.readInt();
             if (deltaCount < 0 || deltaCount > MAX_DELTAS) throw new IOException("Invalid delta count");
             List<ChunkDelta> deltas = new ArrayList<>(deltaCount);
@@ -83,13 +100,13 @@ public final class WorldSave {
         }
     }
 
-    private static void write(Path path, long seed, int generatorVersion, List<ChunkDelta> deltas) throws IOException {
+    private static void write(Path path, Snapshot snapshot, List<ChunkDelta> deltas) throws IOException {
         try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(
                 Files.newOutputStream(path, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)))) {
             output.writeInt(MAGIC);
             output.writeInt(SCHEMA_VERSION);
-            output.writeLong(seed);
-            output.writeInt(generatorVersion);
+            output.writeLong(snapshot.seed());
+            output.writeInt(snapshot.generatorVersion());
             output.writeInt(deltas.size());
             for (ChunkDelta delta : deltas) {
                 output.writeInt(delta.position().x());
@@ -142,6 +159,17 @@ public final class WorldSave {
         public Loaded {
             if (schemaVersion != SCHEMA_VERSION) throw new IllegalArgumentException("Unsupported world save schema");
             Objects.requireNonNull(deltas);
+            deltas = List.copyOf(deltas);
+        }
+    }
+
+    public record Snapshot(long seed, int generatorVersion, int schemaVersion, List<ChunkDelta> deltas) {
+        public Snapshot {
+            if (generatorVersion < 0 || schemaVersion != SCHEMA_VERSION) {
+                throw new IllegalArgumentException("Invalid world save metadata");
+            }
+            Objects.requireNonNull(deltas);
+            if (deltas.size() > MAX_DELTAS) throw new IllegalArgumentException("Too many chunk deltas");
             deltas = List.copyOf(deltas);
         }
     }
