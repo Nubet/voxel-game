@@ -43,13 +43,17 @@ public final class HillsGenerator implements TerrainSource {
 
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
+        return new TerrainSummary(surfaceHeight(worldX, worldZ), BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
+    }
+
+    @Override
+    public int surfaceHeight(int worldX, int worldZ) {
         int seedOffset = seed == 0
                 ? 0
                 : (int) Math.floorMod(
                                 mix(seed, Math.floorDiv(worldX, Chunk.SIZE), Math.floorDiv(worldZ, Chunk.SIZE)), 3)
                         - 1;
-        int surface = 9 + seedOffset + (int) (5 * Math.sin(worldX * 0.065) * Math.cos(worldZ * 0.071));
-        return new TerrainSummary(surface, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
+        return 9 + seedOffset + (int) (5 * Math.sin(worldX * 0.065) * Math.cos(worldZ * 0.071));
     }
 
     private static long mix(long seed, int x, int z) {

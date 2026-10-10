@@ -15,6 +15,30 @@ import org.junit.jupiter.api.Test;
 
 class HillsGeneratorTest {
     @Test
+    void preservesVersionOneTerrain() {
+        ChunkPos[] positions = {new ChunkPos(0, 0, 0), new ChunkPos(-2, 0, 3), new ChunkPos(7, -1, -9)};
+        long[] seeds = {0, 42, -1};
+        int[][] expected = {
+            {-201384846, 1693913540, 1916862465},
+            {932539506, -1693285948, 1916862465},
+            {-201384846, -1693285948, 1916862465}
+        };
+        for (int i = 0; i < seeds.length; i++) {
+            HillsGenerator generator = new HillsGenerator(seeds[i]);
+            assertEquals(1, generator.generatorVersion());
+            for (int j = 0; j < positions.length; j++) {
+                assertEquals(
+                        expected[i][j],
+                        java.util.Arrays.hashCode(
+                                generator.generate(positions[j]).blocks()));
+                int x = positions[j].x() * Chunk.SIZE;
+                int z = positions[j].z() * Chunk.SIZE;
+                assertEquals(generator.sample(x, z).surfaceHeight(), generator.surfaceHeight(x, z));
+            }
+        }
+    }
+
+    @Test
     void generatesTheSameChunkForTheSameCoordinates() {
         HillsGenerator generator = new HillsGenerator(42L);
         ChunkData first = generator.generate(new ChunkPos(2, 0, -3));
