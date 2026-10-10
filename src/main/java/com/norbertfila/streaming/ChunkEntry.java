@@ -9,6 +9,7 @@ public final class ChunkEntry {
     private long chunkRevision = -1;
     private long meshRevision = -1;
     private long generationToken = -1;
+    private boolean gpuResident;
 
     public ChunkEntry(ChunkPos position) {
         this.position = Objects.requireNonNull(position);
@@ -70,12 +71,13 @@ public final class ChunkEntry {
     public boolean uploaded(long revision) {
         if (revision != meshRevision || state != ChunkState.READY_CPU) return false;
         transitionTo(ChunkState.RESIDENT_GPU);
+        gpuResident = true;
         return true;
     }
 
     public boolean meshFailed() {
-        if (state != ChunkState.MESHING) return false;
-        transitionTo(meshRevision < 0 ? ChunkState.GENERATED : ChunkState.RESIDENT_GPU);
+        if (state != ChunkState.MESHING && state != ChunkState.READY_CPU) return false;
+        transitionTo(gpuResident ? ChunkState.RESIDENT_GPU : ChunkState.GENERATED);
         return true;
     }
 
@@ -98,7 +100,8 @@ public final class ChunkEntry {
             case GENERATED -> next == ChunkState.MESHING || next == ChunkState.EVICTING;
             case MESHING ->
                 next == ChunkState.READY_CPU || next == ChunkState.GENERATED || next == ChunkState.RESIDENT_GPU;
-            case READY_CPU -> next == ChunkState.RESIDENT_GPU || next == ChunkState.EVICTING;
+            case READY_CPU ->
+                next == ChunkState.RESIDENT_GPU || next == ChunkState.GENERATED || next == ChunkState.EVICTING;
             case RESIDENT_GPU -> next == ChunkState.MESHING || next == ChunkState.EVICTING;
             case EVICTING -> false;
         };

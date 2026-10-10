@@ -1,11 +1,14 @@
 package com.norbertfila.streaming;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.ChunkData;
+import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.generation.WorldGenerator;
+import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import java.time.Duration;
@@ -16,6 +19,50 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ChunkManagerTest {
+    @Test
+    void loadsSpawnAndPublishesCompleteTerrainAfterDistanceChanges() throws Exception {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(4, -1, 1, ViewDemand.Shape.SQUARE);
+        ChunkPos center = new ChunkPos(0, 0, 0);
+        var uploaded = new java.util.HashMap<ChunkPos, ChunkManager.MeshResult>();
+        try (ChunkManager manager = new ChunkManager(world, new HillsGenerator(), demand)) {
+            for (int radius : new int[] {4, 6, 16, 2, 5}) {
+                manager.setRenderDistance(radius);
+                long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                int quietUpdates = 0;
+                while (quietUpdates < 20 && System.nanoTime() < deadline) {
+                    var update = manager.update(center);
+                    update.evicted().forEach(uploaded::remove);
+                    var processed = manager.processResults();
+                    for (var mesh : processed.meshes()) {
+                        assertTrue(manager.markUploaded(mesh));
+                        uploaded.put(mesh.position(), mesh);
+                    }
+                    if (processed.generated() == 0
+                            && processed.meshes().isEmpty()
+                            && demand.requested().stream().allMatch(uploaded::containsKey)) quietUpdates++;
+                    else quietUpdates = 0;
+                    Thread.sleep(2);
+                }
+                assertEquals(20, quietUpdates, "Streaming did not settle for radius " + radius);
+                assertTrue(manager.readyForPlayer(center), "Spawn chunk missing");
+                var spawn = new com.norbertfila.player.SpawnResolver(new HillsGenerator()).resolve(0, 0);
+                assertTrue(world.isSolid(new com.norbertfila.world.BlockPos(0, (int) spawn.y() - 1, 0)));
+                assertFalse(world.isSolid(new com.norbertfila.world.BlockPos(0, (int) spawn.y(), 0)));
+                GreedyMesher mesher = new GreedyMesher();
+                for (ChunkPos position : demand.requested()) {
+                    var neighborhood = world.blockNeighborhood(position);
+                    var expected =
+                            mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
+                    assertArrayEquals(
+                            expected.vertices(),
+                            uploaded.get(position).mesh().vertices(),
+                            "Outdated terrain at " + position);
+                }
+            }
+        }
+    }
+
     @Test
     void generatesMissingChunksOnceAndKeepsExistingChunks() {
         List<ChunkPos> generated = new ArrayList<>();
@@ -144,6 +191,21 @@ class ChunkManagerTest {
         await(manager);
 
         assertEquals(0, manager.residentCount());
+        manager.close();
+    }
+
+    @Test
+    void retriesMeshAfterUploadFailure() {
+        ChunkManager manager =
+                new ChunkManager(new World(), emptyGenerator(), new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE));
+        manager.update(new ChunkPos(0, 0, 0));
+
+        ChunkManager.MeshResult first = awaitMesh(manager).meshes().get(0);
+        assertTrue(manager.markUploadFailed(first));
+
+        ChunkManager.MeshResult retry = awaitMesh(manager).meshes().get(0);
+        assertEquals(first.position(), retry.position());
+        assertTrue(retry.meshRevision() > first.meshRevision());
         manager.close();
     }
 

@@ -13,6 +13,74 @@ class GreedyMesherTest {
     private final GreedyMesher greedy = new GreedyMesher();
 
     @Test
+    void mergedSurfacesMatchBaselinePositionsDirectionsAndColorsAcrossAllBoundaries() {
+        var generator = new com.norbertfila.generation.HillsGenerator();
+        var world = new com.norbertfila.world.World();
+        var position = new com.norbertfila.world.ChunkPos(-1, 0, -1);
+        for (int y = -1; y <= 1; y++)
+            for (int z = -2; z <= 0; z++)
+                for (int x = -2; x <= 0; x++) {
+                    var neighbor = new com.norbertfila.world.ChunkPos(x, y, z);
+                    world.putChunk(
+                            neighbor,
+                            Chunk.fromBlocks(generator.generate(neighbor).blocks()));
+                }
+        var neighborhood = world.blockNeighborhood(position);
+        assertEquals(
+                surfaces(baseline.mesh(neighborhood.center(), neighborhood, -1, 0, -1)),
+                surfaces(greedy.mesh(neighborhood.center(), neighborhood, -1, 0, -1)));
+
+        Chunk rectangle = new Chunk();
+        for (int y = 2; y < 5; y++)
+            for (int z = 4; z < 11; z++) for (int x = 1; x < 6; x++) rectangle.set(x, y, z, BlockId.STONE);
+        assertEquals(surfaces(meshWith(baseline, rectangle)), surfaces(meshWith(greedy, rectangle)));
+    }
+
+    private record Surface(int axis, int direction, int plane, int u, int v, float r, float g, float b) {}
+
+    private static java.util.Map<Surface, Integer> surfaces(MeshData mesh) {
+        var surfaces = new java.util.HashMap<Surface, Integer>();
+        float[] vertices = mesh.vertices();
+        for (int offset = 0; offset < vertices.length; offset += 36) {
+            float ax = vertices[offset + 6] - vertices[offset];
+            float ay = vertices[offset + 7] - vertices[offset + 1];
+            float az = vertices[offset + 8] - vertices[offset + 2];
+            float bx = vertices[offset + 12] - vertices[offset];
+            float by = vertices[offset + 13] - vertices[offset + 1];
+            float bz = vertices[offset + 14] - vertices[offset + 2];
+            float[] normal = {ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx};
+            int axis = normal[0] != 0 ? 0 : normal[1] != 0 ? 1 : 2;
+            int uAxis = (axis + 1) % 3;
+            int vAxis = (axis + 2) % 3;
+            int minU = Integer.MAX_VALUE, minV = Integer.MAX_VALUE;
+            int maxU = Integer.MIN_VALUE, maxV = Integer.MIN_VALUE;
+            for (int vertex = 0; vertex < 6; vertex++) {
+                int u = (int) vertices[offset + vertex * 6 + uAxis];
+                int v = (int) vertices[offset + vertex * 6 + vAxis];
+                minU = Math.min(minU, u);
+                maxU = Math.max(maxU, u);
+                minV = Math.min(minV, v);
+                maxV = Math.max(maxV, v);
+            }
+            for (int u = minU; u < maxU; u++)
+                for (int v = minV; v < maxV; v++)
+                    surfaces.merge(
+                            new Surface(
+                                    axis,
+                                    normal[axis] > 0 ? 1 : -1,
+                                    (int) vertices[offset + axis],
+                                    u,
+                                    v,
+                                    vertices[offset + 3],
+                                    vertices[offset + 4],
+                                    vertices[offset + 5]),
+                            1,
+                            Integer::sum);
+        }
+        return surfaces;
+    }
+
+    @Test
     void emptyChunkHasNoGeometry() {
         assertEquals(0, mesh(new Chunk()).vertexCount());
     }
@@ -61,6 +129,32 @@ class GreedyMesherTest {
         assertEquals(
                 (Chunk.SIZE * 6 - (Chunk.SIZE - 1) * 2) * MeshData.VERTICES_PER_FACE,
                 meshWith(baseline, chunk).vertexCount());
+    }
+
+    @Test
+    void cullsPresentChunkBoundaryNeighbor() {
+        Chunk center = new Chunk();
+        Chunk neighbor = new Chunk();
+        center.set(Chunk.SIZE - 1, 1, 1, BlockId.STONE);
+        neighbor.set(0, 1, 1, BlockId.STONE);
+
+        ChunkSnapshot snapshot = center.snapshot();
+        BlockNeighborhood neighborhood =
+                new BlockNeighborhood(snapshot, neighbor.snapshot(), null, null, null, null, null);
+
+        assertEquals(5, greedy.mesh(snapshot, neighborhood, 0, 0, 0).faceCount());
+    }
+
+    @Test
+    void keepsBoundaryFaceWhenNeighborIsMissing() {
+        Chunk center = new Chunk();
+        center.set(Chunk.SIZE - 1, 1, 1, BlockId.STONE);
+        ChunkSnapshot snapshot = center.snapshot();
+
+        assertEquals(
+                6,
+                greedy.mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0)
+                        .faceCount());
     }
 
     @Test

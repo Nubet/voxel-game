@@ -12,9 +12,11 @@ import com.norbertfila.world.World;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,6 +39,7 @@ public final class ChunkManager implements AutoCloseable {
             new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
     private final Map<ChunkPos, ChunkEntry> entries = new HashMap<>();
     private final Map<ChunkPos, Long> meshTokens = new HashMap<>();
+    private final Set<ChunkPos> pendingRemesh = new HashSet<>();
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
 
@@ -91,10 +94,17 @@ public final class ChunkManager implements AutoCloseable {
                 if (withinHysteresis(position, center)) continue;
                 entries.remove(position);
                 meshTokens.remove(position);
+                pendingRemesh.remove(position);
                 world.removeChunk(position);
                 evicted.add(position);
             }
+            for (ChunkPos position : evicted) {
+                for (ChunkPos neighbor : neighbors(position)) {
+                    if (world.hasChunk(neighbor)) requestRemesh(neighbor);
+                }
+            }
         }
+        processPendingRemeshes();
         return new UpdateResult(
                 changed,
                 scheduled,
@@ -105,6 +115,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ProcessResult processResults() {
+        processPendingRemeshes();
         int generated = 0;
         int discarded = 0;
         for (int index = 0; index < RESULTS_PER_UPDATE; index++) {
@@ -145,13 +156,18 @@ public final class ChunkManager implements AutoCloseable {
                     || outcome.revision() != entry.chunkRevision()
                     || !outcome.succeeded()
                     || !entry.readyCpu(outcome.revision())) {
-                if (entry != null && outcome.failure() != null) {
+                if (entry != null
+                        && expectedToken != null
+                        && expectedToken == outcome.token()
+                        && outcome.revision() == entry.chunkRevision()
+                        && outcome.failure() != null) {
                     LOG.log(
                             Level.SEVERE,
                             "Chunk meshing failed position=" + outcome.position() + " revision=" + outcome.revision()
                                     + " token=" + outcome.token(),
                             outcome.failure());
                     entry.meshFailed();
+                    requestRemesh(outcome.position());
                 }
                 outcome.discard();
                 discarded++;
@@ -159,6 +175,7 @@ public final class ChunkManager implements AutoCloseable {
             }
             meshes.add(new MeshResult(outcome.position(), outcome.result(), entry.meshRevision(), outcome.token()));
         }
+        processPendingRemeshes();
         return new ProcessResult(generated, meshes, discarded);
     }
 
@@ -179,13 +196,24 @@ public final class ChunkManager implements AutoCloseable {
     public boolean markUploaded(MeshResult result) {
         Objects.requireNonNull(result);
         ChunkEntry entry = entries.get(result.position());
-        return entry != null && entry.uploaded(result.meshRevision());
+        Long expectedToken = meshTokens.get(result.position());
+        if (entry == null
+                || expectedToken == null
+                || expectedToken != result.token()
+                || !entry.uploaded(result.meshRevision())) return false;
+        processPendingRemesh(result.position());
+        return true;
     }
 
     public boolean markUploadFailed(MeshResult result) {
         Objects.requireNonNull(result);
         ChunkEntry entry = entries.get(result.position());
-        return entry != null && entry.meshFailed();
+        Long expectedToken = meshTokens.get(result.position());
+        if (entry == null || expectedToken == null || expectedToken != result.token() || !entry.meshFailed())
+            return false;
+        requestRemesh(result.position());
+        processPendingRemesh(result.position());
+        return true;
     }
 
     public boolean readyForPlayer(ChunkPos position) {
@@ -223,7 +251,12 @@ public final class ChunkManager implements AutoCloseable {
     private void scheduleMesh(ChunkPos position) {
         ChunkEntry entry = entries.get(position);
         Chunk chunk = world.getChunk(position);
-        if (entry == null || chunk == null || !entry.beginMeshing(chunk.revision())) return;
+        if (entry == null || chunk == null) return;
+        if (!entry.beginMeshing(chunk.revision())) {
+            requestRemesh(position);
+            return;
+        }
+        pendingRemesh.remove(position);
         long token = meshTokenSequence.getAndIncrement();
         meshTokens.put(position, token);
         BlockNeighborhood neighborhood = world.blockNeighborhood(position);
@@ -236,8 +269,28 @@ public final class ChunkManager implements AutoCloseable {
         if (!submitted) {
             meshTokens.remove(position);
             entry.meshFailed();
+            requestRemesh(position);
             LOG.warning("Meshing task rejected position=" + position + " revision=" + chunk.revision());
         }
+    }
+
+    private void requestRemesh(ChunkPos position) {
+        if (entries.containsKey(position) && world.hasChunk(position)) pendingRemesh.add(position);
+    }
+
+    private void processPendingRemeshes() {
+        for (ChunkPos position : List.copyOf(pendingRemesh)) processPendingRemesh(position);
+    }
+
+    private void processPendingRemesh(ChunkPos position) {
+        if (!pendingRemesh.contains(position)) return;
+        ChunkEntry entry = entries.get(position);
+        Chunk chunk = world.getChunk(position);
+        if (entry == null || chunk == null) {
+            pendingRemesh.remove(position);
+            return;
+        }
+        if (entry.state() == ChunkState.GENERATED || entry.state() == ChunkState.RESIDENT_GPU) scheduleMesh(position);
     }
 
     private List<ChunkPos> neighbors(ChunkPos position) {

@@ -15,6 +15,24 @@ import org.junit.jupiter.api.Test;
 
 class ChunkSchedulerTest {
     @Test
+    void reservesResultCapacityUntilConsumerDrainsIt() throws Exception {
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 8, 2)) {
+            assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(0, 0, 0), 0, 0, () -> 0)));
+            assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(1, 0, 0), 0, 1, () -> 1)));
+            assertFalse(scheduler.submit(new ChunkTask<>(new ChunkPos(2, 0, 0), 0, 2, () -> 2)));
+            scheduler.shutdown();
+            assertTrue(scheduler.awaitTermination(Duration.ofSeconds(2)));
+            assertEquals(2, scheduler.outstandingJobs());
+            var outcomes = scheduler.drainReady();
+            assertEquals(2, outcomes.size());
+            assertEquals(0, scheduler.outstandingJobs());
+            assertEquals(
+                    java.util.Set.of(0, 1),
+                    outcomes.stream().map(ChunkTask.Outcome::result).collect(java.util.stream.Collectors.toSet()));
+        }
+    }
+
+    @Test
     void returnsOutcomeWithPositionAndToken() throws Exception {
         try (ChunkScheduler scheduler = new ChunkScheduler(1, 2, 2)) {
             ChunkPos position = new ChunkPos(-2, 1, 3);
@@ -32,9 +50,9 @@ class ChunkSchedulerTest {
     }
 
     @Test
-    void limitsQueuedTasks() throws Exception {
+    void limitsOutstandingTasksIncludingReadyResults() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
-        try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 4)) {
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 2)) {
             assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(0, 0, 0), 0, () -> {
                 release.await();
                 return new MeshData(new float[0]);
@@ -79,7 +97,7 @@ class ChunkSchedulerTest {
     @Test
     void runsNearestQueuedTaskFirst() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
-        try (ChunkScheduler scheduler = new ChunkScheduler(1, 20, 20)) {
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 20, 21)) {
             assertTrue(scheduler.submit(new ChunkTask(
                     new ChunkPos(99, 0, 0),
                     0,
@@ -164,6 +182,7 @@ class ChunkSchedulerTest {
             release.countDown();
             scheduler.shutdown();
             assertTrue(scheduler.awaitTermination(Duration.ofSeconds(1)));
+            while (scheduler.pollReady() != null) {}
             assertEquals(0, scheduler.outstandingJobs());
         }
     }

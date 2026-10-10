@@ -42,7 +42,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         executor = new ThreadPoolExecutor(
                 workerCount, workerCount, 0L, TimeUnit.MILLISECONDS, tasks, new ThreadPoolExecutor.AbortPolicy());
         ready = new ArrayBlockingQueue<>(readyQueueCapacity);
-        outstandingLimit = workerCount + taskQueueCapacity;
+        // Reserve one result slot per accepted job so workers never lose an outcome to a full queue
+        outstandingLimit = Math.min(workerCount + taskQueueCapacity, readyQueueCapacity);
         outstanding = new Semaphore(outstandingLimit);
     }
 
@@ -75,7 +76,9 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     public ChunkTask.Outcome<T> pollReady() {
         synchronized (readyLock) {
-            return ready.poll();
+            ChunkTask.Outcome<T> outcome = ready.poll();
+            if (outcome != null) outstanding.release();
+            return outcome;
         }
     }
 
@@ -98,6 +101,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         List<ChunkTask.Outcome<T>> outcomes = new ArrayList<>();
         synchronized (readyLock) {
             ready.drainTo(outcomes);
+            outstanding.release(outcomes.size());
         }
         return outcomes;
     }
@@ -149,6 +153,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 else {
                     outcome.discard();
                     discarded++;
+                    outstanding.release();
                 }
             }
             ready.addAll(retained);
@@ -169,7 +174,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 removed = true;
             }
         }
-        if (!removed && !running.contains(key)) cancelled.remove(key);
+        if (!removed && !submitted.contains(key)) cancelled.remove(key);
         return true;
     }
 
@@ -184,7 +189,12 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     public void shutdownNow() {
-        executor.shutdownNow();
+        for (Runnable queued : executor.shutdownNow()) {
+            TaskKey key = TaskKey.of(((PrioritizedTask) queued).task);
+            submitted.remove(key);
+            cancelled.remove(key);
+            outstanding.release();
+        }
     }
 
     private void execute(ChunkTask<T> task) {
@@ -207,17 +217,15 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             }
             if (cancelled.contains(TaskKey.of(task))) {
                 outcome.discard();
+                outstanding.release();
                 return;
             }
             synchronized (readyLock) {
                 if (!ready.offer(outcome)) {
-                    LOG.warning("Dropping completed chunk result because ready queue is full position="
-                            + outcome.position() + " token=" + outcome.token());
-                    outcome.discard();
+                    throw new IllegalStateException("Reserved chunk result slot unavailable: " + outcome.position());
                 }
             }
         } finally {
-            outstanding.release();
             submitted.remove(TaskKey.of(task));
         }
     }
@@ -277,6 +285,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             shutdownNow();
             Thread.currentThread().interrupt();
         }
+        for (ChunkTask.Outcome<T> outcome : drainReady()) outcome.discard();
         latest.clear();
     }
 }
