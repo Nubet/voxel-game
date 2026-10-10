@@ -3,6 +3,7 @@ package com.norbertfila.world;
 public final class Chunk {
     public static final int SIZE = 16;
     private final byte[] blocks = new byte[SIZE * SIZE * SIZE];
+    private long revision;
 
     public byte get(int x, int y, int z) {
         return blocks[index(x, y, z)];
@@ -12,7 +13,15 @@ public final class Chunk {
         if (!BlockId.isValid(value)) {
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
         }
-        blocks[index(x, y, z)] = value;
+        int blockIndex = index(x, y, z);
+        if (blocks[blockIndex] != value) {
+            blocks[blockIndex] = value;
+            revision++;
+        }
+    }
+
+    public ChunkSnapshot snapshot() {
+        return new ChunkSnapshot(blocks, revision);
     }
 
     private static int index(int x, int y, int z) {

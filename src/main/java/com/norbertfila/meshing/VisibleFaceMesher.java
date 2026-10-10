@@ -1,6 +1,8 @@
 package com.norbertfila.meshing;
 
-import com.norbertfila.world.*;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkSnapshot;
 import java.util.Arrays;
 
 /** Baseline face culling inside one chunk; boundary faces are intentionally emitted */
@@ -22,12 +24,12 @@ public final class VisibleFaceMesher implements ChunkMesher {
     private static final int[] TRIANGLE_INDICES = {0, 1, 2, 0, 2, 3};
 
     @Override
-    public MeshData mesh(Chunk chunk, int cx, int cy, int cz) {
+    public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
         Floats out = new Floats(4096);
         for (int y = 0; y < Chunk.SIZE; y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
-                    byte block = chunk.get(x, y, z);
+                    byte block = snapshot.get(x, y, z);
                     if (block == BlockId.AIR) continue;
                     for (int f = 0; f < 6; f++) {
                         int nx = x + NORMALS[f][0], ny = y + NORMALS[f][1], nz = z + NORMALS[f][2];
@@ -37,7 +39,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
                                 && nx < Chunk.SIZE
                                 && ny < Chunk.SIZE
                                 && nz < Chunk.SIZE
-                                && chunk.get(nx, ny, nz) != BlockId.AIR) continue;
+                                && snapshot.get(nx, ny, nz) != BlockId.AIR) continue;
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
                         float[] rgb = color(block, f);
                         for (int index : TRIANGLE_INDICES) {

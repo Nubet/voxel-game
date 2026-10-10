@@ -46,7 +46,7 @@ class VisibleFaceMesherTest {
     void eachFaceHasOutwardWinding() {
         Chunk chunk = new Chunk();
         chunk.set(1, 1, 1, BlockId.STONE);
-        float[] vertices = mesher.mesh(chunk, 0, 0, 0).vertices();
+        float[] vertices = mesh(chunk).vertices();
 
         for (int face = 0; face < NORMALS.length; face++) {
             int offset = face * MeshData.VERTICES_PER_FACE * MeshData.VERTEX_STRIDE;
@@ -67,9 +67,14 @@ class VisibleFaceMesherTest {
     }
 
     private void assertCounts(Chunk chunk, int faces) {
-        MeshData mesh = mesher.mesh(chunk, 0, 0, 0);
+        MeshData mesh = mesh(chunk);
 
         assertEquals(faces, mesh.faceCount());
         assertEquals(faces * MeshData.VERTICES_PER_FACE, mesh.vertexCount());
+    }
+
+    private MeshData mesh(Chunk chunk) {
+        var snapshot = chunk.snapshot();
+        return mesher.mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0);
     }
 }

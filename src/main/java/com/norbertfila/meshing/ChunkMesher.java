@@ -1,8 +1,8 @@
 package com.norbertfila.meshing;
 
-import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkSnapshot;
 
 @FunctionalInterface
 public interface ChunkMesher {
-    MeshData mesh(Chunk chunk, int cx, int cy, int cz);
+    MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz);
 }

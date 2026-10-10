@@ -25,7 +25,8 @@ public final class Game {
                 for (int chunkY = TERRAIN_MIN_CHUNK_Y; chunkY <= TERRAIN_MAX_CHUNK_Y; chunkY++)
                     for (int z = -TERRAIN_RADIUS; z <= TERRAIN_RADIUS; z++)
                         for (int x = -TERRAIN_RADIUS; x <= TERRAIN_RADIUS; x++) {
-                            MeshData mesh = mesher.mesh(generator.generate(x, chunkY, z), x, chunkY, z);
+                            var snapshot = generator.generate(x, chunkY, z).snapshot();
+                            MeshData mesh = mesher.mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), x, chunkY, z);
                             renderer.upload(mesh);
                             vertices += mesh.vertexCount();
                             meshBytes += (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
