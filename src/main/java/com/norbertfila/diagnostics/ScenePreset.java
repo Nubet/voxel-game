@@ -10,6 +10,7 @@ public enum ScenePreset {
     FLAT,
     HILLS,
     SOLID,
+    CHECKERBOARD,
     EMPTY;
 
     public int generatorVersion() {
@@ -23,8 +24,10 @@ public enum ScenePreset {
         for (int y = 0; y < Chunk.SIZE; y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
-                    if (this == SOLID || position.y() * Chunk.SIZE + y <= 8) {
-                        blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = this == SOLID ? BlockId.STONE : BlockId.GRASS;
+                    if (this == SOLID || this == CHECKERBOARD || position.y() * Chunk.SIZE + y <= 8) {
+                        blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = this == CHECKERBOARD
+                                ? ((x + z + y) & 1) == 0 ? BlockId.STONE : BlockId.AIR
+                                : this == SOLID ? BlockId.STONE : BlockId.GRASS;
                     }
                 }
         return new ChunkData(position, blocks);

@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 /** Baseline face culling inside one chunk; boundary faces are intentionally emitted */
 public final class VisibleFaceMesher implements ChunkMesher {
-    static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    public static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
     private static final float[] GRASS_TOP = {.32f, .69f, .22f};
     private static final float[] GRASS_SIDE = {.50f, .46f, .27f};
     private static final float[] DIRT = {.46f, .29f, .16f};

@@ -20,7 +20,7 @@ public final class Game {
             ViewDemand viewDemand =
                     new ViewDemand(TERRAIN_RADIUS, TERRAIN_MIN_CHUNK_Y, TERRAIN_MAX_CHUNK_Y, ViewDemand.Shape.SQUARE);
             WorldGenerator generator = new HillsGenerator();
-            ChunkMesher mesher = new VisibleFaceMesher();
+            ChunkMesher mesher = new GreedyMesher();
             try (TerrainRenderer renderer = new TerrainRenderer()) {
                 long start = System.nanoTime();
                 World world = new World();
