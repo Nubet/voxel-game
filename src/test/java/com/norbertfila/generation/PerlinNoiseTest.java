@@ -6,6 +6,14 @@ import org.junit.jupiter.api.Test;
 
 class PerlinNoiseTest {
     @Test
+    void preservesReferenceGradientSamples() {
+        Noise2D noise = new PerlinNoise(42);
+        assertEquals(.2201701284503913, noise.sample(.25, .75), 1e-15);
+        assertEquals(-.011829423536565908, noise.sample(-1.25, 3.5), 1e-15);
+        assertEquals(-.25, noise.sample(-17.5, -31.75), 1e-15);
+    }
+
+    @Test
     void isSeededBoundedAndZeroAtLatticeCorners() {
         Noise2D first = new PerlinNoise(42);
         Noise2D same = new PerlinNoise(42);

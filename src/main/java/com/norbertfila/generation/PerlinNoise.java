@@ -20,6 +20,7 @@ public final class PerlinNoise implements Noise2D {
         double v = fade(dz);
         double lower = lerp(gradient(cellX, cellZ, dx, dz), gradient(cellX + 1, cellZ, dx - 1, dz), u);
         double upper = lerp(gradient(cellX, cellZ + 1, dx, dz - 1), gradient(cellX + 1, cellZ + 1, dx - 1, dz - 1), u);
+        // Corner dot products lie in [-2, 2]; halving preserves TerrainConfig's height bounds.
         return lerp(lower, upper, v) * 0.5;
     }
 
