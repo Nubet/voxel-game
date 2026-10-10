@@ -7,13 +7,13 @@ import java.util.Arrays;
 
 /** Baseline face culling inside one chunk; boundary faces are intentionally emitted */
 public final class VisibleFaceMesher implements ChunkMesher {
-    private static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
     private static final float[] GRASS_TOP = {.32f, .69f, .22f};
     private static final float[] GRASS_SIDE = {.50f, .46f, .27f};
     private static final float[] DIRT = {.46f, .29f, .16f};
     private static final float[] STONE = {.48f, .49f, .51f};
     // Each face: four corner offsets in CCW order as viewed from outside.
-    private static final int[][][] FACES = {
+    static final int[][][] FACES = {
         {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}, {1, 0, 1}},
         {{0, 0, 1}, {0, 1, 1}, {0, 1, 0}, {0, 0, 0}},
         {{0, 1, 1}, {1, 1, 1}, {1, 1, 0}, {0, 1, 0}},
@@ -21,7 +21,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
         {{1, 0, 1}, {1, 1, 1}, {0, 1, 1}, {0, 0, 1}},
         {{0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}}
     };
-    private static final int[] TRIANGLE_INDICES = {0, 1, 2, 0, 2, 3};
+    static final int[] TRIANGLE_INDICES = {0, 1, 2, 0, 2, 3};
 
     @Override
     public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
