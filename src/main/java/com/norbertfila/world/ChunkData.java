@@ -19,14 +19,20 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
 
     long estimatedBytes();
 
+    int length();
+
     static ChunkData empty() {
-        return new Empty();
+        return empty(Chunk.BLOCK_BYTES);
+    }
+
+    static ChunkData empty(int length) {
+        checkLength(length);
+        return new Empty(length);
     }
 
     static ChunkData fromBlocks(byte[] source) {
         Objects.requireNonNull(source);
-        if (source.length != Chunk.BLOCK_BYTES)
-            throw new IllegalArgumentException("Invalid chunk data size: " + source.length);
+        checkLength(source.length);
         byte first = source[0];
         boolean uniform = true;
         for (byte value : source) {
@@ -34,27 +40,33 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
                 throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
             uniform &= value == first;
         }
-        if (uniform) return first == BlockId.AIR ? new Empty() : new Uniform(first);
+        if (uniform) return first == BlockId.AIR ? new Empty(source.length) : new Uniform(first, source.length);
         return new Dense(source);
     }
 
     final class Empty implements ChunkData {
+        private final int length;
+
+        Empty(int length) {
+            this.length = length;
+        }
+
         @Override
         public byte get(int index) {
-            checkIndex(index);
+            checkIndex(index, length);
             return BlockId.AIR;
         }
 
         @Override
         public ChunkData set(int index, byte value) {
-            checkIndex(index);
+            checkIndex(index, length);
             checkValue(value);
-            return value == BlockId.AIR ? this : Dense.withValue(index, value);
+            return value == BlockId.AIR ? this : Dense.withValue(index, value, BlockId.AIR, length);
         }
 
         @Override
         public byte[] toBlocks() {
-            return new byte[Chunk.BLOCK_BYTES];
+            return new byte[length];
         }
 
         @Override
@@ -66,30 +78,40 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
         public long estimatedBytes() {
             return 0;
         }
+
+        @Override
+        public int length() {
+            return length;
+        }
     }
 
-    record Uniform(byte value) implements ChunkData {
+    record Uniform(byte value, int length) implements ChunkData {
+        public Uniform(byte value) {
+            this(value, Chunk.BLOCK_BYTES);
+        }
+
         public Uniform {
             if (!BlockId.isValid(value) || value == BlockId.AIR)
                 throw new IllegalArgumentException("Invalid uniform block id");
+            checkLength(length);
         }
 
         @Override
         public byte get(int index) {
-            checkIndex(index);
+            checkIndex(index, length);
             return value;
         }
 
         @Override
         public ChunkData set(int index, byte next) {
-            checkIndex(index);
+            checkIndex(index, length);
             checkValue(next);
-            return value == next ? this : Dense.withValue(index, next, value);
+            return value == next ? this : Dense.withValue(index, next, value, length);
         }
 
         @Override
         public byte[] toBlocks() {
-            byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+            byte[] blocks = new byte[length];
             java.util.Arrays.fill(blocks, value);
             return blocks;
         }
@@ -112,12 +134,8 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
             this.blocks = blocks.clone();
         }
 
-        static Dense withValue(int index, byte value) {
-            return withValue(index, value, BlockId.AIR);
-        }
-
-        static Dense withValue(int index, byte value, byte fill) {
-            byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+        static Dense withValue(int index, byte value, byte fill, int length) {
+            byte[] blocks = new byte[length];
             java.util.Arrays.fill(blocks, fill);
             blocks[index] = value;
             return new Dense(blocks);
@@ -125,13 +143,13 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
 
         @Override
         public byte get(int index) {
-            checkIndex(index);
+            checkIndex(index, blocks.length);
             return blocks[index];
         }
 
         @Override
         public ChunkData set(int index, byte value) {
-            checkIndex(index);
+            checkIndex(index, blocks.length);
             checkValue(value);
             blocks[index] = value;
             return this;
@@ -149,12 +167,21 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
 
         @Override
         public long estimatedBytes() {
-            return Chunk.BLOCK_BYTES;
+            return blocks.length;
+        }
+
+        @Override
+        public int length() {
+            return blocks.length;
         }
     }
 
-    private static void checkIndex(int index) {
-        if (index < 0 || index >= Chunk.BLOCK_BYTES) throw new IndexOutOfBoundsException("Chunk index: " + index);
+    private static void checkIndex(int index, int length) {
+        if (index < 0 || index >= length) throw new IndexOutOfBoundsException("Chunk index: " + index);
+    }
+
+    private static void checkLength(int length) {
+        if (length <= 0) throw new IllegalArgumentException("Invalid storage length: " + length);
     }
 
     private static void checkValue(byte value) {

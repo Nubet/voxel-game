@@ -53,12 +53,12 @@ class ChunkTest {
         java.util.Arrays.fill(blocks, BlockId.STONE);
         Chunk chunk = Chunk.fromBlocks(blocks);
         assertEquals(ChunkData.Kind.UNIFORM, chunk.storageKind());
-        assertEquals(1, chunk.estimatedBytes());
+        assertEquals(Chunk.SIZE, chunk.estimatedBytes());
 
         chunk.set(0, 0, 0, BlockId.DIRT);
 
         assertEquals(ChunkData.Kind.DENSE, chunk.storageKind());
-        assertEquals(Chunk.BLOCK_BYTES, chunk.estimatedBytes());
+        assertEquals(LayerStorage.LAYER_BLOCKS + Chunk.SIZE - 1, chunk.estimatedBytes());
         assertEquals(BlockId.DIRT, chunk.get(0, 0, 0));
         assertEquals(BlockId.STONE, chunk.get(1, 0, 0));
     }
