@@ -38,7 +38,11 @@ public final class PlayerPhysics {
             double yawDegrees,
             double deltaSeconds) {
         return resolve(
-                world, start, motion(start, inputX, inputZ, jump, sprint, yawDegrees, deltaSeconds), deltaSeconds);
+                world,
+                start,
+                motion(start, inputX, inputZ, jump, sprint, yawDegrees, deltaSeconds),
+                deltaSeconds,
+                true);
     }
 
     public PlayerState fly(
@@ -49,13 +53,20 @@ public final class PlayerPhysics {
             double inputZ,
             boolean sprint,
             double deltaSeconds) {
-        return resolve(world, start, flightMotion(start, inputX, inputY, inputZ, sprint, deltaSeconds), deltaSeconds);
+        return resolve(
+                world, start, flightMotion(start, inputX, inputY, inputZ, sprint, deltaSeconds), deltaSeconds, false);
     }
 
-    private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds) {
+    private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds, boolean walking) {
         Objects.requireNonNull(world);
         double moveX = motion.x * deltaSeconds, moveZ = motion.z * deltaSeconds;
-        VoxelCollision.Result moved = collision.move(world, start.body(), moveX, motion.y * deltaSeconds, moveZ);
+        VoxelCollision.Result moved = collision.move(
+                world,
+                start.body(),
+                moveX,
+                motion.y * deltaSeconds,
+                moveZ,
+                walking && start.crouching() && start.grounded() && motion.y <= 0);
         if (!moved.available()) return start;
         Aabb box = moved.body();
         double x = moved.blockedX()

@@ -12,6 +12,7 @@ import java.util.Objects;
 
 public final class VoxelCollision {
     private static final double SUPPORT_AND_STEP_MARGIN = 0.6;
+    private static final double EDGE_REDUCTION = 0.05;
     private static final int MAX_BLOCKS = 262144;
     private static final int MAX_CHUNKS = 512;
 
@@ -47,8 +48,21 @@ public final class VoxelCollision {
     }
 
     public Result move(World world, Aabb body, double x, double y, double z) {
+        return move(world, body, x, y, z, false);
+    }
+
+    Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge) {
         if (!available(world, requiredRegion(body, x, y, z)))
             return new Result(body, 0, 0, 0, false, false, false, false, false);
+        double requestedX = x, requestedZ = z;
+        if (protectEdge && supported(world, body, 0, 0)) {
+            while (x != 0 && !supported(world, body, x, 0)) x = towardZero(x);
+            while (z != 0 && !supported(world, body, 0, z)) z = towardZero(z);
+            while (x != 0 && z != 0 && !supported(world, body, x, z)) {
+                x = towardZero(x);
+                z = towardZero(z);
+            }
+        }
         Bounds candidates = bounds(body.swept(x, y, z));
         double allowedY = clip(world, body, candidates, y, Axis.Y);
         Aabb moved = body.move(0, allowedY, 0);
@@ -61,11 +75,31 @@ public final class VoxelCollision {
                 allowedX,
                 allowedY,
                 allowedZ,
-                allowedX != x,
+                allowedX != requestedX,
                 allowedY != y,
-                allowedZ != z,
+                allowedZ != requestedZ,
                 allowedY != y && y < 0,
                 true);
+    }
+
+    private static double towardZero(double delta) {
+        return Math.abs(delta) <= EDGE_REDUCTION ? 0 : delta - Math.copySign(EDGE_REDUCTION, delta);
+    }
+
+    private static boolean supported(World world, Aabb body, double x, double z) {
+        // Probe the whole footprint, but only below the feet: walls and ceilings are not support.
+        Bounds range = bounds(new Aabb(
+                body.minX() + x,
+                body.minY() - SUPPORT_AND_STEP_MARGIN,
+                body.minZ() + z,
+                body.maxX() + x,
+                body.minY(),
+                body.maxZ() + z));
+        for (long by = range.minY; by <= range.maxY; by++)
+            for (long bz = range.minZ; bz <= range.maxZ; bz++)
+                for (long bx = range.minX; bx <= range.maxX; bx++)
+                    if (solid(world, (int) bx, (int) by, (int) bz)) return true;
+        return false;
     }
 
     private static double clip(World world, Aabb body, Bounds range, double delta, Axis axis) {
