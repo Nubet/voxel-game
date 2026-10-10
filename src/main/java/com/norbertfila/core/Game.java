@@ -35,7 +35,7 @@ public final class Game {
                             mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
                     renderer.enqueueUpload(position, mesh);
                     vertices += mesh.vertexCount();
-                    meshBytes += (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
+                    meshBytes += (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
                 }
                 System.out.println(
                         "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");

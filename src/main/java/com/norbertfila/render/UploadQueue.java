@@ -31,7 +31,7 @@ public final class UploadQueue {
         }
 
         public long bytes() {
-            return (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
+            return (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
         }
     }
 }
