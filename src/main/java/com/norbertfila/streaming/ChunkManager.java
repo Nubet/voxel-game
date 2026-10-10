@@ -1,8 +1,9 @@
 package com.norbertfila.streaming;
 
+import com.norbertfila.generation.WorldGenerator;
+import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
-import com.norbertfila.world.WorldGenerator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -30,7 +31,8 @@ public final class ChunkManager {
         for (ChunkPos position : viewDemand.requested()) {
             if (world.hasChunk(position)) continue;
             world.requestChunk(position);
-            world.putChunk(position, generator.generate(position.x(), position.y(), position.z()));
+            world.putChunk(
+                    position, Chunk.fromBlocks(generator.generate(position).blocks()));
             generated++;
         }
         List<ChunkPos> evicted = new ArrayList<>();

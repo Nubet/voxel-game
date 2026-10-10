@@ -4,7 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.norbertfila.world.Chunk;
+import com.norbertfila.generation.ChunkData;
+import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import java.util.ArrayList;
@@ -19,9 +20,22 @@ class ChunkManagerTest {
         ViewDemand demand = new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE);
         ChunkManager manager = new ChunkManager(
                 world,
-                (x, y, z) -> {
-                    generated.add(new ChunkPos(x, y, z));
-                    return new Chunk();
+                new WorldGenerator() {
+                    @Override
+                    public long seed() {
+                        return 0;
+                    }
+
+                    @Override
+                    public int generatorVersion() {
+                        return 1;
+                    }
+
+                    @Override
+                    public ChunkData generate(ChunkPos position) {
+                        generated.add(position);
+                        return emptyData(position);
+                    }
                 },
                 demand);
 
@@ -42,7 +56,7 @@ class ChunkManagerTest {
     void residentPositionsHaveDeterministicOrder() {
         World world = new World();
         ViewDemand demand = new ViewDemand(1, -1, 1, ViewDemand.Shape.SQUARE);
-        ChunkManager manager = new ChunkManager(world, (x, y, z) -> new Chunk(), demand);
+        ChunkManager manager = new ChunkManager(world, emptyGenerator(), demand);
 
         ChunkManager.UpdateResult result = manager.update(new ChunkPos(0, 0, 0));
 
@@ -55,7 +69,7 @@ class ChunkManagerTest {
     void hysteresisUnloadingKeepsResidentCountBounded() {
         World world = new World();
         ViewDemand demand = new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE);
-        ChunkManager manager = new ChunkManager(world, (x, y, z) -> new Chunk(), demand);
+        ChunkManager manager = new ChunkManager(world, emptyGenerator(), demand);
 
         manager.update(new ChunkPos(0, 0, 0));
         ChunkManager.UpdateResult moved = manager.update(new ChunkPos(2, 0, 0));
@@ -66,5 +80,28 @@ class ChunkManagerTest {
         assertEquals(1, manager.residentCount());
         assertTrue(steady.evicted().isEmpty());
         assertEquals(0, steady.generated());
+    }
+
+    private static WorldGenerator emptyGenerator() {
+        return new WorldGenerator() {
+            @Override
+            public long seed() {
+                return 0;
+            }
+
+            @Override
+            public int generatorVersion() {
+                return 1;
+            }
+
+            @Override
+            public ChunkData generate(ChunkPos position) {
+                return emptyData(position);
+            }
+        };
+    }
+
+    private static ChunkData emptyData(ChunkPos position) {
+        return new ChunkData(position, new byte[ChunkData.BLOCK_COUNT]);
     }
 }

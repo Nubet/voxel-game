@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.generation.*;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
