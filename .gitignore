@@ -1,0 +1,67 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA: keep shared project configuration, ignore local state
+.idea/workspace.xml
+.idea/**/workspace.xml
+.idea/tasks.xml
+.idea/**/tasks.xml
+.idea/usage.statistics.xml
+.idea/**/usage.statistics.xml
+.idea/dictionaries/
+.idea/**/dictionaries/
+.idea/shelf/
+.idea/**/shelf/
+.idea/httpRequests/
+.idea/**/httpRequests/
+.idea/dataSources/
+.idea/**/dataSources/
+.idea/dataSources.local.xml
+.idea/**/dataSources.local.xml
+*.iml
+*.ipr
+*.iws
+
+# Eclipse and NetBeans metadata, if an alternate IDE is used
+.classpath
+.project
+.settings/
+nbproject/private/
+nbbuild/
+dist/
+.nb-gradle/
+
+# Java compiler and test output from non-Gradle tools
+out/
+bin/
+target/
+
+# Logs and runtime-generated game data
+*.log
+logs/
+saves/
+screenshots/
+recordings/
+crash-reports/
+
+# JVM crash dumps and profilers
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+core
+core.*
+*.dmp
+
+# Local environment and machine-specific configuration
+.env
+.env.*
+!.env.example
+local.properties
+
+# OS metadata
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
