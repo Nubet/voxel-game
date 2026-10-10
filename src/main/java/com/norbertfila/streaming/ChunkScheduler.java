@@ -127,13 +127,18 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     public int cancelOutside(ChunkPos center, int radius, boolean square) {
+        return cancelOutside(center, radius, square, Set.of());
+    }
+
+    public int cancelOutside(ChunkPos center, int radius, boolean square, Set<ChunkPos> protectedPositions) {
+        Objects.requireNonNull(protectedPositions);
         if (radius < 0) throw new IllegalArgumentException("Radius must not be negative");
         Set<TaskKey> candidates = new HashSet<>();
         for (Runnable queued : executor.getQueue()) candidates.add(TaskKey.of(((PrioritizedTask) queued).task));
         candidates.addAll(submitted);
         int cancelledCount = 0;
         for (TaskKey key : candidates) {
-            if (!withinRadius(key.position(), center, radius, square)) {
+            if (!protectedPositions.contains(key.position()) && !withinRadius(key.position(), center, radius, square)) {
                 cancel(key.position(), key.revision(), key.token());
                 cancelledCount++;
             }
@@ -146,6 +151,11 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     public int discardReadyOutside(ChunkPos center, int radius, boolean square) {
+        return discardReadyOutside(center, radius, square, Set.of());
+    }
+
+    public int discardReadyOutside(ChunkPos center, int radius, boolean square, Set<ChunkPos> protectedPositions) {
+        Objects.requireNonNull(protectedPositions);
         if (radius < 0) throw new IllegalArgumentException("Radius must not be negative");
         synchronized (readyLock) {
             List<ChunkTask.Outcome<T>> keep = new ArrayList<>();
@@ -153,7 +163,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             ready.drainTo(keep);
             List<ChunkTask.Outcome<T>> retained = new ArrayList<>(keep.size());
             for (ChunkTask.Outcome<T> outcome : keep) {
-                if (withinRadius(outcome.position(), center, radius, square)) retained.add(outcome);
+                if (protectedPositions.contains(outcome.position())
+                        || withinRadius(outcome.position(), center, radius, square)) retained.add(outcome);
                 else {
                     outcome.discard();
                     discarded++;

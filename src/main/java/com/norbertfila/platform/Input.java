@@ -49,6 +49,10 @@ public final class Input implements AutoCloseable {
         return playerInput.nextTick();
     }
 
+    public PlayerInput peekPlayerTick() {
+        return playerInput.peekTick();
+    }
+
     public void clearPlayerInput() {
         playerInput.clear();
     }

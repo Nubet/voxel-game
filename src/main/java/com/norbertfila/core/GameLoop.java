@@ -85,17 +85,24 @@ public final class GameLoop {
                 if (controlsBlocked) input.clearPlayerInput();
                 else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
                 ChunkPos playerChunk = playerChunk(player);
+                chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
+                        input.peekPlayerTick(), FIXED_DELTA_SECONDS, camera.yaw(), camera.pitch()));
                 ChunkManager.UpdateResult update = chunkManager.update(playerChunk);
                 ChunkManager.ProcessResult processed = chunkManager.processResults();
                 for (ChunkManager.MeshResult mesh : processed.meshes()) {
                     renderer.enqueueUpload(mesh);
                 }
-                if (!controlsBlocked
-                        && (player.mode() == PlayerController.Mode.SPECTATOR
-                                || chunkManager.readyForPlayer(playerChunk))) {
+                if (!controlsBlocked) {
                     simulation.advance(deltaSeconds, fixedDelta -> {
-                        player.tick(
-                                chunkManager.world(), input.nextPlayerTick(), fixedDelta, camera.yaw(), camera.pitch());
+                        if (chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
+                                input.peekPlayerTick(), fixedDelta, camera.yaw(), camera.pitch()))) {
+                            player.tick(
+                                    chunkManager.world(),
+                                    input.nextPlayerTick(),
+                                    fixedDelta,
+                                    camera.yaw(),
+                                    camera.pitch());
+                        } else player.pauseInterpolation();
                     });
                 }
                 PlayerState.Position renderPosition = player.renderEyePosition(simulation.interpolationAlpha());

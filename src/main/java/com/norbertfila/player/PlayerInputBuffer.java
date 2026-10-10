@@ -28,10 +28,17 @@ public final class PlayerInputBuffer {
     }
 
     public PlayerInput nextTick() {
+        PlayerInput input = peekTick();
+        if (size != 0) {
+            head = (head + 1) % jumpPresses.length;
+            size--;
+        }
+        return input;
+    }
+
+    public PlayerInput peekTick() {
         if (size == 0) return held;
         double pressedAt = jumpPresses[head];
-        head = (head + 1) % jumpPresses.length;
-        size--;
         return new PlayerInput(
                 held.forward(),
                 held.backward(),

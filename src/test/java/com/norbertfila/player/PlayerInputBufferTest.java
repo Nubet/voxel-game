@@ -34,6 +34,8 @@ class PlayerInputBufferTest {
         input.updateHeld(held);
         input.pressJump(.01);
         input.pressJump(.02);
+        assertEquals(.01, input.peekTick().jumpPressedAtSeconds());
+        assertEquals(.01, input.peekTick().jumpPressedAtSeconds());
 
         PlayerInput first = input.nextTick();
         PlayerInput second = input.nextTick();

@@ -27,7 +27,8 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 0, false, 1);
+        PlayerState step =
+                physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 0, false, 1.0 / 60);
 
         assertEquals(1.7, step.position().x(), 0.000001);
     }
@@ -50,7 +51,8 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 2, false, 1);
+        PlayerState step =
+                physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 2, false, 1.0 / 60);
 
         assertEquals(1.7, step.position().x(), 0.000001);
         assertEquals(2.5, step.position().z(), 0.000001);
@@ -61,7 +63,8 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(16, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(15.5, 1, .5)), 2, 0, false, 1);
+        PlayerState step =
+                physics.step(world, PlayerState.at(new PlayerState.Position(15.5, 1, .5)), 2, 0, false, 1.0 / 60);
 
         assertEquals(15.7, step.position().x(), 0.000001);
     }
@@ -83,6 +86,9 @@ class PlayerPhysicsTest {
 
     private static World worldWithBlocks(BlockPos... positions) {
         World world = new World();
+        for (int y = -2; y <= 1; y++)
+            for (int z = -1; z <= 1; z++)
+                for (int x = -1; x <= 1; x++) world.putChunk(new ChunkPos(x, y, z), new Chunk());
         for (BlockPos position : positions) {
             ChunkPos chunkPosition = new ChunkPos(
                     Math.floorDiv(position.x(), Chunk.SIZE),

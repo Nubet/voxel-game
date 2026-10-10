@@ -1,7 +1,9 @@
 package com.norbertfila.player;
 
 import com.norbertfila.player.PlayerState.Position;
+import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
+import java.util.List;
 import java.util.Objects;
 
 public final class PlayerController {
@@ -39,6 +41,34 @@ public final class PlayerController {
     }
 
     public void tick(World world, PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+        Movement move = movement(input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
+        if (mode == Mode.SURVIVAL) Objects.requireNonNull(world, "Survival requires a world");
+        previous = current.position();
+        if (mode == Mode.SPECTATOR) {
+            current = new PlayerState(
+                    new Position(previous.x() + move.x, previous.y() + move.y, previous.z() + move.z),
+                    move.x / fixedDeltaSeconds,
+                    move.y / fixedDeltaSeconds,
+                    move.z / fixedDeltaSeconds,
+                    false);
+        } else {
+            current = physics.step(world, current, move.x, move.z, input.jumpPressed(), fixedDeltaSeconds);
+        }
+    }
+
+    public List<ChunkPos> requiredCollisionChunks(
+            PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+        Movement move = movement(input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
+        return mode == Mode.SPECTATOR
+                ? List.of()
+                : physics.requiredChunks(current, move.x, move.z, input.jumpPressed(), fixedDeltaSeconds);
+    }
+
+    public void pauseInterpolation() {
+        previous = current.position();
+    }
+
+    private Movement movement(PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         Objects.requireNonNull(input);
         if (!Double.isFinite(fixedDeltaSeconds) || fixedDeltaSeconds <= 0) {
             throw new IllegalArgumentException("Fixed delta must be positive and finite");
@@ -46,8 +76,6 @@ public final class PlayerController {
         if (!Double.isFinite(yawDegrees) || !Double.isFinite(pitchDegrees)) {
             throw new IllegalArgumentException("Player orientation must be finite");
         }
-        if (mode == Mode.SURVIVAL) Objects.requireNonNull(world, "Survival requires a world");
-        previous = current.position();
         double yaw = Math.toRadians(yawDegrees);
         double pitch = Math.toRadians(mode == Mode.SPECTATOR ? pitchDegrees : 0);
         double forwardX = Math.cos(yaw) * Math.cos(pitch);
@@ -56,9 +84,9 @@ public final class PlayerController {
         double rightX = -Math.sin(yaw);
         double rightZ = Math.cos(yaw);
         double speed = (input.sprintHeld() ? SPRINT_SPEED : WALK_SPEED) * fixedDeltaSeconds;
-        double x = previous.x();
-        double y = previous.y();
-        double z = previous.z();
+        double x = 0;
+        double y = 0;
+        double z = 0;
         if (input.forward()) {
             x += forwardX * speed;
             y += forwardY * speed;
@@ -80,16 +108,8 @@ public final class PlayerController {
         if (mode == Mode.SPECTATOR) {
             if (input.jumpHeld()) y += speed;
             if (input.sneakHeld()) y -= speed;
-            current = new PlayerState(
-                    new Position(x, y, z),
-                    (x - previous.x()) / fixedDeltaSeconds,
-                    (y - previous.y()) / fixedDeltaSeconds,
-                    (z - previous.z()) / fixedDeltaSeconds,
-                    false);
-            return;
         }
-        current = physics.step(
-                world, current, x - previous.x(), z - previous.z(), input.jumpPressed(), fixedDeltaSeconds);
+        return new Movement(x, y, z);
     }
 
     public Position renderPosition(double alpha) {
@@ -111,4 +131,6 @@ public final class PlayerController {
         SPECTATOR,
         SURVIVAL
     }
+
+    private record Movement(double x, double y, double z) {}
 }

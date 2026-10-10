@@ -43,6 +43,8 @@ public final class ChunkManager implements AutoCloseable {
     private final Map<ChunkPos, Long> meshTokens = new HashMap<>();
     private final Set<ChunkPos> pendingRemesh = new HashSet<>();
     private final Set<ChunkPos> pendingEdits = new HashSet<>();
+    private Set<ChunkPos> collisionChunks = Set.of();
+    private boolean collisionDemandChanged;
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
 
@@ -71,28 +73,23 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public UpdateResult update(ChunkPos center) {
-        boolean changed = viewDemand.update(center);
+        boolean changed = viewDemand.update(center) || collisionDemandChanged;
+        collisionDemandChanged = false;
         int scheduled = 0;
+        for (ChunkPos position : collisionChunks) {
+            if (scheduleGeneration(position, new ChunkPriority(0, 1))) scheduled++;
+        }
         for (ChunkPos position : viewDemand.requested()) {
-            if (world.hasChunk(position) || entries.containsKey(position)) continue;
-            ChunkEntry entry = new ChunkEntry(position);
-            long token = generationTokens.getAndIncrement();
-            entry.setGenerationToken(token);
-            entry.beginGenerating();
-            if (generationScheduler.submitLatest(new ChunkTask<>(
-                    position, 0, token, ChunkPriority.unprioritized(), () -> generator.generate(position)))) {
-                entries.put(position, entry);
-                scheduled++;
-            }
+            if (scheduleGeneration(position, ChunkPriority.unprioritized())) scheduled++;
         }
 
         List<ChunkPos> evicted = new ArrayList<>();
         if (changed) {
             boolean square = viewDemand.shape() == ViewDemand.Shape.SQUARE;
-            generationScheduler.cancelOutside(center, hysteresisRadius, square);
-            meshingScheduler.cancelOutside(center, hysteresisRadius, square);
-            generationScheduler.discardReadyOutside(center, hysteresisRadius, square);
-            meshingScheduler.discardReadyOutside(center, hysteresisRadius, square);
+            generationScheduler.cancelOutside(center, hysteresisRadius, square, collisionChunks);
+            meshingScheduler.cancelOutside(center, hysteresisRadius, square, collisionChunks);
+            generationScheduler.discardReadyOutside(center, hysteresisRadius, square, collisionChunks);
+            meshingScheduler.discardReadyOutside(center, hysteresisRadius, square, collisionChunks);
             for (ChunkPos position : List.copyOf(entries.keySet())) {
                 if (withinHysteresis(position, center)) continue;
                 entries.remove(position);
@@ -251,6 +248,30 @@ public final class ChunkManager implements AutoCloseable {
         return world.hasChunk(Objects.requireNonNull(position));
     }
 
+    public boolean ensureCollisionChunks(List<ChunkPos> required) {
+        if (required.size() > 512) throw new IllegalArgumentException("Collision demand exceeds chunk budget");
+        Set<ChunkPos> next = Set.copyOf(required);
+        if (!next.equals(collisionChunks)) {
+            collisionChunks = next;
+            collisionDemandChanged = true;
+        }
+        for (ChunkPos position : required) scheduleGeneration(position, new ChunkPriority(0, 1));
+        return required.stream().allMatch(world::hasChunk);
+    }
+
+    private boolean scheduleGeneration(ChunkPos position, ChunkPriority priority) {
+        if (world.hasChunk(position) || entries.containsKey(position) || !generationScheduler.hasCapacity())
+            return false;
+        ChunkEntry entry = new ChunkEntry(position);
+        long token = generationTokens.getAndIncrement();
+        entry.setGenerationToken(token);
+        entry.beginGenerating();
+        if (!generationScheduler.submitLatest(
+                new ChunkTask<>(position, 0, token, priority, () -> generator.generate(position)))) return false;
+        entries.put(position, entry);
+        return true;
+    }
+
     public List<ChunkPos> residentPositions() {
         return world.residentPositions();
     }
@@ -358,6 +379,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private boolean withinHysteresis(ChunkPos position, ChunkPos center) {
+        if (collisionChunks.contains(position)) return true;
         if (position.y() < viewDemand.minChunkY() || position.y() > viewDemand.maxChunkY()) return false;
         int dx = position.x() - center.x();
         int dz = position.z() - center.z();
