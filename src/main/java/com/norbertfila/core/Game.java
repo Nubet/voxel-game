@@ -4,6 +4,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
+import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.*;
 
 public final class Game {
@@ -14,6 +15,8 @@ public final class Game {
     public void run() {
         try (Window window = new Window(1280, 720, "Voxel Engine | M0")) {
             Camera camera = new Camera();
+            ViewDemand viewDemand =
+                    new ViewDemand(TERRAIN_RADIUS, TERRAIN_MIN_CHUNK_Y, TERRAIN_MAX_CHUNK_Y, ViewDemand.Shape.SQUARE);
             WorldGenerator generator = new HillsGenerator();
             ChunkMesher mesher = new VisibleFaceMesher();
             try (TerrainRenderer renderer = new TerrainRenderer()) {
@@ -43,7 +46,7 @@ public final class Game {
                         "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");
                 FrameMetrics metrics =
                         new FrameMetrics(chunks, vertices, meshBytes, Boolean.getBoolean("voxel.debug"), window.time());
-                new GameLoop().run(window, camera, renderer, metrics);
+                new GameLoop().run(window, camera, renderer, metrics, viewDemand);
             }
         }
     }

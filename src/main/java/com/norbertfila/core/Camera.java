@@ -1,6 +1,9 @@
 package com.norbertfila.core;
 
 import com.norbertfila.platform.Input;
+import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -39,5 +42,10 @@ public final class Camera {
         return new Matrix4f()
                 .perspective((float) Math.toRadians(75), (float) width / Math.max(1, height), 0.1f, 800f)
                 .lookAt(position, new Vector3f(position).add(forward), new Vector3f(0, 1, 0));
+    }
+
+    public ChunkPos chunkPosition() {
+        return Coordinates.worldToChunk(
+                new BlockPos((int) Math.floor(position.x), (int) Math.floor(position.y), (int) Math.floor(position.z)));
     }
 }
