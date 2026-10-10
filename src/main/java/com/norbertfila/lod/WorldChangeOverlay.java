@@ -2,6 +2,9 @@ package com.norbertfila.lod;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,26 +17,35 @@ import java.util.Set;
 public final class WorldChangeOverlay {
     private static final Comparator<FarTilePos> ORDER =
             Comparator.comparingInt(FarTilePos::z).thenComparingInt(FarTilePos::x);
-    private final Map<BlockPos, Byte> changes = new HashMap<>();
+    private final Map<ChunkPos, Map<BlockPos, Byte>> changes = new HashMap<>();
     private final Set<FarTilePos> dirtyTiles = new HashSet<>();
 
     public OptionalInt get(BlockPos position) {
-        Byte value = changes.get(Objects.requireNonNull(position));
+        Objects.requireNonNull(position);
+        Map<BlockPos, Byte> chunkChanges = changes.get(Coordinates.worldToChunk(position));
+        Byte value = chunkChanges == null ? null : chunkChanges.get(position);
         return value == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(value));
     }
 
     public OptionalInt set(BlockPos position, byte value, int tileSize) {
         Objects.requireNonNull(position);
         validate(value);
-        Byte previous = changes.put(position, value);
-        dirtyTiles.add(tile(position, tileSize));
+        FarTilePos dirtyTile = tile(position, tileSize);
+        Byte previous = changes.computeIfAbsent(Coordinates.worldToChunk(position), ignored -> new HashMap<>())
+                .put(position, value);
+        dirtyTiles.add(dirtyTile);
         return previous == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(previous));
     }
 
     public OptionalInt remove(BlockPos position, int tileSize) {
         Objects.requireNonNull(position);
-        Byte previous = changes.remove(position);
-        if (previous != null) dirtyTiles.add(tile(position, tileSize));
+        FarTilePos dirtyTile = tile(position, tileSize);
+        ChunkPos chunkPosition = Coordinates.worldToChunk(position);
+        Map<BlockPos, Byte> chunkChanges = changes.get(chunkPosition);
+        if (chunkChanges == null) return OptionalInt.empty();
+        Byte previous = chunkChanges.remove(position);
+        if (chunkChanges.isEmpty()) changes.remove(chunkPosition);
+        if (previous != null) dirtyTiles.add(dirtyTile);
         return previous == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(previous));
     }
 
@@ -48,16 +60,28 @@ public final class WorldChangeOverlay {
     }
 
     public int size() {
-        return changes.size();
+        return changes.values().stream().mapToInt(Map::size).sum();
     }
 
     public List<Change> changes() {
-        return changes.entrySet().stream()
+        return changes.values().stream()
+                .flatMap(chunkChanges -> chunkChanges.entrySet().stream())
                 .sorted(Map.Entry.comparingByKey(Comparator.comparingInt(BlockPos::x)
                         .thenComparingInt(BlockPos::y)
                         .thenComparingInt(BlockPos::z)))
                 .map(entry -> new Change(entry.getKey(), entry.getValue()))
                 .toList();
+    }
+
+    public void applyTo(ChunkPos position, Chunk chunk) {
+        Objects.requireNonNull(position);
+        Objects.requireNonNull(chunk);
+        Map<BlockPos, Byte> chunkChanges = changes.get(position);
+        if (chunkChanges == null) return;
+        for (Map.Entry<BlockPos, Byte> change : chunkChanges.entrySet()) {
+            BlockPos local = Coordinates.worldToLocal(change.getKey());
+            chunk.set(local.x(), local.y(), local.z(), change.getValue());
+        }
     }
 
     private static FarTilePos tile(BlockPos position, int tileSize) {

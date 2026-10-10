@@ -1,14 +1,92 @@
 package com.norbertfila.lod;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkPos;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WorldChangeOverlayTest {
+    @Test
+    void appliesOnlyTargetChunkDeltasIncludingAirAndLatestValues() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        Chunk target = new Chunk();
+        target.set(15, 4, 15, BlockId.STONE);
+        overlay.set(new BlockPos(-1, -12, -1), BlockId.AIR, 8);
+        BlockPos placed = new BlockPos(-15, -11, -14);
+        overlay.set(placed, BlockId.STONE, 8);
+        overlay.set(placed, BlockId.DIRT, 8);
+        overlay.set(new BlockPos(16, -11, 16), BlockId.GRASS, 8);
+        overlay.set(new BlockPos(-15, 5, -14), BlockId.GRASS, 8);
+        var deltas = overlay.changes();
+        overlay.drainDirtyTiles();
+
+        overlay.applyTo(new ChunkPos(-1, -1, -1), target);
+
+        assertEquals(BlockId.AIR, target.get(15, 4, 15));
+        assertEquals(BlockId.DIRT, target.get(1, 5, 2));
+        assertEquals(BlockId.AIR, target.get(0, 5, 0));
+        assertEquals(3, target.revision());
+        overlay.applyTo(new ChunkPos(-1, -1, -1), target);
+        assertEquals(3, target.revision());
+        assertEquals(deltas, overlay.changes());
+        assertEquals(4, overlay.size());
+        assertTrue(overlay.dirtyTiles().isEmpty());
+    }
+
+    @Test
+    void removesTheLastChunkDeltaAndDoesNotReplayIt() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        BlockPos position = new BlockPos(-1, 4, -9);
+        overlay.set(position, BlockId.STONE, 8);
+        overlay.remove(position, 8);
+        Chunk target = new Chunk();
+
+        overlay.applyTo(new ChunkPos(-1, 0, -1), target);
+
+        assertEquals(0, overlay.size());
+        assertTrue(overlay.get(position).isEmpty());
+        assertTrue(overlay.changes().isEmpty());
+        assertEquals(0, target.revision());
+        assertEquals(BlockId.AIR, target.get(15, 4, 7));
+    }
+
+    @Test
+    void keepsStableWorldCoordinateOrderAcrossChunkBuckets() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        BlockPos first = new BlockPos(-17, 4, -9);
+        BlockPos middle = new BlockPos(-1, 4, -9);
+        BlockPos last = new BlockPos(16, 4, 16);
+        overlay.set(last, BlockId.STONE, 8);
+        overlay.set(first, BlockId.AIR, 8);
+        overlay.set(middle, BlockId.DIRT, 8);
+
+        assertEquals(
+                List.of(first, middle, last),
+                overlay.changes().stream()
+                        .map(WorldChangeOverlay.Change::position)
+                        .toList());
+    }
+
+    @Test
+    void invalidTileSizeDoesNotPartiallyChangeIndexedDeltas() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        BlockPos position = new BlockPos(-1, 4, -9);
+        assertThrows(IllegalArgumentException.class, () -> overlay.set(position, BlockId.STONE, 0));
+        assertEquals(0, overlay.size());
+        overlay.set(position, BlockId.DIRT, 8);
+        overlay.drainDirtyTiles();
+        assertThrows(IllegalArgumentException.class, () -> overlay.remove(position, 0));
+        assertEquals(BlockId.DIRT, overlay.get(position).orElseThrow());
+        assertEquals(1, overlay.size());
+        assertTrue(overlay.dirtyTiles().isEmpty());
+    }
+
     @Test
     void storesOnlyOverridesAndMarksNegativeFarTilesDirty() {
         WorldChangeOverlay overlay = new WorldChangeOverlay();

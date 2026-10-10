@@ -139,8 +139,9 @@ public final class ChunkManager implements AutoCloseable {
                 continue;
             }
             ChunkData data = outcome.result();
-            world.putChunk(outcome.position(), Chunk.fromBlocks(data.blocks()));
-            entry.generated(0);
+            Chunk chunk = Chunk.fromBlocks(data.blocks());
+            world.putChunk(outcome.position(), chunk);
+            entry.generated(chunk.revision());
             requestRemesh(outcome.position());
             for (ChunkPos neighbor : neighbors(outcome.position())) {
                 if (world.hasChunk(neighbor)) requestRemesh(neighbor);

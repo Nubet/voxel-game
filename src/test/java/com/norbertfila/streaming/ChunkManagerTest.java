@@ -15,6 +15,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
 import java.time.Duration;
@@ -28,8 +29,58 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class ChunkManagerTest {
+    @ParameterizedTest
+    @CsvSource({"0,0", "-1,-1"})
+    void reloadsPlacedAndRemovedBlocksBeforeMeshing(int chunkX, int chunkZ) {
+        World world = new World();
+        HillsGenerator generator = new HillsGenerator();
+        ChunkPos center = new ChunkPos(chunkX, 0, chunkZ);
+        int removeX = chunkX * Chunk.SIZE + 3;
+        int removeZ = chunkZ * Chunk.SIZE + 4;
+        int placeX = chunkX * Chunk.SIZE + 5;
+        int placeZ = chunkZ * Chunk.SIZE + 6;
+        BlockPos removed =
+                new BlockPos(removeX, generator.sample(removeX, removeZ).surfaceHeight(), removeZ);
+        BlockPos placed = new BlockPos(placeX, generator.sample(placeX, placeZ).surfaceHeight() + 1, placeZ);
+        try (ChunkManager manager =
+                new ChunkManager(world, generator, new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            manager.update(center);
+            assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            WorldEdit edits = new WorldEdit(world, 8);
+            manager.requestRemesh(edits.setBlock(removed, BlockId.AIR));
+            manager.requestRemesh(edits.setBlock(placed, BlockId.STONE));
+            var editedMesh = awaitMesh(manager).meshes().get(0);
+            assertTrue(manager.markUploaded(editedMesh));
+            var deltas = world.changes().changes();
+            world.changes().drainDirtyTiles();
+
+            manager.update(new ChunkPos(chunkX + 10, 0, chunkZ));
+            assertFalse(world.hasChunk(center));
+            manager.update(center);
+            var reloadedMesh = awaitMesh(manager).meshes().get(0);
+
+            Chunk reloaded = world.getChunk(center);
+            BlockPos localRemoved = Coordinates.worldToLocal(removed);
+            BlockPos localPlaced = Coordinates.worldToLocal(placed);
+            assertEquals(BlockId.AIR, reloaded.get(localRemoved.x(), localRemoved.y(), localRemoved.z()));
+            assertEquals(BlockId.STONE, reloaded.get(localPlaced.x(), localPlaced.y(), localPlaced.z()));
+            assertFalse(world.isSolid(removed));
+            assertTrue(world.isSolid(placed));
+            assertArrayEquals(editedMesh.mesh().vertices(), reloadedMesh.mesh().vertices());
+            assertEquals(2, reloadedMesh.dataRevision());
+            assertEquals(reloaded.revision(), reloadedMesh.dataRevision());
+            assertTrue(reloadedMesh.token() != editedMesh.token());
+            assertFalse(manager.markUploaded(editedMesh));
+            assertTrue(manager.markUploaded(reloadedMesh));
+            assertEquals(deltas, world.changes().changes());
+            assertTrue(world.changes().dirtyTiles().isEmpty());
+        }
+    }
+
     @Test
     void rejectsAnUploadEditedWhileQueuedAndIgnoresItsLateAcknowledgements() {
         World world = new World();

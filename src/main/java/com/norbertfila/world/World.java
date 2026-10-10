@@ -27,7 +27,8 @@ public final class World {
     }
 
     public void putChunk(ChunkPos position, Chunk chunk) {
-        storage.put(Objects.requireNonNull(position), Objects.requireNonNull(chunk));
+        changes.applyTo(position, chunk);
+        storage.put(position, chunk);
         requestedChunks.remove(position);
         invalidateNeighbors(position);
     }

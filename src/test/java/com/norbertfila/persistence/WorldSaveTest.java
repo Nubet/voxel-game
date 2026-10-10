@@ -4,9 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
+import com.norbertfila.world.WorldEdit;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +22,36 @@ import org.junit.jupiter.api.io.TempDir;
 class WorldSaveTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void restoredDeltasReachChunkSnapshotsOnFirstLoad() throws Exception {
+        HillsGenerator generator = new HillsGenerator();
+        ChunkPos position = new ChunkPos(-1, 0, -1);
+        World world = new World();
+        world.putChunk(position, Chunk.fromBlocks(generator.generate(position).blocks()));
+        WorldEdit edits = new WorldEdit(world, 8);
+        BlockPos removed = new BlockPos(-1, 4, -9);
+        BlockPos placed = new BlockPos(-1, 15, -9);
+        assertTrue(edits.setBlock(removed, BlockId.AIR).changed());
+        assertTrue(edits.setBlock(placed, BlockId.STONE).changed());
+        Path save = temporaryDirectory.resolve("edited.vxl");
+        WorldSave.save(save, generator.seed(), generator.generatorVersion(), world);
+        World restored = new World();
+        WorldSave.restore(restored, WorldSave.load(save), 8);
+        restored.changes().drainDirtyTiles();
+
+        restored.putChunk(
+                position, Chunk.fromBlocks(generator.generate(position).blocks()));
+
+        var snapshot = restored.getChunk(position).snapshot();
+        BlockPos localRemoved = Coordinates.worldToLocal(removed);
+        BlockPos localPlaced = Coordinates.worldToLocal(placed);
+        assertEquals(BlockId.AIR, snapshot.get(localRemoved.x(), localRemoved.y(), localRemoved.z()));
+        assertEquals(BlockId.STONE, snapshot.get(localPlaced.x(), localPlaced.y(), localPlaced.z()));
+        assertEquals(2, snapshot.revision());
+        assertEquals(world.changes().changes(), restored.changes().changes());
+        assertTrue(restored.changes().dirtyTiles().isEmpty());
+    }
 
     @Test
     void roundTripsSeedVersionAndOnlyOverlayDeltas() throws Exception {
