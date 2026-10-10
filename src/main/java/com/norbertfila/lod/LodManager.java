@@ -65,6 +65,10 @@ public final class LodManager {
         return null;
     }
 
+    public LodLevel selectLevel(LodLevel current, long distanceSquaredChunks, int hysteresisChunks) {
+        return LodTransition.selectLevel(levels, current, distanceSquaredChunks, hysteresisChunks);
+    }
+
     public int renderDistanceChunks() {
         return levels.get(levels.size() - 1).maxRadiusChunks();
     }
