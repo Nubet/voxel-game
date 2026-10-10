@@ -26,26 +26,9 @@ public final class Game {
             player.setMode(PlayerController.Mode.SURVIVAL);
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             ChunkMesher mesher = new GreedyMesher();
-            try (TerrainRenderer renderer = new TerrainRenderer()) {
-                long start = System.nanoTime();
-                World world = new World();
-                ChunkManager chunkManager = new ChunkManager(world, generator, viewDemand);
-                ChunkManager.UpdateResult initial = chunkManager.update(camera.chunkPosition());
-                int chunks = initial.requested();
-                int vertices = 0;
-                long meshBytes = 0;
-                for (ChunkPos position : chunkManager.residentPositions()) {
-                    BlockNeighborhood neighborhood = world.blockNeighborhood(position);
-                    MeshData mesh =
-                            mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
-                    renderer.enqueueUpload(position, mesh);
-                    vertices += mesh.vertexCount();
-                    meshBytes += (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
-                }
-                System.out.println(
-                        "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");
-                FrameMetrics metrics =
-                        new FrameMetrics(chunks, vertices, meshBytes, Boolean.getBoolean("voxel.debug"), window.time());
+            try (ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
+                    TerrainRenderer renderer = new TerrainRenderer()) {
+                FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
                 new GameLoop().run(window, camera, renderer, metrics, chunkManager, player);
             }
         }

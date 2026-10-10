@@ -10,6 +10,9 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
@@ -71,21 +74,30 @@ public final class GameLoop {
                     player.mode() == PlayerController.Mode.SPECTATOR ? input.moveUp() : jumpQueued,
                     input.moveDown(),
                     input.sprint());
+            ChunkPos playerChunk = playerChunk(player);
+            ChunkManager.UpdateResult update = chunkManager.update(playerChunk);
+            ChunkManager.ProcessResult processed = chunkManager.processResults();
+            for (ChunkManager.MeshResult mesh : processed.meshes()) {
+                renderer.enqueueUpload(mesh.position(), mesh.mesh());
+                chunkManager.markUploaded(mesh);
+            }
             boolean[] jumpForTick = {jumpQueued};
-            simulation.advance(deltaSeconds, fixedDelta -> {
-                player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch());
-                jumpForTick[0] = false;
-            });
+            if (chunkManager.readyForPlayer(playerChunk)) {
+                simulation.advance(deltaSeconds, fixedDelta -> {
+                    player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch());
+                    jumpForTick[0] = false;
+                });
+            }
             jumpQueued = jumpForTick[0];
             PlayerController.Position renderPosition = player.renderPosition(simulation.interpolationAlpha());
             float eyeOffset = player.mode() == PlayerController.Mode.SURVIVAL ? Camera.PLAYER_EYE_HEIGHT : 0;
             camera.setPosition(
                     (float) renderPosition.x(), (float) renderPosition.y() + eyeOffset, (float) renderPosition.z());
-            ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());
             if (update.changed()) {
                 update.evicted().forEach(renderer::remove);
                 System.out.println("View demand center=" + update.center() + " sections=" + update.requested()
-                        + " generated=" + update.generated() + " resident=" + chunkManager.residentCount());
+                        + " scheduled=" + update.scheduled() + " generated=" + processed.generated()
+                        + " resident=" + chunkManager.residentCount());
             }
             TerrainRenderer.UploadStats uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000);
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
@@ -100,6 +112,12 @@ public final class GameLoop {
             metrics.recordFrame(deltaSeconds);
             metrics.reportIfDue(now, framebufferWidth[0], framebufferHeight[0], hardware);
         }
+    }
+
+    private static ChunkPos playerChunk(PlayerController player) {
+        PlayerController.Position position = player.renderPosition(1);
+        return Coordinates.worldToChunk(new BlockPos(
+                (int) Math.floor(position.x()), (int) Math.floor(position.y()), (int) Math.floor(position.z())));
     }
 
     static double clampDelta(double deltaSeconds) {

@@ -8,6 +8,7 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -34,6 +35,13 @@ public final class HeadlessWorldRunner {
         Objects.requireNonNull(center);
         Objects.requireNonNull(commands);
         ChunkManager.UpdateResult update = chunks.update(center);
+        int generated;
+        try {
+            generated = chunks.awaitGeneration(Duration.ofSeconds(5));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Chunk generation interrupted", interrupted);
+        }
         List<ChunkPos> dirty = new ArrayList<>();
         int changed = 0;
         for (Command command : commands) {
@@ -47,7 +55,7 @@ public final class HeadlessWorldRunner {
             }
         }
         tick++;
-        return new TickResult(tick, update.generated(), changed, List.copyOf(dirty), world.residentCount());
+        return new TickResult(tick, generated, changed, List.copyOf(dirty), world.residentCount());
     }
 
     public World world() {

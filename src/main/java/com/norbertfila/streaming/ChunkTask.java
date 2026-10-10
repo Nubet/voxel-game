@@ -1,20 +1,19 @@
 package com.norbertfila.streaming;
 
-import com.norbertfila.meshing.MeshData;
 import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 
-public record ChunkTask(ChunkPos position, long revision, long token, ChunkPriority priority, Callable<MeshData> work) {
-    public ChunkTask(ChunkPos position, long token, Callable<MeshData> work) {
+public record ChunkTask<T>(ChunkPos position, long revision, long token, ChunkPriority priority, Callable<T> work) {
+    public ChunkTask(ChunkPos position, long token, Callable<T> work) {
         this(position, -1, token, ChunkPriority.unprioritized(), work);
     }
 
-    public ChunkTask(ChunkPos position, long token, ChunkPriority priority, Callable<MeshData> work) {
+    public ChunkTask(ChunkPos position, long token, ChunkPriority priority, Callable<T> work) {
         this(position, -1, token, priority, work);
     }
 
-    public ChunkTask(ChunkPos position, long revision, long token, Callable<MeshData> work) {
+    public ChunkTask(ChunkPos position, long revision, long token, Callable<T> work) {
         this(position, revision, token, ChunkPriority.unprioritized(), work);
     }
 
@@ -24,22 +23,22 @@ public record ChunkTask(ChunkPos position, long revision, long token, ChunkPrior
         Objects.requireNonNull(work);
     }
 
-    public static final class Outcome implements AutoCloseable {
+    public static final class Outcome<T> implements AutoCloseable {
         private final ChunkPos position;
         private final long revision;
         private final long token;
-        private MeshData mesh;
+        private T result;
         private final Throwable failure;
 
-        public Outcome(ChunkPos position, long revision, long token, MeshData mesh, Throwable failure) {
+        public Outcome(ChunkPos position, long revision, long token, T result, Throwable failure) {
             Objects.requireNonNull(position);
-            if ((mesh == null) == (failure == null)) {
-                throw new IllegalArgumentException("Outcome must contain either mesh or failure");
+            if ((result == null) == (failure == null)) {
+                throw new IllegalArgumentException("Outcome must contain either a result or failure");
             }
             this.position = position;
             this.revision = revision;
             this.token = token;
-            this.mesh = mesh;
+            this.result = result;
             this.failure = failure;
         }
 
@@ -55,7 +54,13 @@ public record ChunkTask(ChunkPos position, long revision, long token, ChunkPrior
             return token;
         }
 
-        public MeshData mesh() {
+        public T result() {
+            return result;
+        }
+
+        public <R> R mesh() {
+            @SuppressWarnings("unchecked")
+            R mesh = (R) result;
             return mesh;
         }
 
@@ -64,11 +69,11 @@ public record ChunkTask(ChunkPos position, long revision, long token, ChunkPrior
         }
 
         public boolean succeeded() {
-            return mesh != null;
+            return result != null;
         }
 
         public void discard() {
-            mesh = null;
+            result = null;
         }
 
         @Override
