@@ -8,6 +8,7 @@ public final class ChunkEntry {
     private ChunkState state = ChunkState.REQUESTED;
     private long chunkRevision = -1;
     private long meshRevision = -1;
+    private long generationToken = -1;
 
     public ChunkEntry(ChunkPos position) {
         this.position = Objects.requireNonNull(position);
@@ -27,6 +28,19 @@ public final class ChunkEntry {
 
     public long meshRevision() {
         return meshRevision;
+    }
+
+    public long generationToken() {
+        return generationToken;
+    }
+
+    public void setGenerationToken(long token) {
+        if (token < 0) throw new IllegalArgumentException("Generation token must not be negative");
+        generationToken = token;
+    }
+
+    public boolean isCurrent(long revision, long token) {
+        return chunkRevision == revision && generationToken == token;
     }
 
     public void beginGenerating() {

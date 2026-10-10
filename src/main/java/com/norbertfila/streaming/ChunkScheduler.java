@@ -1,11 +1,14 @@
 package com.norbertfila.streaming;
 
+import com.norbertfila.world.ChunkPos;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
@@ -18,6 +21,8 @@ public final class ChunkScheduler implements AutoCloseable {
     private final BlockingQueue<ChunkTask.Outcome> ready;
     private final Semaphore outstanding;
     private final AtomicLong sequence = new AtomicLong();
+    private final Set<TaskKey> cancelled = ConcurrentHashMap.newKeySet();
+    private final Set<TaskKey> running = ConcurrentHashMap.newKeySet();
 
     public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity) {
         if (workerCount <= 0 || taskQueueCapacity <= 0 || readyQueueCapacity <= 0) {
@@ -33,6 +38,7 @@ public final class ChunkScheduler implements AutoCloseable {
 
     public boolean submit(ChunkTask task) {
         Objects.requireNonNull(task);
+        cancelled.remove(TaskKey.of(task));
         if (!outstanding.tryAcquire()) return false;
         try {
             executor.execute(new PrioritizedTask(task, sequence.getAndIncrement()));
@@ -61,6 +67,22 @@ public final class ChunkScheduler implements AutoCloseable {
         return executor.getActiveCount();
     }
 
+    public boolean cancel(ChunkPos position, long revision, long token) {
+        TaskKey key = new TaskKey(Objects.requireNonNull(position), revision, token);
+        cancelled.add(key);
+        boolean removed = false;
+        for (Runnable queued : executor.getQueue().toArray(Runnable[]::new)) {
+            PrioritizedTask task = (PrioritizedTask) queued;
+            if (TaskKey.of(task.task).equals(key) && executor.getQueue().remove(task)) {
+                outstanding.release();
+                cancelled.remove(key);
+                removed = true;
+            }
+        }
+        if (!removed && !running.contains(key)) cancelled.remove(key);
+        return true;
+    }
+
     public void shutdown() {
         executor.shutdown();
     }
@@ -80,9 +102,17 @@ public final class ChunkScheduler implements AutoCloseable {
             ChunkTask.Outcome outcome;
             try {
                 outcome = new ChunkTask.Outcome(
-                        task.position(), task.token(), task.work().call(), null);
+                        task.position(),
+                        task.revision(),
+                        task.token(),
+                        task.work().call(),
+                        null);
             } catch (Throwable failure) {
-                outcome = new ChunkTask.Outcome(task.position(), task.token(), null, failure);
+                outcome = new ChunkTask.Outcome(task.position(), task.revision(), task.token(), null, failure);
+            }
+            if (cancelled.contains(TaskKey.of(task))) {
+                outcome.discard();
+                return;
             }
             try {
                 ready.put(outcome);
@@ -106,7 +136,14 @@ public final class ChunkScheduler implements AutoCloseable {
 
         @Override
         public void run() {
-            execute(task);
+            TaskKey key = TaskKey.of(task);
+            running.add(key);
+            try {
+                execute(task);
+            } finally {
+                running.remove(key);
+                cancelled.remove(key);
+            }
         }
 
         private int compareTo(PrioritizedTask other) {
@@ -114,6 +151,12 @@ public final class ChunkScheduler implements AutoCloseable {
             double right = other.task.priority().score() - other.order * AGE_WEIGHT;
             int comparison = Double.compare(left, right);
             return comparison != 0 ? comparison : Long.compare(order, other.order);
+        }
+    }
+
+    private record TaskKey(ChunkPos position, long revision, long token) {
+        private static TaskKey of(ChunkTask task) {
+            return new TaskKey(task.position(), task.revision(), task.token());
         }
     }
 

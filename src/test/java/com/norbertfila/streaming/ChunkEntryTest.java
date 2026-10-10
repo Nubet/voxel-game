@@ -48,4 +48,16 @@ class ChunkEntryTest {
         entry.beginEviction();
         assertThrows(IllegalStateException.class, () -> entry.transitionTo(ChunkState.REQUESTED));
     }
+
+    @Test
+    void matchesRevisionAndGenerationToken() {
+        ChunkEntry entry = new ChunkEntry(new ChunkPos(0, 0, 0));
+        entry.beginGenerating();
+        entry.setGenerationToken(12);
+        entry.generated(5);
+
+        assertTrue(entry.isCurrent(5, 12));
+        assertFalse(entry.isCurrent(4, 12));
+        assertFalse(entry.isCurrent(5, 13));
+    }
 }

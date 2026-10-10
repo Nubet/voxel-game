@@ -3,6 +3,7 @@ package com.norbertfila.streaming;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.meshing.MeshData;
@@ -17,13 +18,16 @@ class ChunkSchedulerTest {
     void returnsOutcomeWithPositionAndToken() throws Exception {
         try (ChunkScheduler scheduler = new ChunkScheduler(1, 2, 2)) {
             ChunkPos position = new ChunkPos(-2, 1, 3);
-            assertTrue(scheduler.submit(new ChunkTask(position, 9L, () -> new MeshData(new float[0]))));
+            assertTrue(scheduler.submit(new ChunkTask(position, 8L, 9L, () -> new MeshData(new float[0]))));
 
             ChunkTask.Outcome outcome = waitForOutcome(scheduler);
 
             assertEquals(position, outcome.position());
+            assertEquals(8L, outcome.revision());
             assertEquals(9L, outcome.token());
             assertTrue(outcome.succeeded());
+            outcome.discard();
+            assertNull(outcome.mesh());
         }
     }
 
@@ -106,6 +110,43 @@ class ChunkSchedulerTest {
         ChunkPriority behind = ChunkPriority.forPosition(new ChunkPos(-2, 0, 0), new ChunkPos(0, 0, 0), 1, 0);
 
         assertTrue(ahead.score() < behind.score());
+    }
+
+    @Test
+    void cancelRemovesQueuedTaskAndReleasesCapacity() throws Exception {
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 2)) {
+            CountDownLatch release = new CountDownLatch(1);
+            assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(0, 0, 0), 1, 10, () -> {
+                release.await();
+                return new MeshData(new float[0]);
+            })));
+            waitForActiveTask(scheduler);
+            ChunkTask queued = new ChunkTask(new ChunkPos(1, 0, 0), 2, 11, () -> new MeshData(new float[0]));
+            assertTrue(scheduler.submit(queued));
+            assertTrue(scheduler.cancel(queued.position(), queued.revision(), queued.token()));
+            assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(2, 0, 0), 3, 12, () -> new MeshData(new float[0]))));
+            release.countDown();
+        }
+    }
+
+    @Test
+    void cancelMarksSlowActiveTaskWithoutWaitingForIt() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 1)) {
+            ChunkTask task = new ChunkTask(new ChunkPos(0, 0, 0), 4, 20, () -> {
+                started.countDown();
+                release.await();
+                return new MeshData(new float[] {1, 2, 3, 1, 1, 1});
+            });
+            assertTrue(scheduler.submit(task));
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            assertTrue(scheduler.cancel(task.position(), task.revision(), task.token()));
+            assertEquals(1, scheduler.activeTasks());
+            release.countDown();
+            assertTrue(scheduler.awaitTermination(Duration.ofSeconds(1)) || scheduler.activeTasks() == 0);
+            assertNull(scheduler.pollReady());
+        }
     }
 
     private static ChunkTask.Outcome waitForOutcome(ChunkScheduler scheduler) throws InterruptedException {
