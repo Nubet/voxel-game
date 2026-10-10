@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
@@ -25,6 +26,7 @@ public final class ChunkScheduler implements AutoCloseable {
     private final AtomicLong sequence = new AtomicLong();
     private final Set<TaskKey> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<TaskKey> running = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<ChunkPos, TaskKey> latest = new ConcurrentHashMap<>();
 
     public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity) {
         if (workerCount <= 0 || taskQueueCapacity <= 0 || readyQueueCapacity <= 0) {
@@ -52,8 +54,34 @@ public final class ChunkScheduler implements AutoCloseable {
         }
     }
 
+    public boolean submitLatest(ChunkTask task) {
+        Objects.requireNonNull(task);
+        TaskKey key = TaskKey.of(task);
+        TaskKey previous = latest.put(task.position(), key);
+        if (previous != null && !previous.equals(key))
+            cancel(previous.position(), previous.revision(), previous.token());
+        if (submit(task)) return true;
+        latest.remove(task.position(), key);
+        return false;
+    }
+
     public ChunkTask.Outcome pollReady() {
         return ready.poll();
+    }
+
+    public ChunkTask.Outcome pollLatestReady() {
+        ChunkTask.Outcome outcome;
+        while ((outcome = ready.poll()) != null) {
+            if (isLatest(outcome)) return outcome;
+            outcome.discard();
+        }
+        return null;
+    }
+
+    public boolean isLatest(ChunkTask.Outcome outcome) {
+        Objects.requireNonNull(outcome);
+        return new TaskKey(outcome.position(), outcome.revision(), outcome.token())
+                .equals(latest.get(outcome.position()));
     }
 
     public List<ChunkTask.Outcome> drainReady() {
@@ -212,5 +240,6 @@ public final class ChunkScheduler implements AutoCloseable {
             shutdownNow();
             Thread.currentThread().interrupt();
         }
+        latest.clear();
     }
 }

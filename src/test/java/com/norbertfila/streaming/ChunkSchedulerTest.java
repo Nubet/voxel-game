@@ -168,6 +168,40 @@ class ChunkSchedulerTest {
         }
     }
 
+    @Test
+    void latestSubmissionDropsOlderReadyResult() throws Exception {
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 2, 2)) {
+            ChunkPos position = new ChunkPos(0, 0, 0);
+            assertTrue(scheduler.submitLatest(
+                    new ChunkTask(position, 1, 10, () -> new MeshData(new float[] {1, 2, 3, 1, 1, 1}))));
+            ChunkTask.Outcome old = waitForOutcome(scheduler);
+            old.discard();
+            assertTrue(scheduler.submitLatest(
+                    new ChunkTask(position, 2, 11, () -> new MeshData(new float[] {2, 3, 4, 1, 1, 1}))));
+            ChunkTask.Outcome latest = waitForOutcome(scheduler);
+            assertTrue(scheduler.isLatest(latest));
+            latest.discard();
+        }
+    }
+
+    @Test
+    void latestSubmissionCancelsQueuedWorkInsteadOfGrowingQueue() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 2)) {
+            ChunkPos activePosition = new ChunkPos(0, 0, 0);
+            assertTrue(scheduler.submit(new ChunkTask(activePosition, 1, 1, () -> {
+                release.await();
+                return new MeshData(new float[0]);
+            })));
+            waitForActiveTask(scheduler);
+            ChunkPos position = new ChunkPos(1, 0, 0);
+            assertTrue(scheduler.submitLatest(new ChunkTask(position, 1, 2, () -> new MeshData(new float[0]))));
+            assertTrue(scheduler.submitLatest(new ChunkTask(position, 2, 3, () -> new MeshData(new float[0]))));
+            assertEquals(1, scheduler.queuedTasks());
+            release.countDown();
+        }
+    }
+
     private static ChunkTask.Outcome waitForOutcome(ChunkScheduler scheduler) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
         ChunkTask.Outcome outcome;
