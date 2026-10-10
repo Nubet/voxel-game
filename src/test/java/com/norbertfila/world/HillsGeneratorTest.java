@@ -36,4 +36,17 @@ class HillsGeneratorTest {
         assertTrue(hasDirt);
         assertTrue(hasStone);
     }
+
+    @Test
+    void generatesVerticalSectionsUsingWorldHeight() {
+        HillsGenerator generator = new HillsGenerator();
+        Chunk belowSurface = generator.generate(0, -1, 0);
+        Chunk surface = generator.generate(0, 0, 0);
+        Chunk aboveSurface = generator.generate(0, 1, 0);
+
+        assertEquals(BlockId.STONE, belowSurface.get(0, Chunk.SIZE - 1, 0));
+        assertEquals(BlockId.STONE, surface.get(0, 0, 0));
+        assertEquals(BlockId.AIR, surface.get(0, Chunk.SIZE - 1, 0));
+        assertEquals(BlockId.AIR, aboveSurface.get(0, 0, 0));
+    }
 }
