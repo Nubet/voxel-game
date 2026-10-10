@@ -2,6 +2,7 @@ package com.norbertfila.core;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.TerrainRenderer;
 
@@ -12,6 +13,7 @@ public final class GameLoop {
     public void run(Window window, Camera camera, TerrainRenderer renderer, int chunks) {
         double previous = window.time();
         double reportTime = previous;
+        Input input = new Input(window.handle());
         int frames = 0;
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
@@ -24,6 +26,7 @@ public final class GameLoop {
             double now = window.time();
             double deltaSeconds = clampDelta(now - previous);
             previous = now;
+            input.update();
             window.framebufferSize(framebufferWidth, framebufferHeight);
             if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
                 if (!sleepWhileMinimized()) {
@@ -32,7 +35,7 @@ public final class GameLoop {
                 continue;
             }
 
-            camera.update(window.handle(), deltaSeconds);
+            camera.update(input, deltaSeconds);
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
