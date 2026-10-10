@@ -40,6 +40,10 @@ public final class Chunk {
         return data.kind();
     }
 
+    public long revision() {
+        return revision;
+    }
+
     public long estimatedBytes() {
         return data.estimatedBytes();
     }
