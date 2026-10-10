@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
+import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.streaming.ChunkManager;
 
@@ -48,7 +49,9 @@ public final class GameLoop {
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            renderer.render(camera.viewProjection(framebufferWidth[0], framebufferHeight[0]));
+            var viewProjection = camera.viewProjection(framebufferWidth[0], framebufferHeight[0]);
+            TerrainRenderer.RenderStats renderStats = renderer.render(viewProjection, Frustum.from(viewProjection));
+            metrics.recordCulling(renderStats.visible(), renderStats.culled(), renderStats.drawCalls());
             window.swapBuffers();
 
             metrics.recordFrame(deltaSeconds);

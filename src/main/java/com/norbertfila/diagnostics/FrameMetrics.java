@@ -13,6 +13,9 @@ public final class FrameMetrics {
     private long uploadBytes;
     private long uploadNanos;
     private int uploadQueueDepth;
+    private int visible;
+    private int culled;
+    private int drawCalls;
 
     public FrameMetrics(int chunks, int vertices, long meshBytes, boolean debug, double startSeconds) {
         this.chunks = chunks;
@@ -41,6 +44,12 @@ public final class FrameMetrics {
         uploadQueueDepth = queueDepth;
     }
 
+    public void recordCulling(int visible, int culled, int drawCalls) {
+        this.visible = visible;
+        this.culled = culled;
+        this.drawCalls = drawCalls;
+    }
+
     public void reportIfDue(double nowSeconds) {
         double elapsedSeconds = nowSeconds - reportStartSeconds;
         if (elapsedSeconds < REPORT_INTERVAL_SECONDS) return;
@@ -48,10 +57,13 @@ public final class FrameMetrics {
         double frameTimeMillis = averageFrameTimeMillis();
         if (debug) {
             System.out.printf(
-                    "[debug] FPS: %.0f | frame: %.2f ms | sections: %d | vertices: %d | CPU mesh: %d bytes | GPU upload: %d bytes / %.2f ms | upload queue: %d%n",
+                    "[debug] FPS: %.0f | frame: %.2f ms | sections: %d | visible: %d | culled: %d | draws: %d | vertices: %d | CPU mesh: %d bytes | GPU upload: %d bytes / %.2f ms | upload queue: %d%n",
                     fps,
                     frameTimeMillis,
                     chunks,
+                    visible,
+                    culled,
+                    drawCalls,
                     vertices,
                     meshBytes,
                     uploadBytes,
@@ -65,6 +77,9 @@ public final class FrameMetrics {
         uploadBytes = 0;
         uploadNanos = 0;
         uploadQueueDepth = 0;
+        visible = 0;
+        culled = 0;
+        drawCalls = 0;
         reportStartSeconds = nowSeconds;
     }
 }

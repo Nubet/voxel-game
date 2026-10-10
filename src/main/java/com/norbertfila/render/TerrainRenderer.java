@@ -141,18 +141,27 @@ public final class TerrainRenderer implements AutoCloseable {
         if (mesh != null) mesh.close();
     }
 
-    public void render(Matrix4f viewProjection) {
+    public RenderStats render(Matrix4f viewProjection, Frustum frustum) {
         glUseProgram(program);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer mat = stack.mallocFloat(16);
             viewProjection.get(mat);
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
-        for (GpuMesh mesh : meshes.values()) {
+        int visible = 0;
+        int culled = 0;
+        for (Map.Entry<ChunkPos, GpuMesh> entry : meshes.entrySet()) {
+            if (!frustum.intersects(entry.getKey())) {
+                culled++;
+                continue;
+            }
+            GpuMesh mesh = entry.getValue();
             glBindVertexArray(mesh.vao());
             glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
+            visible++;
         }
         glBindVertexArray(0);
+        return new RenderStats(visible, culled, visible);
     }
 
     @Override
@@ -165,4 +174,6 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     public record UploadStats(long bytesUploaded, int queueDepth, long uploadNanos, int uploadCount) {}
+
+    public record RenderStats(int visible, int culled, int drawCalls) {}
 }
