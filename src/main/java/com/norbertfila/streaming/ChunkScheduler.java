@@ -118,6 +118,10 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         return outstandingLimit - outstanding.availablePermits();
     }
 
+    public boolean hasCapacity() {
+        return outstanding.availablePermits() > 0;
+    }
+
     public int cancelOutside(ChunkPos center, int radius) {
         return cancelOutside(center, radius, false);
     }

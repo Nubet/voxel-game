@@ -20,12 +20,14 @@ class ChunkSchedulerTest {
             assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(0, 0, 0), 0, 0, () -> 0)));
             assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(1, 0, 0), 0, 1, () -> 1)));
             assertFalse(scheduler.submit(new ChunkTask<>(new ChunkPos(2, 0, 0), 0, 2, () -> 2)));
+            assertFalse(scheduler.hasCapacity());
             scheduler.shutdown();
             assertTrue(scheduler.awaitTermination(Duration.ofSeconds(2)));
             assertEquals(2, scheduler.outstandingJobs());
             var outcomes = scheduler.drainReady();
             assertEquals(2, outcomes.size());
             assertEquals(0, scheduler.outstandingJobs());
+            assertTrue(scheduler.hasCapacity());
             assertEquals(
                     java.util.Set.of(0, 1),
                     outcomes.stream().map(ChunkTask.Outcome::result).collect(java.util.stream.Collectors.toSet()));
@@ -217,6 +219,30 @@ class ChunkSchedulerTest {
             assertTrue(scheduler.submitLatest(new ChunkTask(position, 1, 2, () -> new MeshData(new float[0]))));
             assertTrue(scheduler.submitLatest(new ChunkTask(position, 2, 3, () -> new MeshData(new float[0]))));
             assertEquals(1, scheduler.queuedTasks());
+            release.countDown();
+        }
+    }
+
+    @Test
+    void editedChunkPriorityRunsBeforeQueuedBackgroundMeshing() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 3, 4)) {
+            assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(0, 0, 0), 0, 0, () -> {
+                started.countDown();
+                release.await();
+                return 0;
+            })));
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            assertTrue(scheduler.submit(
+                    new ChunkTask<>(new ChunkPos(10, 0, 0), 0, 1, ChunkPriority.unprioritized(), () -> 1)));
+            ChunkPos edited = new ChunkPos(1, 0, 0);
+            assertTrue(scheduler.submit(new ChunkTask<>(
+                    edited, 1, 2, ChunkPriority.forPosition(edited, new ChunkPos(0, 0, 0), 0, 0), () -> 2)));
+            release.countDown();
+            waitForOutcome(scheduler);
+            assertEquals(edited, waitForOutcome(scheduler).position());
+        } finally {
             release.countDown();
         }
     }

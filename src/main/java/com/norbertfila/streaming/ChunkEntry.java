@@ -55,8 +55,9 @@ public final class ChunkEntry {
     }
 
     public boolean beginMeshing(long revision) {
-        if (revision != chunkRevision || (state != ChunkState.GENERATED && state != ChunkState.RESIDENT_GPU))
+        if (revision < chunkRevision || (state != ChunkState.GENERATED && state != ChunkState.RESIDENT_GPU))
             return false;
+        chunkRevision = revision;
         transitionTo(ChunkState.MESHING);
         return true;
     }

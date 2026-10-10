@@ -9,16 +9,153 @@ import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
+import com.norbertfila.world.WorldEdit;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ChunkManagerTest {
+    @Test
+    void coalescesTenThousandEditsIntoOneLatestMeshWithoutMeshingOnCallerThread() {
+        World world = new World();
+        AtomicInteger calls = new AtomicInteger();
+        Thread owner = Thread.currentThread();
+        GreedyMesher mesher = new GreedyMesher();
+        try (ChunkManager manager = new ChunkManager(
+                world,
+                emptyGenerator(),
+                (snapshot, neighborhood, x, y, z) -> {
+                    assertFalse(Thread.currentThread() == owner);
+                    calls.incrementAndGet();
+                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                },
+                new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            int initialCalls = calls.get();
+            WorldEdit edits = new WorldEdit(world, 8);
+            BlockPos position = new BlockPos(1, 1, 1);
+
+            for (int index = 0; index < 10_000; index++)
+                manager.requestRemesh(edits.setBlock(position, index % 2 == 0 ? BlockId.STONE : BlockId.DIRT));
+
+            assertEquals(initialCalls, calls.get());
+            var result = awaitMesh(manager).meshes().get(0);
+            var neighborhood = world.blockNeighborhood(center);
+            assertArrayEquals(
+                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
+                    result.mesh().vertices());
+            assertEquals(initialCalls + 1, calls.get());
+            assertEquals(10_000, world.getChunk(center).revision());
+            assertTrue(manager.markUploaded(result));
+            manager.requestRemesh(edits.setBlock(position, BlockId.DIRT));
+            manager.requestRemesh(edits.setBlock(new BlockPos(16, 0, 0), BlockId.STONE));
+            manager.processResults();
+            assertEquals(initialCalls + 1, calls.get());
+            assertEquals(1, world.residentCount());
+        }
+    }
+
+    @Test
+    void coalescesEditsWhileWorkerUsesAnImmutableOldSnapshot() throws Exception {
+        World world = new World();
+        AtomicInteger calls = new AtomicInteger();
+        AtomicBoolean blockNext = new AtomicBoolean();
+        AtomicReference<com.norbertfila.world.ChunkSnapshot> blockedSnapshot = new AtomicReference<>();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        GreedyMesher mesher = new GreedyMesher();
+        try (ChunkManager manager = new ChunkManager(
+                world,
+                emptyGenerator(),
+                (snapshot, neighborhood, x, y, z) -> {
+                    calls.incrementAndGet();
+                    if (blockNext.getAndSet(false)) {
+                        blockedSnapshot.set(snapshot);
+                        started.countDown();
+                        try {
+                            if (!release.await(2, TimeUnit.SECONDS))
+                                throw new AssertionError("Worker release timed out");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new AssertionError(interrupted);
+                        }
+                    }
+                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                },
+                new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            WorldEdit edits = new WorldEdit(world, 8);
+            BlockPos position = new BlockPos(1, 1, 1);
+            blockNext.set(true);
+            manager.requestRemesh(edits.setBlock(position, BlockId.STONE));
+            manager.processResults();
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            try {
+                for (int index = 0; index < 20; index++) {
+                    manager.requestRemesh(edits.setBlock(position, index % 2 == 0 ? BlockId.GRASS : BlockId.DIRT));
+                    manager.processResults();
+                }
+                assertEquals(BlockId.STONE, blockedSnapshot.get().get(1, 1, 1));
+                assertEquals(2, calls.get());
+            } finally {
+                release.countDown();
+            }
+            var result = awaitMesh(manager).meshes().get(0);
+            var neighborhood = world.blockNeighborhood(center);
+            assertArrayEquals(
+                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
+                    result.mesh().vertices());
+            assertEquals(3, calls.get());
+            assertTrue(manager.markUploaded(result));
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
+    void queuesOnlyResidentChunksForACornerEdit() {
+        World world = new World();
+        AtomicInteger calls = new AtomicInteger();
+        GreedyMesher mesher = new GreedyMesher();
+        try (ChunkManager manager = new ChunkManager(
+                world,
+                emptyGenerator(),
+                (snapshot, neighborhood, x, y, z) -> {
+                    calls.incrementAndGet();
+                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                },
+                new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            var change = new WorldEdit(world, 8).setBlock(new BlockPos(15, 15, 15), BlockId.STONE);
+            assertEquals(4, change.dirtyChunks().size());
+            manager.requestRemesh(change);
+            var result = awaitMesh(manager).meshes();
+            assertEquals(1, result.size());
+            assertEquals(center, result.get(0).position());
+            assertEquals(6, result.get(0).mesh().faceCount());
+            assertEquals(2, calls.get());
+            assertEquals(1, world.residentCount());
+        }
+    }
+
     @Test
     void loadsSpawnAndPublishesCompleteTerrainAfterDistanceChanges() throws Exception {
         World world = new World();
