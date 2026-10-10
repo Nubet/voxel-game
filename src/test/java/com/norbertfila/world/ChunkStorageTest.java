@@ -14,7 +14,7 @@ class ChunkStorageTest {
         storage.put(new ChunkPos(1, 0, 0), new Chunk());
 
         assertEquals(2, storage.size());
-        assertEquals(2L * Chunk.BLOCK_BYTES, storage.estimatedBytes());
+        assertEquals(0, storage.estimatedBytes());
         assertTrue(storage.softLimitExceeded());
     }
 
@@ -34,7 +34,7 @@ class ChunkStorageTest {
         storage.put(new ChunkPos(1, 0, 0), new Chunk());
 
         assertTrue(storage.remove(first) != null);
-        assertEquals(Chunk.BLOCK_BYTES, storage.estimatedBytes());
+        assertEquals(0, storage.estimatedBytes());
         assertEquals(1, storage.size());
         assertTrue(!storage.softLimitExceeded());
     }

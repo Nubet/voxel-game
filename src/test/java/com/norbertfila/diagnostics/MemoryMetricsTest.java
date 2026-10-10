@@ -19,7 +19,7 @@ class MemoryMetricsTest {
 
         assertEquals(2, metrics.residentChunks());
         assertEquals(Chunk.BLOCK_BYTES, metrics.bytesPerChunk());
-        assertEquals(2L * Chunk.BLOCK_BYTES, metrics.residentBytes());
+        assertEquals(0, metrics.residentBytes());
         assertTrue(metrics.estimated());
     }
 }

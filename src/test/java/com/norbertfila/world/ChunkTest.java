@@ -46,4 +46,29 @@ class ChunkTest {
         assertFalse(BlockId.isValid((byte) 0xff));
         assertThrows(IllegalArgumentException.class, () -> new Chunk().set(0, 0, 0, (byte) 0xff));
     }
+
+    @Test
+    void changesUniformStorageToDenseOnWrite() {
+        byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+        java.util.Arrays.fill(blocks, BlockId.STONE);
+        Chunk chunk = Chunk.fromBlocks(blocks);
+        assertEquals(ChunkData.Kind.UNIFORM, chunk.storageKind());
+        assertEquals(1, chunk.estimatedBytes());
+
+        chunk.set(0, 0, 0, BlockId.DIRT);
+
+        assertEquals(ChunkData.Kind.DENSE, chunk.storageKind());
+        assertEquals(Chunk.BLOCK_BYTES, chunk.estimatedBytes());
+        assertEquals(BlockId.DIRT, chunk.get(0, 0, 0));
+        assertEquals(BlockId.STONE, chunk.get(1, 0, 0));
+    }
+
+    @Test
+    void emptyChunkUsesNoBlockArray() {
+        Chunk chunk = new Chunk();
+
+        assertEquals(ChunkData.Kind.EMPTY, chunk.storageKind());
+        assertEquals(0, chunk.estimatedBytes());
+        assertEquals(BlockId.AIR, chunk.get(Chunk.SIZE - 1, Chunk.SIZE - 1, Chunk.SIZE - 1));
+    }
 }

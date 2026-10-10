@@ -47,7 +47,9 @@ public final class ChunkStorage {
     }
 
     public long estimatedBytes() {
-        return (long) size() * Chunk.BLOCK_BYTES;
+        long bytes = 0;
+        for (Chunk chunk : chunks.values()) bytes += chunk.estimatedBytes();
+        return bytes;
     }
 
     public int softLimit() {
