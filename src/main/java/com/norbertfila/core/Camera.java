@@ -18,8 +18,16 @@ public final class Camera {
     private float yaw = -90f, pitch = -25f;
 
     public void update(Input input, double dt) {
+        updateLook(input);
+        move(input, dt);
+    }
+
+    public void updateLook(Input input) {
         yaw += input.mouseDeltaX() * MOUSE_SENSITIVITY;
         pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - input.mouseDeltaY() * MOUSE_SENSITIVITY));
+    }
+
+    private void move(Input input, double dt) {
         getForward();
         forward.cross(0, 1, 0, right).normalize();
         float speed = (input.sprint() ? SPRINT_SPEED : WALK_SPEED) * (float) dt;
@@ -29,6 +37,18 @@ public final class Camera {
         if (input.moveLeft()) position.fma(-speed, right);
         if (input.moveUp()) position.y += speed;
         if (input.moveDown()) position.y -= speed;
+    }
+
+    public void setPosition(float x, float y, float z) {
+        position.set(x, y, z);
+    }
+
+    public float yaw() {
+        return yaw;
+    }
+
+    public float pitch() {
+        return pitch;
     }
 
     private void getForward() {

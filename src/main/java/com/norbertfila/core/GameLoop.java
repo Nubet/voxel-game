@@ -5,6 +5,8 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.FixedSimulation;
+import com.norbertfila.player.PlayerController;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.streaming.ChunkManager;
@@ -12,11 +14,15 @@ import com.norbertfila.streaming.ChunkManager;
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
     private static final long MINIMIZED_SLEEP_MILLIS = 16;
+    private static final double FIXED_DELTA_SECONDS = 1.0 / 60.0;
+    private static final int MAX_CATCH_UP_TICKS = 5;
 
     public void run(
             Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics, ChunkManager chunkManager) {
         double previous = window.time();
         Input input = new Input(window.handle());
+        PlayerController player = new PlayerController();
+        FixedSimulation simulation = new FixedSimulation(FIXED_DELTA_SECONDS, MAX_CATCH_UP_TICKS);
         String hardware =
                 System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
         int[] framebufferWidth = new int[1];
@@ -39,7 +45,19 @@ public final class GameLoop {
                 continue;
             }
 
-            camera.update(input, deltaSeconds);
+            camera.updateLook(input);
+            PlayerController.InputState playerInput = new PlayerController.InputState(
+                    input.moveForward(),
+                    input.moveBackward(),
+                    input.moveLeft(),
+                    input.moveRight(),
+                    input.moveUp(),
+                    input.moveDown(),
+                    input.sprint());
+            simulation.advance(
+                    deltaSeconds, fixedDelta -> player.tick(playerInput, fixedDelta, camera.yaw(), camera.pitch()));
+            PlayerController.Position renderPosition = player.renderPosition(simulation.interpolationAlpha());
+            camera.setPosition((float) renderPosition.x(), (float) renderPosition.y(), (float) renderPosition.z());
             ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());
             if (update.changed()) {
                 update.evicted().forEach(renderer::remove);
