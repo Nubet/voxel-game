@@ -5,10 +5,26 @@ public final class Chunk {
     private final byte[] blocks = new byte[SIZE * SIZE * SIZE];
 
     public byte get(int x, int y, int z) {
-        return blocks[(y * SIZE + z) * SIZE + x];
+        return blocks[index(x, y, z)];
     }
 
     public void set(int x, int y, int z, byte value) {
-        blocks[(y * SIZE + z) * SIZE + x] = value;
+        if (!BlockId.isValid(value)) {
+            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
+        }
+        blocks[index(x, y, z)] = value;
+    }
+
+    private static int index(int x, int y, int z) {
+        checkLocalCoordinate(x, "x");
+        checkLocalCoordinate(y, "y");
+        checkLocalCoordinate(z, "z");
+        return (y * SIZE + z) * SIZE + x;
+    }
+
+    private static void checkLocalCoordinate(int coordinate, String axis) {
+        if (coordinate < 0 || coordinate >= SIZE) {
+            throw new IndexOutOfBoundsException(axis + " must be in [0, " + SIZE + "): " + coordinate);
+        }
     }
 }
