@@ -22,15 +22,22 @@ public final class Game {
                 int vertices = 0;
                 long meshBytes = 0;
                 // Static 9x9 terrain over a limited vertical chunk range
+                World world = new World();
                 for (int chunkY = TERRAIN_MIN_CHUNK_Y; chunkY <= TERRAIN_MAX_CHUNK_Y; chunkY++)
                     for (int z = -TERRAIN_RADIUS; z <= TERRAIN_RADIUS; z++)
                         for (int x = -TERRAIN_RADIUS; x <= TERRAIN_RADIUS; x++) {
-                            var snapshot = generator.generate(x, chunkY, z).snapshot();
-                            MeshData mesh = mesher.mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), x, chunkY, z);
+                            world.putChunk(new ChunkPos(x, chunkY, z), generator.generate(x, chunkY, z));
+                            chunks++;
+                        }
+                for (int chunkY = TERRAIN_MIN_CHUNK_Y; chunkY <= TERRAIN_MAX_CHUNK_Y; chunkY++)
+                    for (int z = -TERRAIN_RADIUS; z <= TERRAIN_RADIUS; z++)
+                        for (int x = -TERRAIN_RADIUS; x <= TERRAIN_RADIUS; x++) {
+                            ChunkPos position = new ChunkPos(x, chunkY, z);
+                            BlockNeighborhood neighborhood = world.blockNeighborhood(position);
+                            MeshData mesh = mesher.mesh(neighborhood.center(), neighborhood, x, chunkY, z);
                             renderer.upload(mesh);
                             vertices += mesh.vertexCount();
                             meshBytes += (long) mesh.vertexCount() * MeshData.VERTEX_STRIDE * Float.BYTES;
-                            chunks++;
                         }
                 System.out.println(
                         "Generated " + chunks + " sections in " + ((System.nanoTime() - start) / 1_000_000) + " ms");

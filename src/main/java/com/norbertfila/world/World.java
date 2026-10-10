@@ -1,5 +1,6 @@
 package com.norbertfila.world;
 
+import com.norbertfila.meshing.BlockNeighborhood;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -40,5 +41,26 @@ public final class World {
 
     public boolean isChunkRequested(ChunkPos position) {
         return requestedChunks.contains(position);
+    }
+
+    public BlockNeighborhood blockNeighborhood(ChunkPos position) {
+        Objects.requireNonNull(position);
+        ChunkSnapshot center = snapshot(position);
+        if (center == null) {
+            throw new IllegalArgumentException("Center chunk is not resident: " + position);
+        }
+        return new BlockNeighborhood(
+                center,
+                snapshot(new ChunkPos(position.x() + 1, position.y(), position.z())),
+                snapshot(new ChunkPos(position.x() - 1, position.y(), position.z())),
+                snapshot(new ChunkPos(position.x(), position.y() + 1, position.z())),
+                snapshot(new ChunkPos(position.x(), position.y() - 1, position.z())),
+                snapshot(new ChunkPos(position.x(), position.y(), position.z() + 1)),
+                snapshot(new ChunkPos(position.x(), position.y(), position.z() - 1)));
+    }
+
+    private ChunkSnapshot snapshot(ChunkPos position) {
+        Chunk chunk = chunks.get(position);
+        return chunk == null ? null : chunk.snapshot();
     }
 }

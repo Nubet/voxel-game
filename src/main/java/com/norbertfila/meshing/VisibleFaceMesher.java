@@ -33,13 +33,11 @@ public final class VisibleFaceMesher implements ChunkMesher {
                     if (block == BlockId.AIR) continue;
                     for (int f = 0; f < 6; f++) {
                         int nx = x + NORMALS[f][0], ny = y + NORMALS[f][1], nz = z + NORMALS[f][2];
-                        if (nx >= 0
-                                && ny >= 0
-                                && nz >= 0
-                                && nx < Chunk.SIZE
-                                && ny < Chunk.SIZE
-                                && nz < Chunk.SIZE
-                                && snapshot.get(nx, ny, nz) != BlockId.AIR) continue;
+                        if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
+                            if (snapshot.get(nx, ny, nz) != BlockId.AIR) continue;
+                        } else if (isSolidNeighbor(neighborhood, f, x, y, z)) {
+                            continue;
+                        }
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
                         float[] rgb = color(block, f);
                         for (int index : TRIANGLE_INDICES) {
@@ -54,6 +52,21 @@ public final class VisibleFaceMesher implements ChunkMesher {
                     }
                 }
         return new MeshData(out.toArray());
+    }
+
+    private static boolean isSolidNeighbor(BlockNeighborhood neighborhood, int face, int x, int y, int z) {
+        BlockNeighborhood.Side side = BlockNeighborhood.Side.values()[face];
+        ChunkSnapshot neighbor = neighborhood.neighbor(side).orElse(null);
+        if (neighbor == null) return false;
+        return switch (face) {
+            case 0 -> neighbor.get(0, y, z) != BlockId.AIR;
+            case 1 -> neighbor.get(Chunk.SIZE - 1, y, z) != BlockId.AIR;
+            case 2 -> neighbor.get(x, 0, z) != BlockId.AIR;
+            case 3 -> neighbor.get(x, Chunk.SIZE - 1, z) != BlockId.AIR;
+            case 4 -> neighbor.get(x, y, 0) != BlockId.AIR;
+            case 5 -> neighbor.get(x, y, Chunk.SIZE - 1) != BlockId.AIR;
+            default -> throw new AssertionError(face);
+        };
     }
 
     private static float[] color(byte block, int face) {

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
+import com.norbertfila.world.ChunkSnapshot;
 import org.junit.jupiter.api.Test;
 
 class VisibleFaceMesherTest {
@@ -31,6 +32,31 @@ class VisibleFaceMesherTest {
         chunk.set(2, 1, 1, BlockId.STONE);
 
         assertCounts(chunk, 10);
+    }
+
+    @Test
+    void presentNeighborHidesBoundaryFace() {
+        Chunk center = new Chunk();
+        Chunk neighbor = new Chunk();
+        center.set(Chunk.SIZE - 1, 1, 1, BlockId.STONE);
+        neighbor.set(0, 1, 1, BlockId.STONE);
+        ChunkSnapshot centerSnapshot = center.snapshot();
+        BlockNeighborhood neighborhood =
+                new BlockNeighborhood(centerSnapshot, neighbor.snapshot(), null, null, null, null, null);
+
+        assertEquals(5, mesher.mesh(centerSnapshot, neighborhood, 0, 0, 0).faceCount());
+    }
+
+    @Test
+    void missingNeighborKeepsBoundaryFace() {
+        Chunk center = new Chunk();
+        center.set(Chunk.SIZE - 1, 1, 1, BlockId.STONE);
+        ChunkSnapshot centerSnapshot = center.snapshot();
+
+        assertEquals(
+                6,
+                mesher.mesh(centerSnapshot, BlockNeighborhood.centerOnly(centerSnapshot), 0, 0, 0)
+                        .faceCount());
     }
 
     @Test
