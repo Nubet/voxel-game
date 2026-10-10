@@ -1,0 +1,52 @@
+package com.norbertfila.protocol;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import com.norbertfila.persistence.ChunkDelta;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.ChunkPos;
+import java.io.IOException;
+import java.util.HexFormat;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class MessageCodecTest {
+    @Test
+    void blockEditHasStableGoldenBytes() throws Exception {
+        WorldCommand command = new WorldCommand.BlockEdit(new BlockPos(-1, 2, 3), BlockId.GRASS);
+        byte[] expected = HexFormat.of().parseHex("5658433100000001040000000DFFFFFFFF000000020000000301");
+
+        assertArrayEquals(expected, MessageCodec.encode(command));
+        assertEquals(command, MessageCodec.decode(expected));
+    }
+
+    @Test
+    void roundTripsEveryMessageType() throws Exception {
+        List<WorldCommand> commands = List.of(
+                new WorldCommand.Handshake(1),
+                new WorldCommand.Seed(42, 3),
+                new WorldCommand.PlayerPosition(1.5, -2.0, 3.25),
+                new WorldCommand.BlockEdit(new BlockPos(1, 2, 3), BlockId.STONE),
+                new WorldCommand.ChunkDeltaUpdate(new ChunkDelta(
+                        new ChunkPos(0, 0, 0),
+                        List.of(new ChunkDelta.BlockChange(new BlockPos(1, 2, 3), BlockId.DIRT)))));
+
+        for (WorldCommand command : commands) assertEquals(command, MessageCodec.decode(MessageCodec.encode(command)));
+    }
+
+    @Test
+    void rejectsTruncatedUnknownAndTrailingMessages() {
+        byte[] valid = MessageCodec.encode(new WorldCommand.Handshake(1));
+
+        assertThrows(IOException.class, () -> MessageCodec.decode(new byte[] {1, 2, 3}));
+        byte[] unknown = valid.clone();
+        unknown[8] = 99;
+        assertThrows(IOException.class, () -> MessageCodec.decode(unknown));
+        byte[] trailing = new byte[valid.length + 1];
+        System.arraycopy(valid, 0, trailing, 0, valid.length);
+        assertThrows(IOException.class, () -> MessageCodec.decode(trailing));
+    }
+}
