@@ -68,6 +68,10 @@ public final class ChunkManager {
         return hysteresisRadius;
     }
 
+    public World world() {
+        return world;
+    }
+
     private boolean withinHysteresis(ChunkPos position, ChunkPos center) {
         if (position.y() < viewDemand.minChunkY() || position.y() > viewDemand.maxChunkY()) return false;
         int dx = position.x() - center.x();

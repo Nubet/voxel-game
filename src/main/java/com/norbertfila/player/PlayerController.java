@@ -1,5 +1,6 @@
 package com.norbertfila.player;
 
+import com.norbertfila.world.World;
 import java.util.Objects;
 
 public final class PlayerController {
@@ -8,6 +9,7 @@ public final class PlayerController {
     private Mode mode = Mode.SPECTATOR;
     private Position previous = new Position(0, 22, 34);
     private Position current = previous;
+    private final PlayerPhysics physics = new PlayerPhysics();
 
     public void setMode(Mode mode) {
         this.mode = Objects.requireNonNull(mode);
@@ -18,6 +20,10 @@ public final class PlayerController {
     }
 
     public void tick(InputState input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+        tick(null, input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
+    }
+
+    public void tick(World world, InputState input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         Objects.requireNonNull(input);
         if (!Double.isFinite(fixedDeltaSeconds) || fixedDeltaSeconds <= 0) {
             throw new IllegalArgumentException("Fixed delta must be positive and finite");
@@ -55,8 +61,17 @@ public final class PlayerController {
         if (mode == Mode.SPECTATOR) {
             if (input.up()) y += speed;
             if (input.down()) y -= speed;
+            current = new Position(x, y, z);
+            return;
         }
-        current = new Position(x, y, z);
+        if (world == null) {
+            current = new Position(x, y, z);
+            return;
+        }
+        double horizontalX = x - current.x();
+        double horizontalZ = z - current.z();
+        current = physics.step(world, current, horizontalX, horizontalZ, input.up(), fixedDeltaSeconds)
+                .position();
     }
 
     public Position renderPosition(double alpha) {

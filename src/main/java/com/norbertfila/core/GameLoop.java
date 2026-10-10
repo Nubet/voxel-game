@@ -55,7 +55,9 @@ public final class GameLoop {
                     input.moveDown(),
                     input.sprint());
             simulation.advance(
-                    deltaSeconds, fixedDelta -> player.tick(playerInput, fixedDelta, camera.yaw(), camera.pitch()));
+                    deltaSeconds,
+                    fixedDelta ->
+                            player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch()));
             PlayerController.Position renderPosition = player.renderPosition(simulation.interpolationAlpha());
             camera.setPosition((float) renderPosition.x(), (float) renderPosition.y(), (float) renderPosition.z());
             ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());

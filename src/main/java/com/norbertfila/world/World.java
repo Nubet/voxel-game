@@ -58,6 +58,10 @@ public final class World {
         return OptionalInt.of(BlockId.toUnsignedInt(chunk.get(local.x(), local.y(), local.z())));
     }
 
+    public boolean isSolid(BlockPos worldPosition) {
+        return getBlock(Objects.requireNonNull(worldPosition)).orElse(BlockId.AIR) != BlockId.AIR;
+    }
+
     public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {
         Objects.requireNonNull(worldPosition);
         OptionalInt previous = getBlock(worldPosition);
