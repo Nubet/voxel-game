@@ -3,18 +3,20 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.MeshData;
+import com.norbertfila.world.ChunkPos;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 /** Intentionally tiny OpenGL backend. Resource ownership remains explicit. */
 public final class TerrainRenderer implements AutoCloseable {
-    private final List<GpuMesh> meshes = new ArrayList<>();
+    private final Map<ChunkPos, GpuMesh> meshes = new HashMap<>();
     private final int matrixUniform;
     private int program;
     private boolean closed;
@@ -84,8 +86,14 @@ public final class TerrainRenderer implements AutoCloseable {
         }
     }
 
-    public void upload(MeshData mesh) {
-        if (mesh.vertexCount() == 0) return;
+    public void upload(ChunkPos position, MeshData mesh) {
+        Objects.requireNonNull(position);
+        Objects.requireNonNull(mesh);
+        if (mesh.vertexCount() == 0) {
+            GpuMesh previous = meshes.remove(position);
+            if (previous != null) previous.close();
+            return;
+        }
         int vao = glGenVertexArrays(), vbo = glGenBuffers();
         try {
             glBindVertexArray(vao);
@@ -96,7 +104,8 @@ public final class TerrainRenderer implements AutoCloseable {
             glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * Float.BYTES, 3L * Float.BYTES);
             glEnableVertexAttribArray(1);
             glBindVertexArray(0);
-            meshes.add(new GpuMesh(vao, vbo, mesh.vertexCount()));
+            GpuMesh previous = meshes.put(position, new GpuMesh(vao, vbo, mesh.vertexCount()));
+            if (previous != null) previous.close();
         } catch (RuntimeException | Error failure) {
             glDeleteBuffers(vbo);
             glDeleteVertexArrays(vao);
@@ -111,9 +120,9 @@ public final class TerrainRenderer implements AutoCloseable {
             viewProjection.get(mat);
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
-        for (GpuMesh mesh : meshes) {
-            glBindVertexArray(mesh.vao);
-            glDrawArrays(GL_TRIANGLES, 0, mesh.count);
+        for (GpuMesh mesh : meshes.values()) {
+            glBindVertexArray(mesh.vao());
+            glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
         }
         glBindVertexArray(0);
     }
@@ -122,13 +131,8 @@ public final class TerrainRenderer implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        for (GpuMesh mesh : meshes) {
-            glDeleteBuffers(mesh.vbo);
-            glDeleteVertexArrays(mesh.vao);
-        }
+        meshes.values().forEach(GpuMesh::close);
         glDeleteProgram(program);
         meshes.clear();
     }
-
-    private record GpuMesh(int vao, int vbo, int count) {}
 }
