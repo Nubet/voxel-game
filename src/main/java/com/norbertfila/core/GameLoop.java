@@ -9,6 +9,7 @@ import com.norbertfila.player.FixedSimulation;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
+import com.norbertfila.render.UiRenderer;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
@@ -24,9 +25,11 @@ public final class GameLoop {
             Window window,
             Camera camera,
             TerrainRenderer renderer,
+            UiRenderer uiRenderer,
             FrameMetrics metrics,
             ChunkManager chunkManager,
-            PlayerController player) {
+            PlayerController player,
+            SettingsPanel settingsPanel) {
         double previous = window.time();
         Input input = new Input(window.handle());
         FixedSimulation simulation = new FixedSimulation(FIXED_DELTA_SECONDS, MAX_CATCH_UP_TICKS);
@@ -37,35 +40,39 @@ public final class GameLoop {
         boolean jumpQueued = false;
         while (!window.shouldClose()) {
             window.pollEvents();
-            if (window.escapePressed()) {
-                window.requestClose();
-            }
 
             double now = window.time();
             double deltaSeconds = clampDelta(now - previous);
             previous = now;
             input.update();
-            if (input.toggleModePressed()) {
+            if (input.settingsPressed()) {
+                settingsPanel.toggle();
+                window.setCursorCaptured(!settingsPanel.open());
+                input.resetMouseTracking();
+            }
+            window.framebufferSize(framebufferWidth, framebufferHeight);
+            if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
+                if (!sleepWhileMinimized()) return;
+                continue;
+            }
+            if (settingsPanel.update(
+                    input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY())) {
+                chunkManager.setRenderDistance(settingsPanel.renderDistance());
+                window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
+            }
+            if (!settingsPanel.open() && input.toggleModePressed()) {
                 player.setMode(
                         player.mode() == PlayerController.Mode.SURVIVAL
                                 ? PlayerController.Mode.SPECTATOR
                                 : PlayerController.Mode.SURVIVAL);
                 System.out.println("Player mode: " + player.mode());
             }
-            if (player.mode() == PlayerController.Mode.SURVIVAL) {
+            if (!settingsPanel.open() && player.mode() == PlayerController.Mode.SURVIVAL) {
                 jumpQueued |= input.jumpPressed();
             } else {
                 jumpQueued = false;
             }
-            window.framebufferSize(framebufferWidth, framebufferHeight);
-            if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
-                if (!sleepWhileMinimized()) {
-                    return;
-                }
-                continue;
-            }
-
-            camera.updateLook(input);
+            if (!settingsPanel.open()) camera.updateLook(input);
             PlayerController.InputState playerInput = new PlayerController.InputState(
                     input.moveForward(),
                     input.moveBackward(),
@@ -82,7 +89,7 @@ public final class GameLoop {
                 chunkManager.markUploaded(mesh);
             }
             boolean[] jumpForTick = {jumpQueued};
-            if (chunkManager.readyForPlayer(playerChunk)) {
+            if (!settingsPanel.open() && chunkManager.readyForPlayer(playerChunk)) {
                 simulation.advance(deltaSeconds, fixedDelta -> {
                     player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch());
                     jumpForTick[0] = false;
@@ -107,6 +114,7 @@ public final class GameLoop {
             var viewProjection = camera.viewProjection(framebufferWidth[0], framebufferHeight[0]);
             TerrainRenderer.RenderStats renderStats = renderer.render(viewProjection, Frustum.from(viewProjection));
             metrics.recordCulling(renderStats.visible(), renderStats.culled(), renderStats.drawCalls());
+            uiRenderer.render(settingsPanel, framebufferWidth[0], framebufferHeight[0]);
             window.swapBuffers();
 
             metrics.recordFrame(deltaSeconds);

@@ -54,10 +54,6 @@ public final class Window implements AutoCloseable {
         glfwSetWindowShouldClose(handle, true);
     }
 
-    public boolean escapePressed() {
-        return glfwGetKey(handle, GLFW_KEY_ESCAPE) == GLFW_PRESS;
-    }
-
     public void pollEvents() {
         glfwPollEvents();
     }
@@ -72,6 +68,14 @@ public final class Window implements AutoCloseable {
 
     public void swapBuffers() {
         glfwSwapBuffers(handle);
+    }
+
+    public void setCursorCaptured(boolean captured) {
+        glfwSetInputMode(handle, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    }
+
+    public void setTitle(String title) {
+        glfwSetWindowTitle(handle, title);
     }
 
     @Override

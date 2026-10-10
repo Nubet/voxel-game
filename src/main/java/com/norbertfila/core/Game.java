@@ -26,10 +26,14 @@ public final class Game {
             player.setMode(PlayerController.Mode.SURVIVAL);
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             ChunkMesher mesher = new GreedyMesher();
+            GameSettings settings = new GameSettings();
+            SettingsPanel settingsPanel = new SettingsPanel(settings);
             try (ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
-                    TerrainRenderer renderer = new TerrainRenderer()) {
+                    TerrainRenderer renderer = new TerrainRenderer();
+                    UiRenderer uiRenderer = new UiRenderer()) {
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
-                new GameLoop().run(window, camera, renderer, metrics, chunkManager, player);
+                window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
+                new GameLoop().run(window, camera, renderer, uiRenderer, metrics, chunkManager, player, settingsPanel);
             }
         }
     }

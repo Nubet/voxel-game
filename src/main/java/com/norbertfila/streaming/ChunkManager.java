@@ -27,7 +27,7 @@ public final class ChunkManager implements AutoCloseable {
     private final WorldGenerator generator;
     private final ChunkMesher mesher;
     private final ViewDemand viewDemand;
-    private final int hysteresisRadius;
+    private int hysteresisRadius;
     private final ChunkScheduler<ChunkData> generationScheduler =
             new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
     private final ChunkScheduler<MeshData> meshingScheduler =
@@ -184,6 +184,14 @@ public final class ChunkManager implements AutoCloseable {
 
     public int unloadRadius() {
         return hysteresisRadius;
+    }
+
+    public boolean setRenderDistance(int radius) {
+        if (radius < 0) throw new IllegalArgumentException("Render distance must not be negative");
+        boolean changed =
+                viewDemand.configure(radius, viewDemand.minChunkY(), viewDemand.maxChunkY(), viewDemand.shape());
+        if (changed) hysteresisRadius = radius + 1;
+        return changed;
     }
 
     public World world() {

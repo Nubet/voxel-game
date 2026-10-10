@@ -20,8 +20,12 @@ public final class Input {
     private boolean sprint;
     private boolean toggleMode;
     private boolean jump;
+    private boolean settings;
+    private boolean leftMouse;
+    private boolean previousLeftMouse;
     private boolean previousToggleMode;
     private boolean previousJump;
+    private boolean previousSettings;
 
     public Input(long window) {
         this.window = window;
@@ -30,6 +34,8 @@ public final class Input {
     public void update() {
         previousToggleMode = toggleMode;
         previousJump = jump;
+        previousSettings = settings;
+        previousLeftMouse = leftMouse;
         glfwGetCursorPos(window, cursorX, cursorY);
         if (!mouseInitialized) {
             lastCursorX = cursorX[0];
@@ -50,6 +56,8 @@ public final class Input {
         sprint = isPressed(GLFW_KEY_LEFT_CONTROL);
         toggleMode = isPressed(GLFW_KEY_F4);
         jump = moveUp;
+        settings = isPressed(GLFW_KEY_F10);
+        leftMouse = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
     }
 
     public float mouseDeltaX() {
@@ -94,6 +102,32 @@ public final class Input {
 
     public boolean jumpPressed() {
         return jump && !previousJump;
+    }
+
+    public boolean settingsPressed() {
+        return settings && !previousSettings;
+    }
+
+    public boolean leftMouseDown() {
+        return leftMouse;
+    }
+
+    public boolean leftMousePressed() {
+        return leftMouse && !previousLeftMouse;
+    }
+
+    public double cursorX() {
+        return cursorX[0];
+    }
+
+    public double cursorY() {
+        return cursorY[0];
+    }
+
+    public void resetMouseTracking() {
+        mouseInitialized = false;
+        mouseDeltaX = 0;
+        mouseDeltaY = 0;
     }
 
     private boolean isPressed(int key) {
