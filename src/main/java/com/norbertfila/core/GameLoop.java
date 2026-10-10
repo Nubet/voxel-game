@@ -39,8 +39,9 @@ public final class GameLoop {
             camera.update(input, deltaSeconds);
             ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());
             if (update.changed()) {
+                update.evicted().forEach(renderer::remove);
                 System.out.println("View demand center=" + update.center() + " sections=" + update.requested()
-                        + " generated=" + update.generated());
+                        + " generated=" + update.generated() + " resident=" + chunkManager.residentCount());
             }
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);

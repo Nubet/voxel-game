@@ -50,4 +50,21 @@ class ChunkManagerTest {
         assertEquals(new ChunkPos(-1, -1, -1), manager.residentPositions().get(0));
         assertEquals(new ChunkPos(1, 1, 1), manager.residentPositions().get(26));
     }
+
+    @Test
+    void hysteresisUnloadingKeepsResidentCountBounded() {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE);
+        ChunkManager manager = new ChunkManager(world, (x, y, z) -> new Chunk(), demand);
+
+        manager.update(new ChunkPos(0, 0, 0));
+        ChunkManager.UpdateResult moved = manager.update(new ChunkPos(2, 0, 0));
+        ChunkManager.UpdateResult steady = manager.update(new ChunkPos(2, 0, 0));
+
+        assertEquals(List.of(new ChunkPos(0, 0, 0)), moved.evicted());
+        assertEquals(1, moved.generated());
+        assertEquals(1, manager.residentCount());
+        assertTrue(steady.evicted().isEmpty());
+        assertEquals(0, steady.generated());
+    }
 }

@@ -63,4 +63,20 @@ public final class ViewDemand {
     public List<ChunkPos> requested() {
         return requested;
     }
+
+    public int horizontalRadius() {
+        return horizontalRadius;
+    }
+
+    public int minChunkY() {
+        return minChunkY;
+    }
+
+    public int maxChunkY() {
+        return maxChunkY;
+    }
+
+    public Shape shape() {
+        return shape;
+    }
 }

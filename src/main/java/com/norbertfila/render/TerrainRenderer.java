@@ -113,6 +113,11 @@ public final class TerrainRenderer implements AutoCloseable {
         }
     }
 
+    public void remove(ChunkPos position) {
+        GpuMesh mesh = meshes.remove(Objects.requireNonNull(position));
+        if (mesh != null) mesh.close();
+    }
+
     public void render(Matrix4f viewProjection) {
         glUseProgram(program);
         try (MemoryStack stack = MemoryStack.stackPush()) {

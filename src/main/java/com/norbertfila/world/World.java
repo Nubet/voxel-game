@@ -27,6 +27,15 @@ public final class World {
         return chunks.containsKey(position);
     }
 
+    public Chunk removeChunk(ChunkPos position) {
+        requestedChunks.remove(Objects.requireNonNull(position));
+        return chunks.remove(position);
+    }
+
+    public int residentCount() {
+        return chunks.size();
+    }
+
     public OptionalInt getBlock(BlockPos worldPosition) {
         Objects.requireNonNull(worldPosition);
         Chunk chunk = chunks.get(Coordinates.worldToChunk(worldPosition));
