@@ -82,6 +82,16 @@ class ChunkManagerTest {
         assertEquals(0, steady.generated());
     }
 
+    @Test
+    void supportsSeparateLoadAndUnloadRadius() {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(1, 0, 0, ViewDemand.Shape.SQUARE);
+        ChunkManager manager = new ChunkManager(world, emptyGenerator(), demand, 3);
+
+        assertEquals(1, manager.loadRadius());
+        assertEquals(3, manager.unloadRadius());
+    }
+
     private static WorldGenerator emptyGenerator() {
         return new WorldGenerator() {
             @Override

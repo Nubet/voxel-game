@@ -3,6 +3,7 @@ package com.norbertfila.streaming;
 import com.norbertfila.world.ChunkPos;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -20,6 +21,7 @@ public final class ChunkScheduler implements AutoCloseable {
     private final ThreadPoolExecutor executor;
     private final BlockingQueue<ChunkTask.Outcome> ready;
     private final Semaphore outstanding;
+    private final int outstandingLimit;
     private final AtomicLong sequence = new AtomicLong();
     private final Set<TaskKey> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<TaskKey> running = ConcurrentHashMap.newKeySet();
@@ -33,7 +35,8 @@ public final class ChunkScheduler implements AutoCloseable {
         executor = new ThreadPoolExecutor(
                 workerCount, workerCount, 0L, TimeUnit.MILLISECONDS, tasks, new ThreadPoolExecutor.AbortPolicy());
         ready = new ArrayBlockingQueue<>(readyQueueCapacity);
-        outstanding = new Semaphore(workerCount + taskQueueCapacity);
+        outstandingLimit = workerCount + taskQueueCapacity;
+        outstanding = new Semaphore(outstandingLimit);
     }
 
     public boolean submit(ChunkTask task) {
@@ -65,6 +68,40 @@ public final class ChunkScheduler implements AutoCloseable {
 
     public int activeTasks() {
         return executor.getActiveCount();
+    }
+
+    public int outstandingJobs() {
+        return outstandingLimit - outstanding.availablePermits();
+    }
+
+    public int cancelOutside(ChunkPos center, int radius) {
+        if (radius < 0) throw new IllegalArgumentException("Radius must not be negative");
+        Set<TaskKey> candidates = new HashSet<>();
+        for (Runnable queued : executor.getQueue()) candidates.add(TaskKey.of(((PrioritizedTask) queued).task));
+        candidates.addAll(running);
+        int cancelledCount = 0;
+        for (TaskKey key : candidates) {
+            if (!withinRadius(key.position(), center, radius)) {
+                cancel(key.position(), key.revision(), key.token());
+                cancelledCount++;
+            }
+        }
+        return cancelledCount;
+    }
+
+    public int discardReadyOutside(ChunkPos center, int radius) {
+        if (radius < 0) throw new IllegalArgumentException("Radius must not be negative");
+        List<ChunkTask.Outcome> keep = new ArrayList<>();
+        int discarded = 0;
+        for (ChunkTask.Outcome outcome : drainReady()) {
+            if (withinRadius(outcome.position(), center, radius)) keep.add(outcome);
+            else {
+                outcome.discard();
+                discarded++;
+            }
+        }
+        ready.addAll(keep);
+        return discarded;
     }
 
     public boolean cancel(ChunkPos position, long revision, long token) {
@@ -122,6 +159,12 @@ public final class ChunkScheduler implements AutoCloseable {
         } finally {
             outstanding.release();
         }
+    }
+
+    private static boolean withinRadius(ChunkPos position, ChunkPos center, int radius) {
+        long dx = position.x() - (long) center.x();
+        long dz = position.z() - (long) center.z();
+        return dx * dx + dz * dz <= (long) radius * radius;
     }
 
     private final class PrioritizedTask implements Runnable {

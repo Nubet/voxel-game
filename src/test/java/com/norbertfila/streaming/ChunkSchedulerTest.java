@@ -149,6 +149,25 @@ class ChunkSchedulerTest {
         }
     }
 
+    @Test
+    void teleportCancelsOldQueuedWork() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler scheduler = new ChunkScheduler(1, 3, 4)) {
+            assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(20, 0, 0), 1, 1, () -> {
+                release.await();
+                return new MeshData(new float[0]);
+            })));
+            waitForActiveTask(scheduler);
+            ChunkTask queued = new ChunkTask(new ChunkPos(21, 0, 0), 1, 2, () -> new MeshData(new float[0]));
+            assertTrue(scheduler.submit(queued));
+            assertEquals(2, scheduler.cancelOutside(new ChunkPos(0, 0, 0), 2));
+            release.countDown();
+            scheduler.shutdown();
+            assertTrue(scheduler.awaitTermination(Duration.ofSeconds(1)));
+            assertEquals(0, scheduler.outstandingJobs());
+        }
+    }
+
     private static ChunkTask.Outcome waitForOutcome(ChunkScheduler scheduler) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
         ChunkTask.Outcome outcome;

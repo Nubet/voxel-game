@@ -15,10 +15,17 @@ public final class ChunkManager {
     private final int hysteresisRadius;
 
     public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand) {
+        this(world, generator, viewDemand, viewDemand.horizontalRadius() + 1);
+    }
+
+    public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand, int unloadRadius) {
         this.world = Objects.requireNonNull(world);
         this.generator = Objects.requireNonNull(generator);
         this.viewDemand = Objects.requireNonNull(viewDemand);
-        this.hysteresisRadius = viewDemand.horizontalRadius() + 1;
+        if (unloadRadius < viewDemand.horizontalRadius()) {
+            throw new IllegalArgumentException("Unload radius must not be smaller than load radius");
+        }
+        this.hysteresisRadius = unloadRadius;
     }
 
     public UpdateResult update(ChunkPos center) {
@@ -51,6 +58,14 @@ public final class ChunkManager {
 
     public int residentCount() {
         return world.residentCount();
+    }
+
+    public int loadRadius() {
+        return viewDemand.horizontalRadius();
+    }
+
+    public int unloadRadius() {
+        return hysteresisRadius;
     }
 
     private boolean withinHysteresis(ChunkPos position, ChunkPos center) {
