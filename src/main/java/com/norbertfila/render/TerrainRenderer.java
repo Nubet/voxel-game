@@ -12,11 +12,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 /** Intentionally tiny OpenGL backend. Resource ownership remains explicit. */
 public final class TerrainRenderer implements AutoCloseable {
+    private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
     private final GpuMeshPool meshPool;
     private final UploadQueue uploads = new UploadQueue();
@@ -145,18 +148,37 @@ public final class TerrainRenderer implements AutoCloseable {
         long start = System.nanoTime();
         long bytesUploaded = 0;
         int uploadCount = 0;
+        List<ChunkPos> uploaded = new ArrayList<>();
+        List<ChunkPos> failed = new ArrayList<>();
         while (true) {
             UploadQueue.Request request = uploads.poll(byteBudget - bytesUploaded, uploadCount == 0);
             if (request == null) break;
-            upload(request.position(), request.mesh());
-            bytesUploaded += request.bytes();
+            try {
+                upload(request.position(), request.mesh());
+                bytesUploaded += request.bytes();
+                uploaded.add(request.position());
+            } catch (RuntimeException failure) {
+                failed.add(request.position());
+                LOG.log(
+                        Level.SEVERE,
+                        "GPU upload failed position=" + request.position() + " bytes=" + request.bytes()
+                                + " queueDepth=" + uploads.size(),
+                        failure);
+            }
             uploadCount++;
             if (bytesUploaded >= byteBudget || System.nanoTime() - start >= timeBudgetNanos) break;
         }
-        return new UploadStats(bytesUploaded, uploads.size(), System.nanoTime() - start, uploadCount);
+        return new UploadStats(
+                bytesUploaded,
+                uploads.size(),
+                System.nanoTime() - start,
+                uploadCount,
+                List.copyOf(uploaded),
+                List.copyOf(failed));
     }
 
     public void remove(ChunkPos position) {
+        uploads.remove(Objects.requireNonNull(position));
         meshPool.remove(Objects.requireNonNull(position));
         regionIndex.remove(position);
         meshPool.drainDeletions(1);
@@ -200,7 +222,13 @@ public final class TerrainRenderer implements AutoCloseable {
         glDeleteProgram(program);
     }
 
-    public record UploadStats(long bytesUploaded, int queueDepth, long uploadNanos, int uploadCount) {}
+    public record UploadStats(
+            long bytesUploaded,
+            int queueDepth,
+            long uploadNanos,
+            int uploadCount,
+            List<ChunkPos> uploaded,
+            List<ChunkPos> failed) {}
 
     public record RenderStats(int visible, int culled, int drawCalls) {}
 }

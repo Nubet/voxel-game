@@ -120,6 +120,33 @@ class ChunkManagerTest {
         manager.close();
     }
 
+    @Test
+    void workerFailureIsDiscardedWithoutLeavingAResidentChunk() {
+        WorldGenerator failing = new WorldGenerator() {
+            @Override
+            public long seed() {
+                return 0;
+            }
+
+            @Override
+            public int generatorVersion() {
+                return 1;
+            }
+
+            @Override
+            public ChunkData generate(ChunkPos position) {
+                throw new IllegalStateException("test generation failure");
+            }
+        };
+        ChunkManager manager = new ChunkManager(new World(), failing, new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE));
+
+        manager.update(new ChunkPos(0, 0, 0));
+        await(manager);
+
+        assertEquals(0, manager.residentCount());
+        manager.close();
+    }
+
     private static void await(ChunkManager manager) {
         try {
             manager.awaitGeneration(Duration.ofSeconds(2));

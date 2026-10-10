@@ -34,9 +34,11 @@ public final class SettingsPanel {
     public boolean update(boolean mouseDown, boolean mousePressed, double cursorX, double cursorY) {
         if (!open) return false;
         if (mousePressed && inside(cursorX, cursorY, MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE)) {
+            if (!canDecrease()) return false;
             return settings.setRenderDistance(settings.renderDistance() - 1);
         }
         if (mousePressed && inside(cursorX, cursorY, PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE)) {
+            if (!canIncrease()) return false;
             return settings.setRenderDistance(settings.renderDistance() + 1);
         }
         if (!mouseDown || !inside(cursorX, cursorY, SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT)) return false;
@@ -54,6 +56,14 @@ public final class SettingsPanel {
 
     public int renderDistance() {
         return settings.renderDistance();
+    }
+
+    public boolean canDecrease() {
+        return settings.renderDistance() > GameSettings.MIN_RENDER_DISTANCE;
+    }
+
+    public boolean canIncrease() {
+        return settings.renderDistance() < GameSettings.MAX_RENDER_DISTANCE;
     }
 
     private static boolean inside(double x, double y, int left, int top, int width, int height) {

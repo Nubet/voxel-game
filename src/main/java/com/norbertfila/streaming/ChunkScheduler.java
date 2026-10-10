@@ -17,8 +17,11 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class ChunkScheduler<T> implements AutoCloseable {
+    private static final Logger LOG = Logger.getLogger(ChunkScheduler.class.getName());
     private final ThreadPoolExecutor executor;
     private final BlockingQueue<ChunkTask.Outcome<T>> ready;
     private final Semaphore outstanding;
@@ -28,6 +31,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     private final Set<TaskKey> submitted = ConcurrentHashMap.newKeySet();
     private final Set<TaskKey> running = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ChunkPos, TaskKey> latest = new ConcurrentHashMap<>();
+    private final Object readyLock = new Object();
 
     public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity) {
         if (workerCount <= 0 || taskQueueCapacity <= 0 || readyQueueCapacity <= 0) {
@@ -70,12 +74,14 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     public ChunkTask.Outcome<T> pollReady() {
-        return ready.poll();
+        synchronized (readyLock) {
+            return ready.poll();
+        }
     }
 
     public ChunkTask.Outcome<T> pollLatestReady() {
         ChunkTask.Outcome<T> outcome;
-        while ((outcome = ready.poll()) != null) {
+        while ((outcome = pollReady()) != null) {
             if (isLatest(outcome)) return outcome;
             outcome.discard();
         }
@@ -90,7 +96,9 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     public List<ChunkTask.Outcome<T>> drainReady() {
         List<ChunkTask.Outcome<T>> outcomes = new ArrayList<>();
-        ready.drainTo(outcomes);
+        synchronized (readyLock) {
+            ready.drainTo(outcomes);
+        }
         return outcomes;
     }
 
@@ -131,17 +139,21 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     public int discardReadyOutside(ChunkPos center, int radius, boolean square) {
         if (radius < 0) throw new IllegalArgumentException("Radius must not be negative");
-        List<ChunkTask.Outcome<T>> keep = new ArrayList<>();
-        int discarded = 0;
-        for (ChunkTask.Outcome<T> outcome : drainReady()) {
-            if (withinRadius(outcome.position(), center, radius, square)) keep.add(outcome);
-            else {
-                outcome.discard();
-                discarded++;
+        synchronized (readyLock) {
+            List<ChunkTask.Outcome<T>> keep = new ArrayList<>();
+            int discarded = 0;
+            ready.drainTo(keep);
+            List<ChunkTask.Outcome<T>> retained = new ArrayList<>(keep.size());
+            for (ChunkTask.Outcome<T> outcome : keep) {
+                if (withinRadius(outcome.position(), center, radius, square)) retained.add(outcome);
+                else {
+                    outcome.discard();
+                    discarded++;
+                }
             }
+            ready.addAll(retained);
+            return discarded;
         }
-        ready.addAll(keep);
-        return discarded;
     }
 
     public boolean cancel(ChunkPos position, long revision, long token) {
@@ -186,16 +198,23 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                         task.work().call(),
                         null);
             } catch (Throwable failure) {
+                LOG.log(
+                        Level.SEVERE,
+                        "Chunk task failed position=" + task.position() + " revision=" + task.revision() + " token="
+                                + task.token(),
+                        failure);
                 outcome = new ChunkTask.Outcome<T>(task.position(), task.revision(), task.token(), null, failure);
             }
             if (cancelled.contains(TaskKey.of(task))) {
                 outcome.discard();
                 return;
             }
-            try {
-                ready.put(outcome);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+            synchronized (readyLock) {
+                if (!ready.offer(outcome)) {
+                    LOG.warning("Dropping completed chunk result because ready queue is full position="
+                            + outcome.position() + " token=" + outcome.token());
+                    outcome.discard();
+                }
             }
         } finally {
             outstanding.release();

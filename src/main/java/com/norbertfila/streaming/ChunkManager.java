@@ -16,8 +16,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class ChunkManager implements AutoCloseable {
+    private static final Logger LOG = Logger.getLogger(ChunkManager.class.getName());
     private static final int WORKER_COUNT = 2;
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
@@ -109,6 +112,13 @@ public final class ChunkManager implements AutoCloseable {
             if (outcome == null) break;
             ChunkEntry entry = entries.get(outcome.position());
             if (entry == null || entry.generationToken() != outcome.token() || !outcome.succeeded()) {
+                if (entry != null && entry.generationToken() == outcome.token() && outcome.failure() != null) {
+                    LOG.log(
+                            Level.SEVERE,
+                            "Chunk generation failed position=" + outcome.position() + " token=" + outcome.token(),
+                            outcome.failure());
+                    entries.remove(outcome.position());
+                }
                 outcome.discard();
                 discarded++;
                 continue;
@@ -135,6 +145,14 @@ public final class ChunkManager implements AutoCloseable {
                     || outcome.revision() != entry.chunkRevision()
                     || !outcome.succeeded()
                     || !entry.readyCpu(outcome.revision())) {
+                if (entry != null && outcome.failure() != null) {
+                    LOG.log(
+                            Level.SEVERE,
+                            "Chunk meshing failed position=" + outcome.position() + " revision=" + outcome.revision()
+                                    + " token=" + outcome.token(),
+                            outcome.failure());
+                    entry.meshFailed();
+                }
                 outcome.discard();
                 discarded++;
                 continue;
@@ -158,12 +176,16 @@ public final class ChunkManager implements AutoCloseable {
         return generated;
     }
 
-    public void markUploaded(MeshResult result) {
+    public boolean markUploaded(MeshResult result) {
         Objects.requireNonNull(result);
         ChunkEntry entry = entries.get(result.position());
-        if (entry == null || !entry.uploaded(result.meshRevision())) {
-            throw new IllegalStateException("Mesh result is no longer current: " + result.position());
-        }
+        return entry != null && entry.uploaded(result.meshRevision());
+    }
+
+    public boolean markUploadFailed(MeshResult result) {
+        Objects.requireNonNull(result);
+        ChunkEntry entry = entries.get(result.position());
+        return entry != null && entry.meshFailed();
     }
 
     public boolean readyForPlayer(ChunkPos position) {
@@ -205,12 +227,17 @@ public final class ChunkManager implements AutoCloseable {
         long token = meshTokenSequence.getAndIncrement();
         meshTokens.put(position, token);
         BlockNeighborhood neighborhood = world.blockNeighborhood(position);
-        meshingScheduler.submitLatest(new ChunkTask<>(
+        boolean submitted = meshingScheduler.submitLatest(new ChunkTask<>(
                 position,
                 chunk.revision(),
                 token,
                 ChunkPriority.unprioritized(),
                 () -> mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z())));
+        if (!submitted) {
+            meshTokens.remove(position);
+            entry.meshFailed();
+            LOG.warning("Meshing task rejected position=" + position + " revision=" + chunk.revision());
+        }
     }
 
     private List<ChunkPos> neighbors(ChunkPos position) {

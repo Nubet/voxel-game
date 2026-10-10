@@ -4,12 +4,15 @@ import static org.lwjgl.glfw.GLFW.*;
 
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GLUtil;
+import org.lwjgl.system.Callback;
 
 public final class Window implements AutoCloseable {
     private final GLFWErrorCallback errorCallback;
     private long handle;
     private boolean glfwInitialized;
     private boolean glCapabilitiesCreated;
+    private Callback debugCallback;
     private boolean closed;
 
     public Window(int width, int height, String title) {
@@ -33,6 +36,7 @@ public final class Window implements AutoCloseable {
             glfwMakeContextCurrent(handle);
             GL.createCapabilities();
             glCapabilitiesCreated = true;
+            if (Boolean.getBoolean("voxel.glDebug")) debugCallback = GLUtil.setupDebugMessageCallback();
             glfwSwapInterval(0);
             glfwShowWindow(handle);
             glfwSetInputMode(handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -85,6 +89,10 @@ public final class Window implements AutoCloseable {
         }
         closed = true;
         if (glCapabilitiesCreated) {
+            if (debugCallback != null) {
+                debugCallback.free();
+                debugCallback = null;
+            }
             GL.destroy();
             glCapabilitiesCreated = false;
         }

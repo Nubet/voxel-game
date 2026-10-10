@@ -60,4 +60,18 @@ class ChunkEntryTest {
         assertFalse(entry.isCurrent(4, 12));
         assertFalse(entry.isCurrent(5, 13));
     }
+
+    @Test
+    void restoresGpuResidentStateWhenRemeshSubmissionFails() {
+        ChunkEntry entry = new ChunkEntry(new ChunkPos(0, 0, 0));
+        entry.beginGenerating();
+        entry.generated(0);
+        assertTrue(entry.beginMeshing(0));
+        assertTrue(entry.readyCpu(0));
+        assertTrue(entry.uploaded(0));
+        assertTrue(entry.beginMeshing(0));
+
+        assertTrue(entry.meshFailed());
+        assertEquals(ChunkState.RESIDENT_GPU, entry.state());
+    }
 }

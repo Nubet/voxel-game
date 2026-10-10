@@ -34,6 +34,23 @@ class UploadQueueTest {
         assertNull(queue.poll(smallBytes(mesh), false));
     }
 
+    @Test
+    void replacesQueuedMeshForTheSameChunkAndCanRemoveIt() {
+        UploadQueue queue = new UploadQueue();
+        MeshData first = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE]);
+        MeshData replacement = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE * 2]);
+        ChunkPos position = new ChunkPos(3, 0, 4);
+
+        queue.enqueue(position, first);
+        queue.enqueue(position, replacement);
+
+        assertEquals(1, queue.size());
+        assertEquals(replacement, queue.poll(Long.MAX_VALUE, true).mesh());
+        queue.enqueue(position, first);
+        assertEquals(position, queue.remove(position).position());
+        assertEquals(0, queue.size());
+    }
+
     private static long smallBytes(MeshData mesh) {
         return mesh.vertexCount() * (long) MeshData.VERTEX_STRIDE * Float.BYTES;
     }

@@ -2,6 +2,7 @@ package com.norbertfila.core;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.diagnostics.DiagnosticsLog;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
@@ -14,6 +15,8 @@ import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
@@ -38,6 +41,7 @@ public final class GameLoop {
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
         boolean jumpQueued = false;
+        Map<ChunkPos, ChunkManager.MeshResult> pendingUploads = new HashMap<>();
         while (!window.shouldClose()) {
             window.pollEvents();
 
@@ -45,6 +49,8 @@ public final class GameLoop {
             double deltaSeconds = clampDelta(now - previous);
             previous = now;
             input.update();
+            DiagnosticsLog.context("frame=" + now + " mode=" + player.mode() + " settingsOpen=" + settingsPanel.open()
+                    + " renderDistance=" + settingsPanel.renderDistance());
             if (input.settingsPressed()) {
                 settingsPanel.toggle();
                 window.setCursorCaptured(!settingsPanel.open());
@@ -59,13 +65,15 @@ public final class GameLoop {
                     input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY())) {
                 chunkManager.setRenderDistance(settingsPanel.renderDistance());
                 window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
+                DiagnosticsLog.logger(GameLoop.class)
+                        .info("Render distance changed to " + settingsPanel.renderDistance());
             }
             if (!settingsPanel.open() && input.toggleModePressed()) {
                 player.setMode(
                         player.mode() == PlayerController.Mode.SURVIVAL
                                 ? PlayerController.Mode.SPECTATOR
                                 : PlayerController.Mode.SURVIVAL);
-                System.out.println("Player mode: " + player.mode());
+                DiagnosticsLog.logger(GameLoop.class).info("Player mode changed to " + player.mode());
             }
             if (!settingsPanel.open() && player.mode() == PlayerController.Mode.SURVIVAL) {
                 jumpQueued |= input.jumpPressed();
@@ -86,7 +94,7 @@ public final class GameLoop {
             ChunkManager.ProcessResult processed = chunkManager.processResults();
             for (ChunkManager.MeshResult mesh : processed.meshes()) {
                 renderer.enqueueUpload(mesh.position(), mesh.mesh());
-                chunkManager.markUploaded(mesh);
+                pendingUploads.put(mesh.position(), mesh);
             }
             boolean[] jumpForTick = {jumpQueued};
             if (!settingsPanel.open() && chunkManager.readyForPlayer(playerChunk)) {
@@ -101,12 +109,32 @@ public final class GameLoop {
             camera.setPosition(
                     (float) renderPosition.x(), (float) renderPosition.y() + eyeOffset, (float) renderPosition.z());
             if (update.changed()) {
-                update.evicted().forEach(renderer::remove);
-                System.out.println("View demand center=" + update.center() + " sections=" + update.requested()
-                        + " scheduled=" + update.scheduled() + " generated=" + processed.generated()
-                        + " resident=" + chunkManager.residentCount());
+                update.evicted().forEach(position -> {
+                    renderer.remove(position);
+                    pendingUploads.remove(position);
+                });
+                DiagnosticsLog.logger(GameLoop.class)
+                        .info("View demand center=" + update.center() + " sections="
+                                + update.requested() + " scheduled=" + update.scheduled() + " generated="
+                                + processed.generated()
+                                + " discarded=" + processed.discarded() + " resident=" + chunkManager.residentCount());
             }
             TerrainRenderer.UploadStats uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000);
+            for (ChunkPos position : uploads.uploaded()) {
+                ChunkManager.MeshResult mesh = pendingUploads.remove(position);
+                if (mesh != null && !chunkManager.markUploaded(mesh)) {
+                    DiagnosticsLog.logger(GameLoop.class)
+                            .warning("Ignoring stale completed upload position=" + position);
+                }
+            }
+            for (ChunkPos position : uploads.failed()) {
+                ChunkManager.MeshResult mesh = pendingUploads.remove(position);
+                if (mesh != null) {
+                    chunkManager.markUploadFailed(mesh);
+                    DiagnosticsLog.logger(GameLoop.class)
+                            .warning("Upload failed and mesh was returned to retry state position=" + position);
+                }
+            }
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);

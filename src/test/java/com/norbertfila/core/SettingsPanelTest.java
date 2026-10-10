@@ -39,4 +39,18 @@ class SettingsPanelTest {
         assertTrue(panel.update(true, true, SettingsPanel.MINUS_X + 1, SettingsPanel.BUTTON_Y + 10));
         assertEquals(4, panel.renderDistance());
     }
+
+    @Test
+    void boundaryButtonsDoNotThrowOrChangeValue() {
+        GameSettings settings = new GameSettings();
+        SettingsPanel panel = new SettingsPanel(settings);
+        panel.toggle();
+
+        settings.setRenderDistance(GameSettings.MIN_RENDER_DISTANCE);
+        assertFalse(panel.update(true, true, SettingsPanel.MINUS_X + 1, SettingsPanel.BUTTON_Y + 10));
+        assertEquals(GameSettings.MIN_RENDER_DISTANCE, panel.renderDistance());
+        settings.setRenderDistance(GameSettings.MAX_RENDER_DISTANCE);
+        assertFalse(panel.update(true, true, SettingsPanel.PLUS_X + 1, SettingsPanel.BUTTON_Y + 10));
+        assertEquals(GameSettings.MAX_RENDER_DISTANCE, panel.renderDistance());
+    }
 }

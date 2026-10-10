@@ -99,9 +99,9 @@ public final class UiRenderer implements AutoCloseable {
                 SettingsPanel.BUTTON_Y,
                 SettingsPanel.BUTTON_SIZE,
                 SettingsPanel.BUTTON_SIZE,
-                .15f,
-                .18f,
-                .23f,
+                panel.canDecrease() ? .15f : .07f,
+                panel.canDecrease() ? .18f : .08f,
+                panel.canDecrease() ? .23f : .1f,
                 1f);
         offset = rectangle(
                 vertices,
@@ -110,15 +110,43 @@ public final class UiRenderer implements AutoCloseable {
                 SettingsPanel.BUTTON_Y,
                 SettingsPanel.BUTTON_SIZE,
                 SettingsPanel.BUTTON_SIZE,
-                .15f,
-                .18f,
-                .23f,
+                panel.canIncrease() ? .15f : .07f,
+                panel.canIncrease() ? .18f : .08f,
+                panel.canIncrease() ? .23f : .1f,
                 1f);
         offset = rectangle(
-                vertices, offset, SettingsPanel.MINUS_X + 5, SettingsPanel.BUTTON_Y + 9, 10, 3, .85f, .94f, .96f, 1f);
+                vertices,
+                offset,
+                SettingsPanel.MINUS_X + 5,
+                SettingsPanel.BUTTON_Y + 9,
+                10,
+                3,
+                panel.canDecrease() ? .85f : .3f,
+                panel.canDecrease() ? .94f : .3f,
+                panel.canDecrease() ? .96f : .3f,
+                1f);
         offset = rectangle(
-                vertices, offset, SettingsPanel.PLUS_X + 5, SettingsPanel.BUTTON_Y + 9, 10, 3, .85f, .94f, .96f, 1f);
-        rectangle(vertices, offset, SettingsPanel.PLUS_X + 9, SettingsPanel.BUTTON_Y + 5, 3, 11, .85f, .94f, .96f, 1f);
+                vertices,
+                offset,
+                SettingsPanel.PLUS_X + 5,
+                SettingsPanel.BUTTON_Y + 9,
+                10,
+                3,
+                panel.canIncrease() ? .85f : .3f,
+                panel.canIncrease() ? .94f : .3f,
+                panel.canIncrease() ? .96f : .3f,
+                1f);
+        rectangle(
+                vertices,
+                offset,
+                SettingsPanel.PLUS_X + 9,
+                SettingsPanel.BUTTON_Y + 5,
+                3,
+                11,
+                panel.canIncrease() ? .85f : .3f,
+                panel.canIncrease() ? .94f : .3f,
+                panel.canIncrease() ? .96f : .3f,
+                1f);
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
