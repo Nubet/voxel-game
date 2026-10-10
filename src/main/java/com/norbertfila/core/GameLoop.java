@@ -97,7 +97,8 @@ public final class GameLoop {
                 pendingUploads.put(mesh.position(), mesh);
             }
             boolean[] jumpForTick = {jumpQueued};
-            if (!settingsPanel.open() && chunkManager.readyForPlayer(playerChunk)) {
+            if (!settingsPanel.open()
+                    && (player.mode() == PlayerController.Mode.SPECTATOR || chunkManager.readyForPlayer(playerChunk))) {
                 simulation.advance(deltaSeconds, fixedDelta -> {
                     player.tick(chunkManager.world(), playerInput, fixedDelta, camera.yaw(), camera.pitch());
                     jumpForTick[0] = false;
