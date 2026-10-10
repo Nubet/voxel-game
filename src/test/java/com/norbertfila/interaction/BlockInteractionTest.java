@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerState;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -19,7 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class BlockInteractionTest {
-    private static final PlayerController.Position DISTANT_PLAYER = new PlayerController.Position(0, 10, 0);
+    private static final PlayerState.Position DISTANT_PLAYER = new PlayerState.Position(0, 10, 0);
 
     @ParameterizedTest
     @CsvSource({"11,8,8,1,0,0", "5,8,8,-1,0,0", "8,11,8,0,1,0", "8,5,8,0,-1,0", "8,8,11,0,0,1", "8,8,5,0,0,-1"})
@@ -109,7 +110,7 @@ class BlockInteractionTest {
                 0,
                 BlockId.STONE,
                 PlayerController.Mode.SURVIVAL,
-                new PlayerController.Position(x, y, z));
+                new PlayerState.Position(x, y, z));
 
         assertEquals(allowed, result.isPresent());
         assertEquals(
@@ -136,7 +137,7 @@ class BlockInteractionTest {
                         0,
                         BlockId.STONE,
                         PlayerController.Mode.SPECTATOR,
-                        new PlayerController.Position(.5, 1, 1.5))
+                        new PlayerState.Position(.5, 1, 1.5))
                 .orElseThrow()
                 .changed());
     }
@@ -182,7 +183,7 @@ class BlockInteractionTest {
                         0,
                         BlockId.DIRT,
                         PlayerController.Mode.SURVIVAL,
-                        new PlayerController.Position(Double.NaN, 0, 0)));
+                        new PlayerState.Position(Double.NaN, 0, 0)));
         assertEquals(revision, world.getChunk(new ChunkPos(0, 0, 0)).revision());
         assertEquals(0, world.changes().size());
         assertTrue(world.changes().drainDirtyTiles().isEmpty());

@@ -10,7 +10,7 @@ public final class SpawnResolver {
         this.terrain = Objects.requireNonNull(terrain);
     }
 
-    public PlayerController.Position resolve(int worldX, int worldZ) {
-        return new PlayerController.Position(worldX + 0.5, terrain.surfaceHeight(worldX, worldZ) + 1.0, worldZ + 0.5);
+    public PlayerState.Position resolve(int worldX, int worldZ) {
+        return new PlayerState.Position(worldX + 0.5, terrain.surfaceHeight(worldX, worldZ) + 1.0, worldZ + 0.5);
     }
 }

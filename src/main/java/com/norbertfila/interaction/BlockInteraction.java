@@ -2,6 +2,7 @@ package com.norbertfila.interaction;
 
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerPhysics;
+import com.norbertfila.player.PlayerState;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -38,14 +39,9 @@ public final class BlockInteraction {
             double directionZ,
             byte blockId,
             PlayerController.Mode mode,
-            PlayerController.Position playerPosition) {
+            PlayerState.Position playerPosition) {
         Objects.requireNonNull(mode);
         Objects.requireNonNull(playerPosition);
-        if (!Double.isFinite(playerPosition.x())
-                || !Double.isFinite(playerPosition.y())
-                || !Double.isFinite(playerPosition.z())) {
-            throw new IllegalArgumentException("Player position must be finite");
-        }
         if (!BlockId.isValid(blockId))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
         if (blockId == BlockId.AIR) return Optional.empty();
@@ -65,7 +61,7 @@ public final class BlockInteraction {
         return Optional.of(edit.setBlock(position, blockId));
     }
 
-    private static boolean overlapsPlayer(BlockPos block, PlayerController.Position player) {
+    private static boolean overlapsPlayer(BlockPos block, PlayerState.Position player) {
         return player.x() + PlayerPhysics.HALF_WIDTH > block.x()
                 && player.x() - PlayerPhysics.HALF_WIDTH < block.x() + 1.0
                 && player.y() + PlayerPhysics.HEIGHT > block.y()

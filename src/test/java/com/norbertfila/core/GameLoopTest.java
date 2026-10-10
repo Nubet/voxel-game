@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerState;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
@@ -27,7 +28,7 @@ class GameLoopTest {
         Hotbar hotbar = new Hotbar();
         PlayerController player = new PlayerController();
         player.setMode(PlayerController.Mode.SURVIVAL);
-        player.setPosition(new PlayerController.Position(8.5, 9, 9.5));
+        player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
 
         var result = GameLoop.updateBlockEditing(
                         camera, player, new BlockInteraction(world, 64), hotbar, false, false, true, 1)
@@ -58,7 +59,7 @@ class GameLoopTest {
         World world = editableWorld();
         PlayerController player = new PlayerController();
         player.setMode(PlayerController.Mode.SURVIVAL);
-        player.setPosition(new PlayerController.Position(8.5, 9, 7.5));
+        player.setPosition(new PlayerState.Position(8.5, 9, 7.5));
         Hotbar hotbar = new Hotbar();
         Camera camera = editingCamera();
         BlockInteraction interaction = new BlockInteraction(world, 64);

@@ -1,5 +1,6 @@
 package com.norbertfila.player;
 
+import com.norbertfila.player.PlayerState.Position;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.World;
 import java.util.Objects;
@@ -10,27 +11,22 @@ public final class PlayerPhysics {
     public static final double GRAVITY = -25.0;
     public static final double JUMP_VELOCITY = 9.0;
     private static final double EPSILON = 1e-9;
-    private double verticalVelocity;
-    private boolean grounded;
 
-    public Step step(
-            World world,
-            PlayerController.Position start,
-            double moveX,
-            double moveZ,
-            boolean jump,
-            double deltaSeconds) {
+    public PlayerState step(
+            World world, PlayerState start, double moveX, double moveZ, boolean jump, double deltaSeconds) {
         Objects.requireNonNull(world);
         Objects.requireNonNull(start);
         if (!Double.isFinite(moveX) || !Double.isFinite(moveZ) || !Double.isFinite(deltaSeconds) || deltaSeconds <= 0) {
             throw new IllegalArgumentException("Physics values must be finite and delta must be positive");
         }
+        double verticalVelocity = start.velocityY();
+        boolean grounded = start.grounded();
         if (jump && grounded) {
             verticalVelocity = JUMP_VELOCITY;
             grounded = false;
         }
         verticalVelocity += GRAVITY * deltaSeconds;
-        PlayerController.Position position = start;
+        Position position = start.position();
         AxisResult x = moveAxis(world, position, moveX, Axis.X);
         position = x.position();
         AxisResult z = moveAxis(world, position, moveZ, Axis.Z);
@@ -44,29 +40,21 @@ public final class PlayerPhysics {
         } else {
             grounded = false;
         }
-        return new Step(position, grounded, verticalVelocity);
+        return new PlayerState(
+                position,
+                x.collided() ? 0 : moveX / deltaSeconds,
+                verticalVelocity,
+                z.collided() ? 0 : moveZ / deltaSeconds,
+                grounded);
     }
 
-    public boolean grounded() {
-        return grounded;
-    }
-
-    public double verticalVelocity() {
-        return verticalVelocity;
-    }
-
-    public void resetMotion() {
-        verticalVelocity = 0;
-        grounded = false;
-    }
-
-    private AxisResult moveAxis(World world, PlayerController.Position start, double delta, Axis axis) {
+    private AxisResult moveAxis(World world, Position start, double delta, Axis axis) {
         if (Math.abs(delta) <= EPSILON) return new AxisResult(start, false);
         int steps = Math.max(1, (int) Math.ceil(Math.abs(delta) / 0.25));
-        PlayerController.Position position = start;
+        Position position = start;
         for (int step = 1; step <= steps; step++) {
             double targetDelta = delta / steps;
-            PlayerController.Position target = offset(position, targetDelta, axis);
+            Position target = offset(position, targetDelta, axis);
             if (!collides(world, target)) {
                 position = target;
                 continue;
@@ -83,7 +71,7 @@ public final class PlayerPhysics {
         return new AxisResult(position, false);
     }
 
-    private static boolean collides(World world, PlayerController.Position position) {
+    private static boolean collides(World world, Position position) {
         int minX = floor(position.x() - HALF_WIDTH);
         int maxX = floor(position.x() + HALF_WIDTH - EPSILON);
         int minY = floor(position.y());
@@ -100,11 +88,11 @@ public final class PlayerPhysics {
         return false;
     }
 
-    private static PlayerController.Position offset(PlayerController.Position position, double delta, Axis axis) {
+    private static Position offset(Position position, double delta, Axis axis) {
         return switch (axis) {
-            case X -> new PlayerController.Position(position.x() + delta, position.y(), position.z());
-            case Y -> new PlayerController.Position(position.x(), position.y() + delta, position.z());
-            case Z -> new PlayerController.Position(position.x(), position.y(), position.z() + delta);
+            case X -> new Position(position.x() + delta, position.y(), position.z());
+            case Y -> new Position(position.x(), position.y() + delta, position.z());
+            case Z -> new Position(position.x(), position.y(), position.z() + delta);
         };
     }
 
@@ -121,7 +109,5 @@ public final class PlayerPhysics {
         Z
     }
 
-    private record AxisResult(PlayerController.Position position, boolean collided) {}
-
-    public record Step(PlayerController.Position position, boolean grounded, double verticalVelocity) {}
+    private record AxisResult(Position position, boolean collided) {}
 }

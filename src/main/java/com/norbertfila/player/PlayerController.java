@@ -1,5 +1,6 @@
 package com.norbertfila.player;
 
+import com.norbertfila.player.PlayerState.Position;
 import com.norbertfila.world.World;
 import java.util.Objects;
 
@@ -8,12 +9,15 @@ public final class PlayerController {
     private static final double SPRINT_SPEED = 45.0;
     private Mode mode = Mode.SPECTATOR;
     private Position previous = new Position(0, 22, 34);
-    private Position current = previous;
+    private PlayerState current = PlayerState.at(previous);
     private final PlayerPhysics physics = new PlayerPhysics();
 
     public void setMode(Mode mode) {
         Mode next = Objects.requireNonNull(mode);
-        if (this.mode != next) physics.resetMotion();
+        if (this.mode != next) {
+            current = PlayerState.at(current.position());
+            previous = current.position();
+        }
         this.mode = next;
     }
 
@@ -22,21 +26,28 @@ public final class PlayerController {
     }
 
     public void setPosition(Position position) {
-        current = Objects.requireNonNull(position);
-        previous = current;
-        physics.resetMotion();
+        current = PlayerState.at(position);
+        previous = current.position();
     }
 
-    public void tick(InputState input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+    public PlayerState state() {
+        return current;
+    }
+
+    public void tick(PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         tick(null, input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
     }
 
-    public void tick(World world, InputState input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+    public void tick(World world, PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         Objects.requireNonNull(input);
         if (!Double.isFinite(fixedDeltaSeconds) || fixedDeltaSeconds <= 0) {
             throw new IllegalArgumentException("Fixed delta must be positive and finite");
         }
-        previous = current;
+        if (!Double.isFinite(yawDegrees) || !Double.isFinite(pitchDegrees)) {
+            throw new IllegalArgumentException("Player orientation must be finite");
+        }
+        if (mode == Mode.SURVIVAL) Objects.requireNonNull(world, "Survival requires a world");
+        previous = current.position();
         double yaw = Math.toRadians(yawDegrees);
         double pitch = Math.toRadians(mode == Mode.SPECTATOR ? pitchDegrees : 0);
         double forwardX = Math.cos(yaw) * Math.cos(pitch);
@@ -44,10 +55,10 @@ public final class PlayerController {
         double forwardZ = Math.sin(yaw) * Math.cos(pitch);
         double rightX = -Math.sin(yaw);
         double rightZ = Math.cos(yaw);
-        double speed = (input.sprint() ? SPRINT_SPEED : WALK_SPEED) * fixedDeltaSeconds;
-        double x = current.x();
-        double y = current.y();
-        double z = current.z();
+        double speed = (input.sprintHeld() ? SPRINT_SPEED : WALK_SPEED) * fixedDeltaSeconds;
+        double x = previous.x();
+        double y = previous.y();
+        double z = previous.z();
         if (input.forward()) {
             x += forwardX * speed;
             y += forwardY * speed;
@@ -67,19 +78,18 @@ public final class PlayerController {
             z -= rightZ * speed;
         }
         if (mode == Mode.SPECTATOR) {
-            if (input.up()) y += speed;
-            if (input.down()) y -= speed;
-            current = new Position(x, y, z);
+            if (input.jumpHeld()) y += speed;
+            if (input.sneakHeld()) y -= speed;
+            current = new PlayerState(
+                    new Position(x, y, z),
+                    (x - previous.x()) / fixedDeltaSeconds,
+                    (y - previous.y()) / fixedDeltaSeconds,
+                    (z - previous.z()) / fixedDeltaSeconds,
+                    false);
             return;
         }
-        if (world == null) {
-            current = new Position(x, y, z);
-            return;
-        }
-        double horizontalX = x - current.x();
-        double horizontalZ = z - current.z();
-        current = physics.step(world, current, horizontalX, horizontalZ, input.up(), fixedDeltaSeconds)
-                .position();
+        current = physics.step(
+                world, current, x - previous.x(), z - previous.z(), input.jumpPressed(), fixedDeltaSeconds);
     }
 
     public Position renderPosition(double alpha) {
@@ -87,18 +97,18 @@ public final class PlayerController {
             throw new IllegalArgumentException("Interpolation alpha must be in [0, 1]");
         }
         return new Position(
-                previous.x() + (current.x() - previous.x()) * alpha,
-                previous.y() + (current.y() - previous.y()) * alpha,
-                previous.z() + (current.z() - previous.z()) * alpha);
+                previous.x() + (current.position().x() - previous.x()) * alpha,
+                previous.y() + (current.position().y() - previous.y()) * alpha,
+                previous.z() + (current.position().z() - previous.z()) * alpha);
+    }
+
+    public Position renderEyePosition(double alpha) {
+        Position feet = renderPosition(alpha);
+        return new Position(feet.x(), feet.y() + PlayerState.EYE_HEIGHT, feet.z());
     }
 
     public enum Mode {
         SPECTATOR,
         SURVIVAL
     }
-
-    public record InputState(
-            boolean forward, boolean backward, boolean left, boolean right, boolean up, boolean down, boolean sprint) {}
-
-    public record Position(double x, double y, double z) {}
 }

@@ -16,7 +16,7 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(0, 0, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerPhysics.Step step = physics.step(world, new PlayerController.Position(.5, 2, .5), 0, 0, false, .5);
+        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(.5, 2, .5)), 0, 0, false, .5);
 
         assertEquals(1, step.position().y(), 0.000001);
         assertTrue(step.grounded());
@@ -27,7 +27,7 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerPhysics.Step step = physics.step(world, new PlayerController.Position(1.5, 1, .5), 2, 0, false, 1);
+        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 0, false, 1);
 
         assertEquals(1.7, step.position().x(), 0.000001);
     }
@@ -36,12 +36,13 @@ class PlayerPhysicsTest {
     void stopsJumpingAtCeiling() {
         World world = worldWithBlocks(new BlockPos(0, 0, 0), new BlockPos(0, 3, 0));
         PlayerPhysics physics = new PlayerPhysics();
-        physics.step(world, new PlayerController.Position(.5, 1, .5), 0, 0, false, 1.0 / 60);
+        PlayerState grounded =
+                physics.step(world, PlayerState.at(new PlayerState.Position(.5, 1, .5)), 0, 0, false, 1.0 / 60);
 
-        PlayerPhysics.Step step = physics.step(world, new PlayerController.Position(.5, 1, .5), 0, 0, true, .1);
+        PlayerState step = physics.step(world, grounded, 0, 0, true, .1);
 
         assertEquals(1.2, step.position().y(), 0.000001);
-        assertEquals(0, step.verticalVelocity(), 0.000001);
+        assertEquals(0, step.velocityY(), 0.000001);
     }
 
     @Test
@@ -49,7 +50,7 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerPhysics.Step step = physics.step(world, new PlayerController.Position(1.5, 1, .5), 2, 2, false, 1);
+        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 2, false, 1);
 
         assertEquals(1.7, step.position().x(), 0.000001);
         assertEquals(2.5, step.position().z(), 0.000001);
@@ -60,9 +61,24 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(16, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerPhysics.Step step = physics.step(world, new PlayerController.Position(15.5, 1, .5), 2, 0, false, 1);
+        PlayerState step = physics.step(world, PlayerState.at(new PlayerState.Position(15.5, 1, .5)), 2, 0, false, 1);
 
         assertEquals(15.7, step.position().x(), 0.000001);
+    }
+
+    @Test
+    void physicsHasNoHiddenMotionSharedBetweenPlayers() {
+        World world = worldWithBlocks(new BlockPos(0, 0, 0));
+        PlayerPhysics physics = new PlayerPhysics();
+        PlayerState start = PlayerState.at(new PlayerState.Position(.5, 4, .5));
+        PlayerState first = physics.step(world, start, 0, 0, false, 1.0 / 60);
+        physics.step(world, PlayerState.at(new PlayerState.Position(.5, 20, .5)), 0, 0, false, .2);
+
+        assertEquals(first, physics.step(world, start, 0, 0, false, 1.0 / 60));
+        assertEquals(0, start.velocityY());
+        assertEquals(-25.0 / 60, first.velocityY(), 1e-9);
+        assertEquals(
+                -50.0 / 60, physics.step(world, first, 0, 0, false, 1.0 / 60).velocityY(), 1e-9);
     }
 
     private static World worldWithBlocks(BlockPos... positions) {

@@ -2,8 +2,15 @@ package com.norbertfila.platform;
 
 import static org.lwjgl.glfw.GLFW.*;
 
-public final class Input {
+import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.PlayerInputBuffer;
+import org.lwjgl.glfw.GLFWKeyCallback;
+
+public final class Input implements AutoCloseable {
     private final long window;
+    private final PlayerInputBuffer playerInput = new PlayerInputBuffer();
+    private GLFWKeyCallback keyCallback;
+    private boolean focused;
     private final double[] cursorX = new double[1];
     private final double[] cursorY = new double[1];
     private boolean mouseInitialized;
@@ -11,15 +18,7 @@ public final class Input {
     private double lastCursorY;
     private float mouseDeltaX;
     private float mouseDeltaY;
-    private boolean moveForward;
-    private boolean moveBackward;
-    private boolean moveLeft;
-    private boolean moveRight;
-    private boolean moveUp;
-    private boolean moveDown;
-    private boolean sprint;
     private boolean toggleMode;
-    private boolean jump;
     private boolean settings;
     private boolean leftMouse;
     private boolean previousLeftMouse;
@@ -28,16 +27,38 @@ public final class Input {
     private int hotbarKeys;
     private int previousHotbarKeys;
     private boolean previousToggleMode;
-    private boolean previousJump;
     private boolean previousSettings;
 
     public Input(long window) {
+        if (window == 0) throw new IllegalArgumentException("Input requires a window");
         this.window = window;
+        keyCallback =
+                GLFWKeyCallback.create((handle, key, scanCode, action, mods) -> keyEvent(key, action, glfwGetTime()));
+        glfwSetKeyCallback(window, keyCallback);
+    }
+
+    Input() {
+        window = 0;
+    }
+
+    void keyEvent(int key, int action, double timeSeconds) {
+        if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
+    }
+
+    public PlayerInput nextPlayerTick() {
+        return playerInput.nextTick();
+    }
+
+    public void clearPlayerInput() {
+        playerInput.clear();
+    }
+
+    public boolean focused() {
+        return focused;
     }
 
     public void update() {
         previousToggleMode = toggleMode;
-        previousJump = jump;
         previousSettings = settings;
         glfwGetCursorPos(window, cursorX, cursorY);
         if (!mouseInitialized) {
@@ -50,15 +71,15 @@ public final class Input {
         lastCursorX = cursorX[0];
         lastCursorY = cursorY[0];
 
-        moveForward = isPressed(GLFW_KEY_W);
-        moveBackward = isPressed(GLFW_KEY_S);
-        moveLeft = isPressed(GLFW_KEY_A);
-        moveRight = isPressed(GLFW_KEY_D);
-        moveUp = isPressed(GLFW_KEY_SPACE);
-        moveDown = isPressed(GLFW_KEY_LEFT_SHIFT);
-        sprint = isPressed(GLFW_KEY_LEFT_CONTROL);
+        playerInput.updateHeld(new PlayerInput(
+                isPressed(GLFW_KEY_W),
+                isPressed(GLFW_KEY_S),
+                isPressed(GLFW_KEY_A),
+                isPressed(GLFW_KEY_D),
+                isPressed(GLFW_KEY_SPACE),
+                isPressed(GLFW_KEY_LEFT_SHIFT),
+                isPressed(GLFW_KEY_LEFT_CONTROL)));
         toggleMode = isPressed(GLFW_KEY_F4);
-        jump = moveUp;
         settings = isPressed(GLFW_KEY_F10);
         int slots = 0;
         for (int slot = 0; slot < 9; slot++) {
@@ -68,6 +89,11 @@ public final class Input {
                 glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
                 glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS,
                 slots);
+        focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE;
+        if (!focused) {
+            clearPlayerInput();
+            resetMouseTracking();
+        }
     }
 
     void updateButtons(boolean left, boolean right, int slots) {
@@ -96,40 +122,8 @@ public final class Input {
         return mouseDeltaY;
     }
 
-    public boolean moveForward() {
-        return moveForward;
-    }
-
-    public boolean moveBackward() {
-        return moveBackward;
-    }
-
-    public boolean moveLeft() {
-        return moveLeft;
-    }
-
-    public boolean moveRight() {
-        return moveRight;
-    }
-
-    public boolean moveUp() {
-        return moveUp;
-    }
-
-    public boolean moveDown() {
-        return moveDown;
-    }
-
-    public boolean sprint() {
-        return sprint;
-    }
-
     public boolean toggleModePressed() {
         return toggleMode && !previousToggleMode;
-    }
-
-    public boolean jumpPressed() {
-        return jump && !previousJump;
     }
 
     public boolean settingsPressed() {
@@ -160,5 +154,13 @@ public final class Input {
 
     private boolean isPressed(int key) {
         return glfwGetKey(window, key) == GLFW_PRESS;
+    }
+
+    @Override
+    public void close() {
+        if (keyCallback == null) return;
+        glfwSetKeyCallback(window, null);
+        keyCallback.free();
+        keyCallback = null;
     }
 }

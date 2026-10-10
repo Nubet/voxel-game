@@ -17,4 +17,19 @@ class CameraTest {
         assertEquals(0, projected.y(), 1e-5);
         assertEquals(1, camera.direction().length(), 1e-6);
     }
+
+    @Test
+    void frameTimeMouseLookChangesOnlyOrientationAndClampsPitch() {
+        Camera camera = new Camera();
+        camera.setPosition(-16.5f, 20.62f, 1);
+        Vector3f before = new Vector3f(camera.position());
+
+        camera.updateLook(10, -2000);
+
+        assertEquals(before, camera.position());
+        assertEquals(-88.9f, camera.yaw(), 1e-5);
+        assertEquals(89, camera.pitch());
+        camera.updateLook(0, 2000);
+        assertEquals(-89, camera.pitch());
+    }
 }
