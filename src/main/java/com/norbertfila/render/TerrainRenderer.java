@@ -9,15 +9,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 /** Intentionally tiny OpenGL backend. Resource ownership remains explicit. */
 public final class TerrainRenderer implements AutoCloseable {
-    private final Map<ChunkPos, GpuMesh> meshes = new HashMap<>();
+    private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
+    private final GpuMeshPool meshPool;
     private final UploadQueue uploads = new UploadQueue();
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
@@ -26,11 +25,16 @@ public final class TerrainRenderer implements AutoCloseable {
     private boolean closed;
 
     public TerrainRenderer() {
-        this(8);
+        this(8, DEFAULT_GPU_BUDGET_BYTES);
     }
 
     public TerrainRenderer(int regionEdge) {
+        this(regionEdge, DEFAULT_GPU_BUDGET_BYTES);
+    }
+
+    public TerrainRenderer(int regionEdge, long gpuBudgetBytes) {
         regionIndex = new RegionIndex(regionEdge);
+        meshPool = new GpuMeshPool(new GpuMemoryBudget(gpuBudgetBytes));
         int vertex = 0;
         int fragment = 0;
         int linkedProgram = 0;
@@ -99,9 +103,9 @@ public final class TerrainRenderer implements AutoCloseable {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
         if (mesh.vertexCount() == 0) {
-            GpuMesh previous = meshes.remove(position);
+            meshPool.remove(position);
             regionIndex.remove(position);
-            if (previous != null) previous.close();
+            meshPool.drainDeletions(1);
             return;
         }
         int vao = glGenVertexArrays(), vbo = glGenBuffers();
@@ -114,12 +118,12 @@ public final class TerrainRenderer implements AutoCloseable {
             glVertexAttribPointer(1, 3, GL_FLOAT, false, mesh.format().stride() * Float.BYTES, 3L * Float.BYTES);
             glEnableVertexAttribArray(1);
             glBindVertexArray(0);
-            GpuMesh previous = meshes.put(position, new GpuMesh(vao, vbo, mesh.format(), (array, buffer) -> {
+            meshPool.put(position, new GpuMesh(vao, vbo, mesh.format(), (array, buffer) -> {
                 glDeleteBuffers(buffer);
                 glDeleteVertexArrays(array);
             }));
+            meshPool.drainDeletions(1);
             regionIndex.add(position);
-            if (previous != null) previous.close();
         } catch (RuntimeException | Error failure) {
             glDeleteBuffers(vbo);
             glDeleteVertexArrays(vao);
@@ -150,8 +154,9 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     public void remove(ChunkPos position) {
-        GpuMesh mesh = meshes.remove(Objects.requireNonNull(position));
-        if (mesh != null) mesh.close();
+        meshPool.remove(Objects.requireNonNull(position));
+        regionIndex.remove(position);
+        meshPool.drainDeletions(1);
     }
 
     public RenderStats render(Matrix4f viewProjection, Frustum frustum) {
@@ -163,23 +168,22 @@ public final class TerrainRenderer implements AutoCloseable {
         }
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
         for (ChunkPos position : culling.visible()) {
-            GpuMesh mesh = meshes.get(position);
+            GpuMesh mesh = meshPool.get(position);
             if (mesh == null) continue;
             glBindVertexArray(mesh.vao());
             glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
         }
         glBindVertexArray(0);
         int visible = culling.visible().size();
-        return new RenderStats(visible, meshes.size() - visible, visible);
+        return new RenderStats(visible, meshPool.size() - visible, visible);
     }
 
     @Override
     public void close() {
         if (closed) return;
         closed = true;
-        meshes.values().forEach(GpuMesh::close);
+        meshPool.close();
         glDeleteProgram(program);
-        meshes.clear();
     }
 
     public record UploadStats(long bytesUploaded, int queueDepth, long uploadNanos, int uploadCount) {}
