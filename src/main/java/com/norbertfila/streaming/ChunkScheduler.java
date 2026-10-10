@@ -208,6 +208,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 outcome = new ChunkTask.Outcome<T>(
                         task.position(),
                         task.revision(),
+                        task.meshDependencyRevision(),
                         task.token(),
                         task.work().call(),
                         null);
@@ -217,7 +218,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                         "Chunk task failed position=" + task.position() + " revision=" + task.revision() + " token="
                                 + task.token(),
                         failure);
-                outcome = new ChunkTask.Outcome<T>(task.position(), task.revision(), task.token(), null, failure);
+                outcome = new ChunkTask.Outcome<T>(
+                        task.position(), task.revision(), task.meshDependencyRevision(), task.token(), null, failure);
             }
             if (cancelled.contains(TaskKey.of(task))) {
                 outcome.discard();

@@ -35,7 +35,7 @@ public final class Chunk {
     }
 
     public ChunkSnapshot snapshot() {
-        return new ChunkSnapshot(data.toBlocks(), revision);
+        return new ChunkSnapshot(data.toBlocks(), revision, meshDependencyRevision);
     }
 
     public ChunkData.Kind storageKind() {

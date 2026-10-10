@@ -15,8 +15,6 @@ import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
-import java.util.HashMap;
-import java.util.Map;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
@@ -41,7 +39,6 @@ public final class GameLoop {
         int[] framebufferWidth = new int[1];
         int[] framebufferHeight = new int[1];
         boolean jumpQueued = false;
-        Map<ChunkPos, ChunkManager.MeshResult> pendingUploads = new HashMap<>();
         while (!window.shouldClose()) {
             window.pollEvents();
 
@@ -93,8 +90,7 @@ public final class GameLoop {
             ChunkManager.UpdateResult update = chunkManager.update(playerChunk);
             ChunkManager.ProcessResult processed = chunkManager.processResults();
             for (ChunkManager.MeshResult mesh : processed.meshes()) {
-                renderer.enqueueUpload(mesh.position(), mesh.mesh());
-                pendingUploads.put(mesh.position(), mesh);
+                renderer.enqueueUpload(mesh);
             }
             boolean[] jumpForTick = {jumpQueued};
             if (!settingsPanel.open()
@@ -110,32 +106,28 @@ public final class GameLoop {
             camera.setPosition(
                     (float) renderPosition.x(), (float) renderPosition.y() + eyeOffset, (float) renderPosition.z());
             if (update.changed()) {
-                update.evicted().forEach(position -> {
-                    renderer.remove(position);
-                    pendingUploads.remove(position);
-                });
+                update.evicted().forEach(renderer::remove);
                 DiagnosticsLog.logger(GameLoop.class)
                         .info("View demand center=" + update.center() + " sections="
                                 + update.requested() + " scheduled=" + update.scheduled() + " generated="
                                 + processed.generated()
                                 + " discarded=" + processed.discarded() + " resident=" + chunkManager.residentCount());
             }
-            TerrainRenderer.UploadStats uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000);
-            for (ChunkPos position : uploads.uploaded()) {
-                ChunkManager.MeshResult mesh = pendingUploads.remove(position);
-                if (mesh != null && !chunkManager.markUploaded(mesh)) {
+            TerrainRenderer.UploadStats uploads =
+                    renderer.processUploads(4L * 1024 * 1024, 2_000_000, chunkManager::isCurrentMesh);
+            for (ChunkManager.MeshResult mesh : uploads.uploaded()) {
+                if (!chunkManager.markUploaded(mesh)) {
                     DiagnosticsLog.logger(GameLoop.class)
-                            .warning("Ignoring stale completed upload position=" + position);
+                            .warning("Ignoring stale completed upload position=" + mesh.position());
                 }
             }
-            for (ChunkPos position : uploads.failed()) {
-                ChunkManager.MeshResult mesh = pendingUploads.remove(position);
-                if (mesh != null) {
-                    chunkManager.markUploadFailed(mesh);
+            for (ChunkManager.MeshResult mesh : uploads.failed()) {
+                if (chunkManager.rejectUpload(mesh)) {
                     DiagnosticsLog.logger(GameLoop.class)
-                            .warning("Upload failed and mesh was returned to retry state position=" + position);
+                            .warning("Upload failed and mesh was returned to retry state position=" + mesh.position());
                 }
             }
+            uploads.discarded().forEach(chunkManager::rejectUpload);
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             metrics.recordResidentChunks(chunkManager.residentCount());
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);

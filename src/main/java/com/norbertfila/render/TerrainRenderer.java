@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.MeshData;
+import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.streaming.RegionIndex;
 import com.norbertfila.world.ChunkPos;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4f;
@@ -137,28 +139,34 @@ public final class TerrainRenderer implements AutoCloseable {
         }
     }
 
-    public void enqueueUpload(ChunkPos position, MeshData mesh) {
-        uploads.enqueue(position, mesh);
+    public void enqueueUpload(MeshResult result) {
+        uploads.enqueue(result);
     }
 
-    public UploadStats processUploads(long byteBudget, long timeBudgetNanos) {
+    public UploadStats processUploads(long byteBudget, long timeBudgetNanos, Predicate<MeshResult> isCurrent) {
+        Objects.requireNonNull(isCurrent);
         if (byteBudget <= 0 || timeBudgetNanos <= 0) {
             throw new IllegalArgumentException("Upload budgets must be positive");
         }
         long start = System.nanoTime();
         long bytesUploaded = 0;
         int uploadCount = 0;
-        List<ChunkPos> uploaded = new ArrayList<>();
-        List<ChunkPos> failed = new ArrayList<>();
+        List<MeshResult> uploaded = new ArrayList<>();
+        List<MeshResult> failed = new ArrayList<>();
+        List<MeshResult> discarded = new ArrayList<>();
         while (true) {
-            UploadQueue.Request request = uploads.poll(byteBudget - bytesUploaded, uploadCount == 0);
+            MeshResult request = uploads.poll(byteBudget - bytesUploaded, uploadCount == 0, result -> {
+                if (isCurrent.test(result)) return true;
+                discarded.add(result);
+                return false;
+            });
             if (request == null) break;
             try {
                 upload(request.position(), request.mesh());
                 bytesUploaded += request.bytes();
-                uploaded.add(request.position());
+                uploaded.add(request);
             } catch (RuntimeException failure) {
-                failed.add(request.position());
+                failed.add(request);
                 LOG.log(
                         Level.SEVERE,
                         "GPU upload failed position=" + request.position() + " bytes=" + request.bytes()
@@ -174,7 +182,8 @@ public final class TerrainRenderer implements AutoCloseable {
                 System.nanoTime() - start,
                 uploadCount,
                 List.copyOf(uploaded),
-                List.copyOf(failed));
+                List.copyOf(failed),
+                List.copyOf(discarded));
     }
 
     public void remove(ChunkPos position) {
@@ -227,8 +236,9 @@ public final class TerrainRenderer implements AutoCloseable {
             int queueDepth,
             long uploadNanos,
             int uploadCount,
-            List<ChunkPos> uploaded,
-            List<ChunkPos> failed) {}
+            List<MeshResult> uploaded,
+            List<MeshResult> failed,
+            List<MeshResult> discarded) {}
 
     public record RenderStats(int visible, int culled, int drawCalls) {}
 }

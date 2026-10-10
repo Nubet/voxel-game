@@ -161,6 +161,7 @@ public final class ChunkManager implements AutoCloseable {
                     || outcome.revision() != entry.chunkRevision()
                     || chunk == null
                     || outcome.revision() != chunk.revision()
+                    || outcome.meshDependencyRevision() != chunk.meshDependencyRevision()
                     || pendingEdits.contains(outcome.position())
                     || !outcome.succeeded()
                     || !entry.readyCpu(outcome.revision())) {
@@ -181,7 +182,13 @@ public final class ChunkManager implements AutoCloseable {
                 discarded++;
                 continue;
             }
-            meshes.add(new MeshResult(outcome.position(), outcome.result(), entry.meshRevision(), outcome.token()));
+            meshes.add(new MeshResult(
+                    outcome.position(),
+                    outcome.result(),
+                    outcome.revision(),
+                    outcome.meshDependencyRevision(),
+                    entry.meshRevision(),
+                    outcome.token()));
         }
         processPendingRemeshes();
         return new ProcessResult(generated, meshes, discarded);
@@ -202,26 +209,41 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean markUploaded(MeshResult result) {
-        Objects.requireNonNull(result);
+        if (!isCurrentMesh(result)) return false;
         ChunkEntry entry = entries.get(result.position());
-        Long expectedToken = meshTokens.get(result.position());
-        if (entry == null
-                || expectedToken == null
-                || expectedToken != result.token()
-                || !entry.uploaded(result.meshRevision())) return false;
+        if (!entry.uploaded(result.meshRevision())) return false;
         processPendingRemesh(result.position());
         return true;
     }
 
-    public boolean markUploadFailed(MeshResult result) {
-        Objects.requireNonNull(result);
+    public boolean rejectUpload(MeshResult result) {
+        if (!matchesPendingUpload(result)) return false;
         ChunkEntry entry = entries.get(result.position());
-        Long expectedToken = meshTokens.get(result.position());
-        if (entry == null || expectedToken == null || expectedToken != result.token() || !entry.meshFailed())
-            return false;
+        if (!entry.meshFailed()) return false;
         requestRemesh(result.position());
         processPendingRemesh(result.position());
         return true;
+    }
+
+    public boolean isCurrentMesh(MeshResult result) {
+        if (!matchesPendingUpload(result)) return false;
+        Chunk chunk = world.getChunk(result.position());
+        return chunk != null
+                && chunk.revision() == result.dataRevision()
+                && chunk.meshDependencyRevision() == result.meshDependencyRevision()
+                && !pendingEdits.contains(result.position());
+    }
+
+    private boolean matchesPendingUpload(MeshResult result) {
+        Objects.requireNonNull(result);
+        ChunkEntry entry = entries.get(result.position());
+        Long expectedToken = meshTokens.get(result.position());
+        return entry != null
+                && expectedToken != null
+                && expectedToken == result.token()
+                && entry.state() == ChunkState.READY_CPU
+                && entry.meshRevision() == result.meshRevision()
+                && entry.chunkRevision() == result.dataRevision();
     }
 
     public boolean readyForPlayer(ChunkPos position) {
@@ -284,7 +306,8 @@ public final class ChunkManager implements AutoCloseable {
                 : ChunkPriority.unprioritized();
         boolean submitted = meshingScheduler.submitLatest(new ChunkTask<>(
                 position,
-                chunk.revision(),
+                neighborhood.center().revision(),
+                neighborhood.center().meshDependencyRevision(),
                 token,
                 priority,
                 () -> mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z())));
@@ -353,5 +376,20 @@ public final class ChunkManager implements AutoCloseable {
 
     public record ProcessResult(int generated, List<MeshResult> meshes, int discarded) {}
 
-    public record MeshResult(ChunkPos position, MeshData mesh, long meshRevision, long token) {}
+    public record MeshResult(
+            ChunkPos position,
+            MeshData mesh,
+            long dataRevision,
+            long meshDependencyRevision,
+            long meshRevision,
+            long token) {
+        public MeshResult {
+            Objects.requireNonNull(position);
+            Objects.requireNonNull(mesh);
+        }
+
+        public long bytes() {
+            return (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
+        }
+    }
 }

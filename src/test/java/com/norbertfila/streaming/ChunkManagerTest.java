@@ -3,14 +3,17 @@ package com.norbertfila.streaming;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
@@ -27,6 +30,131 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ChunkManagerTest {
+    @Test
+    void rejectsAnUploadEditedWhileQueuedAndIgnoresItsLateAcknowledgements() {
+        World world = new World();
+        try (ChunkManager manager =
+                new ChunkManager(world, emptyGenerator(), new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            var stale = awaitMesh(manager).meshes().get(0);
+            UploadQueue queue = new UploadQueue();
+            queue.enqueue(stale);
+            manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(1, 1, 1), BlockId.STONE));
+
+            assertFalse(manager.isCurrentMesh(stale));
+            assertNull(queue.poll(Long.MAX_VALUE, true, manager::isCurrentMesh));
+            assertEquals(0, queue.size());
+            assertFalse(manager.markUploaded(stale));
+            assertTrue(manager.rejectUpload(stale));
+            assertFalse(manager.rejectUpload(stale));
+            var latest = awaitMesh(manager).meshes().get(0);
+            assertFalse(manager.markUploaded(stale));
+            assertFalse(manager.rejectUpload(stale));
+            assertTrue(manager.isCurrentMesh(latest));
+            assertEquals(1, latest.dataRevision());
+            assertEquals(1, latest.meshDependencyRevision());
+            assertTrue(manager.markUploaded(latest));
+            assertFalse(manager.rejectUpload(latest));
+            assertFalse(manager.markUploaded(latest));
+        }
+    }
+
+    @Test
+    void neighborChangesInvalidateQueuedGeometryWithoutChangingItsDataRevision() {
+        World world = new World();
+        try (ChunkManager manager =
+                new ChunkManager(world, emptyGenerator(), new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(15, 1, 1), BlockId.STONE));
+            var beforeNeighbor = awaitMesh(manager).meshes().get(0);
+            assertEquals(6, beforeNeighbor.mesh().faceCount());
+            Chunk neighbor = new Chunk();
+            neighbor.set(0, 1, 1, BlockId.STONE);
+            world.putChunk(new ChunkPos(1, 0, 0), neighbor);
+
+            assertFalse(manager.isCurrentMesh(beforeNeighbor));
+            assertTrue(manager.rejectUpload(beforeNeighbor));
+            var hiddenFace = awaitMesh(manager).meshes().get(0);
+            assertEquals(beforeNeighbor.dataRevision(), hiddenFace.dataRevision());
+            assertTrue(hiddenFace.meshDependencyRevision() > beforeNeighbor.meshDependencyRevision());
+            assertEquals(5, hiddenFace.mesh().faceCount());
+
+            new WorldEdit(world, 8).setBlock(new BlockPos(16, 1, 1), BlockId.AIR);
+            assertFalse(manager.isCurrentMesh(hiddenFace));
+            assertTrue(manager.rejectUpload(hiddenFace));
+            var restoredFace = awaitMesh(manager).meshes().get(0);
+            assertEquals(hiddenFace.dataRevision(), restoredFace.dataRevision());
+            assertEquals(6, restoredFace.mesh().faceCount());
+            assertTrue(manager.markUploaded(restoredFace));
+        }
+    }
+
+    @Test
+    void staleUploadCannotAcknowledgeARegeneratedChunkAtTheSamePosition() {
+        try (ChunkManager manager =
+                new ChunkManager(new World(), emptyGenerator(), new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            ChunkPos center = new ChunkPos(0, 0, 0);
+            manager.update(center);
+            var stale = awaitMesh(manager).meshes().get(0);
+            manager.update(new ChunkPos(10, 0, 0));
+            assertFalse(manager.isCurrentMesh(stale));
+            manager.update(center);
+            var latest = awaitMesh(manager).meshes().get(0);
+            assertEquals(stale.meshRevision(), latest.meshRevision());
+            assertTrue(stale.token() != latest.token());
+            assertFalse(manager.markUploaded(stale));
+            assertFalse(manager.rejectUpload(stale));
+            assertTrue(manager.isCurrentMesh(latest));
+            assertTrue(manager.markUploaded(latest));
+        }
+    }
+
+    @Test
+    void neighborArrivalInvalidatesAnInFlightCpuResultWithoutEditingItsData() throws Exception {
+        World world = new World();
+        AtomicInteger calls = new AtomicInteger();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        GreedyMesher mesher = new GreedyMesher();
+        try (ChunkManager manager = new ChunkManager(
+                world,
+                emptyGenerator(),
+                (snapshot, neighborhood, x, y, z) -> {
+                    if (calls.incrementAndGet() == 1) {
+                        started.countDown();
+                        try {
+                            if (!release.await(2, TimeUnit.SECONDS))
+                                throw new AssertionError("Worker release timed out");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new AssertionError(interrupted);
+                        }
+                    }
+                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                },
+                new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            manager.update(new ChunkPos(0, 0, 0));
+            long deadline = System.nanoTime() + Duration.ofSeconds(1).toNanos();
+            while (started.getCount() != 0 && System.nanoTime() < deadline) {
+                manager.processResults();
+                Thread.sleep(1);
+            }
+            assertEquals(0, started.getCount());
+            world.putChunk(new ChunkPos(1, 0, 0), new Chunk());
+            release.countDown();
+            var latest = awaitMesh(manager).meshes().get(0);
+            assertEquals(0, latest.dataRevision());
+            assertEquals(1, latest.meshDependencyRevision());
+            assertEquals(2, calls.get());
+            assertTrue(manager.markUploaded(latest));
+        } finally {
+            release.countDown();
+        }
+    }
+
     @Test
     void coalescesTenThousandEditsIntoOneLatestMeshWithoutMeshingOnCallerThread() {
         World world = new World();
@@ -338,7 +466,7 @@ class ChunkManagerTest {
         manager.update(new ChunkPos(0, 0, 0));
 
         ChunkManager.MeshResult first = awaitMesh(manager).meshes().get(0);
-        assertTrue(manager.markUploadFailed(first));
+        assertTrue(manager.rejectUpload(first));
 
         ChunkManager.MeshResult retry = awaitMesh(manager).meshes().get(0);
         assertEquals(first.position(), retry.position());

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,9 @@ class WorldEditTest {
                     world.putChunk(new ChunkPos(center.x() + dx, center.y() + dy, center.z() + dz), new Chunk());
         BlockPos block = Coordinates.chunkLocalToWorld(center, new BlockPos(x, y, z));
         WorldEdit edits = new WorldEdit(world, 8);
+        var dependencies = new HashMap<ChunkPos, Long>();
+        for (ChunkPos position : world.residentPositions())
+            dependencies.put(position, world.getChunk(position).meshDependencyRevision());
 
         BlockChangeResult result = edits.setBlock(block, BlockId.STONE);
 
@@ -68,7 +72,9 @@ class WorldEditTest {
         for (ChunkPos position : world.residentPositions()) {
             Chunk chunk = world.getChunk(position);
             assertEquals(position.equals(center) ? 1 : 0, chunk.revision());
-            assertEquals(result.dirtyChunks().contains(position) ? 1 : 0, chunk.meshDependencyRevision());
+            assertEquals(
+                    dependencies.get(position) + (result.dirtyChunks().contains(position) ? 1 : 0),
+                    chunk.meshDependencyRevision());
         }
         assertEquals(1, world.changes().size());
         assertEquals(block, world.changes().changes().get(0).position());
@@ -77,7 +83,8 @@ class WorldEditTest {
                 BlockChangeResult.Status.UNCHANGED,
                 edits.setBlock(block, BlockId.STONE).status());
         for (ChunkPos position : result.dirtyChunks())
-            assertEquals(1, world.getChunk(position).meshDependencyRevision());
+            assertEquals(
+                    dependencies.get(position) + 1, world.getChunk(position).meshDependencyRevision());
     }
 
     @Test
@@ -195,6 +202,7 @@ class WorldEditTest {
         world.putChunk(new ChunkPos(0, 0, 0), first);
         world.putChunk(new ChunkPos(1, 0, 0), neighbor);
         WorldEdit edits = new WorldEdit(world, 8);
+        long firstDependency = first.meshDependencyRevision();
 
         edits.setBlock(new BlockPos(15, 3, 3), BlockId.STONE);
 
@@ -207,7 +215,7 @@ class WorldEditTest {
         assertEquals(1, neighbor.revision());
         assertEquals(2, neighbor.meshDependencyRevision());
         assertEquals(1, first.revision());
-        assertEquals(1, first.meshDependencyRevision());
+        assertEquals(firstDependency + 1, first.meshDependencyRevision());
         assertEquals(2, world.changes().size());
     }
 }

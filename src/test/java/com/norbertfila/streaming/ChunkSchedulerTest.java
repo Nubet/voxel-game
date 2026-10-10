@@ -38,12 +38,14 @@ class ChunkSchedulerTest {
     void returnsOutcomeWithPositionAndToken() throws Exception {
         try (ChunkScheduler scheduler = new ChunkScheduler(1, 2, 2)) {
             ChunkPos position = new ChunkPos(-2, 1, 3);
-            assertTrue(scheduler.submit(new ChunkTask(position, 8L, 9L, () -> new MeshData(new float[0]))));
+            assertTrue(scheduler.submit(new ChunkTask(
+                    position, 8L, 12L, 9L, ChunkPriority.unprioritized(), () -> new MeshData(new float[0]))));
 
             ChunkTask.Outcome outcome = waitForOutcome(scheduler);
 
             assertEquals(position, outcome.position());
             assertEquals(8L, outcome.revision());
+            assertEquals(12L, outcome.meshDependencyRevision());
             assertEquals(9L, outcome.token());
             assertTrue(outcome.succeeded());
             outcome.discard();
@@ -69,14 +71,16 @@ class ChunkSchedulerTest {
     @Test
     void reportsWorkerFailureWithoutKillingScheduler() throws Exception {
         try (ChunkScheduler scheduler = new ChunkScheduler(1, 1, 2)) {
-            assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(0, 0, 0), 4, () -> {
-                throw new IllegalStateException("generation failed");
-            })));
+            assertTrue(scheduler.submit(
+                    new ChunkTask(new ChunkPos(0, 0, 0), 4, 8, 11, ChunkPriority.unprioritized(), () -> {
+                        throw new IllegalStateException("generation failed");
+                    })));
 
             ChunkTask.Outcome outcome = waitForOutcome(scheduler);
 
             assertFalse(outcome.succeeded());
             assertNotNull(outcome.failure());
+            assertEquals(8, outcome.meshDependencyRevision());
             assertTrue(scheduler.submit(new ChunkTask(new ChunkPos(1, 0, 0), 5, () -> new MeshData(new float[0]))));
         }
     }

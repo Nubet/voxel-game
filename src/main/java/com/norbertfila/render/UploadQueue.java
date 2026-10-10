@@ -1,25 +1,35 @@
 package com.norbertfila.render;
 
-import com.norbertfila.meshing.MeshData;
+import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.world.ChunkPos;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 public final class UploadQueue {
-    private final Map<ChunkPos, Request> requests = new LinkedHashMap<>();
+    private final Map<ChunkPos, MeshResult> requests = new LinkedHashMap<>();
 
-    public void enqueue(ChunkPos position, MeshData mesh) {
-        requests.put(Objects.requireNonNull(position), new Request(position, Objects.requireNonNull(mesh)));
+    public void enqueue(MeshResult result) {
+        Objects.requireNonNull(result);
+        requests.put(result.position(), result);
     }
 
-    public Request poll(long remainingBytes, boolean firstUpload) {
+    public MeshResult poll(long remainingBytes, boolean firstUpload, Predicate<MeshResult> isCurrent) {
         if (remainingBytes < 0) throw new IllegalArgumentException("Remaining bytes must not be negative");
-        Request next = requests.values().stream().findFirst().orElse(null);
-        if (next == null) return null;
-        if (firstUpload || next.bytes() <= remainingBytes) {
-            requests.remove(next.position());
-            return next;
+        Objects.requireNonNull(isCurrent);
+        var iterator = requests.values().iterator();
+        while (iterator.hasNext()) {
+            MeshResult next = iterator.next();
+            if (!isCurrent.test(next)) {
+                iterator.remove();
+                continue;
+            }
+            if (firstUpload || next.bytes() <= remainingBytes) {
+                iterator.remove();
+                return next;
+            }
+            return null;
         }
         return null;
     }
@@ -28,18 +38,7 @@ public final class UploadQueue {
         return requests.size();
     }
 
-    public Request remove(ChunkPos position) {
+    public MeshResult remove(ChunkPos position) {
         return requests.remove(Objects.requireNonNull(position));
-    }
-
-    public record Request(ChunkPos position, MeshData mesh) {
-        public Request {
-            Objects.requireNonNull(position);
-            Objects.requireNonNull(mesh);
-        }
-
-        public long bytes() {
-            return (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
-        }
     }
 }

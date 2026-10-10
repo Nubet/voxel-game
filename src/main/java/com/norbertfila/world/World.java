@@ -29,6 +29,7 @@ public final class World {
     public void putChunk(ChunkPos position, Chunk chunk) {
         storage.put(Objects.requireNonNull(position), Objects.requireNonNull(chunk));
         requestedChunks.remove(position);
+        invalidateNeighbors(position);
     }
 
     public Chunk getChunk(ChunkPos position) {
@@ -41,7 +42,22 @@ public final class World {
 
     public Chunk removeChunk(ChunkPos position) {
         requestedChunks.remove(Objects.requireNonNull(position));
-        return storage.remove(position);
+        Chunk removed = storage.remove(position);
+        if (removed != null) invalidateNeighbors(position);
+        return removed;
+    }
+
+    private void invalidateNeighbors(ChunkPos position) {
+        for (ChunkPos neighborPosition : List.of(
+                new ChunkPos(position.x() + 1, position.y(), position.z()),
+                new ChunkPos(position.x() - 1, position.y(), position.z()),
+                new ChunkPos(position.x(), position.y() + 1, position.z()),
+                new ChunkPos(position.x(), position.y() - 1, position.z()),
+                new ChunkPos(position.x(), position.y(), position.z() + 1),
+                new ChunkPos(position.x(), position.y(), position.z() - 1))) {
+            Chunk neighbor = storage.get(neighborPosition);
+            if (neighbor != null) neighbor.invalidateMesh();
+        }
     }
 
     public int residentCount() {

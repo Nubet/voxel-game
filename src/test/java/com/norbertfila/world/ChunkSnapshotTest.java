@@ -22,12 +22,13 @@ class ChunkSnapshotTest {
     void snapshotCopiesExternallyOwnedInput() {
         byte[] blocks = new byte[Chunk.BLOCK_BYTES];
         blocks[0] = BlockId.STONE;
-        ChunkSnapshot snapshot = new ChunkSnapshot(blocks, 7);
+        ChunkSnapshot snapshot = new ChunkSnapshot(blocks, 7, 11);
 
         blocks[0] = BlockId.AIR;
 
         assertEquals(BlockId.STONE, snapshot.get(0, 0, 0));
         assertEquals(7, snapshot.revision());
+        assertEquals(11, snapshot.meshDependencyRevision());
     }
 
     @Test
