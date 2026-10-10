@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Objects;
 
 public final class PlayerController {
-    private static final double WALK_SPEED = 12.0;
-    private static final double SPRINT_SPEED = 45.0;
+    private static final double SPECTATOR_WALK_SPEED = 12.0;
+    private static final double SPECTATOR_SPRINT_SPEED = 45.0;
     private Mode mode = Mode.SPECTATOR;
     private Position previous = new Position(0, 22, 34);
     private PlayerState current = PlayerState.at(previous);
@@ -50,9 +50,11 @@ public final class PlayerController {
                     move.x / fixedDeltaSeconds,
                     move.y / fixedDeltaSeconds,
                     move.z / fixedDeltaSeconds,
-                    false);
+                    false,
+                    0);
         } else {
-            current = physics.step(world, current, move.x, move.z, input.jumpPressed(), fixedDeltaSeconds);
+            current = physics.step(
+                    world, current, move.x, move.z, input.jumpHeld() || input.jumpPressed(), fixedDeltaSeconds);
         }
     }
 
@@ -61,7 +63,8 @@ public final class PlayerController {
         Movement move = movement(input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
         return mode == Mode.SPECTATOR
                 ? List.of()
-                : physics.requiredChunks(current, move.x, move.z, input.jumpPressed(), fixedDeltaSeconds);
+                : physics.requiredChunks(
+                        current, move.x, move.z, input.jumpHeld() || input.jumpPressed(), fixedDeltaSeconds);
     }
 
     public void pauseInterpolation() {
@@ -83,7 +86,9 @@ public final class PlayerController {
         double forwardZ = Math.sin(yaw) * Math.cos(pitch);
         double rightX = -Math.sin(yaw);
         double rightZ = Math.cos(yaw);
-        double speed = (input.sprintHeld() ? SPRINT_SPEED : WALK_SPEED) * fixedDeltaSeconds;
+        double speed = mode == Mode.SPECTATOR
+                ? (input.sprintHeld() ? SPECTATOR_SPRINT_SPEED : SPECTATOR_WALK_SPEED) * fixedDeltaSeconds
+                : 1;
         double x = 0;
         double y = 0;
         double z = 0;

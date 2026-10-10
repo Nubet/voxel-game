@@ -27,8 +27,13 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step =
-                physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 0, false, 1.0 / 60);
+        PlayerState step = physics.step(
+                world,
+                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 0, false, 0),
+                0,
+                0,
+                false,
+                1.0 / 60);
 
         assertEquals(1.7, step.position().x(), 0.000001);
     }
@@ -51,11 +56,16 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(2, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step =
-                physics.step(world, PlayerState.at(new PlayerState.Position(1.5, 1, .5)), 2, 2, false, 1.0 / 60);
+        PlayerState step = physics.step(
+                world,
+                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 120, false, 0),
+                0,
+                0,
+                false,
+                1.0 / 60);
 
         assertEquals(1.7, step.position().x(), 0.000001);
-        assertEquals(2.5, step.position().z(), 0.000001);
+        assertEquals(.5 + 2 * Math.pow(.91, 1.0 / 3), step.position().z(), 0.000001);
     }
 
     @Test
@@ -63,8 +73,13 @@ class PlayerPhysicsTest {
         World world = worldWithBlocks(new BlockPos(16, 1, 0));
         PlayerPhysics physics = new PlayerPhysics();
 
-        PlayerState step =
-                physics.step(world, PlayerState.at(new PlayerState.Position(15.5, 1, .5)), 2, 0, false, 1.0 / 60);
+        PlayerState step = physics.step(
+                world,
+                new PlayerState(new PlayerState.Position(15.5, 1, .5), 120, 0, 0, false, 0),
+                0,
+                0,
+                false,
+                1.0 / 60);
 
         assertEquals(15.7, step.position().x(), 0.000001);
     }
@@ -79,9 +94,13 @@ class PlayerPhysicsTest {
 
         assertEquals(first, physics.step(world, start, 0, 0, false, 1.0 / 60));
         assertEquals(0, start.velocityY());
-        assertEquals(-25.0 / 60, first.velocityY(), 1e-9);
+        double drag = -Math.log(.98) / .05;
+        double gravityDelta = -32 * (-Math.expm1(-drag / 60) / drag);
+        assertEquals(gravityDelta, first.velocityY(), 1e-9);
         assertEquals(
-                -50.0 / 60, physics.step(world, first, 0, 0, false, 1.0 / 60).velocityY(), 1e-9);
+                first.velocityY() * Math.pow(.98, 1.0 / 3) + gravityDelta,
+                physics.step(world, first, 0, 0, false, 1.0 / 60).velocityY(),
+                1e-9);
     }
 
     private static World worldWithBlocks(BlockPos... positions) {
