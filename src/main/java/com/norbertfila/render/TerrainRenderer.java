@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.meshing.MeshData;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;

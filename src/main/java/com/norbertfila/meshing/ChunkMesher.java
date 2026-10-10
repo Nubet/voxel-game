@@ -1,4 +1,4 @@
-package com.norbertfila.render;
+package com.norbertfila.meshing;
 
 import com.norbertfila.world.Chunk;
 

@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
 import com.norbertfila.world.*;
