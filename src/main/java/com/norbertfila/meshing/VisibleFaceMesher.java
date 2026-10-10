@@ -6,14 +6,18 @@ import java.util.Arrays;
 /** Baseline face culling inside one chunk; boundary faces are intentionally emitted */
 public final class VisibleFaceMesher implements ChunkMesher {
     private static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    private static final float[] GRASS_TOP = {.32f, .69f, .22f};
+    private static final float[] GRASS_SIDE = {.50f, .46f, .27f};
+    private static final float[] DIRT = {.46f, .29f, .16f};
+    private static final float[] STONE = {.48f, .49f, .51f};
     // Each face: four corner offsets in CCW order as viewed from outside.
     private static final int[][][] FACES = {
         {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}, {1, 0, 1}},
         {{0, 0, 1}, {0, 1, 1}, {0, 1, 0}, {0, 0, 0}},
         {{0, 1, 1}, {1, 1, 1}, {1, 1, 0}, {0, 1, 0}},
         {{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {0, 0, 1}},
-        {{1, 0, 1}, {0, 0, 1}, {0, 1, 1}, {1, 1, 1}},
-        {{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
+        {{1, 0, 1}, {1, 1, 1}, {0, 1, 1}, {0, 0, 1}},
+        {{0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}}
     };
     private static final int[] TRIANGLE_INDICES = {0, 1, 2, 0, 2, 3};
 
@@ -34,12 +38,8 @@ public final class VisibleFaceMesher implements ChunkMesher {
                                 && ny < Chunk.SIZE
                                 && nz < Chunk.SIZE
                                 && chunk.get(nx, ny, nz) != BlockId.AIR) continue;
-                        float[] rgb = block == BlockId.GRASS
-                                ? (f == 2 ? new float[] {.32f, .69f, .22f} : new float[] {.50f, .46f, .27f})
-                                : block == BlockId.DIRT
-                                        ? new float[] {.46f, .29f, .16f}
-                                        : new float[] {.48f, .49f, .51f};
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
+                        float[] rgb = color(block, f);
                         for (int index : TRIANGLE_INDICES) {
                             int[] p = FACES[f][index];
                             out.add(cx * Chunk.SIZE + x + p[0]);
@@ -52,6 +52,12 @@ public final class VisibleFaceMesher implements ChunkMesher {
                     }
                 }
         return new MeshData(out.toArray());
+    }
+
+    private static float[] color(byte block, int face) {
+        if (block == BlockId.GRASS) return face == 2 ? GRASS_TOP : GRASS_SIDE;
+        if (block == BlockId.DIRT) return DIRT;
+        return STONE;
     }
 
     private static final class Floats {
