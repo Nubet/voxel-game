@@ -1,8 +1,10 @@
 package com.norbertfila.world;
 
 import com.norbertfila.meshing.BlockNeighborhood;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -41,6 +43,14 @@ public final class World {
 
     public boolean isChunkRequested(ChunkPos position) {
         return requestedChunks.contains(position);
+    }
+
+    public List<ChunkPos> residentPositions() {
+        return chunks.keySet().stream()
+                .sorted(Comparator.comparingInt(ChunkPos::y)
+                        .thenComparingInt(ChunkPos::z)
+                        .thenComparingInt(ChunkPos::x))
+                .toList();
     }
 
     public BlockNeighborhood blockNeighborhood(ChunkPos position) {

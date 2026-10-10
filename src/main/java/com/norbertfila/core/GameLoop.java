@@ -6,14 +6,14 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.TerrainRenderer;
-import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.streaming.ChunkManager;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
     private static final long MINIMIZED_SLEEP_MILLIS = 16;
 
     public void run(
-            Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics, ViewDemand viewDemand) {
+            Window window, Camera camera, TerrainRenderer renderer, FrameMetrics metrics, ChunkManager chunkManager) {
         double previous = window.time();
         Input input = new Input(window.handle());
         int[] framebufferWidth = new int[1];
@@ -37,9 +37,10 @@ public final class GameLoop {
             }
 
             camera.update(input, deltaSeconds);
-            if (viewDemand.update(camera.chunkPosition())) {
-                System.out.println("View demand center=" + viewDemand.center() + " sections="
-                        + viewDemand.requested().size());
+            ChunkManager.UpdateResult update = chunkManager.update(camera.chunkPosition());
+            if (update.changed()) {
+                System.out.println("View demand center=" + update.center() + " sections=" + update.requested()
+                        + " generated=" + update.generated());
             }
             glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
             glClearColor(.55f, .76f, .96f, 1f);
