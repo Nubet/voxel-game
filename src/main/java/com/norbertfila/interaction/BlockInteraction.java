@@ -1,8 +1,6 @@
 package com.norbertfila.interaction;
 
 import com.norbertfila.player.PlayerController;
-import com.norbertfila.player.PlayerPhysics;
-import com.norbertfila.player.PlayerState;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
@@ -47,9 +45,9 @@ public final class BlockInteraction {
             double directionZ,
             byte blockId,
             PlayerController.Mode mode,
-            PlayerState.Position playerPosition) {
+            Aabb playerBody) {
         Objects.requireNonNull(mode);
-        Objects.requireNonNull(playerPosition);
+        Objects.requireNonNull(playerBody);
         if (!BlockId.isValid(blockId))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
         if (blockId == BlockId.AIR || mode == PlayerController.Mode.SPECTATOR) return Optional.empty();
@@ -65,13 +63,9 @@ public final class BlockInteraction {
                 hit.block().z() + normal.z());
         if (!world.hasChunk(Coordinates.worldToChunk(position))
                 || world.getBlock(position).orElseThrow() != BlockId.AIR) return Optional.empty();
-        if (overlapsPlayer(position, playerPosition)) return Optional.empty();
+        if (playerBody.intersects(new Aabb(
+                position.x(), position.y(), position.z(), position.x() + 1.0, position.y() + 1.0, position.z() + 1.0)))
+            return Optional.empty();
         return Optional.of(edit.setBlock(position, blockId));
-    }
-
-    private static boolean overlapsPlayer(BlockPos block, PlayerState.Position player) {
-        return PlayerPhysics.body(player)
-                .intersects(
-                        new Aabb(block.x(), block.y(), block.z(), block.x() + 1.0, block.y() + 1.0, block.z() + 1.0));
     }
 }

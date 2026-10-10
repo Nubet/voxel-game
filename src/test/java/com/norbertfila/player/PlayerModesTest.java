@@ -30,14 +30,14 @@ class PlayerModesTest {
         }
         assertEquals(4.317 * 1.3, sprint.state().velocityX(), 1e-8);
         assertEquals(-4.317, backward.state().velocityX(), 1e-8);
-        assertEquals(4.317, sneaking.state().velocityX(), 1e-8);
+        assertEquals(4.317 * .3, sneaking.state().velocityX(), 1e-8);
     }
 
     @Test
     void sprintJumpAddsFacingImpulseOnceAndNotInAirOrDuringCooldown() {
         World world = PlayerDynamicsTest.flatWorld();
         PlayerPhysics physics = new PlayerPhysics();
-        PlayerState start = new PlayerState(new PlayerState.Position(.5, 1, .5), 5.6121, 0, 0, true, 0);
+        PlayerState start = new PlayerState(new PlayerState.Position(.5, 1, .5), 5.6121, 0, 0, true, 0, false);
         PlayerState jumping = physics.step(world, start, 1, 0, true, true, 90, DT);
         PlayerState walking = physics.step(world, start, 1, 0, false, true, 90, DT);
         assertEquals(walking.velocityX(), jumping.velocityX(), 1e-12);
@@ -46,7 +46,7 @@ class PlayerModesTest {
         assertEquals(
                 physics.step(world, jumping, 1, 0, false, true, 90, DT),
                 physics.step(world, jumping, 1, 0, true, true, 90, DT));
-        PlayerState cooling = new PlayerState(start.position(), start.velocityX(), 0, 0, true, .3);
+        PlayerState cooling = new PlayerState(start.position(), start.velocityX(), 0, 0, true, .3, false);
         assertEquals(
                 physics.step(world, cooling, 1, 0, false, true, 90, DT),
                 physics.step(world, cooling, 1, 0, true, true, 90, DT));

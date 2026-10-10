@@ -38,20 +38,25 @@ class PlayerDynamicsTest {
                 physics.step(world, PlayerState.at(new PlayerState.Position(.5, 8, .5)), 1, 0, false, 1.0 / 60);
         assertTrue(airborne.velocityX() < straight.velocityX() * .2);
         PlayerState drifting = physics.step(
-                world, new PlayerState(new PlayerState.Position(.5, 8, .5), 4, 0, 0, false, 0), 0, 0, false, 1.0 / 60);
+                world,
+                new PlayerState(new PlayerState.Position(.5, 8, .5), 4, 0, 0, false, 0, false),
+                0,
+                0,
+                false,
+                1.0 / 60);
         assertTrue(drifting.velocityX() > 3.8);
     }
 
     @Test
     void referenceDragIsPerFiftyMillisecondsAndComposesAcrossTickRates() {
         World world = flatWorld();
-        PlayerState ground = new PlayerState(standing().position(), 4, 0, 0, true, 0);
+        PlayerState ground = new PlayerState(standing().position(), 4, 0, 0, true, 0, false);
         PlayerState coarse = physics.step(world, ground, 0, 0, false, .05);
         PlayerState fine = ground;
         for (int tick = 0; tick < 3; tick++) fine = physics.step(world, fine, 0, 0, false, 1.0 / 60);
         assertEquals(4 * .546, coarse.velocityX(), 1e-12);
         assertEquals(coarse.velocityX(), fine.velocityX(), 1e-12);
-        PlayerState air = new PlayerState(new PlayerState.Position(.5, 8, .5), 4, -10, 0, false, 0);
+        PlayerState air = new PlayerState(new PlayerState.Position(.5, 8, .5), 4, -10, 0, false, 0, false);
         coarse = physics.step(world, air, 0, 0, false, .05);
         fine = air;
         for (int tick = 0; tick < 3; tick++) fine = physics.step(world, fine, 0, 0, false, 1.0 / 60);
@@ -113,7 +118,7 @@ class PlayerDynamicsTest {
     @Test
     void previewIsPureAndLoadsTheActualMomentumAndJumpSweep() {
         World world = new World();
-        PlayerState start = new PlayerState(new PlayerState.Position(15.5, 15, -.5), 90, 0, -90, true, .01);
+        PlayerState start = new PlayerState(new PlayerState.Position(15.5, 15, -.5), 90, 0, -90, true, .01, false);
         var required = physics.requiredChunks(start, 0, 0, true, 1.0 / 60);
         assertEquals(required, physics.requiredChunks(start, 0, 0, true, 1.0 / 60));
         assertSame(start, physics.step(world, start, 0, 0, true, 1.0 / 60));
@@ -136,10 +141,11 @@ class PlayerDynamicsTest {
                 () -> physics.requiredChunks(standing(), Double.MAX_VALUE, Double.MAX_VALUE, false, 1.0 / 60));
         assertThrows(IllegalArgumentException.class, () -> physics.step(world, standing(), 0, 0, false, 0));
         assertThrows(
-                IllegalArgumentException.class, () -> new PlayerState(standing().position(), 0, 0, 0, true, -.1));
+                IllegalArgumentException.class,
+                () -> new PlayerState(standing().position(), 0, 0, 0, true, -.1, false));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PlayerState(standing().position(), 0, 0, 0, true, Double.NaN));
+                () -> new PlayerState(standing().position(), 0, 0, 0, true, Double.NaN, false));
     }
 
     private double[] jumpMeasurement(int tps) {
@@ -178,7 +184,7 @@ class PlayerDynamicsTest {
     }
 
     private static PlayerState standing() {
-        return new PlayerState(new PlayerState.Position(.5, 1, .5), 0, 0, 0, true, 0);
+        return new PlayerState(new PlayerState.Position(.5, 1, .5), 0, 0, 0, true, 0, false);
     }
 
     static World flatWorld() {

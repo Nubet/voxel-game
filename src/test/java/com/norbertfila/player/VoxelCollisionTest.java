@@ -91,7 +91,7 @@ class VoxelCollisionTest {
 
     @Test
     void missingChunksAreNotAirAndWholeStateFreezesUntilDataArrives() {
-        PlayerState start = new PlayerState(new PlayerState.Position(15.5, 15, .5), 60, -30, 0, false, .3);
+        PlayerState start = new PlayerState(new PlayerState.Position(15.5, 15, .5), 60, -30, 0, false, .3, false);
         PlayerPhysics physics = new PlayerPhysics();
         World world = new World();
         world.putChunk(new ChunkPos(0, 0, 0), new Chunk());

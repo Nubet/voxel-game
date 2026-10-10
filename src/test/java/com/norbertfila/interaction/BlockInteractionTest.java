@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -20,7 +21,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class BlockInteractionTest {
-    private static final PlayerState.Position DISTANT_PLAYER = new PlayerState.Position(0, 10, 0);
+    private static final Aabb DISTANT_BODY =
+            PlayerState.at(new PlayerState.Position(0, 10, 0)).body();
 
     @ParameterizedTest
     @CsvSource({"11,8,8,1,0,0", "5,8,8,-1,0,0", "8,11,8,0,1,0", "8,5,8,0,-1,0", "8,8,11,0,0,1", "8,8,5,0,0,-1"})
@@ -32,7 +34,7 @@ class BlockInteractionTest {
         long revision = world.getChunk(new ChunkPos(0, 0, 0)).revision();
 
         BlockChangeResult placement = interaction
-                .place(8.5, 8.5, 8.5, dx, dy, dz, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
+                .place(8.5, 8.5, 8.5, dx, dy, dz, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
                 .orElseThrow();
 
         assertTrue(placement.changed());
@@ -64,16 +66,7 @@ class BlockInteractionTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
 
         BlockChangeResult result = interaction
-                .place(
-                        originX,
-                        1.5,
-                        1.5,
-                        directionX,
-                        0,
-                        0,
-                        BlockId.GRASS,
-                        PlayerController.Mode.SURVIVAL,
-                        DISTANT_PLAYER)
+                .place(originX, 1.5, 1.5, directionX, 0, 0, BlockId.GRASS, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
                 .orElseThrow();
 
         assertTrue(result.changed());
@@ -111,7 +104,7 @@ class BlockInteractionTest {
                 0,
                 BlockId.STONE,
                 PlayerController.Mode.SURVIVAL,
-                new PlayerState.Position(x, y, z));
+                PlayerState.at(new PlayerState.Position(x, y, z)).body());
 
         assertEquals(allowed, result.isPresent());
         assertEquals(
@@ -138,7 +131,7 @@ class BlockInteractionTest {
                         0,
                         BlockId.STONE,
                         PlayerController.Mode.SPECTATOR,
-                        new PlayerState.Position(.5, 1, 1.5))
+                        PlayerState.at(new PlayerState.Position(.5, 1, 1.5)).body())
                 .isEmpty());
         assertTrue(interaction
                 .remove(PlayerController.Mode.SPECTATOR, .5, 1.5, 1.5, 1, 0, 0)
@@ -155,7 +148,7 @@ class BlockInteractionTest {
         long revision = world.getChunk(new ChunkPos(0, 0, 0)).revision();
 
         assertTrue(interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.CREATIVE, DISTANT_PLAYER)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.CREATIVE, DISTANT_BODY)
                 .isEmpty());
         assertEquals(BlockId.STONE, world.getBlock(block).orElseThrow());
         assertEquals(revision, world.getChunk(new ChunkPos(0, 0, 0)).revision());
@@ -174,12 +167,12 @@ class BlockInteractionTest {
         long revision = world.getChunk(new ChunkPos(0, 0, 0)).revision();
 
         assertTrue(interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.AIR, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.AIR, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
                 .isEmpty());
         assertThrows(
                 IllegalArgumentException.class,
                 () -> interaction.place(
-                        .5, 1.5, 1.5, 1, 0, 0, (byte) 255, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER));
+                        .5, 1.5, 1.5, 1, 0, 0, (byte) 255, PlayerController.Mode.SURVIVAL, DISTANT_BODY));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> interaction.place(
@@ -191,7 +184,8 @@ class BlockInteractionTest {
                         0,
                         BlockId.DIRT,
                         PlayerController.Mode.SURVIVAL,
-                        new PlayerState.Position(Double.NaN, 0, 0)));
+                        PlayerState.at(new PlayerState.Position(Double.NaN, 0, 0))
+                                .body()));
         assertEquals(revision, world.getChunk(new ChunkPos(0, 0, 0)).revision());
         assertEquals(0, world.changes().size());
         assertTrue(world.changes().drainDirtyTiles().isEmpty());
@@ -207,7 +201,7 @@ class BlockInteractionTest {
         assertEquals(
                 reachable,
                 interaction
-                        .place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
+                        .place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
                         .isPresent());
         if (reachable) interaction.remove(PlayerController.Mode.SURVIVAL, originX, 1.5, 1.5, 1, 0, 0);
         assertEquals(
@@ -233,7 +227,7 @@ class BlockInteractionTest {
                 .remove(PlayerController.Mode.SURVIVAL, 15.5, 1.5, 1.5, 1, 0, 0)
                 .isEmpty());
         assertTrue(interaction
-                .place(15.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_PLAYER)
+                .place(15.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
                 .isEmpty());
         assertTrue(interaction
                 .remove(PlayerController.Mode.SURVIVAL, 16.5, 1.5, 1.5, 1, 0, 0)
@@ -260,13 +254,44 @@ class BlockInteractionTest {
                         0,
                         BlockId.DIRT,
                         PlayerController.Mode.CREATIVE,
-                        new PlayerState.Position(.5, 1, 1.5))
+                        PlayerState.at(new PlayerState.Position(.5, 1, 1.5)).body())
                 .isEmpty());
         assertEquals(0, world.changes().size());
         assertTrue(interaction
                 .remove(PlayerController.Mode.CREATIVE, .5, 1.5, 1.5, 1, 0, 0)
                 .orElseThrow()
                 .changed());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "SURVIVAL,0.4,true",
+        "SURVIVAL,0.5,true",
+        "SURVIVAL,0.500001,false",
+        "CREATIVE,0.4,true",
+        "CREATIVE,0.5,true",
+        "CREATIVE,0.500001,false"
+    })
+    void placementUsesTheCurrentPoseAndAllowsHeadFaceContact(
+            PlayerController.Mode mode, double feetY, boolean allowed) {
+        World world = worldWithBlock(new BlockPos(1, 2, 1));
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        PlayerState standing = PlayerState.at(new PlayerState.Position(.5, feetY, 1.5));
+        assertTrue(interaction
+                .place(.5, 2.5, 1.5, 1, 0, 0, BlockId.DIRT, mode, standing.body())
+                .isEmpty());
+        assertEquals(0, world.changes().size());
+        PlayerState crouched = standing.withCrouching(true);
+        assertEquals(
+                allowed,
+                interaction
+                        .place(.5, 2.5, 1.5, 1, 0, 0, BlockId.DIRT, mode, crouched.body())
+                        .isPresent());
+        assertEquals(
+                allowed ? BlockId.DIRT : BlockId.AIR,
+                world.getBlock(new BlockPos(0, 2, 1)).orElseThrow());
+        assertEquals(allowed ? 1 : 0, world.changes().size());
+        assertEquals(allowed ? 2 : 1, world.getChunk(new ChunkPos(0, 0, 0)).revision());
     }
 
     private static World worldWithBlock(BlockPos position) {

@@ -97,6 +97,7 @@ public final class GameLoop {
                                 input.peekPlayerTick(), fixedDelta, camera.yaw(), camera.pitch()))) {
                             PlayerController.Mode before = player.mode();
                             boolean wasFlying = player.flying();
+                            boolean wasCrouching = player.state().crouching();
                             player.tick(
                                     chunkManager.world(),
                                     input.nextPlayerTick(),
@@ -108,6 +109,10 @@ public final class GameLoop {
                             if (player.flying() != wasFlying)
                                 DiagnosticsLog.logger(GameLoop.class)
                                         .info("Creative flight changed to " + player.flying());
+                            if (player.state().crouching() != wasCrouching)
+                                DiagnosticsLog.logger(GameLoop.class)
+                                        .info("Player crouching changed to "
+                                                + player.state().crouching());
                         } else player.pauseInterpolation();
                     });
                 }
@@ -195,7 +200,7 @@ public final class GameLoop {
                 direction.z(),
                 hotbar.selectedBlock(),
                 player.mode(),
-                player.renderPosition(1));
+                player.state().body());
     }
 
     private static ChunkPos playerChunk(PlayerController player) {

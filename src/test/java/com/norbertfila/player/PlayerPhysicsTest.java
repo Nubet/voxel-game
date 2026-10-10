@@ -29,7 +29,7 @@ class PlayerPhysicsTest {
 
         PlayerState step = physics.step(
                 world,
-                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 0, false, 0),
+                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 0, false, 0, false),
                 0,
                 0,
                 false,
@@ -58,7 +58,7 @@ class PlayerPhysicsTest {
 
         PlayerState step = physics.step(
                 world,
-                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 120, false, 0),
+                new PlayerState(new PlayerState.Position(1.5, 1, .5), 120, 0, 120, false, 0, false),
                 0,
                 0,
                 false,
@@ -75,7 +75,7 @@ class PlayerPhysicsTest {
 
         PlayerState step = physics.step(
                 world,
-                new PlayerState(new PlayerState.Position(15.5, 1, .5), 120, 0, 0, false, 0),
+                new PlayerState(new PlayerState.Position(15.5, 1, .5), 120, 0, 0, false, 0, false),
                 0,
                 0,
                 false,

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -108,6 +109,32 @@ class GameLoopTest {
         assertEquals(1, world.getChunk(new ChunkPos(0, 0, 0)).revision());
         assertEquals(0, world.changes().size());
         assertTrue(world.changes().drainDirtyTiles().isEmpty());
+    }
+
+    @Test
+    void placementAboveCrouchedHeadUsesCurrentBodyAndPreventsStandingIntoThePlacedBlock() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        chunk.set(8, 10, 6, BlockId.STONE);
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        PlayerController player = new PlayerController();
+        player.setPosition(new PlayerState.Position(8.5, 8.4, 7.5));
+        Camera camera = new Camera();
+        camera.setPosition(8.5f, 10.5f, 9.5f);
+        camera.updateLook(0, -25 / .11f);
+        Hotbar hotbar = new Hotbar();
+        BlockInteraction interaction = new BlockInteraction(world, 64);
+        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+                .isEmpty());
+        player.tick(world, new PlayerInput(false, false, false, false, false, true, false), 1.0 / 60, 0, 0);
+        assertTrue(player.state().crouching());
+        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+                .orElseThrow()
+                .changed());
+        assertEquals(BlockId.GRASS, world.getBlock(new BlockPos(8, 10, 7)).orElseThrow());
+        player.tick(world, PlayerInput.NONE, 1.0 / 60, 0, 0);
+        assertTrue(player.state().crouching());
+        assertTrue(player.state().body().maxY() <= 10);
     }
 
     private static World editableWorld() {

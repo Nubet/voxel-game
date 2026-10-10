@@ -3,6 +3,7 @@ package com.norbertfila.player;
 import com.norbertfila.player.PlayerState.Position;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -15,6 +16,7 @@ public final class PlayerController {
     private boolean flying;
     private double lastJumpPressSeconds = Double.NaN;
     private Position previous = new Position(0, 22, 34);
+    private double previousEyeHeight = PlayerState.EYE_HEIGHT;
     private PlayerState current = PlayerState.at(previous);
     private final PlayerPhysics physics = new PlayerPhysics();
     private final VoxelCollision collision = new VoxelCollision();
@@ -23,11 +25,11 @@ public final class PlayerController {
         Mode next = Objects.requireNonNull(mode);
         if (this.mode == Mode.SPECTATOR
                 && next != Mode.SPECTATOR
-                && !collision.spaceFree(Objects.requireNonNull(world), PlayerPhysics.body(current.position())))
-            return false;
+                && !collision.spaceFree(Objects.requireNonNull(world), current.body())) return false;
         if (this.mode != next) {
-            current = PlayerState.at(current.position());
+            current = current.resetMotion().withCrouching(next != Mode.SPECTATOR && current.crouching());
             previous = current.position();
+            previousEyeHeight = current.eyeHeight();
             flying = false;
             clearInputGestures();
         }
@@ -62,8 +64,9 @@ public final class PlayerController {
     }
 
     public void setPosition(Position position) {
-        current = PlayerState.at(position);
+        current = PlayerState.at(position).withCrouching(current.crouching());
         previous = current.position();
+        previousEyeHeight = current.eyeHeight();
         flying = false;
         requestedMode = null;
         clearInputGestures();
@@ -81,7 +84,7 @@ public final class PlayerController {
         Movement move = movement(input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
         if (requestedMode != null) {
             if (requestedMode != Mode.SPECTATOR
-                    && !collision.available(Objects.requireNonNull(world), PlayerPhysics.body(current.position()))) {
+                    && !collision.available(Objects.requireNonNull(world), current.body())) {
                 pauseInterpolation();
                 return;
             }
@@ -91,7 +94,15 @@ public final class PlayerController {
             return;
         }
         if (mode != Mode.SPECTATOR) Objects.requireNonNull(world, "Colliding modes require a world");
-        PlayerState start = move.toggled ? PlayerState.at(current.position()) : current;
+        PlayerState start = movementStart(input, move);
+        if (mode != Mode.SPECTATOR && start.crouching() && !wantsCrouch(input, move)) {
+            PlayerState standing = start.withCrouching(false);
+            if (!collision.available(world, standing.body())) {
+                pauseInterpolation();
+                return;
+            }
+            if (collision.spaceFree(world, standing.body())) start = standing;
+        }
         PlayerState result;
         if (mode == Mode.SPECTATOR) {
             Position feet = current.position();
@@ -101,7 +112,8 @@ public final class PlayerController {
                     move.y / fixedDeltaSeconds,
                     move.z / fixedDeltaSeconds,
                     false,
-                    0);
+                    0,
+                    false);
         } else if (move.flying) {
             result = physics.fly(world, start, move.x, move.y, move.z, input.sprintHeld(), fixedDeltaSeconds);
         } else {
@@ -120,6 +132,7 @@ public final class PlayerController {
             return;
         }
         previous = current.position();
+        previousEyeHeight = current.eyeHeight();
         current = result;
         flying = move.flying && !result.grounded();
         if (move.flying && !flying) clearInputGestures();
@@ -133,10 +146,19 @@ public final class PlayerController {
         if (requestedMode != null)
             return requestedMode == Mode.SPECTATOR
                     ? List.of()
-                    : VoxelCollision.requiredChunks(
-                            VoxelCollision.requiredRegion(PlayerPhysics.body(current.position()), 0, 0, 0));
+                    : VoxelCollision.requiredChunks(VoxelCollision.requiredRegion(current.body(), 0, 0, 0));
         if (mode == Mode.SPECTATOR) return List.of();
-        PlayerState start = move.toggled ? PlayerState.at(current.position()) : current;
+        PlayerState start = movementStart(input, move);
+        List<ChunkPos> required = requiredMovementChunks(start, input, move, fixedDeltaSeconds, yawDegrees);
+        if (!start.crouching() || wantsCrouch(input, move)) return required;
+        // Expansion and either movement path must be known before choosing the actual pose.
+        var combined = new LinkedHashSet<>(required);
+        combined.addAll(requiredMovementChunks(start.withCrouching(false), input, move, fixedDeltaSeconds, yawDegrees));
+        return List.copyOf(combined);
+    }
+
+    private List<ChunkPos> requiredMovementChunks(
+            PlayerState start, PlayerInput input, Movement move, double fixedDeltaSeconds, double yawDegrees) {
         return move.flying
                 ? physics.requiredFlightChunks(start, move.x, move.y, move.z, input.sprintHeld(), fixedDeltaSeconds)
                 : physics.requiredChunks(
@@ -151,6 +173,16 @@ public final class PlayerController {
 
     public void pauseInterpolation() {
         previous = current.position();
+        previousEyeHeight = current.eyeHeight();
+    }
+
+    private PlayerState movementStart(PlayerInput input, Movement move) {
+        PlayerState start = move.toggled ? current.resetMotion() : current;
+        return wantsCrouch(input, move) ? start.withCrouching(true) : start;
+    }
+
+    private boolean wantsCrouch(PlayerInput input, Movement move) {
+        return mode != Mode.SPECTATOR && !move.flying && input.sneakHeld();
     }
 
     private Movement movement(PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
@@ -221,7 +253,8 @@ public final class PlayerController {
 
     public Position renderEyePosition(double alpha) {
         Position feet = renderPosition(alpha);
-        return new Position(feet.x(), feet.y() + PlayerState.EYE_HEIGHT, feet.z());
+        double eyeHeight = previousEyeHeight + (current.eyeHeight() - previousEyeHeight) * alpha;
+        return new Position(feet.x(), feet.y() + eyeHeight, feet.z());
     }
 
     public enum Mode {

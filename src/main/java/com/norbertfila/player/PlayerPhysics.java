@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Objects;
 
 public final class PlayerPhysics {
-    public static final double HALF_WIDTH = 0.3;
-    public static final double HEIGHT = 1.8;
     public static final double WALK_SPEED = 4.317;
     public static final double GRAVITY = -32.0;
     // Calibrated for a ~1.25-block apex with the production 1/60s semi-implicit step.
@@ -22,6 +20,7 @@ public final class PlayerPhysics {
     private static final double AIR_DRAG = -Math.log(.91) / .05;
     private static final double VERTICAL_DRAG = -Math.log(.98) / .05;
     private static final double AIR_ACCELERATION = 8.0;
+    private static final double CROUCH_MULTIPLIER = .3;
     private final VoxelCollision collision = new VoxelCollision();
 
     public PlayerState step(
@@ -56,8 +55,7 @@ public final class PlayerPhysics {
     private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds) {
         Objects.requireNonNull(world);
         double moveX = motion.x * deltaSeconds, moveZ = motion.z * deltaSeconds;
-        VoxelCollision.Result moved =
-                collision.move(world, body(start.position()), moveX, motion.y * deltaSeconds, moveZ);
+        VoxelCollision.Result moved = collision.move(world, start.body(), moveX, motion.y * deltaSeconds, moveZ);
         if (!moved.available()) return start;
         Aabb box = moved.body();
         double x = moved.blockedX()
@@ -66,21 +64,22 @@ public final class PlayerPhysics {
         double z = moved.blockedZ()
                 ? contactCenter(box.minZ(), box.maxZ(), moveZ)
                 : start.position().z() + moved.z();
-        double y = moved.blockedY() && motion.y > 0 ? belowFace(box.maxY(), HEIGHT) : box.minY();
+        double y = moved.blockedY() && motion.y > 0 ? belowFace(box.maxY(), start.height()) : box.minY();
         return new PlayerState(
                 new PlayerState.Position(x, y, z),
                 moved.blockedX() ? 0 : motion.x,
                 moved.blockedY() ? 0 : motion.y,
                 moved.blockedZ() ? 0 : motion.z,
                 moved.grounded(),
-                motion.jumpCooldownSeconds);
+                motion.jumpCooldownSeconds,
+                start.crouching());
     }
 
     private static double contactCenter(double min, double max, double requested) {
         // Round outward if reconstructing the hitbox would cross the contacted face by one ULP.
-        if (requested > 0) return belowFace(max, HALF_WIDTH);
-        double center = min + HALF_WIDTH;
-        return center - HALF_WIDTH < min ? Math.nextUp(center) : center;
+        if (requested > 0) return belowFace(max, PlayerState.HALF_WIDTH);
+        double center = min + PlayerState.HALF_WIDTH;
+        return center - PlayerState.HALF_WIDTH < min ? Math.nextUp(center) : center;
     }
 
     private static double belowFace(double face, double offset) {
@@ -112,7 +111,7 @@ public final class PlayerPhysics {
 
     private static List<ChunkPos> requiredChunks(PlayerState start, Motion motion, double deltaSeconds) {
         return VoxelCollision.requiredChunks(VoxelCollision.requiredRegion(
-                body(start.position()), motion.x * deltaSeconds, motion.y * deltaSeconds, motion.z * deltaSeconds));
+                start.body(), motion.x * deltaSeconds, motion.y * deltaSeconds, motion.z * deltaSeconds));
     }
 
     private static Motion motion(
@@ -138,13 +137,13 @@ public final class PlayerPhysics {
             inputZ /= length;
         }
         double drag = start.grounded() ? GROUND_DRAG : AIR_DRAG;
-        double acceleration =
-                (start.grounded() ? WALK_SPEED * drag : AIR_ACCELERATION) * (sprint ? SPRINT_MULTIPLIER : 1);
+        double acceleration = (start.grounded() ? WALK_SPEED * drag : AIR_ACCELERATION)
+                * (start.crouching() ? CROUCH_MULTIPLIER : sprint ? SPRINT_MULTIPLIER : 1);
         double decay = Math.exp(-drag * deltaSeconds);
         double response = -Math.expm1(-drag * deltaSeconds) / drag;
         double cooldown = Math.max(0, start.jumpCooldownSeconds() - deltaSeconds);
         boolean jumping = jump && start.grounded() && cooldown <= 1e-9;
-        double impulse = jumping && sprint ? SPRINT_JUMP_IMPULSE : 0;
+        double impulse = jumping && sprint && !start.crouching() ? SPRINT_JUMP_IMPULSE : 0;
         double yaw = Math.toRadians(yawDegrees);
         double x = (start.velocityX() + Math.cos(yaw) * impulse) * decay + inputX * acceleration * response;
         double z = (start.velocityZ() + Math.sin(yaw) * impulse) * decay + inputZ * acceleration * response;
@@ -180,12 +179,6 @@ public final class PlayerPhysics {
     private record Motion(double x, double y, double z, double jumpCooldownSeconds) {}
 
     public static Aabb body(PlayerState.Position feet) {
-        return new Aabb(
-                feet.x() - HALF_WIDTH,
-                feet.y(),
-                feet.z() - HALF_WIDTH,
-                feet.x() + HALF_WIDTH,
-                feet.y() + HEIGHT,
-                feet.z() + HALF_WIDTH);
+        return PlayerState.at(feet).body();
     }
 }
