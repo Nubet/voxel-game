@@ -4,7 +4,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 
-public final class HillsGenerator implements WorldGenerator {
+public final class HillsGenerator implements TerrainSource {
     private static final int GENERATOR_VERSION = 1;
     private final long seed;
 
@@ -29,20 +29,27 @@ public final class HillsGenerator implements WorldGenerator {
     @Override
     public ChunkData generate(ChunkPos position) {
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
-        int seedOffset = seed == 0 ? 0 : (int) Math.floorMod(mix(seed, position.x(), position.z()), 3) - 1;
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
                 int wx = position.x() * Chunk.SIZE + x, wz = position.z() * Chunk.SIZE + z;
-                int surface = 9 + seedOffset + (int) (5 * Math.sin(wx * 0.065) * Math.cos(wz * 0.071));
+                TerrainSummary summary = sample(wx, wz);
                 for (int y = 0; y < Chunk.SIZE; y++) {
                     int wy = position.y() * Chunk.SIZE + y;
-                    byte id = wy > surface
-                            ? BlockId.AIR
-                            : wy == surface ? BlockId.GRASS : wy >= surface - 3 ? BlockId.DIRT : BlockId.STONE;
-                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = id;
+                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = summary.materialAt(wy);
                 }
             }
         return new ChunkData(position, blocks);
+    }
+
+    @Override
+    public TerrainSummary sample(int worldX, int worldZ) {
+        int seedOffset = seed == 0
+                ? 0
+                : (int) Math.floorMod(
+                                mix(seed, Math.floorDiv(worldX, Chunk.SIZE), Math.floorDiv(worldZ, Chunk.SIZE)), 3)
+                        - 1;
+        int surface = 9 + seedOffset + (int) (5 * Math.sin(worldX * 0.065) * Math.cos(worldZ * 0.071));
+        return new TerrainSummary(surface, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
     }
 
     private static long mix(long seed, int x, int z) {
