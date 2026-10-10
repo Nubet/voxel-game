@@ -13,15 +13,13 @@ import com.norbertfila.world.*;
 
 public final class Game {
     private static final int TERRAIN_RADIUS = 4;
-    private static final int TERRAIN_MIN_CHUNK_Y = -1;
-    private static final int TERRAIN_MAX_CHUNK_Y = 1;
 
     public void run() {
         try (Window window = new Window(1280, 720, "Voxel Engine | M0")) {
             Camera camera = new Camera();
-            ViewDemand viewDemand =
-                    new ViewDemand(TERRAIN_RADIUS, TERRAIN_MIN_CHUNK_Y, TERRAIN_MAX_CHUNK_Y, ViewDemand.Shape.SQUARE);
-            HillsGenerator generator = new HillsGenerator();
+            TerrainConfig terrainConfig = TerrainConfig.defaults();
+            ViewDemand viewDemand = terrainDemand(terrainConfig);
+            TerrainSource generator = new TerrainGenerator(0, terrainConfig);
             PlayerController player = new PlayerController();
             player.setMode(PlayerController.Mode.SURVIVAL);
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
@@ -36,5 +34,11 @@ public final class Game {
                 new GameLoop().run(window, camera, renderer, uiRenderer, metrics, chunkManager, player, settingsPanel);
             }
         }
+    }
+
+    static ViewDemand terrainDemand(TerrainConfig config) {
+        int minChunkY = Math.floorDiv(config.minHeight() - Chunk.SIZE, Chunk.SIZE);
+        int maxChunkY = Math.floorDiv(config.maxHeight() + Chunk.SIZE, Chunk.SIZE);
+        return new ViewDemand(TERRAIN_RADIUS, minChunkY, maxChunkY, ViewDemand.Shape.SQUARE);
     }
 }

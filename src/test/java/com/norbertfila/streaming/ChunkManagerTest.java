@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.HillsGenerator;
+import com.norbertfila.generation.TerrainConfig;
+import com.norbertfila.generation.TerrainGenerator;
+import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.render.UploadQueue;
@@ -34,11 +37,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class ChunkManagerTest {
     @ParameterizedTest
-    @CsvSource({"0,0", "-1,-1"})
-    void reloadsPlacedAndRemovedBlocksBeforeMeshing(int chunkX, int chunkZ) {
+    @CsvSource({"0,0,false", "-1,-1,false", "0,0,true", "-1,-1,true"})
+    void reloadsPlacedAndRemovedBlocksBeforeMeshing(int chunkX, int chunkZ, boolean perlin) {
         World world = new World();
-        HillsGenerator generator = new HillsGenerator();
-        ChunkPos center = new ChunkPos(chunkX, 0, chunkZ);
+        TerrainSource generator = perlin ? new TerrainGenerator(0, TerrainConfig.defaults()) : new HillsGenerator();
         int removeX = chunkX * Chunk.SIZE + 3;
         int removeZ = chunkZ * Chunk.SIZE + 4;
         int placeX = chunkX * Chunk.SIZE + 5;
@@ -46,8 +48,10 @@ class ChunkManagerTest {
         BlockPos removed =
                 new BlockPos(removeX, generator.sample(removeX, removeZ).surfaceHeight(), removeZ);
         BlockPos placed = new BlockPos(placeX, generator.sample(placeX, placeZ).surfaceHeight() + 1, placeZ);
-        try (ChunkManager manager =
-                new ChunkManager(world, generator, new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+        ChunkPos center = Coordinates.worldToChunk(removed);
+        assertEquals(center, Coordinates.worldToChunk(placed));
+        try (ChunkManager manager = new ChunkManager(
+                world, generator, new ViewDemand(0, center.y(), center.y(), ViewDemand.Shape.SQUARE))) {
             manager.update(center);
             assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
             WorldEdit edits = new WorldEdit(world, 8);
@@ -58,7 +62,7 @@ class ChunkManagerTest {
             var deltas = world.changes().changes();
             world.changes().drainDirtyTiles();
 
-            manager.update(new ChunkPos(chunkX + 10, 0, chunkZ));
+            manager.update(new ChunkPos(chunkX + 10, center.y(), chunkZ));
             assertFalse(world.hasChunk(center));
             manager.update(center);
             var reloadedMesh = awaitMesh(manager).meshes().get(0);

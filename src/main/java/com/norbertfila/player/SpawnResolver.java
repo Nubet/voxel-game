@@ -11,7 +11,6 @@ public final class SpawnResolver {
     }
 
     public PlayerController.Position resolve(int worldX, int worldZ) {
-        return new PlayerController.Position(
-                worldX + 0.5, terrain.sample(worldX, worldZ).surfaceHeight() + 1.0, worldZ + 0.5);
+        return new PlayerController.Position(worldX + 0.5, terrain.surfaceHeight(worldX, worldZ) + 1.0, worldZ + 0.5);
     }
 }
