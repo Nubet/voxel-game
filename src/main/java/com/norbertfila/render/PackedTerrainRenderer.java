@@ -18,12 +18,19 @@ import org.lwjgl.system.MemoryStack;
 
 public final class PackedTerrainRenderer implements AutoCloseable {
     private final Map<ChunkPos, PackedGpuMesh> meshes = new HashMap<>();
+    private final BlockTextureArray blockTextures;
     private final int matrixUniform;
     private final int chunkOriginUniform;
+    private final int texturedUniform;
     private int program;
     private boolean closed;
 
     public PackedTerrainRenderer() {
+        this(null);
+    }
+
+    public PackedTerrainRenderer(BlockTextureArray blockTextures) {
+        this.blockTextures = blockTextures;
         int vertex = 0;
         int fragment = 0;
         int linkedProgram = 0;
@@ -42,9 +49,16 @@ public final class PackedTerrainRenderer implements AutoCloseable {
             if (uniform < 0) throw new IllegalStateException("Packed shader uniform not found: uVP");
             int originUniform = glGetUniformLocation(linkedProgram, "uChunkOrigin");
             if (originUniform < 0) throw new IllegalStateException("Packed shader uniform not found: uChunkOrigin");
+            int textured = glGetUniformLocation(linkedProgram, "uTextured");
+            if (textured < 0) throw new IllegalStateException("Packed shader uniform not found: uTextured");
+            int sampler = glGetUniformLocation(linkedProgram, "uBlockTextures");
+            if (sampler < 0) throw new IllegalStateException("Packed shader uniform not found: uBlockTextures");
             program = linkedProgram;
             matrixUniform = uniform;
             chunkOriginUniform = originUniform;
+            texturedUniform = textured;
+            glUseProgram(program);
+            glUniform1i(sampler, 0);
         } catch (RuntimeException | Error failure) {
             if (linkedProgram != 0) glDeleteProgram(linkedProgram);
             throw failure;
@@ -110,7 +124,9 @@ public final class PackedTerrainRenderer implements AutoCloseable {
     }
 
     public void render(Matrix4f viewProjection, Frustum frustum) {
+        if (blockTextures != null) blockTextures.bind(0);
         glUseProgram(program);
+        glUniform1i(texturedUniform, blockTextures == null ? 0 : 1);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer matrix = stack.mallocFloat(16);
             viewProjection.get(matrix);

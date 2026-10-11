@@ -3,6 +3,7 @@ package com.norbertfila.meshing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,27 @@ class PackedVertexMesherTest {
             assertEquals(vertices[offset + 1], decoded.y() + corner[1]);
             assertEquals(vertices[offset + 2], decoded.z() + corner[2]);
             assertEquals(BlockId.STONE, decoded.blockId());
+            assertEquals(BlockRegistry.STONE_TEXTURE, PackedVertex.decodeTextureLayer(packed[i]));
         }
+    }
+
+    @Test
+    void packedGrassUsesTheFaceSpecificRegistryLayers() {
+        Chunk chunk = new Chunk();
+        chunk.set(1, 2, 3, BlockId.GRASS);
+        ChunkSnapshot snapshot = chunk.snapshot();
+        int[] vertices = new PackedVertexMesher()
+                .mesh(snapshot, BlockNeighborhood.centerOnly(snapshot))
+                .vertices();
+        int[] expectedLayers = {
+            BlockRegistry.GRASS_SIDE_TEXTURE,
+            BlockRegistry.GRASS_SIDE_TEXTURE,
+            BlockRegistry.GRASS_TOP_TEXTURE,
+            BlockRegistry.DIRT_TEXTURE,
+            BlockRegistry.GRASS_SIDE_TEXTURE,
+            BlockRegistry.GRASS_SIDE_TEXTURE
+        };
+        for (int face = 0; face < expectedLayers.length; face++)
+            assertEquals(expectedLayers[face], PackedVertex.decodeTextureLayer(vertices[face * 6]));
     }
 }

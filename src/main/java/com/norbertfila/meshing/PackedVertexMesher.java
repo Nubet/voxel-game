@@ -24,8 +24,10 @@ public final class PackedVertexMesher {
                         } else if (solidNeighbor(neighborhood, face, x, y, z)) {
                             continue;
                         }
+                        int textureLayer =
+                                BlockRegistry.DEFAULT.definition(block).textureLayer(face);
                         for (int corner : VisibleFaceMesher.TRIANGLE_INDICES)
-                            out.add(PackedVertex.pack(x, y, z, face, block, corner));
+                            out.add(PackedVertex.pack(x, y, z, face, block, corner, textureLayer));
                     }
                 }
         int[] vertices = out.toArray();
