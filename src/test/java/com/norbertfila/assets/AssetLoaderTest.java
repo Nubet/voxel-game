@@ -61,9 +61,17 @@ class AssetLoaderTest {
     }
 
     @Test
-    void refiCutoutTexturesKeepTheirTransparentPixels() {
+    void shippedGrassSideIsOpaqueAndOtherCutoutsStayTransparent() {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
-        assertEquals(0, textures.layer(BlockRegistry.GRASS_SIDE_TEXTURE).rgbaAt(0, 4, 3));
+        TextureSet.Texture grassSide = textures.layer(BlockRegistry.GRASS_SIDE_TEXTURE);
+        TextureSet.Texture dirt = textures.layer(BlockRegistry.DIRT_TEXTURE);
+        assertEquals(255, grassSide.rgbaAt(0, 0, 3));
+        for (int channel = 0; channel < 3; channel++)
+            assertEquals(dirt.rgbaAt(0, 15, channel), grassSide.rgbaAt(0, 0, channel));
+        assertEquals(255, grassSide.rgbaAt(0, 15, 3));
+        assertTrue(grassSide.rgbaAt(0, 15, 1) > grassSide.rgbaAt(0, 15, 0));
+        for (int y = 0; y < grassSide.height(); y++)
+            for (int x = 0; x < grassSide.width(); x++) assertEquals(255, grassSide.rgbaAt(x, y, 3));
         assertEquals(0, textures.layer(BlockRegistry.LEAVES_TEXTURE).rgbaAt(4, 0, 3));
         assertEquals(0, textures.layer(BlockRegistry.GLASS_TEXTURE).rgbaAt(1, 1, 3));
         assertEquals(255, textures.layer(BlockRegistry.GLASS_TEXTURE).rgbaAt(0, 0, 3));

@@ -1,4 +1,4 @@
 Texture assets in this directory with the refi_ prefix were created by MysticTempest for REFI_Textures.
 Source: https://github.com/MysticTempest/REFI_Textures
 License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
-The copied PNG files are unchanged. See REFI_LICENSE.txt for the license text.
+The REFI grass-side texture is modified: its transparent grass overlay is composited over REFI dirt and vertically oriented for the engine's shared UV convention. This derivative is distributed under CC BY-SA 4.0. Other copied PNG files are unchanged. See REFI_LICENSE.txt for the license text.
