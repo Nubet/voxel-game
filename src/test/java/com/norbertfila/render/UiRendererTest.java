@@ -10,10 +10,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 class UiRendererTest {
     @ParameterizedTest
     @CsvSource({"1280,720", "640,360", "180,100"})
-    void hudHasCenteredCrosshairNineSlotsAndOneMovableSelection(int width, int height) {
-        float[] vertices = new float[36 * 96];
+    void hudHasCenteredCrosshairFifteenSlotsAndOneMovableSelection(int width, int height) {
+        float[] vertices = new float[36 * (Hotbar.SLOTS * 11 + 4)];
         Hotbar hotbar = new Hotbar();
-        hotbar.select(8);
+        hotbar.select(14);
         int count = UiRenderer.hudVertices(vertices, hotbar, width, height);
         assertTrue(count > 0 && count <= vertices.length);
         assertEquals(0, count % 36);
@@ -27,7 +27,7 @@ class UiRendererTest {
             if (r == .96f || r == .25f) slots++;
         }
         assertEquals(1, selected);
-        assertEquals(9, slots);
+        assertEquals(15, slots);
         for (int offset = 0; offset < count; offset += 6) {
             assertTrue(vertices[offset] >= 0 && vertices[offset] <= width);
             assertTrue(vertices[offset + 1] >= 0 && vertices[offset + 1] <= height);

@@ -5,11 +5,13 @@ import static org.lwjgl.glfw.GLFW.*;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerInputBuffer;
 import org.lwjgl.glfw.GLFWKeyCallback;
+import org.lwjgl.glfw.GLFWScrollCallback;
 
 public final class Input implements AutoCloseable {
     private final long window;
     private final PlayerInputBuffer playerInput = new PlayerInputBuffer();
     private GLFWKeyCallback keyCallback;
+    private GLFWScrollCallback scrollCallback;
     private boolean focused;
     private final double[] cursorX = new double[1];
     private final double[] cursorY = new double[1];
@@ -26,6 +28,7 @@ public final class Input implements AutoCloseable {
     private boolean previousRightMouse;
     private int hotbarKeys;
     private int previousHotbarKeys;
+    private double scrollDeltaY;
     private boolean previousToggleMode;
     private boolean previousSettings;
 
@@ -35,6 +38,8 @@ public final class Input implements AutoCloseable {
         keyCallback =
                 GLFWKeyCallback.create((handle, key, scanCode, action, mods) -> keyEvent(key, action, glfwGetTime()));
         glfwSetKeyCallback(window, keyCallback);
+        scrollCallback = GLFWScrollCallback.create((handle, xOffset, yOffset) -> scrollDeltaY += yOffset);
+        glfwSetScrollCallback(window, scrollCallback);
     }
 
     Input() {
@@ -43,6 +48,10 @@ public final class Input implements AutoCloseable {
 
     void keyEvent(int key, int action, double timeSeconds) {
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
+    }
+
+    void scrollEvent(double yOffset) {
+        scrollDeltaY += yOffset;
     }
 
     public PlayerInput nextPlayerTick() {
@@ -86,8 +95,11 @@ public final class Input implements AutoCloseable {
         toggleMode = isPressed(GLFW_KEY_F4);
         settings = isPressed(GLFW_KEY_F10);
         int slots = 0;
-        for (int slot = 0; slot < 9; slot++) {
-            if (isPressed(GLFW_KEY_1 + slot)) slots |= 1 << slot;
+        boolean extendedHotbar = isPressed(GLFW_KEY_RIGHT_SHIFT);
+        for (int key = GLFW_KEY_1; key <= GLFW_KEY_9; key++) {
+            if (!isPressed(key)) continue;
+            int slot = hotbarSlot(key, extendedHotbar);
+            if (slot >= 0) slots |= 1 << slot;
         }
         updateButtons(
                 glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
@@ -116,6 +128,19 @@ public final class Input implements AutoCloseable {
     public int hotbarSlotPressed() {
         int pressed = hotbarKeys & ~previousHotbarKeys;
         return pressed == 0 ? -1 : Integer.numberOfTrailingZeros(pressed);
+    }
+
+    public int hotbarScrollSteps() {
+        int steps = (int) scrollDeltaY;
+        scrollDeltaY -= steps;
+        return steps;
+    }
+
+    static int hotbarSlot(int key, boolean extended) {
+        if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return -1;
+        int slot = key - GLFW_KEY_1;
+        if (!extended) return slot;
+        return slot < 6 ? slot + 9 : -1;
     }
 
     public float mouseDeltaX() {
@@ -162,9 +187,15 @@ public final class Input implements AutoCloseable {
 
     @Override
     public void close() {
-        if (keyCallback == null) return;
-        glfwSetKeyCallback(window, null);
-        keyCallback.free();
-        keyCallback = null;
+        if (keyCallback != null) {
+            glfwSetKeyCallback(window, null);
+            keyCallback.free();
+            keyCallback = null;
+        }
+        if (scrollCallback != null) {
+            glfwSetScrollCallback(window, null);
+            scrollCallback.free();
+            scrollCallback = null;
+        }
     }
 }

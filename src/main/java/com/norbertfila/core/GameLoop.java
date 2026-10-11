@@ -53,6 +53,7 @@ public final class GameLoop {
                 double deltaSeconds = clampDelta(now - previous);
                 previous = now;
                 input.update();
+                int hotbarScrollSteps = input.hotbarScrollSteps();
                 DiagnosticsLog.context("frame=" + now + " mode=" + player.mode() + " settingsOpen="
                         + settingsPanel.open() + " renderDistance=" + settingsPanel.renderDistance());
                 if (input.focused() && input.settingsPressed()) {
@@ -79,6 +80,10 @@ public final class GameLoop {
                     input.clearPlayerInput();
                 }
                 boolean controlsBlocked = settingsPanel.open() || !input.focused();
+                boolean editingBlocked = controlsBlocked
+                        || input.settingsPressed()
+                        || input.toggleModePressed()
+                        || player.modeChangePending();
                 if (controlsBlocked) {
                     input.clearPlayerInput();
                     player.clearInputGestures();
@@ -123,13 +128,11 @@ public final class GameLoop {
                                 player,
                                 interaction,
                                 hotbar,
-                                controlsBlocked
-                                        || input.settingsPressed()
-                                        || input.toggleModePressed()
-                                        || player.modeChangePending(),
+                                editingBlocked,
                                 input.leftMousePressed(),
                                 input.rightMousePressed(),
-                                input.hotbarSlotPressed())
+                                input.hotbarSlotPressed(),
+                                hotbarScrollSteps)
                         .ifPresent(chunkManager::requestRemesh);
                 if (update.changed()) {
                     update.evicted().forEach(renderer::remove);
@@ -182,8 +185,23 @@ public final class GameLoop {
             boolean removePressed,
             boolean placePressed,
             int slotPressed) {
+        return updateBlockEditing(
+                camera, player, interaction, hotbar, blocked, removePressed, placePressed, slotPressed, 0);
+    }
+
+    static Optional<BlockChangeResult> updateBlockEditing(
+            Camera camera,
+            PlayerController player,
+            BlockInteraction interaction,
+            Hotbar hotbar,
+            boolean blocked,
+            boolean removePressed,
+            boolean placePressed,
+            int slotPressed,
+            int hotbarScrollSteps) {
         if (blocked || player.mode() == PlayerController.Mode.SPECTATOR) return Optional.empty();
         if (slotPressed >= 0) hotbar.select(slotPressed);
+        else hotbar.scroll(hotbarScrollSteps);
         if (!removePressed && (!placePressed || hotbar.selectedBlock() == BlockId.AIR)) return Optional.empty();
         var origin = camera.position();
         var direction = camera.direction();

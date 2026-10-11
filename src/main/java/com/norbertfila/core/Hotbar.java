@@ -3,7 +3,24 @@ package com.norbertfila.core;
 import com.norbertfila.world.BlockId;
 
 public final class Hotbar {
-    public static final int SLOTS = 9;
+    private static final byte[] BLOCKS = {
+        BlockId.GRASS,
+        BlockId.DIRT,
+        BlockId.STONE,
+        BlockId.SAND,
+        BlockId.GRAVEL,
+        BlockId.BEDROCK,
+        BlockId.SNOW,
+        BlockId.LOG,
+        BlockId.LEAVES,
+        BlockId.PLANKS,
+        BlockId.COBBLE,
+        BlockId.BRICKS,
+        BlockId.GLASS,
+        BlockId.SANDSTONE,
+        BlockId.STONE_BRICKS
+    };
+    public static final int SLOTS = BLOCKS.length;
     private int selectedSlot;
 
     public int selectedSlot() {
@@ -15,21 +32,20 @@ public final class Hotbar {
         selectedSlot = slot;
     }
 
+    public void scroll(int steps) {
+        selectedSlot = Math.floorMod(selectedSlot - Math.floorMod(steps, SLOTS), SLOTS);
+    }
+
     public byte selectedBlock() {
         return block(selectedSlot);
     }
 
     public byte block(int slot) {
         checkSlot(slot);
-        return switch (slot) {
-            case 0 -> BlockId.GRASS;
-            case 1 -> BlockId.DIRT;
-            case 2 -> BlockId.STONE;
-            default -> BlockId.AIR;
-        };
+        return BLOCKS[slot];
     }
 
     private static void checkSlot(int slot) {
-        if (slot < 0 || slot >= SLOTS) throw new IllegalArgumentException("Hotbar slot must be in [0, 8]");
+        if (slot < 0 || slot >= SLOTS) throw new IllegalArgumentException("Hotbar slot must be in [0, 14]");
     }
 }

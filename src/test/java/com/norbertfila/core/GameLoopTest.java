@@ -78,22 +78,42 @@ class GameLoopTest {
     }
 
     @Test
-    void emptySlotDoesNotPlaceButStillAllowsRemovalAndSimultaneousClicksRemoveOnly() {
+    void selectsAndPlacesGlassThenSimultaneousClicksRemoveWithoutReplacing() {
         World world = editableWorld();
         Hotbar hotbar = new Hotbar();
         BlockInteraction interaction = new BlockInteraction(world, 64);
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
 
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 8)
-                .isEmpty());
-        assertEquals(0, world.changes().size());
+        var placement = GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 12)
+                .orElseThrow();
+        assertTrue(placement.changed());
+        assertEquals(BlockId.GLASS, world.getBlock(new BlockPos(8, 9, 7)).orElseThrow());
+        assertEquals(12, hotbar.selectedSlot());
+
         var removal = GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, true, true, -1)
                 .orElseThrow();
 
         assertTrue(removal.changed());
-        assertEquals(BlockId.AIR, world.getBlock(new BlockPos(8, 9, 6)).orElseThrow());
+        assertEquals(BlockId.AIR, world.getBlock(new BlockPos(8, 9, 7)).orElseThrow());
+        assertEquals(BlockId.STONE, world.getBlock(new BlockPos(8, 9, 6)).orElseThrow());
         assertEquals(1, world.changes().size());
+    }
+
+    @Test
+    void scrollSelectsHotbarItemButBlockedInputDoesNotChangeSelection() {
+        World world = editableWorld();
+        Hotbar hotbar = new Hotbar();
+        BlockInteraction interaction = new BlockInteraction(world, 64);
+        Camera camera = editingCamera();
+        PlayerController player = new PlayerController();
+
+        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, false, -1, 1)
+                .isEmpty());
+        assertEquals(14, hotbar.selectedSlot());
+        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, true, false, false, -1, -1)
+                .isEmpty());
+        assertEquals(14, hotbar.selectedSlot());
     }
 
     @Test
