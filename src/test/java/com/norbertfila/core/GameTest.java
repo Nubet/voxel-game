@@ -32,7 +32,7 @@ class GameTest {
             int floorY = (int) spawn.y() - 1;
             assertEquals(generator.surfaceHeight(x, -1) + 1, spawn.y());
             assertEquals(
-                    BlockId.GRASS,
+                    generator.sample(x, -1).surfaceMaterial(),
                     generator
                             .generate(new ChunkPos(Math.floorDiv(x, Chunk.SIZE), Math.floorDiv(floorY, Chunk.SIZE), -1))
                             .get(Math.floorMod(x, Chunk.SIZE), Math.floorMod(floorY, Chunk.SIZE), Chunk.SIZE - 1));

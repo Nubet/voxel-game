@@ -6,7 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 4;
+    private static final int GENERATOR_VERSION = 6;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -53,29 +53,42 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public int surfaceHeight(int worldX, int worldZ) {
-        return (int) Math.floor(surfaceElevation(worldX, worldZ));
+        return (int) Math.floor(columnSample(worldX, worldZ).elevation());
     }
 
     double surfaceElevation(double worldX, double worldZ) {
+        return columnSample(worldX, worldZ).elevation();
+    }
+
+    private ColumnSample columnSample(double worldX, double worldZ) {
         double x = worldX;
         double z = worldZ;
         if (config.warp().amplitude() != 0) {
             x += layer(warpX, config.warp(), worldX, worldZ);
             z += layer(warpZ, config.warp(), worldX, worldZ);
         }
+        double continentalLayer = layer(continental, config.continental(), x, z);
         double height = config.baseHeight()
-                + layer(continental, config.continental(), x, z)
+                + continentalLayer
                 + layer(hills, config.hills(), x, z)
                 + layer(details, config.details(), x, z)
                 + mountainHeight(x, z);
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
-        return height;
+        double biome = config.continental().amplitude() == 0
+                ? 0
+                : continentalLayer / config.continental().amplitude();
+        return new ColumnSample(height, biome);
     }
 
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
-        return new TerrainSummary(surfaceHeight(worldX, worldZ), BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
+        ColumnSample column = columnSample(worldX, worldZ);
+        int height = (int) Math.floor(column.elevation());
+        double biome = column.biome();
+        byte surface = height >= config.baseHeight() + 70 ? BlockId.SNOW : biome < -.1 ? BlockId.SAND : BlockId.GRASS;
+        byte subsurface = surface == BlockId.SAND ? surface : BlockId.DIRT;
+        return new TerrainSummary(height, surface, subsurface, BlockId.STONE, config.minHeight() - 1);
     }
 
     @Override
@@ -87,15 +100,58 @@ public final class TerrainGenerator implements TerrainSource {
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
-                int height = surfaceHeight(originX + x, originZ + z);
+                TerrainSummary summary = sample(originX + x, originZ + z);
                 for (int y = 0; y < Chunk.SIZE; y++) {
                     int worldY = originY + y;
-                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = worldY > height
-                            ? BlockId.AIR
-                            : worldY == height ? BlockId.GRASS : worldY >= height - 3 ? BlockId.DIRT : BlockId.STONE;
+                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = summary.materialAt(worldY);
                 }
             }
+        generateTrees(originX, originY, originZ, blocks);
         return new ChunkData(position, blocks);
+    }
+
+    private void generateTrees(int originX, int originY, int originZ, byte[] blocks) {
+        for (long anchorZ = (long) originZ - 2; anchorZ <= (long) originZ + Chunk.SIZE + 1; anchorZ++)
+            for (long anchorX = (long) originX - 2; anchorX <= (long) originX + Chunk.SIZE + 1; anchorX++) {
+                if (anchorX < Integer.MIN_VALUE
+                        || anchorX > Integer.MAX_VALUE
+                        || anchorZ < Integer.MIN_VALUE
+                        || anchorZ > Integer.MAX_VALUE) continue;
+                int x = (int) anchorX, z = (int) anchorZ;
+                if (Math.floorMod(treeHash(seed, x, z), 64) != 0) continue;
+                TerrainSummary terrain = sample(x, z);
+                if (terrain.surfaceMaterial() == BlockId.SAND || terrain.surfaceMaterial() == BlockId.SNOW) continue;
+                int baseY = terrain.surfaceHeight() + 1;
+                for (int y = baseY; y < baseY + 4; y++)
+                    placeTreeBlock(x, y, z, originX, originY, originZ, blocks, BlockId.LOG);
+                for (int y = baseY + 3; y <= baseY + 5; y++) {
+                    int radius = y == baseY + 5 ? 1 : 2;
+                    for (int dz = -radius; dz <= radius; dz++)
+                        for (int dx = -radius; dx <= radius; dx++) {
+                            if (Math.abs(dx) + Math.abs(dz) > radius + 1 || dx == 0 && dz == 0) continue;
+                            if ((long) x + dx < Integer.MIN_VALUE
+                                    || (long) x + dx > Integer.MAX_VALUE
+                                    || (long) z + dz < Integer.MIN_VALUE
+                                    || (long) z + dz > Integer.MAX_VALUE) continue;
+                            placeTreeBlock(x + dx, y, z + dz, originX, originY, originZ, blocks, BlockId.LEAVES);
+                        }
+                }
+            }
+    }
+
+    private static void placeTreeBlock(
+            int worldX, int worldY, int worldZ, int originX, int originY, int originZ, byte[] blocks, byte block) {
+        int x = worldX - originX, y = worldY - originY, z = worldZ - originZ;
+        if (x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE || z < 0 || z >= Chunk.SIZE) return;
+        int index = (y * Chunk.SIZE + z) * Chunk.SIZE + x;
+        if (blocks[index] == BlockId.AIR) blocks[index] = block;
+    }
+
+    private static long treeHash(long seed, int x, int z) {
+        long value = (seed ^ 0x6A09E667F3BCC909L) ^ ((long) x * 0x9E3779B97F4A7C15L) ^ ((long) z * 0xC2B2AE3D27D4EB4FL);
+        value = (value ^ (value >>> 30)) * 0xBF58476D1CE4E5B9L;
+        value = (value ^ (value >>> 27)) * 0x94D049BB133111EBL;
+        return value ^ (value >>> 31);
     }
 
     private static double layer(Noise2D noise, TerrainConfig.Layer layer, double x, double z) {
@@ -143,4 +199,6 @@ public final class TerrainGenerator implements TerrainSource {
         Math.addExact(origin, Chunk.SIZE - 1);
         return origin;
     }
+
+    private record ColumnSample(double elevation, double biome) {}
 }
