@@ -1,6 +1,7 @@
 package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import java.util.Arrays;
@@ -19,7 +20,7 @@ public final class PackedVertexMesher {
                         int ny = y + VisibleFaceMesher.NORMALS[face][1];
                         int nz = z + VisibleFaceMesher.NORMALS[face][2];
                         if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-                            if (snapshot.get(nx, ny, nz) != BlockId.AIR) continue;
+                            if (BlockRegistry.DEFAULT.isOpaque(snapshot.get(nx, ny, nz))) continue;
                         } else if (solidNeighbor(neighborhood, face, x, y, z)) {
                             continue;
                         }
@@ -36,12 +37,12 @@ public final class PackedVertexMesher {
                 neighborhood.neighbor(BlockNeighborhood.Side.values()[face]).orElse(null);
         if (neighbor == null) return false;
         return switch (face) {
-            case 0 -> neighbor.get(0, y, z) != BlockId.AIR;
-            case 1 -> neighbor.get(Chunk.SIZE - 1, y, z) != BlockId.AIR;
-            case 2 -> neighbor.get(x, 0, z) != BlockId.AIR;
-            case 3 -> neighbor.get(x, Chunk.SIZE - 1, z) != BlockId.AIR;
-            case 4 -> neighbor.get(x, y, 0) != BlockId.AIR;
-            case 5 -> neighbor.get(x, y, Chunk.SIZE - 1) != BlockId.AIR;
+            case 0 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(0, y, z));
+            case 1 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(Chunk.SIZE - 1, y, z));
+            case 2 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, 0, z));
+            case 3 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, Chunk.SIZE - 1, z));
+            case 4 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, y, 0));
+            case 5 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, y, Chunk.SIZE - 1));
             default -> throw new AssertionError(face);
         };
     }

@@ -1,6 +1,7 @@
 package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 
@@ -74,18 +75,18 @@ public final class GreedyMesher implements ChunkMesher {
         int ny = cell[1] + VisibleFaceMesher.NORMALS[face][1];
         int nz = cell[2] + VisibleFaceMesher.NORMALS[face][2];
         if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-            return snapshot.get(nx, ny, nz) != BlockId.AIR;
+            return BlockRegistry.DEFAULT.isOpaque(snapshot.get(nx, ny, nz));
         }
         ChunkSnapshot neighbor =
                 neighborhood.neighbor(BlockNeighborhood.Side.values()[face]).orElse(null);
         if (neighbor == null) return false;
         return switch (face) {
-            case 0 -> neighbor.get(0, cell[1], cell[2]) != BlockId.AIR;
-            case 1 -> neighbor.get(Chunk.SIZE - 1, cell[1], cell[2]) != BlockId.AIR;
-            case 2 -> neighbor.get(cell[0], 0, cell[2]) != BlockId.AIR;
-            case 3 -> neighbor.get(cell[0], Chunk.SIZE - 1, cell[2]) != BlockId.AIR;
-            case 4 -> neighbor.get(cell[0], cell[1], 0) != BlockId.AIR;
-            case 5 -> neighbor.get(cell[0], cell[1], Chunk.SIZE - 1) != BlockId.AIR;
+            case 0 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(0, cell[1], cell[2]));
+            case 1 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(Chunk.SIZE - 1, cell[1], cell[2]));
+            case 2 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(cell[0], 0, cell[2]));
+            case 3 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(cell[0], Chunk.SIZE - 1, cell[2]));
+            case 4 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(cell[0], cell[1], 0));
+            case 5 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(cell[0], cell[1], Chunk.SIZE - 1));
             default -> throw new AssertionError(face);
         };
     }

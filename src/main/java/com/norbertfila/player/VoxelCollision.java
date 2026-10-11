@@ -1,8 +1,8 @@
 package com.norbertfila.player;
 
 import com.norbertfila.world.Aabb;
-import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
@@ -193,7 +193,8 @@ public final class VoxelCollision {
     }
 
     private static boolean solid(World world, int x, int y, int z) {
-        return world.getBlock(new BlockPos(x, y, z)).orElseThrow() != BlockId.AIR;
+        return BlockRegistry.DEFAULT.isSolid(
+                (byte) world.getBlock(new BlockPos(x, y, z)).orElseThrow());
     }
 
     private static Bounds bounds(Aabb region) {
