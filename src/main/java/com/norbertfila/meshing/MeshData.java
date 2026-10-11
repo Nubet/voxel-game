@@ -10,6 +10,10 @@ public record MeshData(MeshFormat format, float[] vertices) {
         this(MeshFormat.floatPositionColor(vertices), vertices);
     }
 
+    public static MeshData textured(float[] vertices) {
+        return new MeshData(MeshFormat.texturedPositionUvLayerShade(vertices), vertices);
+    }
+
     public MeshData {
         Objects.requireNonNull(format);
         Objects.requireNonNull(vertices);

@@ -25,4 +25,23 @@ class MeshFormatTest {
                 IllegalArgumentException.class,
                 () -> new MeshFormat(1, 6, 2, new MeshFormat.Bounds(0, 0, 0, 1, 1, 1), MeshFormat.Topology.TRIANGLES));
     }
+
+    @Test
+    void texturedFormatUsesVersionedSevenFloatStrideAndPositionOnlyBounds() {
+        MeshData mesh = MeshData.textured(new float[] {
+            1, 2, 3, 4, 5, 6, 7,
+            -1, 0, 4, 100, 100, 100, 100,
+            0, -2, 1, 200, 200, 200, 200
+        });
+        assertEquals(MeshFormat.TEXTURED_VERSION, mesh.format().version());
+        assertEquals(MeshFormat.TEXTURED_VERTEX_STRIDE, mesh.format().stride());
+        assertEquals(3, mesh.vertexCount());
+        assertEquals(-1, mesh.format().bounds().minX());
+        assertEquals(-2, mesh.format().bounds().minY());
+        assertEquals(1, mesh.format().bounds().minZ());
+        assertEquals(1, mesh.format().bounds().maxX());
+        assertEquals(2, mesh.format().bounds().maxY());
+        assertEquals(4, mesh.format().bounds().maxZ());
+        assertThrows(IllegalArgumentException.class, () -> MeshData.textured(new float[8]));
+    }
 }

@@ -12,9 +12,19 @@ public final class GreedyMesher implements ChunkMesher {
 
     @Override
     public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
+        return mesh(snapshot, neighborhood, cx, cy, cz, false);
+    }
+
+    public MeshData meshTextured(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
+        return mesh(snapshot, neighborhood, cx, cy, cz, true);
+    }
+
+    private static MeshData mesh(
+            ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz, boolean textured) {
         VisibleFaceMesher.Floats out = new VisibleFaceMesher.Floats(1024);
-        for (int face = 0; face < 6; face++) meshFace(snapshot, neighborhood, cx, cy, cz, face, out);
-        return new MeshData(out.toArray());
+        for (int face = 0; face < 6; face++) meshFace(snapshot, neighborhood, cx, cy, cz, face, out, textured);
+        float[] vertices = out.toArray();
+        return textured ? MeshData.textured(vertices) : new MeshData(vertices);
     }
 
     private static void meshFace(
@@ -24,7 +34,8 @@ public final class GreedyMesher implements ChunkMesher {
             int cy,
             int cz,
             int face,
-            VisibleFaceMesher.Floats out) {
+            VisibleFaceMesher.Floats out,
+            boolean textured) {
         for (int depth = 0; depth < Chunk.SIZE; depth++) {
             byte[][] mask = new byte[Chunk.SIZE][Chunk.SIZE];
             boolean[][] used = new boolean[Chunk.SIZE][Chunk.SIZE];
@@ -47,7 +58,7 @@ public final class GreedyMesher implements ChunkMesher {
                     while (v + height < Chunk.SIZE && rowMatches(mask, used, block, u, v + height, width)) height++;
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) used[row][column] = true;
-                    emitQuad(out, face, block, cell(face, depth, u, v), width, height, cx, cy, cz);
+                    emitQuad(out, face, block, cell(face, depth, u, v), width, height, cx, cy, cz, textured);
                 }
             }
         }
@@ -100,7 +111,8 @@ public final class GreedyMesher implements ChunkMesher {
             int height,
             int cx,
             int cy,
-            int cz) {
+            int cz,
+            boolean textured) {
         int[] base = add(cell, VisibleFaceMesher.FACES[face][0]);
         int[] u = subtract(VisibleFaceMesher.FACES[face][3], VisibleFaceMesher.FACES[face][0]);
         int[] v = subtract(VisibleFaceMesher.FACES[face][1], VisibleFaceMesher.FACES[face][0]);
@@ -110,16 +122,24 @@ public final class GreedyMesher implements ChunkMesher {
             add(add(base, scale(v, height)), scale(u, width)),
             add(base, scale(u, width))
         };
-        float[] color = VisibleFaceMesher.color(block, face);
+        float[] color = textured ? null : VisibleFaceMesher.color(block, face);
+        float textureLayer = BlockRegistry.DEFAULT.definition(block).textureLayer(face);
+        float shade = face == 2 ? 1.0f : face == 3 ? .56f : face < 2 ? .77f : .86f;
         for (int index : VisibleFaceMesher.TRIANGLE_INDICES) {
             int[] corner = corners[index];
-            float shade = face == 2 ? 1.0f : face == 3 ? .56f : face < 2 ? .77f : .86f;
             out.add(cx * Chunk.SIZE + corner[0]);
             out.add(cy * Chunk.SIZE + corner[1]);
             out.add(cz * Chunk.SIZE + corner[2]);
-            out.add(color[0] * shade);
-            out.add(color[1] * shade);
-            out.add(color[2] * shade);
+            if (textured) {
+                out.add((corner[U_AXIS[face]] - base[U_AXIS[face]]) * U_SIGN[face]);
+                out.add(corner[V_AXIS[face]] - base[V_AXIS[face]]);
+                out.add(textureLayer);
+                out.add(shade);
+            } else {
+                out.add(color[0] * shade);
+                out.add(color[1] * shade);
+                out.add(color[2] * shade);
+            }
         }
     }
 
