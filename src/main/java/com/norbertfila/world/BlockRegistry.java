@@ -11,6 +11,19 @@ public final class BlockRegistry {
     public static final int DIRT_TEXTURE = 2;
     public static final int GRASS_SIDE_TEXTURE = 3;
     public static final int STONE_TEXTURE = 4;
+    public static final int SAND_TEXTURE = 5;
+    public static final int GRAVEL_TEXTURE = 6;
+    public static final int BEDROCK_TEXTURE = 7;
+    public static final int SNOW_TEXTURE = 8;
+    public static final int LOG_SIDE_TEXTURE = 9;
+    public static final int LOG_TOP_TEXTURE = 10;
+    public static final int LEAVES_TEXTURE = 11;
+    public static final int PLANKS_TEXTURE = 12;
+    public static final int COBBLE_TEXTURE = 13;
+    public static final int BRICKS_TEXTURE = 14;
+    public static final int GLASS_TEXTURE = 15;
+    public static final int SANDSTONE_TEXTURE = 16;
+    public static final int STONE_BRICKS_TEXTURE = 17;
     public static final BlockRegistry DEFAULT = defaults();
 
     private final BlockDefinition[] definitions;
@@ -71,10 +84,23 @@ public final class BlockRegistry {
     private static BlockRegistry defaults() {
         Map<String, Integer> textures = new LinkedHashMap<>();
         textures.put("missing", FALLBACK_TEXTURE);
-        textures.put("grass_top", GRASS_TOP_TEXTURE);
-        textures.put("dirt", DIRT_TEXTURE);
-        textures.put("grass_side", GRASS_SIDE_TEXTURE);
-        textures.put("stone", STONE_TEXTURE);
+        textures.put("refi_grass_top", GRASS_TOP_TEXTURE);
+        textures.put("refi_dirt", DIRT_TEXTURE);
+        textures.put("refi_grass_side", GRASS_SIDE_TEXTURE);
+        textures.put("refi_stone", STONE_TEXTURE);
+        textures.put("refi_sand", SAND_TEXTURE);
+        textures.put("refi_gravel", GRAVEL_TEXTURE);
+        textures.put("refi_bedrock", BEDROCK_TEXTURE);
+        textures.put("refi_snow", SNOW_TEXTURE);
+        textures.put("refi_log_side", LOG_SIDE_TEXTURE);
+        textures.put("refi_log_top", LOG_TOP_TEXTURE);
+        textures.put("refi_leaves", LEAVES_TEXTURE);
+        textures.put("refi_planks", PLANKS_TEXTURE);
+        textures.put("refi_cobble", COBBLE_TEXTURE);
+        textures.put("refi_bricks", BRICKS_TEXTURE);
+        textures.put("refi_glass", GLASS_TEXTURE);
+        textures.put("refi_sandstone", SANDSTONE_TEXTURE);
+        textures.put("refi_stone_bricks", STONE_BRICKS_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(
@@ -82,7 +108,30 @@ public final class BlockRegistry {
                         new BlockDefinition(
                                 1, "grass", GRASS_TOP_TEXTURE, DIRT_TEXTURE, GRASS_SIDE_TEXTURE, true, true),
                         new BlockDefinition(2, "dirt", DIRT_TEXTURE, DIRT_TEXTURE, DIRT_TEXTURE, true, true),
-                        new BlockDefinition(3, "stone", STONE_TEXTURE, STONE_TEXTURE, STONE_TEXTURE, true, true)),
+                        new BlockDefinition(3, "stone", STONE_TEXTURE, STONE_TEXTURE, STONE_TEXTURE, true, true),
+                        uniform(BlockId.SAND, "sand", SAND_TEXTURE, true),
+                        uniform(BlockId.GRAVEL, "gravel", GRAVEL_TEXTURE, true),
+                        uniform(BlockId.BEDROCK, "bedrock", BEDROCK_TEXTURE, true),
+                        uniform(BlockId.SNOW, "snow", SNOW_TEXTURE, true),
+                        new BlockDefinition(
+                                Byte.toUnsignedInt(BlockId.LOG),
+                                "log",
+                                LOG_TOP_TEXTURE,
+                                LOG_TOP_TEXTURE,
+                                LOG_SIDE_TEXTURE,
+                                true,
+                                true),
+                        uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false),
+                        uniform(BlockId.PLANKS, "planks", PLANKS_TEXTURE, true),
+                        uniform(BlockId.COBBLE, "cobble", COBBLE_TEXTURE, true),
+                        uniform(BlockId.BRICKS, "bricks", BRICKS_TEXTURE, true),
+                        uniform(BlockId.GLASS, "glass", GLASS_TEXTURE, false),
+                        uniform(BlockId.SANDSTONE, "sandstone", SANDSTONE_TEXTURE, true),
+                        uniform(BlockId.STONE_BRICKS, "stone_bricks", STONE_BRICKS_TEXTURE, true)),
                 textures);
+    }
+
+    private static BlockDefinition uniform(byte id, String name, int texture, boolean opaque) {
+        return new BlockDefinition(Byte.toUnsignedInt(id), name, texture, texture, texture, true, opaque);
     }
 }

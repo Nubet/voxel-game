@@ -22,6 +22,17 @@ class BlockRegistryTest {
         assertEquals(
                 BlockRegistry.STONE_TEXTURE, registry.definition(BlockId.STONE).textureLayer(5));
         assertEquals(
+                BlockRegistry.SAND_TEXTURE, registry.definition(BlockId.SAND).textureLayer(2));
+        assertEquals(
+                BlockRegistry.BEDROCK_TEXTURE,
+                registry.definition(BlockId.BEDROCK).textureLayer(3));
+        assertEquals(
+                BlockRegistry.LOG_TOP_TEXTURE, registry.definition(BlockId.LOG).textureLayer(2));
+        assertEquals(
+                BlockRegistry.LOG_SIDE_TEXTURE, registry.definition(BlockId.LOG).textureLayer(0));
+        assertEquals(
+                BlockRegistry.GLASS_TEXTURE, registry.definition(BlockId.GLASS).textureLayer(5));
+        assertEquals(
                 BlockRegistry.FALLBACK_TEXTURE, registry.definition(BlockId.AIR).textureLayer(0));
     }
 
@@ -30,10 +41,32 @@ class BlockRegistryTest {
         BlockRegistry registry = BlockRegistry.DEFAULT;
         assertFalse(registry.isSolid(BlockId.AIR));
         assertFalse(registry.isOpaque(BlockId.AIR));
-        for (byte id : new byte[] {BlockId.GRASS, BlockId.DIRT, BlockId.STONE}) {
+        for (byte id : new byte[] {
+            BlockId.GRASS,
+            BlockId.DIRT,
+            BlockId.STONE,
+            BlockId.SAND,
+            BlockId.GRAVEL,
+            BlockId.BEDROCK,
+            BlockId.SNOW,
+            BlockId.LOG,
+            BlockId.LEAVES,
+            BlockId.PLANKS,
+            BlockId.COBBLE,
+            BlockId.BRICKS,
+            BlockId.GLASS,
+            BlockId.SANDSTONE,
+            BlockId.STONE_BRICKS
+        }) {
             assertTrue(registry.isSolid(id));
-            assertTrue(registry.isOpaque(id));
         }
+        for (byte id : new byte[] {
+            BlockId.GRASS, BlockId.DIRT, BlockId.STONE, BlockId.SAND, BlockId.GRAVEL, BlockId.BEDROCK,
+            BlockId.SNOW, BlockId.LOG, BlockId.PLANKS, BlockId.COBBLE, BlockId.BRICKS, BlockId.SANDSTONE,
+            BlockId.STONE_BRICKS
+        }) assertTrue(registry.isOpaque(id));
+        assertFalse(registry.isOpaque(BlockId.LEAVES));
+        assertFalse(registry.isOpaque(BlockId.GLASS));
     }
 
     @Test
@@ -89,7 +122,7 @@ class BlockRegistryTest {
                 () -> new BlockRegistry(
                         List.of(
                                 BlockRegistry.DEFAULT.definition(BlockId.AIR),
-                                new BlockDefinition(1, "invalid-layer", 9, 9, 9, true, true)),
+                                new BlockDefinition(1, "invalid-layer", 99, 99, 99, true, true)),
                         textures));
     }
 

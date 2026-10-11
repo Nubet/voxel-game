@@ -14,7 +14,7 @@ class AssetLoaderTest {
     @Test
     void loadsAllDefaultImagesInRegistryLayerOrderAsIndependentRgba() {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
-        assertEquals(5, textures.layerCount());
+        assertEquals(18, textures.layerCount());
         for (TextureSet.Texture texture : textures.layers()) {
             assertEquals(16, texture.width());
             assertEquals(16, texture.height());
@@ -22,7 +22,8 @@ class AssetLoaderTest {
         }
         assertEquals(255, textures.layer(BlockRegistry.FALLBACK_TEXTURE).rgbaAt(0, 0, 0));
         assertEquals(0, textures.layer(BlockRegistry.FALLBACK_TEXTURE).rgbaAt(0, 0, 1));
-        assertNotEquals(BlockRegistry.DEFAULT.textureLayer("grass_top"), BlockRegistry.DEFAULT.textureLayer("stone"));
+        assertNotEquals(
+                BlockRegistry.DEFAULT.textureLayer("refi_grass_top"), BlockRegistry.DEFAULT.textureLayer("refi_stone"));
         byte[] copy = textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgba();
         copy[0] = 0;
         assertNotEquals(0, textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgbaAt(0, 0, 0));
@@ -57,6 +58,15 @@ class AssetLoaderTest {
         assertEquals(50, texture.rgbaAt(0, 0, 2));
         assertEquals(255, texture.rgbaAt(0, 0, 3));
         assertEquals(25, texture.rgbaAt(0, 15, 0));
+    }
+
+    @Test
+    void refiCutoutTexturesKeepTheirTransparentPixels() {
+        TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
+        assertEquals(0, textures.layer(BlockRegistry.GRASS_SIDE_TEXTURE).rgbaAt(0, 4, 3));
+        assertEquals(0, textures.layer(BlockRegistry.LEAVES_TEXTURE).rgbaAt(4, 0, 3));
+        assertEquals(0, textures.layer(BlockRegistry.GLASS_TEXTURE).rgbaAt(1, 1, 3));
+        assertEquals(255, textures.layer(BlockRegistry.GLASS_TEXTURE).rgbaAt(0, 0, 3));
     }
 
     private static void assertCheckerboard(TextureSet.Texture texture) {

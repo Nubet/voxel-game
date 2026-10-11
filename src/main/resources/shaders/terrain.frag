@@ -12,7 +12,9 @@ out vec4 fragColor;
 
 void main() {
     if (uTextured != 0) {
-        fragColor = vec4(texture(uBlockTextures, vec3(vUv, vLayer)).rgb * vShade, 1.0);
+        vec4 texel = texture(uBlockTextures, vec3(vUv, vLayer));
+        if (texel.a < 0.5) discard;
+        fragColor = vec4(texel.rgb * vShade, 1.0);
     } else {
         fragColor = vec4(vColor, 1.0);
     }

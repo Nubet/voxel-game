@@ -13,6 +13,18 @@ public final class VisibleFaceMesher implements ChunkMesher {
     private static final float[] GRASS_SIDE = {.50f, .46f, .27f};
     private static final float[] DIRT = {.46f, .29f, .16f};
     private static final float[] STONE = {.48f, .49f, .51f};
+    private static final float[] SAND = {.82f, .72f, .48f};
+    private static final float[] GRAVEL = {.52f, .5f, .47f};
+    private static final float[] BEDROCK = {.2f, .2f, .19f};
+    private static final float[] SNOW = {.92f, .94f, .98f};
+    private static final float[] LOG = {.44f, .28f, .14f};
+    private static final float[] LEAVES = {.3f, .55f, .22f};
+    private static final float[] PLANKS = {.64f, .45f, .25f};
+    private static final float[] COBBLE = {.43f, .44f, .46f};
+    private static final float[] BRICKS = {.58f, .32f, .25f};
+    private static final float[] GLASS = {.55f, .75f, .82f};
+    private static final float[] SANDSTONE = {.76f, .64f, .42f};
+    private static final float[] STONE_BRICKS = {.42f, .43f, .45f};
     // Each face: four corner offsets in CCW order as viewed from outside.
     static final int[][][] FACES = {
         {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}, {1, 0, 1}},
@@ -72,8 +84,23 @@ public final class VisibleFaceMesher implements ChunkMesher {
 
     static float[] color(byte block, int face) {
         if (block == BlockId.GRASS) return face == 2 ? GRASS_TOP : GRASS_SIDE;
-        if (block == BlockId.DIRT) return DIRT;
-        return STONE;
+        return switch (block) {
+            case BlockId.DIRT -> DIRT;
+            case BlockId.STONE -> STONE;
+            case BlockId.SAND -> SAND;
+            case BlockId.GRAVEL -> GRAVEL;
+            case BlockId.BEDROCK -> BEDROCK;
+            case BlockId.SNOW -> SNOW;
+            case BlockId.LOG -> LOG;
+            case BlockId.LEAVES -> LEAVES;
+            case BlockId.PLANKS -> PLANKS;
+            case BlockId.COBBLE -> COBBLE;
+            case BlockId.BRICKS -> BRICKS;
+            case BlockId.GLASS -> GLASS;
+            case BlockId.SANDSTONE -> SANDSTONE;
+            case BlockId.STONE_BRICKS -> STONE_BRICKS;
+            default -> STONE;
+        };
     }
 
     static final class Floats {
