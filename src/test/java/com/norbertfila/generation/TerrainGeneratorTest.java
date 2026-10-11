@@ -66,13 +66,13 @@ class TerrainGeneratorTest {
     }
 
     @Test
-    void classicPresetHasVersionSixReferenceChunks() {
+    void classicPresetHasVersionSevenReferenceChunks() {
         ChunkPos[] positions = {new ChunkPos(0, 2, 0), new ChunkPos(-2, 2, 3), new ChunkPos(-12, 4, 14)};
-        int[][] expected = {{2079817867, 322607703, 1742602241}, {-1299730120, -1048288188, -1014507725}};
+        int[][] expected = {{1180583825, -1863016422, 1742602241}, {1633097437, -283642084, 1140572427}};
         long[] seeds = {0, 42};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.classic());
-            assertEquals(6, generator.generatorVersion());
+            assertEquals(7, generator.generatorVersion());
             for (int j = 0; j < positions.length; j++)
                 assertEquals(
                         expected[i][j],
@@ -85,13 +85,16 @@ class TerrainGeneratorTest {
         TerrainConfig.Layer enabled = new TerrainConfig.Layer(.01, 1, .5, 2, 1);
         TerrainConfig.Layer disabled = new TerrainConfig.Layer(.01, 4, .5, 2, 0);
         int[] calls = {0};
-        TerrainGenerator generator =
-                new TerrainGenerator(0, new TerrainConfig(8, enabled, disabled, disabled), (x, z) -> {
+        TerrainGenerator generator = new TerrainGenerator(
+                0,
+                new TerrainConfig(8, enabled, disabled, disabled),
+                (x, z) -> {
                     calls[0]++;
                     return -.25;
-                });
+                },
+                (x, z) -> -1);
         ChunkData data = generator.generate(new ChunkPos(-1, 0, 1));
-        assertEquals(265, calls[0]);
+        assertEquals(256, calls[0]);
         assertEquals(BlockId.AIR, data.get(0, 8, 0));
         assertEquals(BlockId.SAND, data.get(0, 7, 0));
         assertEquals(BlockId.BEDROCK, data.get(0, 6, 0));
@@ -143,7 +146,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(6, generator.generatorVersion());
+        assertEquals(7, generator.generatorVersion());
     }
 
     @Test

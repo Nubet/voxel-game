@@ -6,7 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 6;
+    private static final int GENERATOR_VERSION = 7;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -17,15 +17,21 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D ranges;
     private final Noise2D warpX;
     private final Noise2D warpZ;
+    private final TreeGenerator trees;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
     }
 
     public TerrainGenerator(long seed, TerrainConfig config, Noise2D noise) {
+        this(seed, config, noise, forestNoise(noise));
+    }
+
+    TerrainGenerator(long seed, TerrainConfig config, Noise2D noise, Noise2D forestDensity) {
         this.seed = seed;
         this.config = Objects.requireNonNull(config);
         Objects.requireNonNull(noise);
+        Objects.requireNonNull(forestDensity);
         continental = config.continental().fractal(noise);
         hills = config.hills().fractal(noise);
         details = config.details().fractal(noise);
@@ -39,6 +45,11 @@ public final class TerrainGenerator implements TerrainSource {
         ranges = config.mountains().ranges().fractal((x, z) -> noise.sample(x - 73.3, z + 29.9));
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
+        trees = new TreeGenerator(seed, forestDensity, this);
+    }
+
+    private static Noise2D forestNoise(Noise2D noise) {
+        return (x, z) -> noise.sample(x + .5, z + .5);
     }
 
     @Override
@@ -106,52 +117,8 @@ public final class TerrainGenerator implements TerrainSource {
                     blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = summary.materialAt(worldY);
                 }
             }
-        generateTrees(originX, originY, originZ, blocks);
+        trees.generate(originX, originY, originZ, blocks);
         return new ChunkData(position, blocks);
-    }
-
-    private void generateTrees(int originX, int originY, int originZ, byte[] blocks) {
-        for (long anchorZ = (long) originZ - 2; anchorZ <= (long) originZ + Chunk.SIZE + 1; anchorZ++)
-            for (long anchorX = (long) originX - 2; anchorX <= (long) originX + Chunk.SIZE + 1; anchorX++) {
-                if (anchorX < Integer.MIN_VALUE
-                        || anchorX > Integer.MAX_VALUE
-                        || anchorZ < Integer.MIN_VALUE
-                        || anchorZ > Integer.MAX_VALUE) continue;
-                int x = (int) anchorX, z = (int) anchorZ;
-                if (Math.floorMod(treeHash(seed, x, z), 64) != 0) continue;
-                TerrainSummary terrain = sample(x, z);
-                if (terrain.surfaceMaterial() == BlockId.SAND || terrain.surfaceMaterial() == BlockId.SNOW) continue;
-                int baseY = terrain.surfaceHeight() + 1;
-                for (int y = baseY; y < baseY + 4; y++)
-                    placeTreeBlock(x, y, z, originX, originY, originZ, blocks, BlockId.LOG);
-                for (int y = baseY + 3; y <= baseY + 5; y++) {
-                    int radius = y == baseY + 5 ? 1 : 2;
-                    for (int dz = -radius; dz <= radius; dz++)
-                        for (int dx = -radius; dx <= radius; dx++) {
-                            if (Math.abs(dx) + Math.abs(dz) > radius + 1 || dx == 0 && dz == 0) continue;
-                            if ((long) x + dx < Integer.MIN_VALUE
-                                    || (long) x + dx > Integer.MAX_VALUE
-                                    || (long) z + dz < Integer.MIN_VALUE
-                                    || (long) z + dz > Integer.MAX_VALUE) continue;
-                            placeTreeBlock(x + dx, y, z + dz, originX, originY, originZ, blocks, BlockId.LEAVES);
-                        }
-                }
-            }
-    }
-
-    private static void placeTreeBlock(
-            int worldX, int worldY, int worldZ, int originX, int originY, int originZ, byte[] blocks, byte block) {
-        int x = worldX - originX, y = worldY - originY, z = worldZ - originZ;
-        if (x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE || z < 0 || z >= Chunk.SIZE) return;
-        int index = (y * Chunk.SIZE + z) * Chunk.SIZE + x;
-        if (blocks[index] == BlockId.AIR) blocks[index] = block;
-    }
-
-    private static long treeHash(long seed, int x, int z) {
-        long value = (seed ^ 0x6A09E667F3BCC909L) ^ ((long) x * 0x9E3779B97F4A7C15L) ^ ((long) z * 0xC2B2AE3D27D4EB4FL);
-        value = (value ^ (value >>> 30)) * 0xBF58476D1CE4E5B9L;
-        value = (value ^ (value >>> 27)) * 0x94D049BB133111EBL;
-        return value ^ (value >>> 31);
     }
 
     private static double layer(Noise2D noise, TerrainConfig.Layer layer, double x, double z) {

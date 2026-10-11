@@ -15,8 +15,8 @@ class TerrainBenchmarkTest {
         List<ChunkPos> positions = List.of(new ChunkPos(0, 2, 0));
         TerrainConfig plains =
                 new TerrainConfig(config.baseHeight(), config.continental(), config.hills(), config.details());
-        assertEquals(2376, TerrainBenchmark.countNoiseSamples(0, plains, positions));
-        assertEquals(2904, TerrainBenchmark.countNoiseSamples(0, config, positions));
+        assertEquals(2612, TerrainBenchmark.countNoiseSamples(0, plains, positions));
+        assertEquals(3184, TerrainBenchmark.countNoiseSamples(0, config, positions));
     }
 
     @Test
@@ -36,7 +36,7 @@ class TerrainBenchmarkTest {
                 || result.snapshot().bytes() > result.generate().bytes());
         String csv = TerrainBenchmark.toCsv(List.of(result));
         assertTrue(csv.contains("heightBytesPerColumn"));
-        assertTrue(csv.contains("mountains,42,6,1,2,2,"));
+        assertTrue(csv.contains("mountains,42,7,1,2,2,"));
     }
 
     @Test
