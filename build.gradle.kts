@@ -18,7 +18,7 @@ val natives = when {
 
 dependencies {
     implementation(platform("org.lwjgl:lwjgl-bom:$lwjglVersion"))
-    listOf("lwjgl", "lwjgl-glfw", "lwjgl-opengl").forEach {
+    listOf("lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-stb").forEach {
         implementation("org.lwjgl:$it")
         runtimeOnly("org.lwjgl:$it::$natives")
     }

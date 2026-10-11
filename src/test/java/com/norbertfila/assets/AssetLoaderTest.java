@@ -1,0 +1,78 @@
+package com.norbertfila.assets;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.norbertfila.world.BlockRegistry;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+
+class AssetLoaderTest {
+    @Test
+    void loadsAllDefaultImagesInRegistryLayerOrderAsIndependentRgba() {
+        TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
+        assertEquals(5, textures.layerCount());
+        for (TextureSet.Texture texture : textures.layers()) {
+            assertEquals(16, texture.width());
+            assertEquals(16, texture.height());
+            assertEquals(16 * 16 * 4, texture.rgba().length);
+        }
+        assertEquals(255, textures.layer(BlockRegistry.FALLBACK_TEXTURE).rgbaAt(0, 0, 0));
+        assertEquals(0, textures.layer(BlockRegistry.FALLBACK_TEXTURE).rgbaAt(0, 0, 1));
+        assertNotEquals(BlockRegistry.DEFAULT.textureLayer("grass_top"), BlockRegistry.DEFAULT.textureLayer("stone"));
+        byte[] copy = textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgba();
+        copy[0] = 0;
+        assertNotEquals(0, textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgbaAt(0, 0, 0));
+    }
+
+    @Test
+    void missingOrCorruptPngUsesOpaqueMagentaBlackCheckerboard() {
+        AssetLoader missing = new AssetLoader(BlockRegistry.DEFAULT, resource -> null);
+        TextureSet missingTextures = missing.loadBlockTextures();
+        assertCheckerboard(missingTextures.layer(BlockRegistry.GRASS_TOP_TEXTURE));
+
+        AssetLoader corrupt = new AssetLoader(
+                BlockRegistry.DEFAULT,
+                resource -> new ByteArrayInputStream("not a PNG".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertCheckerboard(corrupt.loadBlockTextures().layer(BlockRegistry.STONE_TEXTURE));
+    }
+
+    @Test
+    void wrongDimensionsFallBackWithoutLeakingStbImageMemory() throws IOException {
+        byte[] png = png(8, 16);
+        AssetLoader loader = new AssetLoader(BlockRegistry.DEFAULT, resource -> new ByteArrayInputStream(png));
+        assertCheckerboard(loader.loadBlockTextures().layer(BlockRegistry.DIRT_TEXTURE));
+    }
+
+    @Test
+    void decodedPixelsAreRgbaWithStableTopToBottomRows() throws IOException {
+        byte[] png = png(16, 16);
+        AssetLoader loader = new AssetLoader(BlockRegistry.DEFAULT, resource -> new ByteArrayInputStream(png));
+        TextureSet.Texture texture = loader.loadBlockTextures().layer(BlockRegistry.STONE_TEXTURE);
+        assertEquals(10, texture.rgbaAt(0, 0, 0));
+        assertEquals(30, texture.rgbaAt(0, 0, 1));
+        assertEquals(50, texture.rgbaAt(0, 0, 2));
+        assertEquals(255, texture.rgbaAt(0, 0, 3));
+        assertEquals(25, texture.rgbaAt(0, 15, 0));
+    }
+
+    private static void assertCheckerboard(TextureSet.Texture texture) {
+        assertEquals(255, texture.rgbaAt(0, 0, 0));
+        assertEquals(0, texture.rgbaAt(0, 0, 1));
+        assertEquals(255, texture.rgbaAt(0, 0, 2));
+        assertEquals(255, texture.rgbaAt(0, 0, 3));
+        assertEquals(0, texture.rgbaAt(4, 0, 0));
+        assertEquals(0, texture.rgbaAt(4, 0, 2));
+    }
+
+    private static byte[] png(int width, int height) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) image.setRGB(x, y, 0xff0a1e32 + y * 0x010000);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        assertTrue(ImageIO.write(image, "png", output));
+        return output.toByteArray();
+    }
+}
