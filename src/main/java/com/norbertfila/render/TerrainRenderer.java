@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.MeshData;
+import com.norbertfila.meshing.MeshFormat;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.streaming.RegionIndex;
 import com.norbertfila.world.ChunkPos;
@@ -28,19 +29,30 @@ public final class TerrainRenderer implements AutoCloseable {
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
     private final IndirectTerrainRenderer indirectRenderer = new IndirectTerrainRenderer();
+    private final BlockTextureArray blockTextures;
     private final int matrixUniform;
+    private final int texturedUniform;
     private int program;
     private boolean closed;
 
     public TerrainRenderer() {
-        this(8, DEFAULT_GPU_BUDGET_BYTES);
+        this(null, 8, DEFAULT_GPU_BUDGET_BYTES);
     }
 
     public TerrainRenderer(int regionEdge) {
-        this(regionEdge, DEFAULT_GPU_BUDGET_BYTES);
+        this(null, regionEdge, DEFAULT_GPU_BUDGET_BYTES);
     }
 
     public TerrainRenderer(int regionEdge, long gpuBudgetBytes) {
+        this(null, regionEdge, gpuBudgetBytes);
+    }
+
+    public TerrainRenderer(BlockTextureArray blockTextures) {
+        this(Objects.requireNonNull(blockTextures), 8, DEFAULT_GPU_BUDGET_BYTES);
+    }
+
+    private TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
+        this.blockTextures = blockTextures;
         regionIndex = new RegionIndex(regionEdge);
         meshPool = new GpuMeshPool(new GpuMemoryBudget(gpuBudgetBytes));
         int vertex = 0;
@@ -60,8 +72,15 @@ public final class TerrainRenderer implements AutoCloseable {
             if (uniform < 0) {
                 throw new IllegalStateException("Shader uniform not found: uVP");
             }
+            int textured = glGetUniformLocation(linkedProgram, "uTextured");
+            if (textured < 0) throw new IllegalStateException("Shader uniform not found: uTextured");
+            int sampler = glGetUniformLocation(linkedProgram, "uBlockTextures");
+            if (sampler < 0) throw new IllegalStateException("Shader uniform not found: uBlockTextures");
             program = linkedProgram;
             matrixUniform = uniform;
+            texturedUniform = textured;
+            glUseProgram(program);
+            glUniform1i(sampler, 0);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
@@ -110,6 +129,11 @@ public final class TerrainRenderer implements AutoCloseable {
     public void upload(ChunkPos position, MeshData mesh) {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
+        int version = mesh.format().version();
+        if (version != MeshFormat.POSITION_COLOR_VERSION && version != MeshFormat.TEXTURED_VERSION)
+            throw new IllegalArgumentException("Unsupported mesh format version: " + version);
+        if (version == MeshFormat.TEXTURED_VERSION && blockTextures == null)
+            throw new IllegalStateException("Textured meshes require a block texture array");
         if (mesh.vertexCount() == 0) {
             meshPool.remove(position);
             regionIndex.remove(position);
@@ -121,9 +145,11 @@ public final class TerrainRenderer implements AutoCloseable {
             glBindVertexArray(vao);
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER, mesh.vertices(), GL_STATIC_DRAW);
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, mesh.format().stride() * Float.BYTES, 0);
+            int strideBytes = mesh.format().stride() * Float.BYTES;
+            glVertexAttribPointer(0, 3, GL_FLOAT, false, strideBytes, 0);
             glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1, 3, GL_FLOAT, false, mesh.format().stride() * Float.BYTES, 3L * Float.BYTES);
+            glVertexAttribPointer(
+                    1, version == MeshFormat.TEXTURED_VERSION ? 4 : 3, GL_FLOAT, false, strideBytes, 3L * Float.BYTES);
             glEnableVertexAttribArray(1);
             glBindVertexArray(0);
             meshPool.put(position, new GpuMesh(vao, vbo, mesh.format(), (array, buffer) -> {
@@ -194,6 +220,7 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     public RenderStats render(Matrix4f viewProjection, Frustum frustum) {
+        if (blockTextures != null) blockTextures.bind(0);
         glUseProgram(program);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer mat = stack.mallocFloat(16);
@@ -201,9 +228,15 @@ public final class TerrainRenderer implements AutoCloseable {
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
+        int texturedMode = -1;
         for (ChunkPos position : culling.visible()) {
             GpuMesh mesh = meshPool.get(position);
             if (mesh == null) continue;
+            int nextMode = mesh.format().version() == MeshFormat.TEXTURED_VERSION ? 1 : 0;
+            if (nextMode != texturedMode) {
+                glUniform1i(texturedUniform, nextMode);
+                texturedMode = nextMode;
+            }
             glBindVertexArray(mesh.vao());
             glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
         }

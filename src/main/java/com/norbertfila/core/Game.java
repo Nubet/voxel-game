@@ -23,15 +23,15 @@ public final class Game {
             TerrainSource generator = new TerrainGenerator(0, terrainConfig);
             PlayerController player = new PlayerController();
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
-            ChunkMesher mesher = new GreedyMesher();
+            GreedyMesher greedyMesher = new GreedyMesher();
+            ChunkMesher mesher = greedyMesher::meshTextured;
             GameSettings settings = new GameSettings();
             SettingsPanel settingsPanel = new SettingsPanel(settings);
             var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
             try (BlockTextureArray textureArray = new BlockTextureArray(blockTextures);
                     ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
-                    TerrainRenderer renderer = new TerrainRenderer();
+                    TerrainRenderer renderer = new TerrainRenderer(textureArray);
                     UiRenderer uiRenderer = new UiRenderer()) {
-                textureArray.bind(0);
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
                 window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
                 new GameLoop().run(window, camera, renderer, uiRenderer, metrics, chunkManager, player, settingsPanel);
