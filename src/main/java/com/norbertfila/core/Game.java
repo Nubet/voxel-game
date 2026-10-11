@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
 import com.norbertfila.meshing.*;
@@ -25,9 +26,12 @@ public final class Game {
             ChunkMesher mesher = new GreedyMesher();
             GameSettings settings = new GameSettings();
             SettingsPanel settingsPanel = new SettingsPanel(settings);
-            try (ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
+            var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
+            try (BlockTextureArray textureArray = new BlockTextureArray(blockTextures);
+                    ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
                     TerrainRenderer renderer = new TerrainRenderer();
                     UiRenderer uiRenderer = new UiRenderer()) {
+                textureArray.bind(0);
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
                 window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
                 new GameLoop().run(window, camera, renderer, uiRenderer, metrics, chunkManager, player, settingsPanel);
