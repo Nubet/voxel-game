@@ -37,10 +37,10 @@ class BlockRegistryTest {
     }
 
     @Test
-    void definitionsExposeSolidAndOpaquePropertiesWithoutChangingCurrentBlocks() {
+    void definitionsSeparateCollisionOcclusionAndRenderLayers() {
         BlockRegistry registry = BlockRegistry.DEFAULT;
-        assertFalse(registry.isSolid(BlockId.AIR));
-        assertFalse(registry.isOpaque(BlockId.AIR));
+        assertFalse(registry.isCollidable(BlockId.AIR));
+        assertFalse(registry.occludesFullFace(BlockId.AIR));
         for (byte id : new byte[] {
             BlockId.GRASS,
             BlockId.DIRT,
@@ -58,15 +58,30 @@ class BlockRegistryTest {
             BlockId.SANDSTONE,
             BlockId.STONE_BRICKS
         }) {
-            assertTrue(registry.isSolid(id));
+            assertTrue(registry.isCollidable(id));
         }
         for (byte id : new byte[] {
             BlockId.GRASS, BlockId.DIRT, BlockId.STONE, BlockId.SAND, BlockId.GRAVEL, BlockId.BEDROCK,
             BlockId.SNOW, BlockId.LOG, BlockId.PLANKS, BlockId.COBBLE, BlockId.BRICKS, BlockId.SANDSTONE,
             BlockId.STONE_BRICKS
-        }) assertTrue(registry.isOpaque(id));
-        assertFalse(registry.isOpaque(BlockId.LEAVES));
-        assertFalse(registry.isOpaque(BlockId.GLASS));
+        }) {
+            assertTrue(registry.occludesFullFace(id));
+            assertEquals(RenderLayer.OPAQUE, registry.definition(id).renderLayer());
+        }
+        for (byte id : new byte[] {BlockId.LEAVES, BlockId.GLASS}) {
+            assertFalse(registry.occludesFullFace(id));
+            assertEquals(RenderLayer.CUTOUT, registry.definition(id).renderLayer());
+        }
+        assertTrue(BlockId.isValid(BlockId.WATER));
+        assertEquals(16, BlockId.toUnsignedInt(BlockId.WATER));
+        assertFalse(registry.isCollidable(BlockId.WATER));
+        assertFalse(registry.occludesFullFace(BlockId.WATER));
+        assertEquals(RenderLayer.TRANSLUCENT, registry.definition(BlockId.WATER).renderLayer());
+        for (int face = 0; face < 6; face++)
+            assertEquals(
+                    BlockRegistry.WATER_TEXTURE,
+                    registry.definition(BlockId.WATER).textureLayer(face));
+        assertEquals(18, registry.textureLayer("refi_water"));
     }
 
     @Test
@@ -79,8 +94,8 @@ class BlockRegistryTest {
         input.put("dirt", 2);
         BlockRegistry registry = new BlockRegistry(
                 List.of(
-                        new BlockDefinition(0, "air", 0, 0, 0, false, false),
-                        new BlockDefinition(3, "stone", 4, 4, 4, true, true)),
+                        new BlockDefinition(0, "air", 0, 0, 0, false, false, RenderLayer.OPAQUE),
+                        new BlockDefinition(3, "stone", 4, 4, 4, true, true, RenderLayer.OPAQUE)),
                 input);
         input.put("new", 5);
         assertEquals(4, registry.textureLayer("stone"));
@@ -103,9 +118,13 @@ class BlockRegistryTest {
 
     @Test
     void rejectsInvalidDefinitionsAndRegistryCollisions() {
-        assertThrows(IllegalArgumentException.class, () -> new BlockDefinition(256, "bad", 0, 0, 0, true, true));
-        assertThrows(IllegalArgumentException.class, () -> new BlockDefinition(1, " ", 0, 0, 0, true, true));
-        assertThrows(IllegalArgumentException.class, () -> new BlockDefinition(1, "glass", 0, 0, 0, false, true));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new BlockDefinition(256, "bad", 0, 0, 0, true, true, RenderLayer.OPAQUE));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new BlockDefinition(1, " ", 0, 0, 0, true, true, RenderLayer.OPAQUE));
+        assertThrows(NullPointerException.class, () -> new BlockDefinition(1, "invalid", 0, 0, 0, true, true, null));
         Map<String, Integer> textures = BlockRegistry.DEFAULT.textureLayers();
         assertThrows(
                 IllegalArgumentException.class,
@@ -122,7 +141,7 @@ class BlockRegistryTest {
                 () -> new BlockRegistry(
                         List.of(
                                 BlockRegistry.DEFAULT.definition(BlockId.AIR),
-                                new BlockDefinition(1, "invalid-layer", 99, 99, 99, true, true)),
+                                new BlockDefinition(1, "invalid-layer", 99, 99, 99, true, true, RenderLayer.OPAQUE)),
                         textures));
     }
 
@@ -131,8 +150,18 @@ class BlockRegistryTest {
         World world = new World();
         Chunk chunk = new Chunk();
         chunk.set(1, 2, 3, BlockId.GRASS);
+        chunk.set(3, 2, 3, BlockId.WATER);
         world.putChunk(new ChunkPos(0, 0, 0), chunk);
         assertTrue(world.isSolid(new BlockPos(1, 2, 3)));
         assertFalse(world.isSolid(new BlockPos(2, 2, 3)));
+        assertFalse(world.isSolid(new BlockPos(3, 2, 3)));
+        assertEquals(BlockId.WATER, chunk.snapshot().get(3, 2, 3));
+    }
+
+    @Test
+    void fullFaceOcclusionDoesNotRequireCollision() {
+        BlockDefinition definition = new BlockDefinition(1, "visual-wall", 0, 0, 0, false, true, RenderLayer.OPAQUE);
+        assertFalse(definition.collidable());
+        assertTrue(definition.occludesFullFace());
     }
 }

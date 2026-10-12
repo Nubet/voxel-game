@@ -77,7 +77,7 @@ public final class World {
 
     public boolean isSolid(BlockPos worldPosition) {
         OptionalInt block = getBlock(Objects.requireNonNull(worldPosition));
-        return block.isPresent() && BlockRegistry.DEFAULT.isSolid((byte) block.getAsInt());
+        return block.isPresent() && BlockRegistry.DEFAULT.isCollidable((byte) block.getAsInt());
     }
 
     public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {

@@ -122,6 +122,23 @@ class VoxelCollisionTest {
     }
 
     @Test
+    void waterDoesNotBlockMovementOrProvideFloorSupport() {
+        Aabb body = PlayerPhysics.body(new PlayerState.Position(.5, 1, .5));
+        World world = loaded(VoxelCollision.requiredRegion(body, 2, -.5, 0));
+        world.setBlock(new BlockPos(1, 1, 0), BlockId.WATER, 64);
+        world.setBlock(new BlockPos(0, 0, 0), BlockId.WATER, 64);
+        world.setBlock(new BlockPos(0, 1, 0), BlockId.WATER, 64);
+        assertTrue(collision.spaceFree(world, body));
+        var moved = collision.move(world, body, 2, -.5, 0);
+        assertTrue(moved.available());
+        assertEquals(2, moved.x());
+        assertEquals(-.5, moved.y());
+        assertFalse(moved.blockedX());
+        assertFalse(moved.blockedY());
+        assertFalse(moved.grounded());
+    }
+
+    @Test
     void authoritativeBlockEditsImmediatelyChangeCollisions() {
         Aabb body = PlayerPhysics.body(new PlayerState.Position(.5, 1, .5));
         World world = loaded(VoxelCollision.requiredRegion(body, 2, 0, 0));

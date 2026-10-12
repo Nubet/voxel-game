@@ -20,7 +20,7 @@ public final class PackedVertexMesher {
                         int ny = y + VisibleFaceMesher.NORMALS[face][1];
                         int nz = z + VisibleFaceMesher.NORMALS[face][2];
                         if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-                            if (BlockRegistry.DEFAULT.isOpaque(snapshot.get(nx, ny, nz))) continue;
+                            if (BlockRegistry.DEFAULT.occludesFullFace(snapshot.get(nx, ny, nz))) continue;
                         } else if (solidNeighbor(neighborhood, face, x, y, z)) {
                             continue;
                         }
@@ -39,12 +39,12 @@ public final class PackedVertexMesher {
                 neighborhood.neighbor(BlockNeighborhood.Side.values()[face]).orElse(null);
         if (neighbor == null) return false;
         return switch (face) {
-            case 0 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(0, y, z));
-            case 1 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(Chunk.SIZE - 1, y, z));
-            case 2 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, 0, z));
-            case 3 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, Chunk.SIZE - 1, z));
-            case 4 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, y, 0));
-            case 5 -> BlockRegistry.DEFAULT.isOpaque(neighbor.get(x, y, Chunk.SIZE - 1));
+            case 0 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(0, y, z));
+            case 1 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(Chunk.SIZE - 1, y, z));
+            case 2 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, 0, z));
+            case 3 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, Chunk.SIZE - 1, z));
+            case 4 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, 0));
+            case 5 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, Chunk.SIZE - 1));
             default -> throw new AssertionError(face);
         };
     }

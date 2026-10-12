@@ -38,6 +38,17 @@ class MessageCodecTest {
     }
 
     @Test
+    void roundTripsWaterEditsAndChunkDeltas() throws Exception {
+        BlockPos position = new BlockPos(-17, -1, -9);
+        for (WorldCommand command : List.of(
+                new WorldCommand.BlockEdit(position, BlockId.WATER),
+                new WorldCommand.ChunkDeltaUpdate(new ChunkDelta(
+                        new ChunkPos(-2, -1, -1), List.of(new ChunkDelta.BlockChange(position, BlockId.WATER)))))) {
+            assertEquals(command, MessageCodec.decode(MessageCodec.encode(command)));
+        }
+    }
+
+    @Test
     void rejectsTruncatedUnknownAndTrailingMessages() {
         byte[] valid = MessageCodec.encode(new WorldCommand.Handshake(1));
 

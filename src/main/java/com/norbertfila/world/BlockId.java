@@ -16,7 +16,8 @@ public final class BlockId {
             BRICKS = 12,
             GLASS = 13,
             SANDSTONE = 14,
-            STONE_BRICKS = 15;
+            STONE_BRICKS = 15,
+            WATER = 16;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -39,7 +40,8 @@ public final class BlockId {
                     BRICKS,
                     GLASS,
                     SANDSTONE,
-                    STONE_BRICKS -> true;
+                    STONE_BRICKS,
+                    WATER -> true;
             default -> false;
         };
     }

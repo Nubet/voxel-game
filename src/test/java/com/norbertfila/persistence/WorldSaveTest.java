@@ -1,6 +1,7 @@
 package com.norbertfila.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -70,6 +71,20 @@ class WorldSaveTest {
         assertEquals(2, loaded.deltas().size());
         assertEquals(BlockId.STONE, restored.getBlock(new BlockPos(-1, 4, -9)).orElseThrow());
         assertEquals(BlockId.GRASS, restored.getBlock(new BlockPos(16, 1, 16)).orElseThrow());
+    }
+
+    @Test
+    void roundTripsWaterDeltaAtNegativeCoordinates() throws Exception {
+        World world = new World();
+        BlockPos position = new BlockPos(-17, -1, -9);
+        world.setBlock(position, BlockId.WATER, 8);
+        Path save = temporaryDirectory.resolve("water.vxl");
+        WorldSave.save(save, 42, 7, world);
+        World restored = new World();
+        WorldSave.restore(restored, WorldSave.load(save), 8);
+        restored.putChunk(Coordinates.worldToChunk(position), new Chunk());
+        assertEquals(BlockId.WATER, restored.getBlock(position).orElseThrow());
+        assertFalse(restored.isSolid(position));
     }
 
     @Test

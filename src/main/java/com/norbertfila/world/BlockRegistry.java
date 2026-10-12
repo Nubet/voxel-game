@@ -24,6 +24,7 @@ public final class BlockRegistry {
     public static final int GLASS_TEXTURE = 15;
     public static final int SANDSTONE_TEXTURE = 16;
     public static final int STONE_BRICKS_TEXTURE = 17;
+    public static final int WATER_TEXTURE = 18;
     public static final BlockRegistry DEFAULT = defaults();
 
     private final BlockDefinition[] definitions;
@@ -59,12 +60,12 @@ public final class BlockRegistry {
         return definition;
     }
 
-    public boolean isSolid(byte id) {
-        return definition(id).solid();
+    public boolean isCollidable(byte id) {
+        return definition(id).collidable();
     }
 
-    public boolean isOpaque(byte id) {
-        return definition(id).opaque();
+    public boolean occludesFullFace(byte id) {
+        return definition(id).occludesFullFace();
     }
 
     public int textureLayer(String name) {
@@ -101,14 +102,38 @@ public final class BlockRegistry {
         textures.put("refi_glass", GLASS_TEXTURE);
         textures.put("refi_sandstone", SANDSTONE_TEXTURE);
         textures.put("refi_stone_bricks", STONE_BRICKS_TEXTURE);
+        textures.put("refi_water", WATER_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(
-                                0, "air", FALLBACK_TEXTURE, FALLBACK_TEXTURE, FALLBACK_TEXTURE, false, false),
+                                0,
+                                "air",
+                                FALLBACK_TEXTURE,
+                                FALLBACK_TEXTURE,
+                                FALLBACK_TEXTURE,
+                                false,
+                                false,
+                                RenderLayer.OPAQUE),
                         new BlockDefinition(
-                                1, "grass", GRASS_TOP_TEXTURE, DIRT_TEXTURE, GRASS_SIDE_TEXTURE, true, true),
-                        new BlockDefinition(2, "dirt", DIRT_TEXTURE, DIRT_TEXTURE, DIRT_TEXTURE, true, true),
-                        new BlockDefinition(3, "stone", STONE_TEXTURE, STONE_TEXTURE, STONE_TEXTURE, true, true),
+                                1,
+                                "grass",
+                                GRASS_TOP_TEXTURE,
+                                DIRT_TEXTURE,
+                                GRASS_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
+                        new BlockDefinition(
+                                2, "dirt", DIRT_TEXTURE, DIRT_TEXTURE, DIRT_TEXTURE, true, true, RenderLayer.OPAQUE),
+                        new BlockDefinition(
+                                3,
+                                "stone",
+                                STONE_TEXTURE,
+                                STONE_TEXTURE,
+                                STONE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
                         uniform(BlockId.SAND, "sand", SAND_TEXTURE, true),
                         uniform(BlockId.GRAVEL, "gravel", GRAVEL_TEXTURE, true),
                         uniform(BlockId.BEDROCK, "bedrock", BEDROCK_TEXTURE, true),
@@ -120,18 +145,36 @@ public final class BlockRegistry {
                                 LOG_TOP_TEXTURE,
                                 LOG_SIDE_TEXTURE,
                                 true,
-                                true),
+                                true,
+                                RenderLayer.OPAQUE),
                         uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false),
                         uniform(BlockId.PLANKS, "planks", PLANKS_TEXTURE, true),
                         uniform(BlockId.COBBLE, "cobble", COBBLE_TEXTURE, true),
                         uniform(BlockId.BRICKS, "bricks", BRICKS_TEXTURE, true),
                         uniform(BlockId.GLASS, "glass", GLASS_TEXTURE, false),
                         uniform(BlockId.SANDSTONE, "sandstone", SANDSTONE_TEXTURE, true),
-                        uniform(BlockId.STONE_BRICKS, "stone_bricks", STONE_BRICKS_TEXTURE, true)),
+                        uniform(BlockId.STONE_BRICKS, "stone_bricks", STONE_BRICKS_TEXTURE, true),
+                        new BlockDefinition(
+                                Byte.toUnsignedInt(BlockId.WATER),
+                                "water",
+                                WATER_TEXTURE,
+                                WATER_TEXTURE,
+                                WATER_TEXTURE,
+                                false,
+                                false,
+                                RenderLayer.TRANSLUCENT)),
                 textures);
     }
 
-    private static BlockDefinition uniform(byte id, String name, int texture, boolean opaque) {
-        return new BlockDefinition(Byte.toUnsignedInt(id), name, texture, texture, texture, true, opaque);
+    private static BlockDefinition uniform(byte id, String name, int texture, boolean occludesFullFace) {
+        return new BlockDefinition(
+                Byte.toUnsignedInt(id),
+                name,
+                texture,
+                texture,
+                texture,
+                true,
+                occludesFullFace,
+                occludesFullFace ? RenderLayer.OPAQUE : RenderLayer.CUTOUT);
     }
 }

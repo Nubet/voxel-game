@@ -14,7 +14,7 @@ class AssetLoaderTest {
     @Test
     void loadsAllDefaultImagesInRegistryLayerOrderAsIndependentRgba() {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
-        assertEquals(18, textures.layerCount());
+        assertEquals(19, textures.layerCount());
         for (TextureSet.Texture texture : textures.layers()) {
             assertEquals(16, texture.width());
             assertEquals(16, texture.height());
@@ -27,6 +27,26 @@ class AssetLoaderTest {
         byte[] copy = textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgba();
         copy[0] = 0;
         assertNotEquals(0, textures.layer(BlockRegistry.GRASS_TOP_TEXTURE).rgbaAt(0, 0, 0));
+    }
+
+    @Test
+    void shippedWaterDecodesWithoutFallback() throws IOException {
+        TextureSet.Texture water =
+                new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures().layer(BlockRegistry.WATER_TEXTURE);
+        try (var input = AssetLoaderTest.class.getResourceAsStream("/assets/textures/blocks/refi_water.png")) {
+            assertNotNull(input);
+            BufferedImage expected = ImageIO.read(input);
+            assertEquals(16, expected.getWidth());
+            assertEquals(16, expected.getHeight());
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++) {
+                    int pixel = expected.getRGB(x, y);
+                    assertEquals((pixel >>> 16) & 255, water.rgbaAt(x, y, 0));
+                    assertEquals((pixel >>> 8) & 255, water.rgbaAt(x, y, 1));
+                    assertEquals(pixel & 255, water.rgbaAt(x, y, 2));
+                    assertEquals(pixel >>> 24, water.rgbaAt(x, y, 3));
+                }
+        }
     }
 
     @Test

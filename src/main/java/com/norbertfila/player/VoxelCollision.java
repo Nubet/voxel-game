@@ -193,7 +193,7 @@ public final class VoxelCollision {
     }
 
     private static boolean solid(World world, int x, int y, int z) {
-        return BlockRegistry.DEFAULT.isSolid(
+        return BlockRegistry.DEFAULT.isCollidable(
                 (byte) world.getBlock(new BlockPos(x, y, z)).orElseThrow());
     }
 
