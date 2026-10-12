@@ -2,6 +2,7 @@ package com.norbertfila.player;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.simulation.FixedSimulation;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;

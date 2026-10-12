@@ -7,12 +7,12 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
-import com.norbertfila.player.FixedSimulation;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
+import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
@@ -24,7 +24,6 @@ import java.util.Optional;
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = 0.1;
     private static final long MINIMIZED_SLEEP_MILLIS = 16;
-    private static final double FIXED_DELTA_SECONDS = 1.0 / 60.0;
     private static final int MAX_CATCH_UP_TICKS = 5;
     private static final int FAR_TILE_SIZE = 64;
 
@@ -41,7 +40,7 @@ public final class GameLoop {
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             BlockInteraction interaction = new BlockInteraction(chunkManager.world(), FAR_TILE_SIZE);
-            FixedSimulation simulation = new FixedSimulation(FIXED_DELTA_SECONDS, MAX_CATCH_UP_TICKS);
+            FixedSimulation simulation = new FixedSimulation(FixedSimulation.TICK_SECONDS, MAX_CATCH_UP_TICKS);
             String hardware =
                     System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
             int[] framebufferWidth = new int[1];
@@ -90,7 +89,7 @@ public final class GameLoop {
                 } else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
                 ChunkPos playerChunk = playerChunk(player);
                 chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
-                        input.peekPlayerTick(), FIXED_DELTA_SECONDS, camera.yaw(), camera.pitch()));
+                        input.peekPlayerTick(), FixedSimulation.TICK_SECONDS, camera.yaw(), camera.pitch()));
                 ChunkManager.UpdateResult update = chunkManager.update(playerChunk);
                 ChunkManager.ProcessResult processed = chunkManager.processResults();
                 for (ChunkManager.MeshResult mesh : processed.meshes()) {

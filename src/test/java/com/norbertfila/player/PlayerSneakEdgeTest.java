@@ -2,6 +2,7 @@ package com.norbertfila.player;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
