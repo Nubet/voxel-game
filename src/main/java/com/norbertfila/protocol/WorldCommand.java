@@ -3,6 +3,7 @@ package com.norbertfila.protocol;
 import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.WaterState;
 import java.util.Objects;
 
 public sealed interface WorldCommand
@@ -30,10 +31,15 @@ public sealed interface WorldCommand
         }
     }
 
-    record BlockEdit(BlockPos position, byte value) implements WorldCommand {
+    record BlockEdit(BlockPos position, byte value, byte waterState) implements WorldCommand {
+        public BlockEdit(BlockPos position, byte value) {
+            this(position, value, WaterState.defaultFor(value));
+        }
+
         public BlockEdit {
             Objects.requireNonNull(position);
             if (!BlockId.isValid(value)) throw new IllegalArgumentException("Unknown block id");
+            WaterState.validate(value, waterState);
         }
     }
 

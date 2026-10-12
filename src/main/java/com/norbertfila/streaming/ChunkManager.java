@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,6 +48,11 @@ public final class ChunkManager implements AutoCloseable {
     private boolean collisionDemandChanged;
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
+    private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
+
+    public void setChunkLifecycleListener(Consumer<ChunkPos> listener) {
+        chunkLifecycleListener = Objects.requireNonNull(listener);
+    }
 
     public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand) {
         this(world, generator, new GreedyMesher(), viewDemand);
@@ -96,7 +102,7 @@ public final class ChunkManager implements AutoCloseable {
                 meshTokens.remove(position);
                 pendingRemesh.remove(position);
                 pendingEdits.remove(position);
-                world.removeChunk(position);
+                if (world.removeChunk(position) != null) chunkLifecycleListener.accept(position);
                 evicted.add(position);
             }
             for (ChunkPos position : evicted) {
@@ -138,6 +144,7 @@ public final class ChunkManager implements AutoCloseable {
             ChunkData data = outcome.result();
             Chunk chunk = Chunk.fromBlocks(data.blocks());
             world.putChunk(outcome.position(), chunk);
+            chunkLifecycleListener.accept(outcome.position());
             entry.generated(chunk.revision());
             requestRemesh(outcome.position());
             for (ChunkPos neighbor : neighbors(outcome.position())) {

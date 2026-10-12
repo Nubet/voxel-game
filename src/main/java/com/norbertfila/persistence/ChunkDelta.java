@@ -4,6 +4,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WaterState;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -34,9 +35,14 @@ public record ChunkDelta(ChunkPos position, List<BlockChange> changes) {
                 Math.floorDiv(position.z(), Chunk.SIZE));
     }
 
-    public record BlockChange(BlockPos position, byte value) {
+    public record BlockChange(BlockPos position, byte value, byte waterState) {
+        public BlockChange(BlockPos position, byte value) {
+            this(position, value, WaterState.defaultFor(value));
+        }
+
         public BlockChange {
             Objects.requireNonNull(position);
+            WaterState.validate(value, waterState);
         }
     }
 }

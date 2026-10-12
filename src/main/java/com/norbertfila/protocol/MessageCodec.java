@@ -83,6 +83,7 @@ public final class MessageCodec {
                 output.writeInt(edit.position().y());
                 output.writeInt(edit.position().z());
                 output.writeByte(edit.value());
+                output.writeByte(edit.waterState());
             }
             case WorldCommand.ChunkDeltaUpdate update -> writeDelta(output, update.delta());
         }
@@ -99,7 +100,9 @@ public final class MessageCodec {
             case 3 -> new WorldCommand.PlayerPosition(input.readDouble(), input.readDouble(), input.readDouble());
             case 4 ->
                 new WorldCommand.BlockEdit(
-                        new BlockPos(input.readInt(), input.readInt(), input.readInt()), input.readByte());
+                        new BlockPos(input.readInt(), input.readInt(), input.readInt()),
+                        input.readByte(),
+                        input.readByte());
             case 5 -> new WorldCommand.ChunkDeltaUpdate(readDelta(input));
             default -> throw new IOException("Unknown message type: " + type);
         };
@@ -115,6 +118,7 @@ public final class MessageCodec {
             output.writeInt(change.position().y());
             output.writeInt(change.position().z());
             output.writeByte(change.value());
+            output.writeByte(change.waterState());
         }
     }
 
@@ -125,7 +129,9 @@ public final class MessageCodec {
         List<ChunkDelta.BlockChange> changes = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
             changes.add(new ChunkDelta.BlockChange(
-                    new BlockPos(input.readInt(), input.readInt(), input.readInt()), input.readByte()));
+                    new BlockPos(input.readInt(), input.readInt(), input.readInt()),
+                    input.readByte(),
+                    input.readByte()));
         }
         return new ChunkDelta(position, changes);
     }

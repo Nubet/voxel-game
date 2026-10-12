@@ -2,9 +2,11 @@ package com.norbertfila.fluid;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
+import java.util.Set;
 
 final class WaterFlowRules {
     static final int BLOCKED = -2;
@@ -14,10 +16,10 @@ final class WaterFlowRules {
 
     private WaterFlowRules() {}
 
-    static int nextState(World world, BlockPos position) {
-        int current = read(world, position);
+    static int nextState(World world, BlockPos position, Set<ChunkPos> missing) {
+        int current = read(world, position, missing);
         if (current == BLOCKED || current == UNAVAILABLE || current == WaterState.SOURCE) return current;
-        int above = read(world, offset(position, 0, 1, 0));
+        int above = read(world, offset(position, 0, 1, 0), missing);
         if (above == UNAVAILABLE) return UNAVAILABLE;
         if (above >= WaterState.SOURCE) return WaterState.FALLING;
 
@@ -25,12 +27,12 @@ final class WaterFlowRules {
         boolean unknown = false;
         for (int direction = 0; direction < DX.length; direction++) {
             BlockPos neighbor = offset(position, DX[direction], 0, DZ[direction]);
-            int state = read(world, neighbor);
+            int state = read(world, neighbor, missing);
             if (state == UNAVAILABLE) unknown = true;
             if (state < WaterState.SOURCE) continue;
             int distance = WaterState.distance((byte) state) + 1;
             if (distance > WaterState.MAX_DISTANCE) continue;
-            int below = read(world, offset(neighbor, 0, -1, 0));
+            int below = read(world, offset(neighbor, 0, -1, 0), missing);
             if (below == UNAVAILABLE) unknown = true;
             // A donor that can continue downward must not feed a horizontal sheet.
             if (below == BLOCKED || below == WaterState.SOURCE) best = Math.min(best, distance);
@@ -39,9 +41,13 @@ final class WaterFlowRules {
         return best <= WaterState.MAX_DISTANCE ? best : WaterState.EMPTY;
     }
 
-    private static int read(World world, BlockPos position) {
+    private static int read(World world, BlockPos position, Set<ChunkPos> missing) {
         if (position == null) return BLOCKED;
-        if (!world.hasChunk(Coordinates.worldToChunk(position))) return UNAVAILABLE;
+        ChunkPos chunk = Coordinates.worldToChunk(position);
+        if (!world.hasChunk(chunk)) {
+            missing.add(chunk);
+            return UNAVAILABLE;
+        }
         int block = world.getBlock(position).orElseThrow();
         if (block == BlockId.AIR) return WaterState.EMPTY;
         if (block != BlockId.WATER) return BLOCKED;

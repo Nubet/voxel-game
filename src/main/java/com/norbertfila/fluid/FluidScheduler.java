@@ -3,6 +3,7 @@ package com.norbertfila.fluid;
 import com.norbertfila.world.BlockPos;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Objects;
@@ -89,6 +90,19 @@ public final class FluidScheduler {
     public int size() {
         return scheduled.size();
     }
+
+    public List<PendingUpdate> pending() {
+        return queue.stream()
+                .map(t -> new PendingUpdate(t.position(), t.executeAtTick()))
+                .toList();
+    }
+
+    public void cancel(BlockPos position) {
+        FluidTick previous = scheduled.remove(position);
+        if (previous != null) queue.remove(previous);
+    }
+
+    public record PendingUpdate(BlockPos position, long executeAtTick) {}
 
     private record FluidTick(BlockPos position, long executeAtTick, long sequence) {}
 }

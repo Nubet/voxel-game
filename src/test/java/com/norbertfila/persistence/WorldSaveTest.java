@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.norbertfila.fluid.FluidSnapshot;
 import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.generation.TerrainConfig;
 import com.norbertfila.generation.TerrainGenerator;
@@ -16,10 +17,12 @@ import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,20 +31,94 @@ class WorldSaveTest {
     Path temporaryDirectory;
 
     @Test
-    void unsupportedFlowCannotSilentlyReplaceAnExistingSaveWithSources() throws Exception {
+    void schemaOneWaterLoadsAsSourceWithNoFluidTasks() throws Exception {
+        Path save = temporaryDirectory.resolve("legacy.vxl");
+        try (var out = new DataOutputStream(Files.newOutputStream(save))) {
+            out.writeInt(0x56584C31);
+            out.writeInt(1);
+            out.writeLong(42);
+            out.writeInt(7);
+            out.writeInt(1);
+            out.writeInt(-2);
+            out.writeInt(-1);
+            out.writeInt(-1);
+            out.writeInt(1);
+            out.writeInt(-17);
+            out.writeInt(-1);
+            out.writeInt(-9);
+            out.writeByte(BlockId.WATER);
+        }
+        var loaded = WorldSave.load(save);
+        assertEquals(1, loaded.schemaVersion());
+        assertEquals(FluidSnapshot.EMPTY, loaded.fluids());
+        World world = new World();
+        WorldSave.restore(world, loaded, 8);
+        assertEquals(
+                WaterState.SOURCE,
+                world.getWaterState(new BlockPos(-17, -1, -9)).orElseThrow());
+    }
+
+    @Test
+    void allWaterStatesAndBothTaskKindsSurviveDiskAndRegeneration() throws Exception {
+        World world = new World();
+        for (byte state = 0; state <= 8; state++)
+            world.setBlock(new BlockPos(-16 + state, 1, 1), BlockId.WATER, state, 8);
+        var fluids = new FluidSnapshot(
+                500,
+                List.of(
+                        new FluidSnapshot.Update(new BlockPos(-16, 1, 1), 3, List.of()),
+                        new FluidSnapshot.Update(new BlockPos(-15, 1, 1), 15, List.of(new ChunkPos(-2, 0, 0)))));
+        var snapshot = WorldSave.capture(42, 7, world, fluids);
+        Path save = temporaryDirectory.resolve("states.vxl");
+        WorldSave.save(save, snapshot);
+        World restored = new World();
+        var loaded = WorldSave.load(save);
+        assertEquals(2, loaded.schemaVersion());
+        assertEquals(fluids, loaded.fluids());
+        WorldSave.restore(restored, loaded, 8);
+        restored.putChunk(new ChunkPos(-1, 0, 0), new Chunk());
+        for (byte state = 0; state <= 8; state++)
+            assertEquals(
+                    state,
+                    restored.getWaterState(new BlockPos(-16 + state, 1, 1)).orElseThrow());
+        byte[] bytes = Files.readAllBytes(save);
+        bytes[53] = 9;
+        Files.write(save, bytes);
+        assertThrows(IOException.class, () -> WorldSave.load(save));
+    }
+
+    @Test
+    void rejectsMalformedFluidDelaysCountsAndDuplicateTasks() throws Exception {
+        Path save = temporaryDirectory.resolve("bad-fluid.vxl");
+        var task = new FluidSnapshot.Update(new BlockPos(1, 1, 1), 2, List.of());
+        assertThrows(IllegalArgumentException.class, () -> new FluidSnapshot(0, List.of(task, task)));
+        WorldSave.save(save, WorldSave.capture(1, 1, new World(), new FluidSnapshot(10, List.of(task))));
+        byte[] bytes = Files.readAllBytes(save);
+        byte[] invalidDelay = bytes.clone();
+        java.nio.ByteBuffer.wrap(invalidDelay).putLong(48, -1);
+        Files.write(save, invalidDelay);
+        assertThrows(IOException.class, () -> WorldSave.load(save));
+        byte[] invalidCount = bytes.clone();
+        java.nio.ByteBuffer.wrap(invalidCount).putInt(32, Integer.MAX_VALUE);
+        Files.write(save, invalidCount);
+        assertThrows(IOException.class, () -> WorldSave.load(save));
+        Files.write(save, Arrays.copyOf(bytes, bytes.length - 1));
+        assertThrows(IOException.class, () -> WorldSave.load(save));
+    }
+
+    @Test
+    void fallingStateSurvivesReplacingAnExistingSourceSave() throws Exception {
         World world = new World();
         BlockPos position = new BlockPos(-17, -1, -9);
         world.setBlock(position, BlockId.WATER, 8);
         Path save = temporaryDirectory.resolve("water-state.vxl");
         WorldSave.save(save, 42, 7, world);
-        byte[] original = Files.readAllBytes(save);
         world.setBlock(position, BlockId.WATER, WaterState.FALLING, 8);
 
-        assertThrows(IllegalStateException.class, () -> WorldSave.save(save, 42, 7, world));
-        assertTrue(Arrays.equals(original, Files.readAllBytes(save)));
+        WorldSave.save(save, 42, 7, world);
         World restored = new World();
         WorldSave.restore(restored, WorldSave.load(save), 8);
-        assertEquals(WaterState.SOURCE, restored.getWaterState(position).orElseThrow());
+        assertEquals(WaterState.FALLING, restored.getWaterState(position).orElseThrow());
     }
 
     @Test

@@ -17,7 +17,7 @@ class MessageCodecTest {
     @Test
     void blockEditHasStableGoldenBytes() throws Exception {
         WorldCommand command = new WorldCommand.BlockEdit(new BlockPos(-1, 2, 3), BlockId.GRASS);
-        byte[] expected = HexFormat.of().parseHex("5658433100000001040000000DFFFFFFFF000000020000000301");
+        byte[] expected = HexFormat.of().parseHex("5658433100000002040000000EFFFFFFFF000000020000000301FF");
 
         assertArrayEquals(expected, MessageCodec.encode(command));
         assertEquals(command, MessageCodec.decode(expected));
@@ -26,7 +26,7 @@ class MessageCodecTest {
     @Test
     void roundTripsEveryMessageType() throws Exception {
         List<WorldCommand> commands = List.of(
-                new WorldCommand.Handshake(1),
+                new WorldCommand.Handshake(ProtocolVersion.CURRENT),
                 new WorldCommand.Seed(42, 3),
                 new WorldCommand.PlayerPosition(1.5, -2.0, 3.25),
                 new WorldCommand.BlockEdit(new BlockPos(1, 2, 3), BlockId.STONE),
@@ -50,7 +50,7 @@ class MessageCodecTest {
 
     @Test
     void rejectsTruncatedUnknownAndTrailingMessages() {
-        byte[] valid = MessageCodec.encode(new WorldCommand.Handshake(1));
+        byte[] valid = MessageCodec.encode(new WorldCommand.Handshake(ProtocolVersion.CURRENT));
 
         assertThrows(IOException.class, () -> MessageCodec.decode(new byte[] {1, 2, 3}));
         byte[] unknown = valid.clone();
@@ -59,5 +59,23 @@ class MessageCodecTest {
         byte[] trailing = new byte[valid.length + 1];
         System.arraycopy(valid, 0, trailing, 0, valid.length);
         assertThrows(IOException.class, () -> MessageCodec.decode(trailing));
+    }
+
+    @Test
+    void allWaterStatesRoundTripAndInvalidPairsAreRejected() throws Exception {
+        BlockPos position = new BlockPos(-17, -1, -9);
+        for (byte state = 0; state <= 8; state++) {
+            for (WorldCommand command : List.of(
+                    new WorldCommand.BlockEdit(position, BlockId.WATER, state),
+                    new WorldCommand.ChunkDeltaUpdate(new ChunkDelta(
+                            new ChunkPos(-2, -1, -1),
+                            List.of(new ChunkDelta.BlockChange(position, BlockId.WATER, state))))))
+                assertEquals(command, MessageCodec.decode(MessageCodec.encode(command)));
+        }
+        byte[] invalid = MessageCodec.encode(new WorldCommand.BlockEdit(position, BlockId.STONE));
+        invalid[invalid.length - 1] = 1;
+        assertThrows(IOException.class, () -> MessageCodec.decode(invalid));
+        byte[] legacy = HexFormat.of().parseHex("5658433100000001040000000DFFFFFFFF000000020000000301");
+        assertThrows(IOException.class, () -> MessageCodec.decode(legacy));
     }
 }

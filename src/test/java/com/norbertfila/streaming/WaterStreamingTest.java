@@ -2,13 +2,16 @@ package com.norbertfila.streaming;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.WaterTestScene;
 import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.*;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +22,37 @@ import org.junit.jupiter.api.Test;
 class WaterStreamingTest {
     private static final ChunkPos CENTER = new ChunkPos(-1, 1, -1);
     private final GreedyMesher mesher = new GreedyMesher();
+
+    @Test
+    void managerLifecycleFreezesAndReactivatesWaterOnItsOwnerThread() throws Exception {
+        World world = new World();
+        WaterSimulator simulator = new WaterSimulator(world, 8);
+        ViewDemand demand = new ViewDemand(0, 1, 1, ViewDemand.Shape.SQUARE);
+        Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
+        long[] tick = {0};
+        Thread owner = Thread.currentThread();
+        List<Boolean> centerEvents = new ArrayList<>();
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+            manager.setChunkLifecycleListener(position -> {
+                assertSame(owner, Thread.currentThread());
+                if (position.equals(CENTER)) centerEvents.add(world.hasChunk(position));
+                simulator.onChunkChanged(position, tick[0]);
+            });
+            settle(manager, demand, CENTER, uploaded);
+            assertTrue(simulator.pendingUpdates() > 0);
+            tick[0] = 5;
+            settle(manager, demand, new ChunkPos(10, 1, -1), uploaded);
+            assertTrue(simulator.deferredUpdates() > 0);
+            simulator.tick(1000);
+            assertEquals(0, simulator.tick(2000).processedUpdates());
+            tick[0] = 2000;
+            settle(manager, demand, CENTER, uploaded);
+            assertEquals(List.of(true, false, true), centerEvents);
+            assertTrue(simulator.pendingUpdates() > simulator.deferredUpdates());
+            assertTrue(simulator.tick(2015).processedUpdates() > 0);
+            assertEquals(1, world.residentCount());
+        }
+    }
 
     @Test
     void stateOnlyEditsRejectQueuedMeshesAndSurviveStreamingReload() throws Exception {

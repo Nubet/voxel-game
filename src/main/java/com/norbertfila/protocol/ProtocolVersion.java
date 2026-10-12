@@ -1,7 +1,7 @@
 package com.norbertfila.protocol;
 
 public final class ProtocolVersion {
-    public static final int CURRENT = 1;
+    public static final int CURRENT = 2;
 
     private ProtocolVersion() {}
 
