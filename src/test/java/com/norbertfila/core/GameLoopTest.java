@@ -30,8 +30,7 @@ class GameLoopTest {
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
 
-        var result = GameLoop.updateBlockEditing(
-                        camera, player, new BlockInteraction(world, 64), hotbar, false, false, true, 1)
+        var result = updateBlockEditing(camera, player, new BlockInteraction(world, 64), hotbar, false, false, true, 1)
                 .orElseThrow();
 
         assertTrue(result.changed());
@@ -45,7 +44,7 @@ class GameLoopTest {
     void panelAndToggleFrameBlockBothEditsAndSelection() {
         World world = editableWorld();
         Hotbar hotbar = new Hotbar();
-        var result = GameLoop.updateBlockEditing(
+        var result = updateBlockEditing(
                 editingCamera(), new PlayerController(), new BlockInteraction(world, 64), hotbar, true, true, true, 2);
 
         assertTrue(result.isEmpty());
@@ -63,16 +62,16 @@ class GameLoopTest {
         Camera camera = editingCamera();
         BlockInteraction interaction = new BlockInteraction(world, 64);
 
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .isEmpty());
         assertEquals(0, world.changes().size());
         player.setMode(world, PlayerController.Mode.SPECTATOR);
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .isEmpty());
         assertEquals(0, world.changes().size());
         player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
         assertTrue(player.setMode(world, PlayerController.Mode.CREATIVE));
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .orElseThrow()
                 .changed());
     }
@@ -85,13 +84,13 @@ class GameLoopTest {
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
 
-        var placement = GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 12)
+        var placement = updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 12)
                 .orElseThrow();
         assertTrue(placement.changed());
         assertEquals(BlockId.GLASS, world.getBlock(new BlockPos(8, 9, 7)).orElseThrow());
         assertEquals(12, hotbar.selectedSlot());
 
-        var removal = GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, true, true, -1)
+        var removal = updateBlockEditing(camera, player, interaction, hotbar, false, true, true, -1)
                 .orElseThrow();
 
         assertTrue(removal.changed());
@@ -108,10 +107,10 @@ class GameLoopTest {
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
 
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, false, -1, 1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, false, -1, 1)
                 .isEmpty());
         assertEquals(15, hotbar.selectedSlot());
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, true, false, false, -1, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, true, false, false, -1, -1)
                 .isEmpty());
         assertEquals(15, hotbar.selectedSlot());
     }
@@ -122,7 +121,7 @@ class GameLoopTest {
         Hotbar hotbar = new Hotbar();
         PlayerController player = new PlayerController();
         player.setMode(world, PlayerController.Mode.SPECTATOR);
-        assertTrue(GameLoop.updateBlockEditing(
+        assertTrue(updateBlockEditing(
                         editingCamera(), player, new BlockInteraction(world, 64), hotbar, false, true, true, 2)
                 .isEmpty());
         assertEquals(0, hotbar.selectedSlot());
@@ -144,11 +143,11 @@ class GameLoopTest {
         camera.updateLook(0, -25 / .11f);
         Hotbar hotbar = new Hotbar();
         BlockInteraction interaction = new BlockInteraction(world, 64);
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .isEmpty());
         player.tick(world, new PlayerInput(false, false, false, false, false, true, false), 1.0 / 60, 0, 0);
         assertTrue(player.state().crouching());
-        assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
+        assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .orElseThrow()
                 .changed());
         assertEquals(BlockId.GRASS, world.getBlock(new BlockPos(8, 10, 7)).orElseThrow());
@@ -163,6 +162,30 @@ class GameLoopTest {
         chunk.set(8, 9, 6, BlockId.STONE);
         world.putChunk(new ChunkPos(0, 0, 0), chunk);
         return world;
+    }
+
+    private static java.util.Optional<com.norbertfila.world.BlockChangeResult> updateBlockEditing(
+            Camera camera,
+            PlayerController player,
+            BlockInteraction interaction,
+            Hotbar hotbar,
+            boolean blocked,
+            boolean remove,
+            boolean place,
+            int slot,
+            int... scroll) {
+        var origin = camera.position();
+        return GameLoop.editCommand(
+                        hotbar,
+                        blocked || player.mode() == PlayerController.Mode.SPECTATOR,
+                        remove,
+                        place,
+                        slot,
+                        scroll.length == 0 ? 0 : scroll[0],
+                        camera.yaw(),
+                        camera.pitch())
+                .flatMap(command -> WorldRuntime.edit(
+                        interaction, player, command, new PlayerState.Position(origin.x(), origin.y(), origin.z())));
     }
 
     private static Camera editingCamera() {

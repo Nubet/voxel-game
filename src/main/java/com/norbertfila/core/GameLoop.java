@@ -2,30 +2,23 @@ package com.norbertfila.core;
 
 import static org.lwjgl.opengl.GL46C.*;
 
-import com.norbertfila.diagnostics.DiagnosticsLog;
 import com.norbertfila.diagnostics.FrameMetrics;
-import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
-import com.norbertfila.player.PlayerState;
+import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
-import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
-import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
-import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
-import com.norbertfila.world.Coordinates;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 public final class GameLoop {
-    private static final double MAX_DELTA_SECONDS = 0.1;
-    private static final long MINIMIZED_SLEEP_MILLIS = 16;
-    private static final int MAX_CATCH_UP_TICKS = 5;
-    private static final int FAR_TILE_SIZE = 64;
+    private static final double MAX_DELTA_SECONDS = .1;
 
     public void run(
             Window window,
@@ -33,207 +26,157 @@ public final class GameLoop {
             TerrainRenderer renderer,
             UiRenderer uiRenderer,
             FrameMetrics metrics,
-            ChunkManager chunkManager,
-            PlayerController player,
+            WorldRuntime runtime,
             SettingsPanel settingsPanel) {
         double previous = window.time();
+        Map<ChunkPos, Long> residents = Map.of();
+        Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
-            BlockInteraction interaction = new BlockInteraction(chunkManager.world(), FAR_TILE_SIZE);
-            FixedSimulation simulation = new FixedSimulation(FixedSimulation.TICK_SECONDS, MAX_CATCH_UP_TICKS);
             String hardware =
                     System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
-            int[] framebufferWidth = new int[1];
-            int[] framebufferHeight = new int[1];
+            int[] width = new int[1], height = new int[1];
             while (!window.shouldClose()) {
                 window.pollEvents();
-
-                double now = window.time();
-                double deltaSeconds = clampDelta(now - previous);
+                double now = window.time(), delta = clampDelta(now - previous);
                 previous = now;
                 input.update();
-                int hotbarScrollSteps = input.hotbarScrollSteps();
-                DiagnosticsLog.context("frame=" + now + " mode=" + player.mode() + " settingsOpen="
-                        + settingsPanel.open() + " renderDistance=" + settingsPanel.renderDistance());
+                int scroll = input.hotbarScrollSteps();
                 if (input.focused() && input.settingsPressed()) {
                     settingsPanel.toggle();
                     window.setCursorCaptured(!settingsPanel.open());
                     input.resetMouseTracking();
                 }
-                window.framebufferSize(framebufferWidth, framebufferHeight);
-                if (framebufferWidth[0] <= 0 || framebufferHeight[0] <= 0) {
-                    input.clearPlayerInput();
-                    player.clearInputGestures();
-                    if (!sleepWhileMinimized()) return;
-                    continue;
-                }
+                window.framebufferSize(width, height);
+                boolean minimized = width[0] <= 0 || height[0] <= 0;
+                boolean blocked = minimized || settingsPanel.open() || !input.focused();
                 if (settingsPanel.update(
-                        input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY())) {
-                    chunkManager.setRenderDistance(settingsPanel.renderDistance());
+                        input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY()))
                     window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
-                    DiagnosticsLog.logger(GameLoop.class)
-                            .info("Render distance changed to " + settingsPanel.renderDistance());
-                }
-                if (!settingsPanel.open() && input.focused() && input.toggleModePressed()) {
-                    player.requestNextMode();
+                if (blocked) input.clearPlayerInput();
+                else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
+                PlayerInput held = input.peekPlayerTick();
+                runtime.controls(new WorldRuntime.Controls(
+                        new PlayerInput(
+                                held.forward(),
+                                held.backward(),
+                                held.left(),
+                                held.right(),
+                                held.jumpHeld(),
+                                held.sneakHeld(),
+                                held.sprintHeld()),
+                        camera.yaw(),
+                        camera.pitch(),
+                        blocked,
+                        minimized,
+                        settingsPanel.renderDistance()));
+                WorldRuntime.Frame state = runtime.frame();
+                if (!blocked && input.toggleModePressed()) {
+                    submit(runtime, new WorldRuntime.NextMode());
                     input.clearPlayerInput();
                 }
-                boolean controlsBlocked = settingsPanel.open() || !input.focused();
-                boolean editingBlocked = controlsBlocked
+                if (!blocked && input.peekPlayerTick().jumpPressed()) {
+                    if (runtime.offer(
+                            new WorldRuntime.Jump(input.peekPlayerTick().jumpPressedAtSeconds())))
+                        input.nextPlayerTick();
+                }
+                boolean editingBlocked = blocked
                         || input.settingsPressed()
                         || input.toggleModePressed()
-                        || player.modeChangePending();
-                if (controlsBlocked) {
-                    input.clearPlayerInput();
-                    player.clearInputGestures();
-                } else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
-                ChunkPos playerChunk = playerChunk(player);
-                chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
-                        input.peekPlayerTick(), FixedSimulation.TICK_SECONDS, camera.yaw(), camera.pitch()));
-                ChunkManager.UpdateResult update = chunkManager.update(playerChunk);
-                ChunkManager.ProcessResult processed = chunkManager.processResults();
-                for (ChunkManager.MeshResult mesh : processed.meshes()) {
-                    renderer.enqueueUpload(mesh);
-                }
-                if (!controlsBlocked) {
-                    simulation.advance(deltaSeconds, fixedDelta -> {
-                        if (chunkManager.ensureCollisionChunks(player.requiredCollisionChunks(
-                                input.peekPlayerTick(), fixedDelta, camera.yaw(), camera.pitch()))) {
-                            PlayerController.Mode before = player.mode();
-                            boolean wasFlying = player.flying();
-                            boolean wasCrouching = player.state().crouching();
-                            player.tick(
-                                    chunkManager.world(),
-                                    input.nextPlayerTick(),
-                                    fixedDelta,
-                                    camera.yaw(),
-                                    camera.pitch());
-                            if (player.mode() != before)
-                                DiagnosticsLog.logger(GameLoop.class).info("Player mode changed to " + player.mode());
-                            if (player.flying() != wasFlying)
-                                DiagnosticsLog.logger(GameLoop.class)
-                                        .info("Creative flight changed to " + player.flying());
-                            if (player.state().crouching() != wasCrouching)
-                                DiagnosticsLog.logger(GameLoop.class)
-                                        .info("Player crouching changed to "
-                                                + player.state().crouching());
-                        } else player.pauseInterpolation();
-                    });
-                }
-                PlayerState.Position renderPosition = player.renderEyePosition(simulation.interpolationAlpha());
-                camera.setPosition((float) renderPosition.x(), (float) renderPosition.y(), (float) renderPosition.z());
-                updateBlockEditing(
-                                camera,
-                                player,
-                                interaction,
+                        || state == null
+                        || state.modePending()
+                        || state.mode() == PlayerController.Mode.SPECTATOR;
+                editCommand(
                                 hotbar,
                                 editingBlocked,
                                 input.leftMousePressed(),
                                 input.rightMousePressed(),
                                 input.hotbarSlotPressed(),
-                                hotbarScrollSteps)
-                        .ifPresent(chunkManager::requestRemesh);
-                if (update.changed()) {
-                    update.evicted().forEach(renderer::remove);
-                    DiagnosticsLog.logger(GameLoop.class)
-                            .info("View demand center=" + update.center() + " sections="
-                                    + update.requested() + " scheduled=" + update.scheduled() + " generated="
-                                    + processed.generated()
-                                    + " discarded=" + processed.discarded() + " resident="
-                                    + chunkManager.residentCount());
+                                scroll,
+                                camera.yaw(),
+                                camera.pitch())
+                        .ifPresent(action -> submit(runtime, action));
+                if (minimized) {
+                    if (!sleepWhileMinimized()) return;
+                    continue;
                 }
-                TerrainRenderer.UploadStats uploads =
-                        renderer.processUploads(4L * 1024 * 1024, 2_000_000, chunkManager::isCurrentMesh);
-                for (ChunkManager.MeshResult mesh : uploads.uploaded()) {
-                    if (!chunkManager.markUploaded(mesh)) {
-                        DiagnosticsLog.logger(GameLoop.class)
-                                .warning("Ignoring stale completed upload position=" + mesh.position());
+                ChunkManager.MeshResult mesh;
+                while ((mesh = runtime.pollMesh()) != null) {
+                    var replaced = pending.put(mesh.position(), mesh);
+                    if (replaced != null) runtime.acknowledge(replaced, false);
+                    renderer.enqueueUpload(mesh);
+                }
+                state = runtime.frame();
+                if (state != null) {
+                    for (var entry : residents.entrySet()) {
+                        if (entry.getValue().equals(state.residents().get(entry.getKey()))) continue;
+                        var removed = pending.remove(entry.getKey());
+                        if (removed != null) runtime.acknowledge(removed, false);
+                        renderer.remove(entry.getKey());
                     }
+                    residents = state.residents();
+                    var eye = state.interpolatedEye(System.nanoTime());
+                    camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
                 }
-                for (ChunkManager.MeshResult mesh : uploads.failed()) {
-                    if (chunkManager.rejectUpload(mesh)) {
-                        DiagnosticsLog.logger(GameLoop.class)
-                                .warning("Upload failed and mesh was returned to retry state position="
-                                        + mesh.position());
-                    }
+                var uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000, result -> {
+                    var current = runtime.frame();
+                    return current != null && current.isCurrent(result);
+                });
+                for (var uploaded : uploads.uploaded()) {
+                    pending.remove(uploaded.position(), uploaded);
+                    runtime.acknowledge(uploaded, true);
                 }
-                uploads.discarded().forEach(chunkManager::rejectUpload);
+                for (var failed : uploads.failed()) {
+                    pending.remove(failed.position(), failed);
+                    runtime.acknowledge(failed, false);
+                }
+                for (var discarded : uploads.discarded()) {
+                    pending.remove(discarded.position(), discarded);
+                    runtime.acknowledge(discarded, false);
+                }
                 metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
-                metrics.recordResidentChunks(chunkManager.residentCount());
-                glViewport(0, 0, framebufferWidth[0], framebufferHeight[0]);
+                metrics.recordResidentChunks(residents.size());
+                glViewport(0, 0, width[0], height[0]);
                 glClearColor(.55f, .76f, .96f, 1f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                var viewProjection = camera.viewProjection(framebufferWidth[0], framebufferHeight[0]);
-                TerrainRenderer.RenderStats renderStats =
-                        renderer.render(viewProjection, Frustum.from(viewProjection), camera.position());
-                metrics.recordCulling(renderStats.visible(), renderStats.culled(), renderStats.drawCalls());
-                uiRenderer.render(settingsPanel, hotbar, framebufferWidth[0], framebufferHeight[0]);
+                var vp = camera.viewProjection(width[0], height[0]);
+                var stats = renderer.render(vp, Frustum.from(vp), camera.position());
+                metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
+                uiRenderer.render(settingsPanel, hotbar, width[0], height[0]);
                 window.swapBuffers();
-
-                metrics.recordFrame(deltaSeconds);
-                metrics.reportIfDue(now, framebufferWidth[0], framebufferHeight[0], hardware);
+                metrics.recordFrame(delta);
+                metrics.reportIfDue(now, width[0], height[0], hardware);
             }
         }
     }
 
-    static Optional<BlockChangeResult> updateBlockEditing(
-            Camera camera,
-            PlayerController player,
-            BlockInteraction interaction,
-            Hotbar hotbar,
-            boolean blocked,
-            boolean removePressed,
-            boolean placePressed,
-            int slotPressed) {
-        return updateBlockEditing(
-                camera, player, interaction, hotbar, blocked, removePressed, placePressed, slotPressed, 0);
+    private static void submit(WorldRuntime runtime, WorldRuntime.Action action) {
+        if (!runtime.offer(action)) throw new IllegalStateException("World command queue is full");
     }
 
-    static Optional<BlockChangeResult> updateBlockEditing(
-            Camera camera,
-            PlayerController player,
-            BlockInteraction interaction,
+    static Optional<WorldRuntime.Edit> editCommand(
             Hotbar hotbar,
             boolean blocked,
             boolean removePressed,
             boolean placePressed,
             int slotPressed,
-            int hotbarScrollSteps) {
-        if (blocked || player.mode() == PlayerController.Mode.SPECTATOR) return Optional.empty();
+            int hotbarScrollSteps,
+            double yaw,
+            double pitch) {
+        if (blocked) return Optional.empty();
         if (slotPressed >= 0) hotbar.select(slotPressed);
         else hotbar.scroll(hotbarScrollSteps);
         if (!removePressed && (!placePressed || hotbar.selectedBlock() == BlockId.AIR)) return Optional.empty();
-        var origin = camera.position();
-        var direction = camera.direction();
-        if (removePressed) {
-            return interaction.remove(
-                    player.mode(), origin.x(), origin.y(), origin.z(), direction.x(), direction.y(), direction.z());
-        }
-        return interaction.place(
-                origin.x(),
-                origin.y(),
-                origin.z(),
-                direction.x(),
-                direction.y(),
-                direction.z(),
-                hotbar.selectedBlock(),
-                player.mode(),
-                player.state().body());
-    }
-
-    private static ChunkPos playerChunk(PlayerController player) {
-        PlayerState.Position position = player.state().position();
-        return Coordinates.worldToChunk(new BlockPos(
-                (int) Math.floor(position.x()), (int) Math.floor(position.y()), (int) Math.floor(position.z())));
+        return Optional.of(new WorldRuntime.Edit(removePressed, hotbar.selectedBlock(), yaw, pitch));
     }
 
     static double clampDelta(double deltaSeconds) {
-        return Math.min(Math.max(deltaSeconds, 0.0), MAX_DELTA_SECONDS);
+        return Math.min(Math.max(deltaSeconds, 0), MAX_DELTA_SECONDS);
     }
 
     private static boolean sleepWhileMinimized() {
         try {
-            Thread.sleep(MINIMIZED_SLEEP_MILLIS);
+            Thread.sleep(16);
             return true;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();

@@ -29,7 +29,7 @@ public final class ChunkManager implements AutoCloseable {
     private static final int WORKER_COUNT = 2;
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
-    private static final int RESULTS_PER_UPDATE = 32;
+    public static final int RESULTS_PER_UPDATE = 32;
 
     private final World world;
     private final WorldGenerator generator;
@@ -310,7 +310,19 @@ public final class ChunkManager implements AutoCloseable {
     public void requestRemesh(BlockChangeResult change) {
         Objects.requireNonNull(change);
         if (!change.changed()) return;
-        for (ChunkPos position : change.dirtyChunks()) {
+        requestRemesh(change.dirtyChunks());
+    }
+
+    public Map<ChunkPos, Long> residentTokens() {
+        Map<ChunkPos, Long> tokens = new HashMap<>();
+        entries.forEach((position, entry) -> {
+            if (world.hasChunk(position)) tokens.put(position, entry.generationToken());
+        });
+        return Map.copyOf(tokens);
+    }
+
+    public void requestRemesh(List<ChunkPos> dirtyChunks) {
+        for (ChunkPos position : dirtyChunks) {
             if (!entries.containsKey(position) || !world.hasChunk(position)) continue;
             pendingRemesh.add(position);
             pendingEdits.add(position);

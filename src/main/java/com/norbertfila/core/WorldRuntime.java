@@ -1,0 +1,314 @@
+package com.norbertfila.core;
+
+import com.norbertfila.fluid.WaterSimulator;
+import com.norbertfila.generation.TerrainSource;
+import com.norbertfila.interaction.BlockInteraction;
+import com.norbertfila.meshing.ChunkMesher;
+import com.norbertfila.persistence.SaveScheduler;
+import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.player.*;
+import com.norbertfila.simulation.FixedSimulation;
+import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.world.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+import java.util.logging.Logger;
+
+public final class WorldRuntime implements AutoCloseable {
+    private static final int CAPACITY = 64;
+    private static final int FAR_TILE_SIZE = 64;
+    private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
+    private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
+    private final ArrayBlockingQueue<Acknowledgement> acknowledgements = new ArrayBlockingQueue<>(CAPACITY);
+    private final ArrayBlockingQueue<ChunkManager.MeshResult> meshes = new ArrayBlockingQueue<>(CAPACITY);
+    private final AtomicReference<Controls> controls =
+            new AtomicReference<>(new Controls(PlayerInput.NONE, -90, -25, true, false, 4));
+    private final AtomicReference<Frame> frame = new AtomicReference<>();
+    private final Thread thread;
+    private volatile boolean stopping;
+    private volatile Throwable failure;
+
+    public WorldRuntime(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path savePath) {
+        Objects.requireNonNull(generator);
+        Objects.requireNonNull(mesher);
+        Objects.requireNonNull(demand);
+        Objects.requireNonNull(savePath);
+        controls.set(new Controls(PlayerInput.NONE, -90, -25, true, false, demand.horizontalRadius()));
+        thread = new Thread(() -> run(generator, mesher, demand, savePath), "voxel-world");
+        thread.start();
+    }
+
+    public void controls(Controls value) {
+        Objects.requireNonNull(value);
+        Controls previous = controls.getAndSet(value);
+        if ((value.blocked() || value.paused())
+                && !previous.blocked()
+                && !previous.paused()
+                && !offer(new ResetInput())) throw new IllegalStateException("World command queue is full");
+    }
+
+    public boolean offer(Action action) {
+        return !stopping && actions.offer(Objects.requireNonNull(action));
+    }
+
+    public void acknowledge(ChunkManager.MeshResult mesh, boolean uploaded) {
+        if (!acknowledgements.offer(new Acknowledgement(mesh, uploaded)))
+            throw new IllegalStateException("Upload acknowledgement capacity exceeded");
+    }
+
+    public ChunkManager.MeshResult pollMesh() {
+        return meshes.poll();
+    }
+
+    public Frame frame() {
+        checkFailure();
+        return frame.get();
+    }
+
+    private void checkFailure() {
+        if (failure != null) throw new IllegalStateException("World runtime failed", failure);
+    }
+
+    private void run(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path savePath) {
+        try {
+            World world = new World();
+            WaterSimulator water = new WaterSimulator(world, FAR_TILE_SIZE);
+            long[] tick = {0};
+            if (Files.exists(savePath)) {
+                var saved = WorldSave.load(savePath);
+                if (saved.seed() != generator.seed() || saved.generatorVersion() != generator.generatorVersion())
+                    throw new IllegalStateException("Save does not match the world generator");
+                WorldSave.restore(world, saved, FAR_TILE_SIZE);
+                water.restore(saved.fluids());
+                tick[0] = saved.fluids().tick();
+            }
+            PlayerController player = new PlayerController();
+            player.setPosition(new SpawnResolver(generator).resolve(0, 0));
+            PlayerInputBuffer input = new PlayerInputBuffer();
+            Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
+            BlockInteraction interaction =
+                    new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
+            try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
+                    SaveScheduler saves = new SaveScheduler(savePath, 0)) {
+                chunks.setChunkLifecycleListener(position -> water.onChunkChanged(position, tick[0]));
+                FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
+                long previous = System.nanoTime();
+                while (!stopping) {
+                    long now = System.nanoTime();
+                    double delta = Math.min(.1, (now - previous) / 1e9);
+                    previous = now;
+                    clock.advance(delta, dt -> {
+                        Controls state = controls.get();
+                        if (!state.paused()) tick[0] = Math.incrementExact(tick[0]);
+                        Acknowledgement ack;
+                        while ((ack = acknowledgements.poll()) != null) {
+                            if (outstanding.remove(ack.mesh().token()) == null) continue;
+                            if (!ack.uploaded() || !chunks.markUploaded(ack.mesh())) chunks.rejectUpload(ack.mesh());
+                        }
+                        chunks.setRenderDistance(state.renderDistance());
+                        input.updateHeld(state.input());
+                        if (state.blocked() || state.paused()) {
+                            input.clear();
+                            player.clearInputGestures();
+                        }
+                        var position = player.state().position();
+                        ChunkPos center = Coordinates.worldToChunk(
+                                new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
+                                        Math.floor(position.z())));
+                        chunks.ensureCollisionChunks(
+                                player.requiredCollisionChunks(input.peekTick(), dt, state.yaw(), state.pitch()));
+                        chunks.update(center);
+                        List<ChunkManager.MeshResult> ready = List.of();
+                        if (outstanding.size() <= CAPACITY - ChunkManager.RESULTS_PER_UPDATE
+                                && meshes.remainingCapacity() >= ChunkManager.RESULTS_PER_UPDATE) {
+                            ready = chunks.processResults().meshes();
+                            for (var mesh : ready) outstanding.put(mesh.token(), mesh);
+                        }
+                        Action action;
+                        for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
+                            if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
+                            switch (action) {
+                                case ResetInput ignored -> {
+                                    input.clear();
+                                    player.clearInputGestures();
+                                }
+                                case Jump jump -> input.pressJump(jump.time());
+                                case NextMode ignored -> {
+                                    player.requestNextMode();
+                                    input.clear();
+                                }
+                                case Edit edit -> {
+                                    if (!player.modeChangePending())
+                                        edit(interaction, player, edit, player.renderEyePosition(1))
+                                                .ifPresent(chunks::requestRemesh);
+                                }
+                            }
+                        }
+                        if (!state.paused()) {
+                            chunks.requestRemesh(water.tick(tick[0]).dirtyChunks());
+                            if (!state.blocked()
+                                    && chunks.ensureCollisionChunks(player.requiredCollisionChunks(
+                                            input.peekTick(), dt, state.yaw(), state.pitch()))) {
+                                var before = player.mode();
+                                boolean wasFlying = player.flying(),
+                                        wasCrouching = player.state().crouching();
+                                player.tick(world, input.nextTick(), dt, state.yaw(), state.pitch());
+                                if (before != player.mode()) LOG.info("Player mode changed to " + player.mode());
+                                if (wasFlying != player.flying())
+                                    LOG.info("Creative flight changed to " + player.flying());
+                                if (wasCrouching != player.state().crouching())
+                                    LOG.info("Player crouching changed to "
+                                            + player.state().crouching());
+                            } else player.pauseInterpolation();
+                            if (tick[0] % 300 == 0)
+                                saves.request(
+                                        WorldSave.capture(
+                                                generator.seed(),
+                                                generator.generatorVersion(),
+                                                world,
+                                                water.snapshot(tick[0])),
+                                        tick[0]);
+                        } else player.pauseInterpolation();
+                        if (saves.failure() != null)
+                            throw new IllegalStateException("World save failed", saves.failure());
+                        Map<Long, ChunkManager.MeshResult> valid = new HashMap<>();
+                        outstanding.forEach((token, mesh) -> {
+                            if (chunks.isCurrentMesh(mesh)) valid.put(token, mesh);
+                        });
+                        frame.set(new Frame(
+                                tick[0],
+                                System.nanoTime(),
+                                player.renderEyePosition(0),
+                                player.renderEyePosition(1),
+                                player.mode(),
+                                player.modeChangePending(),
+                                player.state(),
+                                player.flying(),
+                                state.paused(),
+                                chunks.residentTokens(),
+                                Map.copyOf(valid),
+                                water.pendingUpdates()));
+                        for (var mesh : ready) {
+                            if (!meshes.offer(mesh))
+                                throw new IllegalStateException("Mesh publication capacity exceeded");
+                        }
+                    });
+                    LockSupport.parkNanos(1_000_000);
+                }
+                saves.request(
+                        WorldSave.capture(
+                                generator.seed(), generator.generatorVersion(), world, water.snapshot(tick[0])),
+                        tick[0]);
+                saves.close();
+                if (saves.failure() != null)
+                    throw new IllegalStateException("Final world save failed", saves.failure());
+            }
+        } catch (Throwable problem) {
+            failure = problem;
+        }
+    }
+
+    static Optional<BlockChangeResult> edit(
+            BlockInteraction interaction, PlayerController player, Edit edit, PlayerState.Position origin) {
+        double yaw = Math.toRadians(edit.yaw()), pitch = Math.toRadians(edit.pitch());
+        double dx = Math.cos(yaw) * Math.cos(pitch), dy = Math.sin(pitch), dz = Math.sin(yaw) * Math.cos(pitch);
+        return edit.remove()
+                ? interaction.remove(player.mode(), origin.x(), origin.y(), origin.z(), dx, dy, dz)
+                : interaction.place(
+                        origin.x(),
+                        origin.y(),
+                        origin.z(),
+                        dx,
+                        dy,
+                        dz,
+                        edit.block(),
+                        player.mode(),
+                        player.state().body());
+    }
+
+    @Override
+    public void close() {
+        stopping = true;
+        LockSupport.unpark(thread);
+        boolean interrupted = false;
+        while (thread.isAlive()) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+        checkFailure();
+    }
+
+    public record Controls(
+            PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
+        public Controls {
+            Objects.requireNonNull(input);
+            if (input.jumpPressed()
+                    || !Double.isFinite(yaw)
+                    || !Double.isFinite(pitch)
+                    || renderDistance < 0
+                    || renderDistance > GameSettings.MAX_RENDER_DISTANCE)
+                throw new IllegalArgumentException("Invalid runtime controls");
+        }
+    }
+
+    public sealed interface Action permits Jump, NextMode, Edit, ResetInput {}
+
+    private record ResetInput() implements Action {}
+
+    public record Jump(double time) implements Action {
+        public Jump {
+            if (!Double.isFinite(time) || time < 0) throw new IllegalArgumentException("Invalid jump timestamp");
+        }
+    }
+
+    public record NextMode() implements Action {}
+
+    public record Edit(boolean remove, byte block, double yaw, double pitch) implements Action {
+        public Edit {
+            if (!BlockId.isValid(block) || !Double.isFinite(yaw) || !Double.isFinite(pitch))
+                throw new IllegalArgumentException("Invalid edit");
+        }
+    }
+
+    private record Acknowledgement(ChunkManager.MeshResult mesh, boolean uploaded) {}
+
+    public record Frame(
+            long tick,
+            long publishedAt,
+            PlayerState.Position previousEye,
+            PlayerState.Position eye,
+            PlayerController.Mode mode,
+            boolean modePending,
+            PlayerState playerState,
+            boolean flying,
+            boolean paused,
+            Map<ChunkPos, Long> residents,
+            Map<Long, ChunkManager.MeshResult> validUploads,
+            int pendingWater) {
+        public Frame {
+            residents = Map.copyOf(residents);
+            validUploads = Map.copyOf(validUploads);
+        }
+
+        public boolean isCurrent(ChunkManager.MeshResult mesh) {
+            return mesh.equals(validUploads.get(mesh.token()));
+        }
+
+        public PlayerState.Position interpolatedEye(long now) {
+            double alpha = Math.clamp((now - publishedAt) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
+            return new PlayerState.Position(
+                    previousEye.x() + (eye.x() - previousEye.x()) * alpha,
+                    previousEye.y() + (eye.y() - previousEye.y()) * alpha,
+                    previousEye.z() + (eye.z() - previousEye.z()) * alpha);
+        }
+    }
+}

@@ -11,16 +11,23 @@ import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 public final class BlockInteraction {
     private static final double REACH = 6;
     private final World world;
     private final WorldEdit edit;
     private final VoxelRaycaster raycaster = new VoxelRaycaster();
+    private final Consumer<BlockPos> changed;
 
     public BlockInteraction(World world, int farTileSize) {
+        this(world, farTileSize, ignored -> {});
+    }
+
+    public BlockInteraction(World world, int farTileSize, Consumer<BlockPos> changed) {
         this.world = Objects.requireNonNull(world);
         edit = new WorldEdit(world, farTileSize);
+        this.changed = Objects.requireNonNull(changed);
     }
 
     public Optional<BlockChangeResult> remove(
@@ -44,7 +51,7 @@ public final class BlockInteraction {
                         REACH,
                         id -> canTarget(mode, id))
                 .filter(hit -> canBreak(mode, hit.blockId()))
-                .map(hit -> edit.setBlock(hit.block(), BlockId.AIR));
+                .map(hit -> setBlock(hit.block(), BlockId.AIR));
     }
 
     public Optional<BlockChangeResult> place(
@@ -87,7 +94,13 @@ public final class BlockInteraction {
                         position.x() + 1.0,
                         position.y() + 1.0,
                         position.z() + 1.0))) return Optional.empty();
-        return Optional.of(edit.setBlock(position, blockId));
+        return Optional.of(setBlock(position, blockId));
+    }
+
+    private BlockChangeResult setBlock(BlockPos position, byte value) {
+        BlockChangeResult result = edit.setBlock(position, value);
+        if (result.changed()) changed.accept(position);
+        return result;
     }
 
     private static boolean canTarget(PlayerController.Mode mode, int id) {

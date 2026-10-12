@@ -5,12 +5,10 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
-import com.norbertfila.player.PlayerController;
-import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.render.*;
-import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.*;
+import java.nio.file.Path;
 
 public final class Game {
     private static final int TERRAIN_RADIUS = 4;
@@ -24,20 +22,23 @@ public final class Game {
                     ? new ViewDemand(TERRAIN_RADIUS, 0, 1, ViewDemand.Shape.SQUARE)
                     : terrainDemand(terrainConfig);
             TerrainSource generator = waterScene ? new WaterTestScene() : new TerrainGenerator(0, terrainConfig);
-            PlayerController player = new PlayerController();
-            player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             GreedyMesher greedyMesher = new GreedyMesher();
             ChunkMesher mesher = greedyMesher::meshTextured;
             GameSettings settings = new GameSettings();
             SettingsPanel settingsPanel = new SettingsPanel(settings);
             var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
             try (BlockTextureArray textureArray = new BlockTextureArray(blockTextures);
-                    ChunkManager chunkManager = new ChunkManager(new World(), generator, mesher, viewDemand);
+                    WorldRuntime runtime = new WorldRuntime(
+                            generator,
+                            mesher,
+                            viewDemand,
+                            Path.of(System.getProperty(
+                                    "voxel.save", waterScene ? "saves/water-test.vxl" : "saves/world.vxl")));
                     TerrainRenderer renderer = new TerrainRenderer(textureArray);
                     UiRenderer uiRenderer = new UiRenderer()) {
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
                 window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
-                new GameLoop().run(window, camera, renderer, uiRenderer, metrics, chunkManager, player, settingsPanel);
+                new GameLoop().run(window, camera, renderer, uiRenderer, metrics, runtime, settingsPanel);
             }
         }
     }
