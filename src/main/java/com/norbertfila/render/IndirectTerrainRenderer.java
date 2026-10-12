@@ -1,6 +1,8 @@
 package com.norbertfila.render;
 
+import com.norbertfila.meshing.MeshRanges;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.RenderLayer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -23,6 +25,12 @@ public final class IndirectTerrainRenderer {
     }
 
     public record Batch(ChunkPos position, int firstVertex, int vertexCount) {
+        public Batch(ChunkPos position, MeshRanges ranges, RenderLayer layer) {
+            this(position, ranges.firstVertex(layer), ranges.vertexCount(layer));
+            if (layer == RenderLayer.TRANSLUCENT)
+                throw new IllegalArgumentException("Translucent meshes require sorted direct rendering");
+        }
+
         public Batch {
             Objects.requireNonNull(position);
             if (firstVertex < 0 || vertexCount < 0) throw new IllegalArgumentException("Invalid draw range");

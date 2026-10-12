@@ -6,21 +6,24 @@ import com.norbertfila.meshing.MeshData;
 import com.norbertfila.meshing.MeshFormat;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.streaming.RegionIndex;
+import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.RenderLayer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4f;
+import org.joml.Vector3fc;
 import org.lwjgl.system.MemoryStack;
 
-/** Intentionally tiny OpenGL backend. Resource ownership remains explicit. */
 public final class TerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
@@ -32,6 +35,7 @@ public final class TerrainRenderer implements AutoCloseable {
     private final BlockTextureArray blockTextures;
     private final int matrixUniform;
     private final int texturedUniform;
+    private final int renderLayerUniform;
     private int program;
     private boolean closed;
 
@@ -76,9 +80,12 @@ public final class TerrainRenderer implements AutoCloseable {
             if (textured < 0) throw new IllegalStateException("Shader uniform not found: uTextured");
             int sampler = glGetUniformLocation(linkedProgram, "uBlockTextures");
             if (sampler < 0) throw new IllegalStateException("Shader uniform not found: uBlockTextures");
+            int renderLayer = glGetUniformLocation(linkedProgram, "uRenderLayer");
+            if (renderLayer < 0) throw new IllegalStateException("Shader uniform not found: uRenderLayer");
             program = linkedProgram;
             matrixUniform = uniform;
             texturedUniform = textured;
+            renderLayerUniform = renderLayer;
             glUseProgram(program);
             glUniform1i(sampler, 0);
             glEnable(GL_DEPTH_TEST);
@@ -219,7 +226,9 @@ public final class TerrainRenderer implements AutoCloseable {
         meshPool.drainDeletions(1);
     }
 
-    public RenderStats render(Matrix4f viewProjection, Frustum frustum) {
+    public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition) {
+        Objects.requireNonNull(cameraPosition);
+        Comparator<ChunkPos> waterOrder = backToFront(cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
         if (blockTextures != null) blockTextures.bind(0);
         glUseProgram(program);
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -228,30 +237,95 @@ public final class TerrainRenderer implements AutoCloseable {
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
-        int texturedMode = -1;
+        List<ChunkPos> water = new ArrayList<>();
         for (ChunkPos position : culling.visible()) {
             GpuMesh mesh = meshPool.get(position);
+            if (mesh != null && mesh.ranges().translucentVertices() > 0) water.add(position);
+        }
+        // shortcut: chunk-center ordering approximates transparency; sort faces or use OIT when overlap artifacts
+        // require it.
+        water.sort(waterOrder);
+        int draws;
+        try {
+            restoreTerrainState();
+            draws = drawLayer(culling.visible(), RenderLayer.OPAQUE);
+            draws += drawLayer(culling.visible(), RenderLayer.CUTOUT);
+            if (!water.isEmpty()) {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDepthMask(false);
+                glDisable(GL_CULL_FACE);
+                draws += drawLayer(water, RenderLayer.TRANSLUCENT);
+            }
+        } finally {
+            restoreTerrainState();
+            glUniform1i(renderLayerUniform, RenderLayer.OPAQUE.ordinal());
+            glBindVertexArray(0);
+        }
+        int visible = culling.visible().size();
+        return new RenderStats(visible, meshPool.size() - visible, draws);
+    }
+
+    private int drawLayer(List<ChunkPos> positions, RenderLayer layer) {
+        glUniform1i(renderLayerUniform, layer.ordinal());
+        int texturedMode = -1;
+        int draws = 0;
+        for (ChunkPos position : positions) {
+            GpuMesh mesh = meshPool.get(position);
             if (mesh == null) continue;
+            int count = mesh.ranges().vertexCount(layer);
+            if (count == 0) continue;
             int nextMode = mesh.format().version() == MeshFormat.TEXTURED_VERSION ? 1 : 0;
             if (nextMode != texturedMode) {
                 glUniform1i(texturedUniform, nextMode);
                 texturedMode = nextMode;
             }
             glBindVertexArray(mesh.vao());
-            glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount());
+            glDrawArrays(GL_TRIANGLES, mesh.ranges().firstVertex(layer), count);
+            draws++;
         }
-        glBindVertexArray(0);
-        int visible = culling.visible().size();
-        return new RenderStats(visible, meshPool.size() - visible, visible);
+        return draws;
+    }
+
+    private static void restoreTerrainState() {
+        glEnable(GL_DEPTH_TEST);
+        glDepthMask(true);
+        glDisable(GL_BLEND);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+    }
+
+    static Comparator<ChunkPos> backToFront(double cameraX, double cameraY, double cameraZ) {
+        if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ))
+            throw new IllegalArgumentException("Camera position must be finite");
+        return Comparator.<ChunkPos>comparingDouble(position -> distanceSquared(position, cameraX, cameraY, cameraZ))
+                .reversed()
+                .thenComparingInt(ChunkPos::x)
+                .thenComparingInt(ChunkPos::y)
+                .thenComparingInt(ChunkPos::z);
+    }
+
+    private static double distanceSquared(ChunkPos position, double x, double y, double z) {
+        double dx = (double) position.x() * Chunk.SIZE + Chunk.SIZE * .5 - x;
+        double dy = (double) position.y() * Chunk.SIZE + Chunk.SIZE * .5 - y;
+        double dz = (double) position.z() * Chunk.SIZE + Chunk.SIZE * .5 - z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     public IndirectTerrainRenderer.Result prepareIndirectCommands(Frustum frustum) {
+        return prepareIndirectCommands(frustum, RenderLayer.OPAQUE);
+    }
+
+    public IndirectTerrainRenderer.Result prepareIndirectCommands(Frustum frustum, RenderLayer layer) {
+        Objects.requireNonNull(layer);
+        if (layer == RenderLayer.TRANSLUCENT)
+            throw new IllegalArgumentException("Translucent meshes require sorted direct rendering");
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
         List<IndirectTerrainRenderer.Batch> batches =
                 new ArrayList<>(culling.visible().size());
         for (ChunkPos position : culling.visible()) {
             GpuMesh mesh = meshPool.get(position);
-            if (mesh != null) batches.add(new IndirectTerrainRenderer.Batch(position, 0, mesh.vertexCount()));
+            if (mesh != null) batches.add(new IndirectTerrainRenderer.Batch(position, mesh.ranges(), layer));
         }
         return indirectRenderer.build(batches, frustum);
     }

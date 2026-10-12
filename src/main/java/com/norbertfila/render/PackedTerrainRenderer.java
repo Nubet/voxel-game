@@ -4,7 +4,9 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.PackedMesh;
 import com.norbertfila.meshing.PackedVertex;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.RenderLayer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
@@ -53,12 +55,15 @@ public final class PackedTerrainRenderer implements AutoCloseable {
             if (textured < 0) throw new IllegalStateException("Packed shader uniform not found: uTextured");
             int sampler = glGetUniformLocation(linkedProgram, "uBlockTextures");
             if (sampler < 0) throw new IllegalStateException("Packed shader uniform not found: uBlockTextures");
+            int renderLayer = glGetUniformLocation(linkedProgram, "uRenderLayer");
+            if (renderLayer < 0) throw new IllegalStateException("Packed shader uniform not found: uRenderLayer");
             program = linkedProgram;
             matrixUniform = uniform;
             chunkOriginUniform = originUniform;
             texturedUniform = textured;
             glUseProgram(program);
             glUniform1i(sampler, 0);
+            glUniform1i(renderLayer, RenderLayer.CUTOUT.ordinal());
         } catch (RuntimeException | Error failure) {
             if (linkedProgram != 0) glDeleteProgram(linkedProgram);
             throw failure;
@@ -95,6 +100,8 @@ public final class PackedTerrainRenderer implements AutoCloseable {
     public void upload(ChunkPos position, PackedMesh mesh) {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
+        int[] vertices = mesh.vertices();
+        if (blockTextures != null) requireSupportedMaterials(vertices);
         PackedGpuMesh previous = meshes.remove(position);
         if (mesh.vertexCount() == 0) {
             if (previous != null) previous.close();
@@ -107,7 +114,7 @@ public final class PackedTerrainRenderer implements AutoCloseable {
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 IntBuffer data = stack.mallocInt(mesh.vertexCount());
-                data.put(mesh.vertices()).flip();
+                data.put(vertices).flip();
                 glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW);
             }
             glVertexAttribIPointer(0, 1, GL_UNSIGNED_INT, PackedVertex.BYTES, 0);
@@ -140,6 +147,16 @@ public final class PackedTerrainRenderer implements AutoCloseable {
             glDrawArrays(GL_TRIANGLES, 0, entry.getValue().vertexCount());
         }
         glBindVertexArray(0);
+    }
+
+    static void requireSupportedMaterials(int[] vertices) {
+        // shortcut: textured packed meshes support opaque/cutout only; add layer ranges before enabling translucency.
+        for (int vertex : vertices)
+            if (BlockRegistry.DEFAULT
+                            .definition(PackedVertex.decode(vertex).blockId())
+                            .renderLayer()
+                    == RenderLayer.TRANSLUCENT)
+                throw new IllegalArgumentException("Translucent materials require TerrainRenderer");
     }
 
     @Override

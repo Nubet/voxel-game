@@ -165,7 +165,8 @@ public final class GameLoop {
                 glClearColor(.55f, .76f, .96f, 1f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 var viewProjection = camera.viewProjection(framebufferWidth[0], framebufferHeight[0]);
-                TerrainRenderer.RenderStats renderStats = renderer.render(viewProjection, Frustum.from(viewProjection));
+                TerrainRenderer.RenderStats renderStats =
+                        renderer.render(viewProjection, Frustum.from(viewProjection), camera.position());
                 metrics.recordCulling(renderStats.visible(), renderStats.culled(), renderStats.drawCalls());
                 uiRenderer.render(settingsPanel, hotbar, framebufferWidth[0], framebufferHeight[0]);
                 window.swapBuffers();
