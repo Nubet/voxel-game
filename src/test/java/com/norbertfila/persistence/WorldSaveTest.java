@@ -13,6 +13,7 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
 import java.io.IOException;
@@ -25,6 +26,23 @@ import org.junit.jupiter.api.io.TempDir;
 class WorldSaveTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void unsupportedFlowCannotSilentlyReplaceAnExistingSaveWithSources() throws Exception {
+        World world = new World();
+        BlockPos position = new BlockPos(-17, -1, -9);
+        world.setBlock(position, BlockId.WATER, 8);
+        Path save = temporaryDirectory.resolve("water-state.vxl");
+        WorldSave.save(save, 42, 7, world);
+        byte[] original = Files.readAllBytes(save);
+        world.setBlock(position, BlockId.WATER, WaterState.FALLING, 8);
+
+        assertThrows(IllegalStateException.class, () -> WorldSave.save(save, 42, 7, world));
+        assertTrue(Arrays.equals(original, Files.readAllBytes(save)));
+        World restored = new World();
+        WorldSave.restore(restored, WorldSave.load(save), 8);
+        assertEquals(WaterState.SOURCE, restored.getWaterState(position).orElseThrow());
+    }
 
     @Test
     void restoredDeltasReachChunkSnapshotsOnFirstLoad() throws Exception {

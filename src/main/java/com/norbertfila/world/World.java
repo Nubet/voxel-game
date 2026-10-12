@@ -80,19 +80,34 @@ public final class World {
         return block.isPresent() && BlockRegistry.DEFAULT.isCollidable((byte) block.getAsInt());
     }
 
-    public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {
+    public OptionalInt getWaterState(BlockPos worldPosition) {
         Objects.requireNonNull(worldPosition);
-        if (!BlockId.isValid(value))
-            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
+        OptionalInt changed = changes.getWaterState(worldPosition);
+        if (changed.isPresent()) return changed;
+        Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
+        if (chunk == null) return OptionalInt.empty();
+        BlockPos local = Coordinates.worldToLocal(worldPosition);
+        return OptionalInt.of(chunk.waterState(local.x(), local.y(), local.z()));
+    }
+
+    public OptionalInt setBlock(BlockPos worldPosition, byte value, int farTileSize) {
+        return setBlock(worldPosition, value, WaterState.defaultFor(value), farTileSize);
+    }
+
+    public OptionalInt setBlock(BlockPos worldPosition, byte value, byte waterState, int farTileSize) {
+        Objects.requireNonNull(worldPosition);
+        WaterState.validate(value, waterState);
         if (farTileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
         OptionalInt previous = getBlock(worldPosition);
-        if (previous.isPresent() && previous.getAsInt() == BlockId.toUnsignedInt(value)) return previous;
+        if (previous.isPresent()
+                && previous.getAsInt() == BlockId.toUnsignedInt(value)
+                && getWaterState(worldPosition).orElseThrow() == waterState) return previous;
         Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
         if (chunk != null) {
             BlockPos local = Coordinates.worldToLocal(worldPosition);
-            chunk.set(local.x(), local.y(), local.z(), value);
+            chunk.set(local.x(), local.y(), local.z(), value, waterState);
         }
-        changes.set(worldPosition, value, farTileSize);
+        changes.set(worldPosition, value, waterState, farTileSize);
         return previous;
     }
 

@@ -21,6 +21,44 @@ class WaterStreamingTest {
     private final GreedyMesher mesher = new GreedyMesher();
 
     @Test
+    void stateOnlyEditsRejectQueuedMeshesAndSurviveStreamingReload() throws Exception {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(0, 1, 1, ViewDemand.Shape.SQUARE);
+        Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+            settle(manager, demand, CENTER, uploaded);
+            BlockPos position = new BlockPos(-2, 17, -6);
+            assertEquals(WaterState.SOURCE, world.getWaterState(position).orElseThrow());
+            WorldEdit edit = new WorldEdit(world, 8);
+            manager.requestRemesh(edit.setBlock(position, BlockId.WATER, WaterState.flowing(1)));
+            var stale = awaitMesh(manager);
+            var oldSnapshot = world.getChunk(CENTER).snapshot();
+            UploadQueue queue = new UploadQueue();
+            queue.enqueue(stale);
+            manager.requestRemesh(edit.setBlock(position, BlockId.WATER, WaterState.flowing(7)));
+            assertEquals(WaterState.flowing(1), oldSnapshot.waterState(14, 1, 10));
+            assertNull(queue.poll(Long.MAX_VALUE, true, result -> {
+                if (manager.isCurrentMesh(result)) return true;
+                manager.rejectUpload(result);
+                return false;
+            }));
+            assertEquals(0, queue.size());
+            assertFalse(manager.markUploaded(stale));
+            settle(manager, demand, CENTER, uploaded);
+            assertEquals(2, uploaded.get(CENTER).dataRevision());
+            assertNotEquals(stale.token(), uploaded.get(CENTER).token());
+
+            settle(manager, demand, new ChunkPos(10, 1, -1), uploaded);
+            assertFalse(world.hasChunk(CENTER));
+            settle(manager, demand, CENTER, uploaded);
+            assertEquals(WaterState.flowing(7), world.getWaterState(position).orElseThrow());
+            assertEquals(
+                    WaterState.flowing(7), world.getChunk(CENTER).snapshot().waterState(14, 1, 10));
+            assertFalse(manager.markUploaded(stale));
+        }
+    }
+
+    @Test
     void waterEditsRemeshHorizontalAndVerticalNeighborsAndSurviveReload() throws Exception {
         World world = new World();
         ViewDemand demand = new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE);

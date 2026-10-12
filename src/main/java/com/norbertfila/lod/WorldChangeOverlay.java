@@ -5,6 +5,7 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.WaterState;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,36 +18,48 @@ import java.util.Set;
 public final class WorldChangeOverlay {
     private static final Comparator<FarTilePos> ORDER =
             Comparator.comparingInt(FarTilePos::z).thenComparingInt(FarTilePos::x);
-    private final Map<ChunkPos, Map<BlockPos, Byte>> changes = new HashMap<>();
+    private final Map<ChunkPos, Map<BlockPos, Short>> changes = new HashMap<>();
     private final Set<FarTilePos> dirtyTiles = new HashSet<>();
 
     public OptionalInt get(BlockPos position) {
         Objects.requireNonNull(position);
-        Map<BlockPos, Byte> chunkChanges = changes.get(Coordinates.worldToChunk(position));
-        Byte value = chunkChanges == null ? null : chunkChanges.get(position);
-        return value == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(value));
+        Map<BlockPos, Short> chunkChanges = changes.get(Coordinates.worldToChunk(position));
+        Short value = chunkChanges == null ? null : chunkChanges.get(position);
+        return value == null ? OptionalInt.empty() : OptionalInt.of(value & 0xff);
+    }
+
+    public OptionalInt getWaterState(BlockPos position) {
+        Objects.requireNonNull(position);
+        Map<BlockPos, Short> chunkChanges = changes.get(Coordinates.worldToChunk(position));
+        Short value = chunkChanges == null ? null : chunkChanges.get(position);
+        return value == null ? OptionalInt.empty() : OptionalInt.of(waterState(value));
     }
 
     public OptionalInt set(BlockPos position, byte value, int tileSize) {
+        return set(position, value, WaterState.defaultFor(value), tileSize);
+    }
+
+    public OptionalInt set(BlockPos position, byte value, byte waterState, int tileSize) {
         Objects.requireNonNull(position);
-        validate(value);
+        WaterState.validate(value, waterState);
         FarTilePos dirtyTile = tile(position, tileSize);
-        Byte previous = changes.computeIfAbsent(Coordinates.worldToChunk(position), ignored -> new HashMap<>())
-                .put(position, value);
+        short packed = (short) (BlockId.toUnsignedInt(value) | (value == BlockId.WATER ? waterState << 8 : 0));
+        Short previous = changes.computeIfAbsent(Coordinates.worldToChunk(position), ignored -> new HashMap<>())
+                .put(position, packed);
         dirtyTiles.add(dirtyTile);
-        return previous == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(previous));
+        return previous == null ? OptionalInt.empty() : OptionalInt.of(previous & 0xff);
     }
 
     public OptionalInt remove(BlockPos position, int tileSize) {
         Objects.requireNonNull(position);
         FarTilePos dirtyTile = tile(position, tileSize);
         ChunkPos chunkPosition = Coordinates.worldToChunk(position);
-        Map<BlockPos, Byte> chunkChanges = changes.get(chunkPosition);
+        Map<BlockPos, Short> chunkChanges = changes.get(chunkPosition);
         if (chunkChanges == null) return OptionalInt.empty();
-        Byte previous = chunkChanges.remove(position);
+        Short previous = chunkChanges.remove(position);
         if (chunkChanges.isEmpty()) changes.remove(chunkPosition);
         if (previous != null) dirtyTiles.add(dirtyTile);
-        return previous == null ? OptionalInt.empty() : OptionalInt.of(BlockId.toUnsignedInt(previous));
+        return previous == null ? OptionalInt.empty() : OptionalInt.of(previous & 0xff);
     }
 
     public List<FarTilePos> dirtyTiles() {
@@ -69,18 +82,20 @@ public final class WorldChangeOverlay {
                 .sorted(Map.Entry.comparingByKey(Comparator.comparingInt(BlockPos::x)
                         .thenComparingInt(BlockPos::y)
                         .thenComparingInt(BlockPos::z)))
-                .map(entry -> new Change(entry.getKey(), entry.getValue()))
+                .map(entry ->
+                        new Change(entry.getKey(), (byte) entry.getValue().shortValue(), waterState(entry.getValue())))
                 .toList();
     }
 
     public void applyTo(ChunkPos position, Chunk chunk) {
         Objects.requireNonNull(position);
         Objects.requireNonNull(chunk);
-        Map<BlockPos, Byte> chunkChanges = changes.get(position);
+        Map<BlockPos, Short> chunkChanges = changes.get(position);
         if (chunkChanges == null) return;
-        for (Map.Entry<BlockPos, Byte> change : chunkChanges.entrySet()) {
+        for (Map.Entry<BlockPos, Short> change : chunkChanges.entrySet()) {
             BlockPos local = Coordinates.worldToLocal(change.getKey());
-            chunk.set(local.x(), local.y(), local.z(), change.getValue());
+            short value = change.getValue();
+            chunk.set(local.x(), local.y(), local.z(), (byte) value, waterState(value));
         }
     }
 
@@ -89,12 +104,20 @@ public final class WorldChangeOverlay {
         return new FarTilePos(Math.floorDiv(position.x(), tileSize), Math.floorDiv(position.z(), tileSize));
     }
 
-    private static void validate(byte value) {
-        if (!BlockId.isValid(value))
-            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
+    private static byte waterState(short packed) {
+        return (byte) packed == BlockId.WATER ? (byte) (packed >>> 8) : WaterState.EMPTY;
     }
 
     public record FarTilePos(int x, int z) {}
 
-    public record Change(BlockPos position, byte value) {}
+    public record Change(BlockPos position, byte value, byte waterState) {
+        public Change(BlockPos position, byte value) {
+            this(position, value, WaterState.defaultFor(value));
+        }
+
+        public Change {
+            Objects.requireNonNull(position);
+            WaterState.validate(value, waterState);
+        }
+    }
 }

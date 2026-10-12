@@ -8,10 +8,52 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WaterState;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WorldChangeOverlayTest {
+    @Test
+    void replaysStateOnlyDeltasAndExportsAnImmutableStateSnapshot() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        BlockPos position = new BlockPos(-1, -1, -1);
+        Chunk target = new Chunk();
+        target.set(15, 15, 15, BlockId.WATER);
+        overlay.set(position, BlockId.WATER, WaterState.flowing(3), 64);
+        var captured = overlay.changes();
+        overlay.set(position, BlockId.WATER, WaterState.FALLING, 64);
+        overlay.applyTo(new ChunkPos(-1, -1, -1), target);
+
+        assertEquals(WaterState.FALLING, target.waterState(15, 15, 15));
+        assertEquals(2, target.revision());
+        assertEquals(WaterState.flowing(3), captured.getFirst().waterState());
+        overlay.applyTo(new ChunkPos(-1, -1, -1), target);
+        assertEquals(2, target.revision());
+        assertEquals(WaterState.FALLING, overlay.getWaterState(position).orElseThrow());
+        assertEquals(BlockId.WATER, overlay.set(position, BlockId.STONE, 64).orElseThrow());
+        assertEquals(WaterState.EMPTY, overlay.getWaterState(position).orElseThrow());
+        overlay.applyTo(new ChunkPos(-1, -1, -1), target);
+        assertEquals(WaterState.EMPTY, target.waterState(15, 15, 15));
+        assertEquals(BlockId.STONE, target.get(15, 15, 15));
+        assertEquals(BlockId.STONE, overlay.remove(position, 64).orElseThrow());
+        assertTrue(overlay.getWaterState(position).isEmpty());
+        assertTrue(overlay.changes().isEmpty());
+    }
+
+    @Test
+    void invalidMetadataDoesNotReplaceAnExistingDeltaOrDirtyItsTile() {
+        WorldChangeOverlay overlay = new WorldChangeOverlay();
+        BlockPos position = new BlockPos(-1, -1, -1);
+        overlay.set(position, BlockId.WATER, WaterState.FALLING, 64);
+        overlay.drainDirtyTiles();
+        assertThrows(IllegalArgumentException.class, () -> overlay.set(position, BlockId.AIR, WaterState.FALLING, 64));
+        assertThrows(IllegalArgumentException.class, () -> overlay.set(position, BlockId.WATER, WaterState.EMPTY, 64));
+        assertThrows(IllegalArgumentException.class, () -> overlay.set(position, BlockId.WATER, WaterState.SOURCE, 0));
+        assertEquals(WaterState.FALLING, overlay.getWaterState(position).orElseThrow());
+        assertEquals(1, overlay.size());
+        assertTrue(overlay.dirtyTiles().isEmpty());
+    }
+
     @Test
     void appliesOnlyTargetChunkDeltasIncludingAirAndLatestValues() {
         WorldChangeOverlay overlay = new WorldChangeOverlay();

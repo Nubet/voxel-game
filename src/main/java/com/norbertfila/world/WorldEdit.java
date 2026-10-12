@@ -22,16 +22,20 @@ public final class WorldEdit {
     }
 
     public BlockChangeResult setBlock(BlockPos position, byte value) {
+        return setBlock(position, value, WaterState.defaultFor(value));
+    }
+
+    public BlockChangeResult setBlock(BlockPos position, byte value, byte waterState) {
         Objects.requireNonNull(position);
-        if (!BlockId.isValid(value))
-            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(value));
+        WaterState.validate(value, waterState);
         ChunkPos chunk = Coordinates.worldToChunk(position);
         if (!world.hasChunk(chunk))
             return new BlockChangeResult(BlockChangeResult.Status.UNAVAILABLE, OptionalInt.empty(), List.of(), -1);
         OptionalInt previous = world.getBlock(position);
-        if (previous.orElseThrow() == BlockId.toUnsignedInt(value))
+        if (previous.orElseThrow() == BlockId.toUnsignedInt(value)
+                && world.getWaterState(position).orElseThrow() == waterState)
             return new BlockChangeResult(BlockChangeResult.Status.UNCHANGED, previous, List.of(), revision(position));
-        world.setBlock(position, value, farTileSize);
+        world.setBlock(position, value, waterState, farTileSize);
         Set<ChunkPos> dirty = new LinkedHashSet<>();
         dirty.add(chunk);
         BlockPos local = Coordinates.worldToLocal(position);

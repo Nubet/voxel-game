@@ -4,6 +4,7 @@ import com.norbertfila.lod.WorldChangeOverlay;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -142,6 +143,9 @@ public final class WorldSave {
     private static List<ChunkDelta> chunkDeltas(List<WorldChangeOverlay.Change> changes) {
         Map<ChunkPos, List<ChunkDelta.BlockChange>> grouped = new LinkedHashMap<>();
         for (WorldChangeOverlay.Change change : changes) {
+            // shortcut: schema 1 cannot encode flow; remove this guard when state-aware saves are implemented.
+            if (change.waterState() != WaterState.defaultFor(change.value()))
+                throw new IllegalStateException("World save schema 1 cannot store flowing water");
             ChunkPos chunk = new ChunkPos(
                     Math.floorDiv(change.position().x(), Chunk.SIZE),
                     Math.floorDiv(change.position().y(), Chunk.SIZE),
