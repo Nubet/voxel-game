@@ -162,7 +162,9 @@ public final class BlockRegistry {
                                 WATER_TEXTURE,
                                 false,
                                 false,
-                                RenderLayer.TRANSLUCENT)),
+                                RenderLayer.TRANSLUCENT,
+                                false,
+                                false)),
                 textures);
     }
 

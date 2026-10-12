@@ -2,10 +2,12 @@ package com.norbertfila.interaction;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.IntPredicate;
 
 public final class VoxelRaycaster {
     public Optional<Hit> cast(
@@ -17,7 +19,30 @@ public final class VoxelRaycaster {
             double directionY,
             double directionZ,
             double maxDistance) {
+        return cast(
+                world,
+                originX,
+                originY,
+                originZ,
+                directionX,
+                directionY,
+                directionZ,
+                maxDistance,
+                id -> BlockRegistry.DEFAULT.definition((byte) id).targetable());
+    }
+
+    public Optional<Hit> cast(
+            World world,
+            double originX,
+            double originY,
+            double originZ,
+            double directionX,
+            double directionY,
+            double directionZ,
+            double maxDistance,
+            IntPredicate targetable) {
         Objects.requireNonNull(world);
+        Objects.requireNonNull(targetable);
         validate(originX, originY, originZ, directionX, directionY, directionZ, maxDistance);
         double scale = Math.max(Math.abs(directionX), Math.max(Math.abs(directionY), Math.abs(directionZ)));
         if (scale == 0) throw new IllegalArgumentException("Direction must not be zero");
@@ -35,7 +60,8 @@ public final class VoxelRaycaster {
         BlockPos position = new BlockPos(x, y, z);
         int blockId = blockId(world, position);
         if (blockId < 0) return Optional.empty();
-        if (blockId != BlockId.AIR) return Optional.of(new Hit(position, Normal.ZERO, 0, blockId));
+        if (blockId != BlockId.AIR && targetable.test(blockId))
+            return Optional.of(new Hit(position, Normal.ZERO, 0, blockId));
 
         int stepX = step(directionX);
         int stepY = step(directionY);
@@ -72,7 +98,8 @@ public final class VoxelRaycaster {
             position = new BlockPos(x, y, z);
             blockId = blockId(world, position);
             if (blockId < 0) return Optional.empty();
-            if (blockId != BlockId.AIR) return Optional.of(new Hit(position, normal, distance, blockId));
+            if (blockId != BlockId.AIR && targetable.test(blockId))
+                return Optional.of(new Hit(position, normal, distance, blockId));
         }
     }
 

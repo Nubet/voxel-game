@@ -9,9 +9,11 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class VoxelRaycasterTest {
@@ -104,6 +106,27 @@ class VoxelRaycasterTest {
         assertTrue(raycaster.cast(world, -.001, 1.5, 1.5, 1, 0, 0, 6).isEmpty());
         assertThrows(IllegalArgumentException.class, () -> raycaster.cast(world, 0, 0, 0, 0, 0, 0, 6));
         assertThrows(IllegalArgumentException.class, () -> raycaster.cast(world, Double.NaN, 0, 0, 1, 0, 0, 6));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1,0,0", "-1,0,0", "0,1,0", "0,-1,0", "0,0,1", "0,0,-1"})
+    void skipsWaterIncludingTheOriginAndPreservesFaceDistanceAndReach(int dx, int dy, int dz) {
+        BlockPos ground = new BlockPos(2 * dx, 2 * dy, 2 * dz);
+        World world = worldWithBlock(ground);
+        world.getChunk(new ChunkPos(0, 0, 0)).set(0, 0, 0, BlockId.WATER);
+        BlockPos water = new BlockPos(dx, dy, dz);
+        BlockPos local = Coordinates.worldToLocal(water);
+        world.getChunk(Coordinates.worldToChunk(water)).set(local.x(), local.y(), local.z(), BlockId.WATER);
+        var hit = raycaster.cast(world, .5, .5, .5, dx, dy, dz, 1.5).orElseThrow();
+        assertEquals(ground, hit.block());
+        assertEquals(new VoxelRaycaster.Normal(-dx, -dy, -dz), hit.normal());
+        assertEquals(1.5, hit.distance());
+        assertTrue(raycaster.cast(world, .5, .5, .5, dx, dy, dz, 1.49).isEmpty());
+        var creative =
+                raycaster.cast(world, .5, .5, .5, dx, dy, dz, 1.5, id -> true).orElseThrow();
+        assertEquals(BlockId.WATER, creative.blockId());
+        assertEquals(VoxelRaycaster.Normal.ZERO, creative.normal());
+        assertEquals(0, creative.distance());
     }
 
     private static World worldWithBlock(BlockPos position) {

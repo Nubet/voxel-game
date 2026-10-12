@@ -10,7 +10,31 @@ public record BlockDefinition(
         int sideTexture,
         boolean collidable,
         boolean occludesFullFace,
-        RenderLayer renderLayer) {
+        RenderLayer renderLayer,
+        boolean breakable,
+        boolean targetable) {
+    public BlockDefinition(
+            int id,
+            String name,
+            int topTexture,
+            int bottomTexture,
+            int sideTexture,
+            boolean collidable,
+            boolean occludesFullFace,
+            RenderLayer renderLayer) {
+        this(
+                id,
+                name,
+                topTexture,
+                bottomTexture,
+                sideTexture,
+                collidable,
+                occludesFullFace,
+                renderLayer,
+                id != BlockId.AIR,
+                id != BlockId.AIR);
+    }
+
     public BlockDefinition {
         if (id < 0 || id > 255) throw new IllegalArgumentException("Block id must fit an unsigned byte");
         if (name == null || name.isBlank()) throw new IllegalArgumentException("Block name must not be blank");

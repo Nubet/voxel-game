@@ -33,7 +33,16 @@ public final class BlockInteraction {
             double directionZ) {
         if (Objects.requireNonNull(mode) == PlayerController.Mode.SPECTATOR) return Optional.empty();
         return raycaster
-                .cast(world, originX, originY, originZ, directionX, directionY, directionZ, REACH)
+                        world,
+                        originX,
+                        originY,
+                        originZ,
+                        directionX,
+                        directionY,
+                        directionZ,
+                        REACH,
+                        id -> canTarget(mode, id))
+                .filter(hit -> canBreak(mode, hit.blockId()))
                 .map(hit -> edit.setBlock(hit.block(), BlockId.AIR));
     }
 
@@ -52,8 +61,8 @@ public final class BlockInteraction {
         if (!BlockId.isValid(blockId))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
         if (blockId == BlockId.AIR || mode == PlayerController.Mode.SPECTATOR) return Optional.empty();
-        Optional<VoxelRaycaster.Hit> target =
-                raycaster.cast(world, originX, originY, originZ, directionX, directionY, directionZ, REACH);
+        Optional<VoxelRaycaster.Hit> target = raycaster.cast(
+                world, originX, originY, originZ, directionX, directionY, directionZ, REACH, id -> canTarget(mode, id));
         if (target.isEmpty()) return Optional.empty();
         VoxelRaycaster.Hit hit = target.get();
         VoxelRaycaster.Normal normal = hit.normal();
@@ -68,6 +77,7 @@ public final class BlockInteraction {
         if (!world.hasChunk(Coordinates.worldToChunk(position))) return Optional.empty();
         int previous = world.getBlock(position).orElseThrow();
         if (previous != BlockId.AIR && previous != BlockId.WATER) return Optional.empty();
+        if (previous != BlockId.AIR && !canBreak(mode, previous)) return Optional.empty();
         if (BlockRegistry.DEFAULT.isCollidable(blockId)
                 && playerBody.intersects(new Aabb(
                         position.x(),
@@ -77,5 +87,15 @@ public final class BlockInteraction {
                         position.y() + 1.0,
                         position.z() + 1.0))) return Optional.empty();
         return Optional.of(edit.setBlock(position, blockId));
+    }
+
+    private static boolean canTarget(PlayerController.Mode mode, int id) {
+        return mode == PlayerController.Mode.CREATIVE
+                || BlockRegistry.DEFAULT.definition((byte) id).targetable();
+    }
+
+    private static boolean canBreak(PlayerController.Mode mode, int id) {
+        return mode == PlayerController.Mode.CREATIVE
+                || BlockRegistry.DEFAULT.definition((byte) id).breakable();
     }
 }

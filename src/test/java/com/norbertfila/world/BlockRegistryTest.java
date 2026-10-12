@@ -164,4 +164,22 @@ class BlockRegistryTest {
         assertFalse(definition.collidable());
         assertTrue(definition.occludesFullFace());
     }
+
+    @Test
+    void interactionPropertiesAreIndependentOfRenderingAndCollision() {
+        BlockRegistry registry = BlockRegistry.DEFAULT;
+        for (byte id : new byte[] {BlockId.AIR, BlockId.WATER}) {
+            assertFalse(registry.definition(id).breakable());
+            assertFalse(registry.definition(id).targetable());
+        }
+        for (byte id : new byte[] {BlockId.STONE, BlockId.LEAVES, BlockId.GLASS, BlockId.BEDROCK}) {
+            assertTrue(registry.definition(id).breakable());
+            assertTrue(registry.definition(id).targetable());
+        }
+        BlockDefinition protectedBlock =
+                new BlockDefinition(1, "protected", 0, 0, 0, true, true, RenderLayer.OPAQUE, false, true);
+        assertFalse(protectedBlock.breakable());
+        assertTrue(protectedBlock.targetable());
+        assertTrue(protectedBlock.collidable());
+    }
 }

@@ -19,6 +19,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class BlockInteractionTest {
     private static final Aabb DISTANT_BODY =
@@ -142,21 +143,21 @@ class BlockInteractionTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
         Aabb body = PlayerState.at(new PlayerState.Position(.5, 1, 1.5)).body();
         var water = interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.SURVIVAL, body)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.CREATIVE, body)
                 .orElseThrow();
         assertTrue(water.changed());
         assertEquals(BlockId.WATER, world.getBlock(new BlockPos(0, 1, 1)).orElseThrow());
         assertFalse(world.isSolid(new BlockPos(0, 1, 1)));
         assertTrue(interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.SURVIVAL, body)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.CREATIVE, body)
                 .isEmpty());
         var sameWater = interaction
-                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.SURVIVAL, body)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.CREATIVE, body)
                 .orElseThrow();
         assertFalse(sameWater.changed());
         assertEquals(1, world.changes().size());
         assertTrue(interaction
-                .remove(PlayerController.Mode.SURVIVAL, .5, 1.5, 1.5, 1, 0, 0)
+                .remove(PlayerController.Mode.CREATIVE, .5, 1.5, 1.5, 1, 0, 0)
                 .orElseThrow()
                 .changed());
     }
@@ -176,6 +177,88 @@ class BlockInteractionTest {
                 .isEmpty());
         assertEquals(BlockId.WATER, world.changes().get(target).orElseThrow());
         assertEquals(1, world.residentCount());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SURVIVAL,18.5", "SURVIVAL,16.5", "CREATIVE,18.5", "CREATIVE,16.5", "SPECTATOR,18.5", "SPECTATOR,16.5"})
+    void onlyCreativeRemovesWaterWhileSurvivalCanRemoveTheGroundBelow(PlayerController.Mode mode, double originY) {
+        BlockPos water = new BlockPos(-1, 16, -1);
+        BlockPos ground = new BlockPos(-1, 15, -1);
+        World world = worldWithBlock(ground);
+        Chunk wetChunk = new Chunk();
+        wetChunk.set(15, 0, 15, BlockId.WATER);
+        world.putChunk(new ChunkPos(-1, 1, -1), wetChunk);
+        long revision = wetChunk.revision();
+        var result = new BlockInteraction(world, 8).remove(mode, -.5, originY, -.5, 0, -1, 0);
+        assertEquals(mode != PlayerController.Mode.SPECTATOR, result.isPresent());
+        assertEquals(
+                mode == PlayerController.Mode.CREATIVE ? BlockId.AIR : BlockId.WATER,
+                world.getBlock(water).orElseThrow());
+        assertEquals(
+                mode == PlayerController.Mode.SURVIVAL ? BlockId.AIR : BlockId.STONE,
+                world.getBlock(ground).orElseThrow());
+        assertEquals(revision + (mode == PlayerController.Mode.CREATIVE ? 1 : 0), wetChunk.revision());
+        assertEquals(
+                mode == PlayerController.Mode.SPECTATOR ? 0 : 1, world.changes().size());
+        if (result.isPresent())
+            assertEquals(
+                    mode == PlayerController.Mode.CREATIVE ? BlockId.WATER : BlockId.STONE,
+                    result.orElseThrow().previous().orElseThrow());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SURVIVAL,.5", "SURVIVAL,1.5", "CREATIVE,.5", "CREATIVE,1.5", "SPECTATOR,.5", "SPECTATOR,1.5"})
+    void placementCannotReplaceWaterOutsideCreativeEvenWhenTargetingGroundBehindIt(
+            PlayerController.Mode mode, double originX) {
+        World world = worldWithBlock(new BlockPos(2, 1, 1));
+        Chunk chunk = world.getChunk(new ChunkPos(0, 0, 0));
+        chunk.set(1, 1, 1, BlockId.WATER);
+        long revision = chunk.revision(), dependency = chunk.meshDependencyRevision();
+        var result = new BlockInteraction(world, 8).place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, mode, DISTANT_BODY);
+        boolean creative = mode == PlayerController.Mode.CREATIVE;
+        assertEquals(creative, result.isPresent());
+        assertEquals(
+                creative ? BlockId.DIRT : BlockId.WATER,
+                world.getBlock(new BlockPos(1, 1, 1)).orElseThrow());
+        assertEquals(BlockId.STONE, world.getBlock(new BlockPos(2, 1, 1)).orElseThrow());
+        assertEquals(revision + (creative ? 1 : 0), chunk.revision());
+        assertEquals(dependency + (creative ? 1 : 0), chunk.meshDependencyRevision());
+        assertEquals(creative ? 1 : 0, world.changes().size());
+        assertEquals(creative ? 1 : 0, world.changes().drainDirtyTiles().size());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = PlayerController.Mode.class,
+            names = {"SURVIVAL", "SPECTATOR"})
+    void targetingOnlyWaterDoesNotEditOrDirtyTheWorld(PlayerController.Mode mode) {
+        World world = worldWithBlock(new BlockPos(1, 1, 1));
+        Chunk chunk = world.getChunk(new ChunkPos(0, 0, 0));
+        chunk.set(1, 1, 1, BlockId.WATER);
+        long revision = chunk.revision(), dependency = chunk.meshDependencyRevision();
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        assertTrue(interaction.remove(mode, .5, 1.5, 1.5, 1, 0, 0).isEmpty());
+        assertTrue(interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, mode, DISTANT_BODY)
+                .isEmpty());
+        assertEquals(BlockId.WATER, chunk.get(1, 1, 1));
+        assertEquals(revision, chunk.revision());
+        assertEquals(dependency, chunk.meshDependencyRevision());
+        assertEquals(0, world.changes().size());
+        assertTrue(world.changes().drainDirtyTiles().isEmpty());
+    }
+
+    @Test
+    void survivalCanPlaceInAnAirGapBehindWaterWithoutReplacingWater() {
+        World world = worldWithBlock(new BlockPos(3, 1, 1));
+        world.getChunk(new ChunkPos(0, 0, 0)).set(1, 1, 1, BlockId.WATER);
+        var result = new BlockInteraction(world, 8)
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
+                .orElseThrow();
+        assertTrue(result.changed());
+        assertEquals(BlockId.WATER, world.getBlock(new BlockPos(1, 1, 1)).orElseThrow());
+        assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(2, 1, 1)).orElseThrow());
+        assertEquals(BlockId.STONE, world.getBlock(new BlockPos(3, 1, 1)).orElseThrow());
     }
 
     @Test
