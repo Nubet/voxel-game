@@ -76,6 +76,24 @@ class TreeGeneratorTest {
     }
 
     @Test
+    void densityRetainsOpenLandSparseEdgesAndDenseForest() {
+        int open = countTrees(new TreeGenerator(42, (x, z) -> -.1, FLAT_GRASS), -3, 3);
+        int edge = countTrees(new TreeGenerator(42, (x, z) -> 0, FLAT_GRASS), -3, 3);
+        int forest = countTrees(new TreeGenerator(42, (x, z) -> .4, FLAT_GRASS), -3, 3);
+        assertEquals(0, open);
+        assertTrue(edge > 0);
+        assertTrue(forest > 3 * edge);
+    }
+
+    @Test
+    void denseForestDoesNotPutRootsOnShoreRockOrSnow() {
+        for (byte material : new byte[] {BlockId.SAND, BlockId.GRAVEL, BlockId.STONE, BlockId.SNOW}) {
+            TreeGenerator generator = new TreeGenerator(42, (x, z) -> 1, terrain((x, z) -> 8, material));
+            assertEquals(0, countTrees(generator, -3, 3));
+        }
+    }
+
+    @Test
     void treesAvoidSteepSurfaceChanges() {
         TerrainSource terrain = terrain((x, z) -> x < 0 ? 8 : 30);
         TreeGenerator generator = new TreeGenerator(0, (x, z) -> 1, terrain);
@@ -122,6 +140,10 @@ class TreeGeneratorTest {
     }
 
     private static TerrainSource terrain(HeightField heightField) {
+        return terrain(heightField, BlockId.GRASS);
+    }
+
+    private static TerrainSource terrain(HeightField heightField, byte material) {
         return new TerrainSource() {
             @Override
             public long seed() {
@@ -145,8 +167,7 @@ class TreeGeneratorTest {
 
             @Override
             public TerrainSummary sample(int worldX, int worldZ) {
-                return new TerrainSummary(
-                        heightField.sample(worldX, worldZ), BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
+                return new TerrainSummary(heightField.sample(worldX, worldZ), material, BlockId.DIRT, BlockId.STONE);
             }
         };
     }

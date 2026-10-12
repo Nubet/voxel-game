@@ -77,7 +77,7 @@ final class TreeGenerator {
         double densityNoise = forestDensity.sample(x * .003, z * .003);
         if (!Double.isFinite(densityNoise) || densityNoise < -1 || densityNoise > 1)
             throw new IllegalStateException("Forest noise must be finite and within [-1, 1]");
-        double t = Math.clamp((densityNoise + .25) / .7, 0, 1);
+        double t = Math.clamp((densityNoise + .1) / .5, 0, 1);
         double density = .65 * t * t * (3 - 2 * t);
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }

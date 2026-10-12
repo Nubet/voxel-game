@@ -10,14 +10,15 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ShoreMaterialTest {
     @ParameterizedTest
     @CsvSource({
-        "32,-3,0,GRASS", "32,-2,0,GRASS", "30,-2,0,SAND", "32,-1,0,SAND",
-        "32,0,1.5,SAND", "32,0,1.51,GRASS", "32,1,0,SAND", "32,3,0,SAND",
-        "32,4,0,GRAVEL", "32,1,2,GRAVEL", "32,-1,2,GRASS"
+        "32,-3,0,GRASS", "32,-2,0,GRASS", "30,-2,0,GRASS", "32,-1,0,SAND",
+        "32,0,1.5,SAND", "32,0,1.51,STONE", "32,1,0,SAND", "32,3,0,SAND",
+        "32,4,0,GRAVEL", "32,1,2,GRAVEL", "32,-1,2,STONE"
     })
     void selectsMaterialsByWaterDepthSlopeAndExistingNoise(int height, int depth, double slope, String material) {
         byte expected = switch (material) {
             case "SAND" -> BlockId.SAND;
             case "GRAVEL" -> BlockId.GRAVEL;
+            case "STONE" -> BlockId.STONE;
             default -> BlockId.GRASS;
         };
         TerrainConfig.Layer enabled = new TerrainConfig.Layer(1, 1, .5, 2, 8);

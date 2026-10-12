@@ -6,7 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 9;
+    private static final int GENERATOR_VERSION = 10;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -96,24 +96,37 @@ public final class TerrainGenerator implements TerrainSource {
     public TerrainSummary sample(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
-        int shoreWidth = column.biome() < -.1 ? 2 : 1;
         long waterDepth = (long) config.waterLevel() - height;
-        byte surface = height >= (long) config.baseHeight() + 70 ? BlockId.SNOW : BlockId.GRASS;
+        byte surface = BlockId.GRASS;
         if (waterDepth > 3) surface = BlockId.GRAVEL;
-        else if (waterDepth >= -shoreWidth) {
-            double slope = Math.max(
-                    Math.max(
-                            Math.abs(surfaceElevation((double) worldX - 1, worldZ) - column.elevation()),
-                            Math.abs(surfaceElevation((double) worldX + 1, worldZ) - column.elevation())),
-                    Math.max(
-                            Math.abs(surfaceElevation(worldX, (double) worldZ - 1) - column.elevation()),
-                            Math.abs(surfaceElevation(worldX, (double) worldZ + 1) - column.elevation())));
-            if (slope <= 1.5) surface = BlockId.SAND;
-            else if (waterDepth > 0) surface = BlockId.GRAVEL;
+        else if (waterDepth >= -1 || height >= (long) config.baseHeight() + 24) {
+            double slope = surfaceSlope(worldX, worldZ, column.elevation());
+            if (waterDepth > 0) surface = slope <= 1.5 ? BlockId.SAND : BlockId.GRAVEL;
+            else if (slope > 1.5 + .5 * column.biome()) surface = BlockId.STONE;
+            else if (column.elevation() >= (long) config.baseHeight() + 70 + 12 * column.biome() && slope <= 1.25)
+                surface = BlockId.SNOW;
+            else if (column.elevation() >= (long) config.baseHeight() + 40 + 8 * column.biome())
+                surface = BlockId.STONE;
+            else if (column.elevation() <= config.waterLevel() + 1.35 + .35 * column.biome() && slope <= 1.5)
+                surface = BlockId.SAND;
         }
-        byte subsurface = surface == BlockId.SAND || surface == BlockId.GRAVEL ? surface : BlockId.DIRT;
+        byte subsurface = switch (surface) {
+            case BlockId.SAND, BlockId.GRAVEL, BlockId.STONE -> surface;
+            case BlockId.SNOW -> BlockId.STONE;
+            default -> BlockId.DIRT;
+        };
         return new TerrainSummary(
                 height, surface, subsurface, BlockId.STONE, config.minHeight() - 1, config.waterLevel());
+    }
+
+    private double surfaceSlope(int worldX, int worldZ, double elevation) {
+        return Math.max(
+                Math.max(
+                        Math.abs(surfaceElevation((double) worldX - 1, worldZ) - elevation),
+                        Math.abs(surfaceElevation((double) worldX + 1, worldZ) - elevation)),
+                Math.max(
+                        Math.abs(surfaceElevation(worldX, (double) worldZ - 1) - elevation),
+                        Math.abs(surfaceElevation(worldX, (double) worldZ + 1) - elevation)));
     }
 
     @Override

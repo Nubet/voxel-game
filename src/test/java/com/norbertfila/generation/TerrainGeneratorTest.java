@@ -16,9 +16,9 @@ class TerrainGeneratorTest {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
         int height = generator.surfaceHeight(-272, 240);
         assertTrue(height >= 200);
-        assertEquals(BlockId.SNOW, blockAt(generator, -272, height, 240));
+        assertEquals(generator.sample(-272, 240).surfaceMaterial(), blockAt(generator, -272, height, 240));
         assertEquals(BlockId.AIR, blockAt(generator, -272, height + 1, 240));
-        assertEquals(BlockId.DIRT, blockAt(generator, -272, height - 3, 240));
+        assertEquals(BlockId.STONE, blockAt(generator, -272, height - 3, 240));
         assertEquals(BlockId.STONE, blockAt(generator, -272, height - 4, 240));
         var tile = new FarTerrainGenerator(generator, 64, 4, 0, 64).generate(-5, 3);
         assertEquals(height, tile.heightAt(12, 12));
@@ -27,13 +27,14 @@ class TerrainGeneratorTest {
     @Test
     void terrainUsesGrassDirtSandGravelAndSnow() {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
-        boolean sand = false, gravel = false, dirt = false, grass = false, snow = false;
+        boolean sand = false, gravel = false, dirt = false, grass = false, stone = false, snow = false;
         for (int z = -1024; z < 1024; z += 16)
             for (int x = -1024; x < 1024; x += 16) {
                 TerrainSummary sample = generator.sample(x, z);
                 byte material = sample.surfaceMaterial();
                 sand |= material == BlockId.SAND;
                 gravel |= material == BlockId.GRAVEL;
+                stone |= material == BlockId.STONE;
                 grass |= material == BlockId.GRASS;
                 snow |= material == BlockId.SNOW;
                 dirt |= sample.subsurfaceMaterial() == BlockId.DIRT;
@@ -42,6 +43,7 @@ class TerrainGeneratorTest {
             }
         assertTrue(sand, "sand");
         assertTrue(gravel, "gravel");
+        assertTrue(stone, "stone");
         assertTrue(grass, "grass");
         assertTrue(dirt, "dirt");
         assertTrue(snow, "snow");
@@ -68,13 +70,13 @@ class TerrainGeneratorTest {
     }
 
     @Test
-    void classicPresetHasVersionNineReferenceChunks() {
+    void classicPresetHasVersionTenReferenceChunks() {
         ChunkPos[] positions = {new ChunkPos(0, 2, 0), new ChunkPos(-2, 2, 3), new ChunkPos(-12, 4, 14)};
-        int[][] expected = {{1180583825, -1863016422, 1742602241}, {1633097437, -283642084, 1140572427}};
+        int[][] expected = {{1180583825, -1863016422, 1742602241}, {1633097437, -283642084, 1228333330}};
         long[] seeds = {0, 42};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.classic());
-            assertEquals(9, generator.generatorVersion());
+            assertEquals(10, generator.generatorVersion());
             for (int j = 0; j < positions.length; j++)
                 assertEquals(
                         expected[i][j],
@@ -148,7 +150,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(9, generator.generatorVersion());
+        assertEquals(10, generator.generatorVersion());
     }
 
     @Test
