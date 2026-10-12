@@ -33,6 +33,7 @@ public final class BlockInteraction {
             double directionZ) {
         if (Objects.requireNonNull(mode) == PlayerController.Mode.SPECTATOR) return Optional.empty();
         return raycaster
+                .cast(
                         world,
                         originX,
                         originY,
