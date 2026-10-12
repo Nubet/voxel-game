@@ -152,7 +152,7 @@ public final class TerrainRenderer implements AutoCloseable {
                     1, version == MeshFormat.TEXTURED_VERSION ? 4 : 3, GL_FLOAT, false, strideBytes, 3L * Float.BYTES);
             glEnableVertexAttribArray(1);
             glBindVertexArray(0);
-            meshPool.put(position, new GpuMesh(vao, vbo, mesh.format(), (array, buffer) -> {
+            meshPool.put(position, new GpuMesh(vao, vbo, mesh, (array, buffer) -> {
                 glDeleteBuffers(buffer);
                 glDeleteVertexArrays(array);
             }));

@@ -5,11 +5,34 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import com.norbertfila.meshing.MeshData;
+import com.norbertfila.meshing.MeshFormat;
+import com.norbertfila.meshing.MeshRanges;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.world.ChunkPos;
 import org.junit.jupiter.api.Test;
 
 class UploadQueueTest {
+    @Test
+    void accountsForAllLayersAndReplacesTheirRangesTogether() {
+        MeshData mixed = MeshData.textured(new float[18 * MeshFormat.TEXTURED_VERTEX_STRIDE], new MeshRanges(6, 6, 6));
+        MeshResult request = result(new ChunkPos(-1, 0, 0), mixed);
+        long expectedBytes = 18L * MeshFormat.TEXTURED_VERTEX_STRIDE * Float.BYTES;
+        assertEquals(expectedBytes, request.bytes());
+        UploadQueue queue = new UploadQueue();
+        queue.enqueue(request);
+        assertNull(queue.poll(expectedBytes - 1, false, current -> true));
+        assertSame(request, queue.poll(expectedBytes, false, current -> true));
+
+        queue.enqueue(request);
+        MeshData dry = MeshData.textured(new float[6 * MeshFormat.TEXTURED_VERTEX_STRIDE], new MeshRanges(6, 0, 0));
+        MeshResult replacement = new MeshResult(request.position(), dry, 2, 3, 4, 5);
+        queue.enqueue(replacement);
+        assertEquals(1, queue.size());
+        assertSame(replacement, queue.poll(expectedBytes, false, current -> true));
+        assertEquals(new MeshRanges(6, 0, 0), replacement.mesh().ranges());
+        assertEquals(5, replacement.token());
+    }
+
     @Test
     void dropsStaleOversizedResultsBeforeCheckingTheByteBudget() {
         UploadQueue queue = new UploadQueue();

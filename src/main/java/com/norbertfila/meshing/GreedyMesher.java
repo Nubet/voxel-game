@@ -4,6 +4,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
+import com.norbertfila.world.RenderLayer;
 
 public final class GreedyMesher implements ChunkMesher {
     private static final int[] U_AXIS = {2, 2, 2, 2, 0, 0};
@@ -21,10 +22,17 @@ public final class GreedyMesher implements ChunkMesher {
 
     private static MeshData mesh(
             ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz, boolean textured) {
-        VisibleFaceMesher.Floats out = new VisibleFaceMesher.Floats(1024);
+        VisibleFaceMesher.Floats[] out = new VisibleFaceMesher.Floats[textured ? RenderLayer.values().length : 1];
+        for (int layer = 0; layer < out.length; layer++) out[layer] = new VisibleFaceMesher.Floats(1024);
         for (int face = 0; face < 6; face++) meshFace(snapshot, neighborhood, cx, cy, cz, face, out, textured);
-        float[] vertices = out.toArray();
-        return textured ? MeshData.textured(vertices) : new MeshData(vertices);
+        if (!textured) return new MeshData(out[0].toArray());
+        MeshRanges ranges = new MeshRanges(
+                out[RenderLayer.OPAQUE.ordinal()].size() / MeshFormat.TEXTURED_VERTEX_STRIDE,
+                out[RenderLayer.CUTOUT.ordinal()].size() / MeshFormat.TEXTURED_VERTEX_STRIDE,
+                out[RenderLayer.TRANSLUCENT.ordinal()].size() / MeshFormat.TEXTURED_VERTEX_STRIDE);
+        out[0].addAll(out[1]);
+        out[0].addAll(out[2]);
+        return MeshData.textured(out[0].toArray(), ranges);
     }
 
     private static void meshFace(
@@ -34,7 +42,7 @@ public final class GreedyMesher implements ChunkMesher {
             int cy,
             int cz,
             int face,
-            VisibleFaceMesher.Floats out,
+            VisibleFaceMesher.Floats[] out,
             boolean textured) {
         for (int depth = 0; depth < Chunk.SIZE; depth++) {
             byte[][] mask = new byte[Chunk.SIZE][Chunk.SIZE];
@@ -59,7 +67,13 @@ public final class GreedyMesher implements ChunkMesher {
                     while (v + height < Chunk.SIZE && rowMatches(mask, used, block, u, v + height, width)) height++;
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) used[row][column] = true;
-                    emitQuad(out, face, block, cell(face, depth, u, v), width, height, cx, cy, cz, textured);
+                    int layer = textured
+                            ? BlockRegistry.DEFAULT
+                                    .definition(block)
+                                    .renderLayer()
+                                    .ordinal()
+                            : 0;
+                    emitQuad(out[layer], face, block, cell(face, depth, u, v), width, height, cx, cy, cz, textured);
                 }
             }
         }

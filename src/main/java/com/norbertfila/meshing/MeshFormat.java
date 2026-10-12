@@ -93,7 +93,7 @@ public record MeshFormat(int version, int stride, int vertexCount, Bounds bounds
             this.verticesPerPrimitive = verticesPerPrimitive;
         }
 
-        private void validateVertexCount(int vertexCount) {
+        void validateVertexCount(int vertexCount) {
             if (vertexCount % verticesPerPrimitive != 0)
                 throw new IllegalArgumentException("Vertex count does not match topology");
         }

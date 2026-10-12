@@ -6,7 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
+import com.norbertfila.world.RenderLayer;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class TexturedGreedyMesherTest {
     private final GreedyMesher mesher = new GreedyMesher();
@@ -90,6 +94,77 @@ class TexturedGreedyMesherTest {
             assertEquals(0, minV);
             assertEquals(Chunk.SIZE, maxV);
         }
+    }
+
+    @Test
+    void mixedGeometryIsGroupedWithoutChangingVerticesUvsOrShade() {
+        Chunk opaque = new Chunk();
+        opaque.set(1, 5, 5, BlockId.STONE);
+        Chunk cutout = new Chunk();
+        cutout.set(4, 5, 5, BlockId.LEAVES);
+        cutout.set(7, 5, 5, BlockId.GLASS);
+        Chunk translucent = new Chunk();
+        translucent.set(10, 5, 5, BlockId.WATER);
+        translucent.set(11, 5, 5, BlockId.WATER);
+        Chunk mixed = new Chunk();
+        mixed.set(1, 5, 5, BlockId.STONE);
+        mixed.set(4, 5, 5, BlockId.LEAVES);
+        mixed.set(7, 5, 5, BlockId.GLASS);
+        mixed.set(10, 5, 5, BlockId.WATER);
+        mixed.set(11, 5, 5, BlockId.WATER);
+
+        MeshData result = textured(mixed);
+        assertEquals(new MeshRanges(36, 72, 36), result.ranges());
+        assertEquals(7, result.format().stride());
+        Chunk[] layers = {opaque, cutout, translucent};
+        for (RenderLayer layer : RenderLayer.values()) {
+            int start = result.ranges().firstVertex(layer) * result.format().stride();
+            int end =
+                    start + result.ranges().vertexCount(layer) * result.format().stride();
+            assertArrayEquals(
+                    textured(layers[layer.ordinal()]).vertices(), Arrays.copyOfRange(result.vertices(), start, end));
+        }
+        assertArrayEquals(result.vertices(), textured(mixed).vertices());
+        assertEquals(
+                new MeshRanges(result.vertexCount(), 0, 0),
+                mesher.mesh(mixed.snapshot(), BlockNeighborhood.centerOnly(mixed.snapshot()), -1, -1, -1)
+                        .ranges());
+    }
+
+    @ParameterizedTest
+    @EnumSource(RenderLayer.class)
+    void singleLayerMeshesHaveEmptyOtherRanges(RenderLayer layer) {
+        byte block = switch (layer) {
+            case OPAQUE -> BlockId.STONE;
+            case CUTOUT -> BlockId.LEAVES;
+            case TRANSLUCENT -> BlockId.WATER;
+        };
+        Chunk chunk = new Chunk();
+        chunk.set(3, 4, 5, block);
+        MeshData mesh = textured(chunk);
+        for (RenderLayer current : RenderLayer.values())
+            assertEquals(current == layer ? 36 : 0, mesh.ranges().vertexCount(current));
+    }
+
+    @Test
+    void adjacentMaterialsKeepIndependentRangesAndWaterCulling() {
+        Chunk chunk = new Chunk();
+        chunk.set(3, 4, 5, BlockId.STONE);
+        chunk.set(4, 4, 5, BlockId.WATER);
+        MeshData mesh = textured(chunk);
+        assertEquals(new MeshRanges(36, 0, 30), mesh.ranges());
+        float[] vertices = mesh.vertices();
+        for (int vertex = 0; vertex < mesh.vertexCount(); vertex++) {
+            assertEquals(
+                    vertex < 36 ? BlockRegistry.STONE_TEXTURE : BlockRegistry.WATER_TEXTURE,
+                    vertices[vertex * mesh.format().stride() + 5]);
+        }
+        assertEquals(new MeshRanges(0, 0, 0), textured(new Chunk()).ranges());
+    }
+
+    private MeshData textured(Chunk chunk) {
+        var snapshot = chunk.snapshot();
+        return mesher.meshTextured(snapshot, BlockNeighborhood.centerOnly(snapshot), -1, -1, -1);
     }
 
     @Test

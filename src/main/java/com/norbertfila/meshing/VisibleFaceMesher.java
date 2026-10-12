@@ -97,5 +97,16 @@ public final class VisibleFaceMesher implements ChunkMesher {
         float[] toArray() {
             return Arrays.copyOf(a, size);
         }
+
+        int size() {
+            return size;
+        }
+
+        void addAll(Floats other) {
+            int required = size + other.size;
+            if (required > a.length) a = Arrays.copyOf(a, Math.max(required, a.length * 2));
+            System.arraycopy(other.a, 0, a, size, other.size);
+            size = required;
+        }
     }
 }
