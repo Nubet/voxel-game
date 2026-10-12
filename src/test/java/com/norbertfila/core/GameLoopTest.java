@@ -110,10 +110,10 @@ class GameLoopTest {
 
         assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, false, false, false, -1, 1)
                 .isEmpty());
-        assertEquals(14, hotbar.selectedSlot());
+        assertEquals(15, hotbar.selectedSlot());
         assertTrue(GameLoop.updateBlockEditing(camera, player, interaction, hotbar, true, false, false, -1, -1)
                 .isEmpty());
-        assertEquals(14, hotbar.selectedSlot());
+        assertEquals(15, hotbar.selectedSlot());
     }
 
     @Test

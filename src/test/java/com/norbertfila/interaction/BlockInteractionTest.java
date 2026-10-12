@@ -117,6 +117,68 @@ class BlockInteractionTest {
     }
 
     @Test
+    void replacesHitWaterInsteadOfPlacingBesideItAndCanRemoveTheReplacement() {
+        BlockPos target = new BlockPos(-1, 16, -1);
+        World world = worldWithBlock(target);
+        world.getChunk(Coordinates.worldToChunk(target)).set(15, 0, 15, BlockId.WATER);
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        var change = interaction
+                .place(-.5, 19, -.5, 0, -1, 0, BlockId.STONE, PlayerController.Mode.CREATIVE, DISTANT_BODY)
+                .orElseThrow();
+        assertEquals(BlockId.WATER, change.previous().orElseThrow());
+        assertEquals(BlockId.STONE, world.getBlock(target).orElseThrow());
+        assertEquals(BlockId.AIR, world.getBlock(new BlockPos(-1, 17, -1)).orElseThrow());
+        assertEquals(4, change.dirtyChunks().size());
+        var removed = interaction
+                .remove(PlayerController.Mode.CREATIVE, -.5, 19, -.5, 0, -1, 0)
+                .orElseThrow();
+        assertEquals(BlockId.STONE, removed.previous().orElseThrow());
+        assertEquals(BlockId.AIR, world.getBlock(target).orElseThrow());
+    }
+
+    @Test
+    void waterPlacementAllowsBodyOverlapButReplacingItWithStoneDoesNot() {
+        World world = worldWithBlock(new BlockPos(1, 1, 1));
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        Aabb body = PlayerState.at(new PlayerState.Position(.5, 1, 1.5)).body();
+        var water = interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.SURVIVAL, body)
+                .orElseThrow();
+        assertTrue(water.changed());
+        assertEquals(BlockId.WATER, world.getBlock(new BlockPos(0, 1, 1)).orElseThrow());
+        assertFalse(world.isSolid(new BlockPos(0, 1, 1)));
+        assertTrue(interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.SURVIVAL, body)
+                .isEmpty());
+        var sameWater = interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.WATER, PlayerController.Mode.SURVIVAL, body)
+                .orElseThrow();
+        assertFalse(sameWater.changed());
+        assertEquals(1, world.changes().size());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.SURVIVAL, .5, 1.5, 1.5, 1, 0, 0)
+                .orElseThrow()
+                .changed());
+    }
+
+    @Test
+    void unloadedWaterDeltaCannotBeEdited() {
+        World world = new World();
+        world.putChunk(new ChunkPos(0, 0, 0), new Chunk());
+        BlockPos target = new BlockPos(16, 1, 1);
+        world.setBlock(target, BlockId.WATER, 8);
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        assertTrue(interaction
+                .place(15.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.CREATIVE, DISTANT_BODY)
+                .isEmpty());
+        assertTrue(interaction
+                .remove(PlayerController.Mode.CREATIVE, 15.5, 1.5, 1.5, 1, 0, 0)
+                .isEmpty());
+        assertEquals(BlockId.WATER, world.changes().get(target).orElseThrow());
+        assertEquals(1, world.residentCount());
+    }
+
+    @Test
     void spectatorCannotPlaceOrRemoveEvenInsideItsPosition() {
         World world = worldWithBlock(new BlockPos(1, 1, 1));
         BlockInteraction interaction = new BlockInteraction(world, 8);

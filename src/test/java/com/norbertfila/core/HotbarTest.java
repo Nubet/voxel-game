@@ -26,7 +26,8 @@ class HotbarTest {
             BlockId.BRICKS,
             BlockId.GLASS,
             BlockId.SANDSTONE,
-            BlockId.STONE_BRICKS
+            BlockId.STONE_BRICKS,
+            BlockId.WATER
         };
         for (int slot = 0; slot < Hotbar.SLOTS; slot++) {
             hotbar.select(slot);
@@ -35,19 +36,19 @@ class HotbarTest {
             assertEquals(expected[slot], hotbar.block(slot));
         }
         assertThrows(IllegalArgumentException.class, () -> hotbar.select(-1));
-        assertThrows(IllegalArgumentException.class, () -> hotbar.select(15));
-        assertThrows(IllegalArgumentException.class, () -> hotbar.block(15));
-        assertEquals(14, hotbar.selectedSlot());
+        assertThrows(IllegalArgumentException.class, () -> hotbar.select(Hotbar.SLOTS));
+        assertThrows(IllegalArgumentException.class, () -> hotbar.block(Hotbar.SLOTS));
+        assertEquals(15, hotbar.selectedSlot());
     }
 
     @Test
     void scrollsAcrossTheWholeHotbarAndWrapsInBothDirections() {
         Hotbar hotbar = new Hotbar();
         hotbar.scroll(1);
-        assertEquals(14, hotbar.selectedSlot());
+        assertEquals(15, hotbar.selectedSlot());
         hotbar.scroll(-1);
         assertEquals(0, hotbar.selectedSlot());
         hotbar.scroll(-17);
-        assertEquals(2, hotbar.selectedSlot());
+        assertEquals(1, hotbar.selectedSlot());
     }
 }

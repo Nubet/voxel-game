@@ -140,7 +140,7 @@ public final class Input implements AutoCloseable {
         if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return -1;
         int slot = key - GLFW_KEY_1;
         if (!extended) return slot;
-        return slot < 6 ? slot + 9 : -1;
+        return slot < 7 ? slot + 9 : -1;
     }
 
     public float mouseDeltaX() {

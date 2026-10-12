@@ -19,8 +19,11 @@ public final class Game {
         try (Window window = new Window(1280, 720, "Voxel Engine | M0")) {
             Camera camera = new Camera();
             TerrainConfig terrainConfig = TerrainConfig.defaults();
-            ViewDemand viewDemand = terrainDemand(terrainConfig);
-            TerrainSource generator = new TerrainGenerator(0, terrainConfig);
+            boolean waterScene = Boolean.getBoolean("voxel.waterScene");
+            ViewDemand viewDemand = waterScene
+                    ? new ViewDemand(TERRAIN_RADIUS, 0, 1, ViewDemand.Shape.SQUARE)
+                    : terrainDemand(terrainConfig);
+            TerrainSource generator = waterScene ? new WaterTestScene() : new TerrainGenerator(0, terrainConfig);
             PlayerController player = new PlayerController();
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             GreedyMesher greedyMesher = new GreedyMesher();

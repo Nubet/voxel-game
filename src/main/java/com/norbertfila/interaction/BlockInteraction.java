@@ -5,6 +5,7 @@ import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
@@ -56,16 +57,25 @@ public final class BlockInteraction {
         if (target.isEmpty()) return Optional.empty();
         VoxelRaycaster.Hit hit = target.get();
         VoxelRaycaster.Normal normal = hit.normal();
-        if (normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
-        BlockPos position = new BlockPos(
-                hit.block().x() + normal.x(),
-                hit.block().y() + normal.y(),
-                hit.block().z() + normal.z());
-        if (!world.hasChunk(Coordinates.worldToChunk(position))
-                || world.getBlock(position).orElseThrow() != BlockId.AIR) return Optional.empty();
-        if (playerBody.intersects(new Aabb(
-                position.x(), position.y(), position.z(), position.x() + 1.0, position.y() + 1.0, position.z() + 1.0)))
-            return Optional.empty();
+        boolean replacesWater = hit.blockId() == BlockId.WATER;
+        if (!replacesWater && normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
+        BlockPos position = replacesWater
+                ? hit.block()
+                : new BlockPos(
+                        hit.block().x() + normal.x(),
+                        hit.block().y() + normal.y(),
+                        hit.block().z() + normal.z());
+        if (!world.hasChunk(Coordinates.worldToChunk(position))) return Optional.empty();
+        int previous = world.getBlock(position).orElseThrow();
+        if (previous != BlockId.AIR && previous != BlockId.WATER) return Optional.empty();
+        if (BlockRegistry.DEFAULT.isCollidable(blockId)
+                && playerBody.intersects(new Aabb(
+                        position.x(),
+                        position.y(),
+                        position.z(),
+                        position.x() + 1.0,
+                        position.y() + 1.0,
+                        position.z() + 1.0))) return Optional.empty();
         return Optional.of(edit.setBlock(position, blockId));
     }
 }

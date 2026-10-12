@@ -30,7 +30,7 @@ class InputTest {
     @Test
     void slotKeysTriggerOnNewPressIncludingWhileAnotherKeyIsHeld() {
         Input input = new Input();
-        for (int slot = 0; slot < 15; slot++) {
+        for (int slot = 0; slot < 16; slot++) {
             input.updateButtons(false, false, 1 << slot);
             assertEquals(slot, input.hotbarSlotPressed());
             input.updateButtons(false, false, 1 << slot);
@@ -47,8 +47,8 @@ class InputTest {
     @Test
     void rightShiftMapsNumberKeysToTheRemainingHotbarSlots() {
         for (int slot = 0; slot < 9; slot++) assertEquals(slot, Input.hotbarSlot(GLFW_KEY_1 + slot, false));
-        for (int slot = 0; slot < 6; slot++) assertEquals(slot + 9, Input.hotbarSlot(GLFW_KEY_1 + slot, true));
-        for (int slot = 6; slot < 9; slot++) assertEquals(-1, Input.hotbarSlot(GLFW_KEY_1 + slot, true));
+        for (int slot = 0; slot < 7; slot++) assertEquals(slot + 9, Input.hotbarSlot(GLFW_KEY_1 + slot, true));
+        for (int slot = 7; slot < 9; slot++) assertEquals(-1, Input.hotbarSlot(GLFW_KEY_1 + slot, true));
     }
 
     @Test

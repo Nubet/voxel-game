@@ -18,7 +18,8 @@ public final class Hotbar {
         BlockId.BRICKS,
         BlockId.GLASS,
         BlockId.SANDSTONE,
-        BlockId.STONE_BRICKS
+        BlockId.STONE_BRICKS,
+        BlockId.WATER
     };
     public static final int SLOTS = BLOCKS.length;
     private int selectedSlot;
@@ -46,6 +47,7 @@ public final class Hotbar {
     }
 
     private static void checkSlot(int slot) {
-        if (slot < 0 || slot >= SLOTS) throw new IllegalArgumentException("Hotbar slot must be in [0, 14]");
+        if (slot < 0 || slot >= SLOTS)
+            throw new IllegalArgumentException("Hotbar slot must be in [0, " + (SLOTS - 1) + "]");
     }
 }

@@ -34,7 +34,8 @@ public final class UiRenderer implements AutoCloseable {
         {.62f, .28f, .18f},
         {.42f, .73f, .82f},
         {.79f, .68f, .46f},
-        {.4f, .42f, .44f}
+        {.4f, .42f, .44f},
+        {.25f, .4f, .8f}
     };
     private final int vao;
     private final int vbo;
