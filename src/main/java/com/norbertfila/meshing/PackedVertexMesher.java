@@ -16,14 +16,7 @@ public final class PackedVertexMesher {
                     byte block = snapshot.get(x, y, z);
                     if (block == BlockId.AIR) continue;
                     for (int face = 0; face < VisibleFaceMesher.NORMALS.length; face++) {
-                        int nx = x + VisibleFaceMesher.NORMALS[face][0];
-                        int ny = y + VisibleFaceMesher.NORMALS[face][1];
-                        int nz = z + VisibleFaceMesher.NORMALS[face][2];
-                        if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-                            if (BlockRegistry.DEFAULT.occludesFullFace(snapshot.get(nx, ny, nz))) continue;
-                        } else if (solidNeighbor(neighborhood, face, x, y, z)) {
-                            continue;
-                        }
+                        if (!FaceVisibility.isVisible(block, snapshot, neighborhood, face, x, y, z)) continue;
                         int textureLayer =
                                 BlockRegistry.DEFAULT.definition(block).textureLayer(face);
                         for (int corner : VisibleFaceMesher.TRIANGLE_INDICES)
@@ -32,21 +25,6 @@ public final class PackedVertexMesher {
                 }
         int[] vertices = out.toArray();
         return new PackedMesh(vertices, vertices.length / MeshData.VERTICES_PER_FACE);
-    }
-
-    private static boolean solidNeighbor(BlockNeighborhood neighborhood, int face, int x, int y, int z) {
-        ChunkSnapshot neighbor =
-                neighborhood.neighbor(BlockNeighborhood.Side.values()[face]).orElse(null);
-        if (neighbor == null) return false;
-        return switch (face) {
-            case 0 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(0, y, z));
-            case 1 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(Chunk.SIZE - 1, y, z));
-            case 2 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, 0, z));
-            case 3 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, Chunk.SIZE - 1, z));
-            case 4 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, 0));
-            case 5 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, Chunk.SIZE - 1));
-            default -> throw new AssertionError(face);
-        };
     }
 
     private static final class Ints {

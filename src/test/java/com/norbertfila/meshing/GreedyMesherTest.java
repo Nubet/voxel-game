@@ -99,6 +99,16 @@ class GreedyMesherTest {
     }
 
     @Test
+    void fullWaterChunkHasOnlySixMergedOuterFaces() {
+        byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+        java.util.Arrays.fill(blocks, BlockId.WATER);
+        Chunk chunk = Chunk.fromBlocks(blocks);
+        assertEquals(6, meshWith(greedy, chunk).faceCount());
+        assertEquals(6 * Chunk.SIZE * Chunk.SIZE, meshWith(baseline, chunk).faceCount());
+        assertEquals(surfaces(meshWith(baseline, chunk)), surfaces(meshWith(greedy, chunk)));
+    }
+
+    @Test
     void fullChunkMergesEachBoundaryIntoOneQuad() {
         byte[] blocks = new byte[Chunk.BLOCK_BYTES];
         java.util.Arrays.fill(blocks, BlockId.STONE);
@@ -155,6 +165,30 @@ class GreedyMesherTest {
                 6,
                 greedy.mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0)
                         .faceCount());
+    }
+
+    @Test
+    void mixedWaterAndCutoutSurfacesMatchBaselineAtSignedChunkBoundaries() {
+        var world = new com.norbertfila.world.World();
+        var position = new com.norbertfila.world.ChunkPos(-1, -1, -1);
+        byte[] materials = {BlockId.AIR, BlockId.WATER, BlockId.STONE, BlockId.DIRT, BlockId.LEAVES, BlockId.GLASS};
+        Random random = new Random(42);
+        for (int face = -1; face < 6; face++) {
+            int[] normal = face < 0 ? new int[3] : VisibleFaceMesher.NORMALS[face];
+            Chunk chunk = new Chunk();
+            for (int y = 0; y < Chunk.SIZE; y++)
+                for (int z = 0; z < Chunk.SIZE; z++)
+                    for (int x = 0; x < Chunk.SIZE; x++)
+                        chunk.set(x, y, z, materials[random.nextInt(materials.length)]);
+            world.putChunk(
+                    new com.norbertfila.world.ChunkPos(
+                            position.x() + normal[0], position.y() + normal[1], position.z() + normal[2]),
+                    chunk);
+        }
+        var neighborhood = world.blockNeighborhood(position);
+        assertEquals(
+                surfaces(baseline.mesh(neighborhood.center(), neighborhood, -1, -1, -1)),
+                surfaces(greedy.mesh(neighborhood.center(), neighborhood, -1, -1, -1)));
     }
 
     @Test

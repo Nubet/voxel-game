@@ -43,9 +43,10 @@ public final class GreedyMesher implements ChunkMesher {
                 for (int u = 0; u < Chunk.SIZE; u++) {
                     int[] cell = cell(face, depth, u, v);
                     byte block = snapshot.get(cell[0], cell[1], cell[2]);
-                    mask[v][u] = block != BlockId.AIR && !solidNeighbor(snapshot, neighborhood, face, cell)
-                            ? block
-                            : BlockId.AIR;
+                    mask[v][u] =
+                            FaceVisibility.isVisible(block, snapshot, neighborhood, face, cell[0], cell[1], cell[2])
+                                    ? block
+                                    : BlockId.AIR;
                 }
             }
             for (int v = 0; v < Chunk.SIZE; v++) {
@@ -79,27 +80,6 @@ public final class GreedyMesher implements ChunkMesher {
     private static boolean rowMatches(byte[][] mask, boolean[][] used, byte block, int start, int row, int width) {
         for (int u = start; u < start + width; u++) if (used[row][u] || mask[row][u] != block) return false;
         return true;
-    }
-
-    private static boolean solidNeighbor(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int face, int[] cell) {
-        int nx = cell[0] + VisibleFaceMesher.NORMALS[face][0];
-        int ny = cell[1] + VisibleFaceMesher.NORMALS[face][1];
-        int nz = cell[2] + VisibleFaceMesher.NORMALS[face][2];
-        if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-            return BlockRegistry.DEFAULT.occludesFullFace(snapshot.get(nx, ny, nz));
-        }
-        ChunkSnapshot neighbor =
-                neighborhood.neighbor(BlockNeighborhood.Side.values()[face]).orElse(null);
-        if (neighbor == null) return false;
-        return switch (face) {
-            case 0 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(0, cell[1], cell[2]));
-            case 1 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(Chunk.SIZE - 1, cell[1], cell[2]));
-            case 2 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(cell[0], 0, cell[2]));
-            case 3 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(cell[0], Chunk.SIZE - 1, cell[2]));
-            case 4 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(cell[0], cell[1], 0));
-            case 5 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(cell[0], cell[1], Chunk.SIZE - 1));
-            default -> throw new AssertionError(face);
-        };
     }
 
     private static void emitQuad(

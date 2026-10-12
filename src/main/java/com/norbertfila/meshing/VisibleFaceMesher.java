@@ -1,12 +1,10 @@
 package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
-import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import java.util.Arrays;
 
-/** Baseline face culling inside one chunk; boundary faces are intentionally emitted */
 public final class VisibleFaceMesher implements ChunkMesher {
     public static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
     private static final float[] GRASS_TOP = {.32f, .69f, .22f};
@@ -45,12 +43,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
                     byte block = snapshot.get(x, y, z);
                     if (block == BlockId.AIR) continue;
                     for (int f = 0; f < 6; f++) {
-                        int nx = x + NORMALS[f][0], ny = y + NORMALS[f][1], nz = z + NORMALS[f][2];
-                        if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE) {
-                            if (BlockRegistry.DEFAULT.occludesFullFace(snapshot.get(nx, ny, nz))) continue;
-                        } else if (isSolidNeighbor(neighborhood, f, x, y, z)) {
-                            continue;
-                        }
+                        if (!FaceVisibility.isVisible(block, snapshot, neighborhood, f, x, y, z)) continue;
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
                         float[] rgb = color(block, f);
                         for (int index : TRIANGLE_INDICES) {
@@ -65,21 +58,6 @@ public final class VisibleFaceMesher implements ChunkMesher {
                     }
                 }
         return new MeshData(out.toArray());
-    }
-
-    private static boolean isSolidNeighbor(BlockNeighborhood neighborhood, int face, int x, int y, int z) {
-        BlockNeighborhood.Side side = BlockNeighborhood.Side.values()[face];
-        ChunkSnapshot neighbor = neighborhood.neighbor(side).orElse(null);
-        if (neighbor == null) return false;
-        return switch (face) {
-            case 0 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(0, y, z));
-            case 1 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(Chunk.SIZE - 1, y, z));
-            case 2 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, 0, z));
-            case 3 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, Chunk.SIZE - 1, z));
-            case 4 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, 0));
-            case 5 -> BlockRegistry.DEFAULT.occludesFullFace(neighbor.get(x, y, Chunk.SIZE - 1));
-            default -> throw new AssertionError(face);
-        };
     }
 
     static float[] color(byte block, int face) {
