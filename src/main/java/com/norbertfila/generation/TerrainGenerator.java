@@ -6,7 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 7;
+    private static final int GENERATOR_VERSION = 9;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -96,10 +96,24 @@ public final class TerrainGenerator implements TerrainSource {
     public TerrainSummary sample(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
-        double biome = column.biome();
-        byte surface = height >= config.baseHeight() + 70 ? BlockId.SNOW : biome < -.1 ? BlockId.SAND : BlockId.GRASS;
-        byte subsurface = surface == BlockId.SAND ? surface : BlockId.DIRT;
-        return new TerrainSummary(height, surface, subsurface, BlockId.STONE, config.minHeight() - 1);
+        int shoreWidth = column.biome() < -.1 ? 2 : 1;
+        long waterDepth = (long) config.waterLevel() - height;
+        byte surface = height >= (long) config.baseHeight() + 70 ? BlockId.SNOW : BlockId.GRASS;
+        if (waterDepth > 3) surface = BlockId.GRAVEL;
+        else if (waterDepth >= -shoreWidth) {
+            double slope = Math.max(
+                    Math.max(
+                            Math.abs(surfaceElevation((double) worldX - 1, worldZ) - column.elevation()),
+                            Math.abs(surfaceElevation((double) worldX + 1, worldZ) - column.elevation())),
+                    Math.max(
+                            Math.abs(surfaceElevation(worldX, (double) worldZ - 1) - column.elevation()),
+                            Math.abs(surfaceElevation(worldX, (double) worldZ + 1) - column.elevation())));
+            if (slope <= 1.5) surface = BlockId.SAND;
+            else if (waterDepth > 0) surface = BlockId.GRAVEL;
+        }
+        byte subsurface = surface == BlockId.SAND || surface == BlockId.GRAVEL ? surface : BlockId.DIRT;
+        return new TerrainSummary(
+                height, surface, subsurface, BlockId.STONE, config.minHeight() - 1, config.waterLevel());
     }
 
     @Override

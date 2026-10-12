@@ -29,15 +29,32 @@ class GameTest {
         TerrainGenerator generator = new TerrainGenerator(0, TerrainConfig.defaults());
         for (int x : new int[] {-17, 0, 31}) {
             var spawn = new SpawnResolver(generator).resolve(x, -1);
+            int spawnX = (int) Math.floor(spawn.x()), spawnZ = (int) Math.floor(spawn.z());
             int floorY = (int) spawn.y() - 1;
-            assertEquals(generator.surfaceHeight(x, -1) + 1, spawn.y());
+            assertEquals(generator.surfaceHeight(spawnX, spawnZ) + 1, spawn.y());
             assertEquals(
-                    generator.sample(x, -1).surfaceMaterial(),
+                    generator.sample(spawnX, spawnZ).surfaceMaterial(),
                     generator
-                            .generate(new ChunkPos(Math.floorDiv(x, Chunk.SIZE), Math.floorDiv(floorY, Chunk.SIZE), -1))
-                            .get(Math.floorMod(x, Chunk.SIZE), Math.floorMod(floorY, Chunk.SIZE), Chunk.SIZE - 1));
-            assertEquals(BlockId.AIR, generator.sample(x, -1).materialAt(floorY + 1));
-            assertEquals(BlockId.AIR, generator.sample(x, -1).materialAt(floorY + 2));
+                            .generate(new ChunkPos(
+                                    Math.floorDiv(spawnX, Chunk.SIZE),
+                                    Math.floorDiv(floorY, Chunk.SIZE),
+                                    Math.floorDiv(spawnZ, Chunk.SIZE)))
+                            .get(
+                                    Math.floorMod(spawnX, Chunk.SIZE),
+                                    Math.floorMod(floorY, Chunk.SIZE),
+                                    Math.floorMod(spawnZ, Chunk.SIZE)));
+            assertFalse(generator.sample(spawnX, spawnZ).flooded());
+            assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 1));
+            assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 2));
         }
+    }
+
+    @Test
+    void streamingIncludesWaterAboveTheTerrainBoundsWithHeadroom() {
+        TerrainConfig c = TerrainConfig.defaults();
+        TerrainConfig config = new TerrainConfig(
+                c.baseHeight(), c.continental(), c.hills(), c.details(), c.mountains(), c.warp(), 350);
+        var demand = Game.terrainDemand(config);
+        assertTrue(((long) demand.maxChunkY() + 1) * Chunk.SIZE > config.waterLevel() + Chunk.SIZE);
     }
 }

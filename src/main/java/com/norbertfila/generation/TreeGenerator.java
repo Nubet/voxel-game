@@ -68,7 +68,7 @@ final class TreeGenerator {
                 4 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4),
                 2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2),
                 shapeSeed,
-                sample.surfaceMaterial());
+                sample);
     }
 
     private boolean selected(long cellX, long cellZ, long x, long z) {
@@ -92,21 +92,22 @@ final class TreeGenerator {
     }
 
     private boolean suitable(Tree tree) {
-        return suitable(tree.x, tree.z, tree.surface);
+        return suitable(tree.x, tree.z, tree.terrain);
     }
 
     private boolean suitableCandidate(long x, long z) {
         TerrainSummary sample = terrain.sample((int) x, (int) z);
-        return suitable((int) x, (int) z, sample.surfaceMaterial());
+        return suitable((int) x, (int) z, sample);
     }
 
-    private boolean suitable(int x, int z, byte surface) {
-        if (surface != BlockId.GRASS
+    private boolean suitable(int x, int z, TerrainSummary terrainSample) {
+        if (terrainSample.surfaceMaterial() != BlockId.GRASS
+                || terrainSample.surfaceHeight() <= terrainSample.waterLevel()
                 || x < Integer.MIN_VALUE + SLOPE_SAMPLE_DISTANCE
                 || x > Integer.MAX_VALUE - SLOPE_SAMPLE_DISTANCE
                 || z < Integer.MIN_VALUE + SLOPE_SAMPLE_DISTANCE
                 || z > Integer.MAX_VALUE - SLOPE_SAMPLE_DISTANCE) return false;
-        int height = terrain.surfaceHeight(x, z);
+        int height = terrainSample.surfaceHeight();
         return Math.abs((long) height - terrain.surfaceHeight(x + SLOPE_SAMPLE_DISTANCE, z)) <= MAX_SLOPE
                 && Math.abs((long) height - terrain.surfaceHeight(x - SLOPE_SAMPLE_DISTANCE, z)) <= MAX_SLOPE
                 && Math.abs((long) height - terrain.surfaceHeight(x, z + SLOPE_SAMPLE_DISTANCE)) <= MAX_SLOPE
@@ -148,5 +149,6 @@ final class TreeGenerator {
         return value ^ (value >>> 31);
     }
 
-    private record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, byte surface) {}
+    private record Tree(
+            int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TerrainSummary terrain) {}
 }

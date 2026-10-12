@@ -4,13 +4,21 @@ import com.norbertfila.world.Chunk;
 import java.util.Objects;
 
 public record TerrainConfig(
-        int baseHeight, Layer continental, Layer hills, Layer details, Mountains mountains, Layer warp) {
+        int baseHeight,
+        Layer continental,
+        Layer hills,
+        Layer details,
+        Mountains mountains,
+        Layer warp,
+        int waterLevel) {
     public TerrainConfig {
         Objects.requireNonNull(continental);
         Objects.requireNonNull(hills);
         Objects.requireNonNull(details);
         Objects.requireNonNull(mountains);
         Objects.requireNonNull(warp);
+        if (waterLevel < Integer.MIN_VALUE + Chunk.SIZE || waterLevel > Integer.MAX_VALUE - 2 * Chunk.SIZE)
+            throw new IllegalArgumentException("Water level exceeds supported world coordinates");
         double amplitude = continental.amplitude() + hills.amplitude() + details.amplitude();
         if (baseHeight - amplitude < Integer.MIN_VALUE + 2.0 * Chunk.SIZE
                 || baseHeight + amplitude + mountains.ridge().amplitude() > Integer.MAX_VALUE - 2.0 * Chunk.SIZE)
@@ -24,6 +32,12 @@ public record TerrainConfig(
             if (!Double.isFinite(coordinateBound) || frequency * coordinateBound + 256 >= 0x1p52)
                 throw new IllegalArgumentException("Warped noise coordinates lose fractional precision");
         }
+    }
+
+    public TerrainConfig(
+            int baseHeight, Layer continental, Layer hills, Layer details, Mountains mountains, Layer warp) {
+        this(baseHeight, continental, hills, details, mountains, warp, (int)
+                Math.max(Integer.MIN_VALUE, (long) baseHeight - 4));
     }
 
     public TerrainConfig(int baseHeight, Layer continental, Layer hills, Layer details, Mountains mountains) {
@@ -73,7 +87,8 @@ public record TerrainConfig(
                 hills,
                 details,
                 mountains,
-                new Layer(warp.frequency(), warp.octaves(), warp.persistence(), warp.lacunarity(), 0));
+                new Layer(warp.frequency(), warp.octaves(), warp.persistence(), warp.lacunarity(), 0),
+                waterLevel);
     }
 
     public TerrainConfig withoutMountains() {
@@ -92,7 +107,8 @@ public record TerrainConfig(
                         mountains.ridgeExponent(),
                         mountains.rangeExponent(),
                         mountains.perOctaveRidges()),
-                warp);
+                warp,
+                waterLevel);
     }
 
     public int minHeight() {

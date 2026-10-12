@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.HillsGenerator;
+import com.norbertfila.generation.TerrainConfig;
+import com.norbertfila.generation.TerrainGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
@@ -71,6 +73,30 @@ class WorldSaveTest {
         assertEquals(2, loaded.deltas().size());
         assertEquals(BlockId.STONE, restored.getBlock(new BlockPos(-1, 4, -9)).orElseThrow());
         assertEquals(BlockId.GRASS, restored.getBlock(new BlockPos(16, 1, 16)).orElseThrow());
+    }
+
+    @Test
+    void removedProceduralWaterStaysAirAfterSavingAndRegeneration() throws Exception {
+        TerrainConfig.Layer disabled = new TerrainConfig.Layer(.01, 1, .5, 2, 0);
+        TerrainConfig c = new TerrainConfig(15, disabled, disabled, disabled);
+        TerrainGenerator generator = new TerrainGenerator(
+                0, new TerrainConfig(15, disabled, disabled, disabled, c.mountains(), c.warp(), 17), (x, z) -> 0);
+        ChunkPos position = new ChunkPos(-1, 1, -1);
+        BlockPos removed = new BlockPos(-1, 16, -1);
+        World world = new World();
+        world.putChunk(position, Chunk.fromBlocks(generator.generate(position).blocks()));
+        assertEquals(BlockId.WATER, world.getBlock(removed).orElseThrow());
+        assertTrue(new WorldEdit(world, 8).setBlock(removed, BlockId.AIR).changed());
+        Path save = temporaryDirectory.resolve("procedural-water.vxl");
+        WorldSave.save(save, generator.seed(), generator.generatorVersion(), world);
+        var loaded = WorldSave.load(save);
+        assertEquals(9, loaded.generatorVersion());
+        World restored = new World();
+        WorldSave.restore(restored, loaded, 8);
+        restored.putChunk(
+                position, Chunk.fromBlocks(generator.generate(position).blocks()));
+        assertEquals(BlockId.AIR, restored.getBlock(removed).orElseThrow());
+        assertEquals(BlockId.WATER, restored.getBlock(new BlockPos(-2, 16, -1)).orElseThrow());
     }
 
     @Test

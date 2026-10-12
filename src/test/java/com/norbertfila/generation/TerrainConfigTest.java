@@ -19,6 +19,23 @@ class TerrainConfigTest {
     }
 
     @Test
+    void waterLevelIsExplicitValidatedAndPreservedByTerrainVariants() {
+        TerrainConfig c = TerrainConfig.defaults();
+        assertEquals(28, c.waterLevel());
+        TerrainConfig.Layer flat = new TerrainConfig.Layer(.01, 1, .5, 2, 0);
+        assertEquals(Integer.MIN_VALUE + 28, new TerrainConfig(Integer.MIN_VALUE + 32, flat, flat, flat).waterLevel());
+        TerrainConfig configured =
+                new TerrainConfig(c.baseHeight(), c.continental(), c.hills(), c.details(), c.mountains(), c.warp(), 45);
+        assertEquals(45, configured.withoutWarp().waterLevel());
+        assertEquals(45, configured.withoutMountains().waterLevel());
+        for (int unsafe : new int[] {Integer.MIN_VALUE, Integer.MAX_VALUE})
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> new TerrainConfig(
+                            c.baseHeight(), c.continental(), c.hills(), c.details(), c.mountains(), c.warp(), unsafe));
+    }
+
+    @Test
     void validatesShapingAndWarpedCoordinatePrecision() {
         TerrainConfig config = TerrainConfig.defaults();
         TerrainConfig.Mountains mountains = config.mountains();

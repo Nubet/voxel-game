@@ -44,7 +44,7 @@ public final class Game {
 
     static ViewDemand terrainDemand(TerrainConfig config) {
         int minChunkY = Math.floorDiv(config.minHeight() - Chunk.SIZE, Chunk.SIZE);
-        int maxChunkY = Math.floorDiv(config.maxHeight() + Chunk.SIZE, Chunk.SIZE);
+        int maxChunkY = Math.floorDiv(Math.max(config.maxHeight(), config.waterLevel()) + Chunk.SIZE, Chunk.SIZE);
         return new ViewDemand(TERRAIN_RADIUS, minChunkY, maxChunkY, ViewDemand.Shape.SQUARE);
     }
 }
