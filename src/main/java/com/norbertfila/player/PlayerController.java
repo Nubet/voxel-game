@@ -182,6 +182,7 @@ public final class PlayerController {
             var water = WaterContact.sample(world, start);
             if (water.available())
                 required.addAll(physics.requiredChunks(
+                        world,
                         start,
                         move.x,
                         move.z,

@@ -26,6 +26,7 @@ public final class PlayerPhysics {
     public static final double SUBMERGED_GRAVITY = -2;
     public static final double SWIM_ACCELERATION = 16;
     public static final double CURRENT_ACCELERATION = 4;
+    private static final double SHORE_EXIT_VELOCITY = 6;
     private final VoxelCollision collision = new VoxelCollision();
 
     public PlayerState step(
@@ -78,12 +79,23 @@ public final class PlayerPhysics {
         return resolve(
                 world,
                 start,
-                waterMotion(start, inputX, inputZ, jump, sneak, sprint, yawDegrees, dt, water),
+                waterMotion(
+                        start,
+                        inputX,
+                        inputZ,
+                        jump,
+                        sneak,
+                        sprint,
+                        yawDegrees,
+                        dt,
+                        water,
+                        shoreExitAvailable(world, start, inputX, inputZ, jump, sneak, water)),
                 dt,
                 water.submergedFraction() < .5);
     }
 
     public List<ChunkPos> requiredChunks(
+            World world,
             PlayerState start,
             double inputX,
             double inputZ,
@@ -94,7 +106,39 @@ public final class PlayerPhysics {
             double dt,
             WaterContact.Result water) {
         return requiredChunks(
-                start, waterMotion(start, inputX, inputZ, jump, sneak, sprint, yawDegrees, dt, water), dt);
+                start,
+                waterMotion(
+                        start,
+                        inputX,
+                        inputZ,
+                        jump,
+                        sneak,
+                        sprint,
+                        yawDegrees,
+                        dt,
+                        water,
+                        shoreExitAvailable(world, start, inputX, inputZ, jump, sneak, water)),
+                dt);
+    }
+
+    private boolean shoreExitAvailable(
+            World world,
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sneak,
+            WaterContact.Result water) {
+        if (!jump || sneak || water.submergedFraction() == 0 || !water.available()) return false;
+        double length = Math.hypot(inputX, inputZ);
+        if (length == 0) return false;
+        double scale = .2 / Math.max(1, length);
+        Aabb ahead = start.body().move(inputX * scale, 0, inputZ * scale);
+        // Only a clear low lip gets the classic water exit lift; a tall wall or roof must still block it.
+        return collision.available(world, ahead)
+                && !collision.spaceFree(world, ahead)
+                && collision.spaceFree(world, ahead.move(0, .6, 0))
+                && collision.spaceFree(world, start.body().swept(0, .6, 0));
     }
 
     private static Motion waterMotion(
@@ -106,7 +150,8 @@ public final class PlayerPhysics {
             boolean sprint,
             double yawDegrees,
             double dt,
-            WaterContact.Result water) {
+            WaterContact.Result water,
+            boolean shoreExit) {
         Motion dry = motion(start, inputX, inputZ, jump, sprint, yawDegrees, dt);
         double f = water.submergedFraction();
         if (f == 0) return dry;
@@ -123,21 +168,18 @@ public final class PlayerPhysics {
                 + SWIM_SPEED * WATER_DRAG * f;
         double decay = Math.exp(-drag * dt), response = -Math.expm1(-drag * dt) / drag;
         double cooldown = Math.max(0, start.jumpCooldownSeconds() - dt);
-        boolean jumping = jump && start.grounded() && f < .5 && cooldown <= 1e-9;
-        double impulse = jumping && sprint && !start.crouching() ? SPRINT_JUMP_IMPULSE * (1 - f) : 0;
-        double yaw = Math.toRadians(yawDegrees);
-        double x = (start.velocityX() + Math.cos(yaw) * impulse) * decay
+        double x = start.velocityX() * decay
                 + (inputX * acceleration + water.currentX() * CURRENT_ACCELERATION * f) * response;
-        double z = (start.velocityZ() + Math.sin(yaw) * impulse) * decay
+        double z = start.velocityZ() * decay
                 + (inputZ * acceleration + water.currentZ() * CURRENT_ACCELERATION * f) * response;
-        double verticalDrag = VERTICAL_DRAG * (1 - f) + WATER_DRAG * f;
-        double verticalAcceleration = GRAVITY * (1 - f)
-                + SUBMERGED_GRAVITY * f
-                + ((jump ? 1 : 0) - (sneak ? 1 : 0)) * SWIM_ACCELERATION * f
+        // Volume-weighting vertical control traps an upright body at the surface before its feet can clear a bank.
+        double verticalAcceleration = SUBMERGED_GRAVITY
+                + ((jump ? 1 : 0) - (sneak ? 1 : 0)) * SWIM_ACCELERATION
                 + water.currentY() * CURRENT_ACCELERATION * f;
-        double y = (jumping ? JUMP_VELOCITY * (1 - f) : start.velocityY()) * Math.exp(-verticalDrag * dt)
-                + verticalAcceleration * (-Math.expm1(-verticalDrag * dt) / verticalDrag);
-        return new Motion(x, y, z, jumping ? JUMP_COOLDOWN_SECONDS : cooldown);
+        double y = start.velocityY() * Math.exp(-WATER_DRAG * dt)
+                + verticalAcceleration * (-Math.expm1(-WATER_DRAG * dt) / WATER_DRAG);
+        if (shoreExit) y = Math.max(y, SHORE_EXIT_VELOCITY);
+        return new Motion(x, y, z, cooldown);
     }
 
     private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds, boolean walking) {

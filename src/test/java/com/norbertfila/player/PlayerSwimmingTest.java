@@ -192,6 +192,89 @@ class PlayerSwimmingTest {
         return new PlayerInput(false, false, false, false, false, false, false, true, time);
     }
 
+    @Test
+    void heldJumpLeavesOneBlockPoolAndClimbsItsFullBlockBank() {
+        for (int depth : new int[] {1, 4}) {
+            for (var mode :
+                    new PlayerController.Mode[] {PlayerController.Mode.SURVIVAL, PlayerController.Mode.CREATIVE}) {
+                World world = known();
+                for (int x = -4; x <= 10; x++)
+                    for (int z = -4; z <= 4; z++) {
+                        world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
+                        for (int y = 1; y <= depth; y++)
+                            world.setBlock(new BlockPos(x, y, z), x >= 4 ? BlockId.STONE : BlockId.WATER, 64);
+                    }
+                var player = controller(world, mode);
+                player.setPosition(new PlayerState.Position(2.5, 1, .5));
+                var jumpForward = new PlayerInput(true, false, false, false, true, false, false);
+                boolean eyesAbove = false;
+                double peak = 1;
+                for (int tick = 0; tick < 360; tick++) {
+                    var required = player.requiredCollisionChunks(world, jumpForward, DT, 0, 0);
+                    player.tick(world, jumpForward, DT, 0, 0);
+                    peak = Math.max(peak, player.state().position().y());
+                    assertTrue(required.containsAll(
+                            VoxelCollision.requiredChunks(player.state().body())));
+                    assertTrue(
+                            new VoxelCollision().spaceFree(world, player.state().body()));
+                    eyesAbove |= !WaterContact.sample(world, player.state()).eyesSubmerged();
+                    if (player.state().position().x() > 5) break;
+                }
+                assertTrue(eyesAbove, "Held jump must bring eyes above water");
+                assertTrue(
+                        player.state().position().x() > 5,
+                        "Cannot climb bank of pool depth " + depth + " in " + mode + "; peak=" + peak + "; state="
+                                + player.state());
+                assertTrue(player.state().position().y() >= depth + 1, "Feet must clear the bank");
+                assertFalse(player.state().crouching());
+                assertFalse(player.flying());
+            }
+        }
+    }
+
+    @Test
+    void partialImmersionStillAllowsHeldJumpToReachTheSurface() {
+        World world = known();
+        for (int x = -3; x <= 3; x++)
+            for (int z = -3; z <= 3; z++) {
+                world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
+                world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, 64);
+            }
+        var player = controller(world, PlayerController.Mode.SURVIVAL);
+        player.setPosition(new PlayerState.Position(.5, 1, .5));
+        var jump = new PlayerInput(false, false, false, false, true, false, false);
+        double maximumFeet = 1;
+        for (int tick = 0; tick < 180; tick++) {
+            player.tick(world, jump, DT, 0, 0);
+            maximumFeet = Math.max(maximumFeet, player.state().position().y());
+        }
+        assertTrue(maximumFeet > 2, "A one-block pool must not trap the feet below its bank height");
+    }
+
+    @Test
+    void waterExitLiftDoesNotClimbTallWallsOrPassThroughLowCeilings() {
+        for (boolean ceiling : new boolean[] {false, true}) {
+            World world = known();
+            for (int x = -3; x <= 8; x++)
+                for (int z = -3; z <= 3; z++) {
+                    world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
+                    world.setBlock(new BlockPos(x, 1, z), x >= 4 ? BlockId.STONE : BlockId.WATER, 64);
+                    if (ceiling) world.setBlock(new BlockPos(x, 3, z), BlockId.STONE, 64);
+                    else if (x >= 4)
+                        for (int y = 2; y <= 4; y++) world.setBlock(new BlockPos(x, y, z), BlockId.STONE, 64);
+                }
+            var player = controller(world, PlayerController.Mode.SURVIVAL);
+            player.setPosition(new PlayerState.Position(3.5, 1, .5));
+            var jump = new PlayerInput(true, false, false, false, true, false, false);
+            for (int tick = 0; tick < 240; tick++) {
+                player.tick(world, jump, DT, 0, 0);
+                assertTrue(player.state().body().maxX() <= 4);
+                assertTrue(new VoxelCollision().spaceFree(world, player.state().body()));
+                if (ceiling) assertTrue(player.state().body().maxY() <= 3);
+            }
+        }
+    }
+
     private static PlayerController controller(World world, PlayerController.Mode mode) {
         var player = new PlayerController();
         player.setPosition(new PlayerState.Position(4, 3, 4));
