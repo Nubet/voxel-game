@@ -1,6 +1,8 @@
 package com.norbertfila.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
@@ -31,5 +33,47 @@ class CameraTest {
         assertEquals(89, camera.pitch());
         camera.updateLook(0, 2000);
         assertEquals(-89, camera.pitch());
+    }
+
+    @Test
+    void zoomChangesFovSmoothlyAndRestoresItAfterRelease() {
+        Camera camera = new Camera();
+
+        camera.updateZoom(true, 1.0 / 60);
+        assertTrue(camera.fieldOfView() < 75 && camera.fieldOfView() > 20);
+        for (int i = 0; i < 120; i++) camera.updateZoom(true, 1.0 / 60);
+        assertEquals(20, camera.fieldOfView(), .01);
+        for (int i = 0; i < 120; i++) camera.updateZoom(false, 1.0 / 60);
+        assertEquals(75, camera.fieldOfView(), .01);
+    }
+
+    @Test
+    void zoomTransitionIsIndependentOfFrameRate() {
+        Camera at60Hz = new Camera();
+        Camera at240Hz = new Camera();
+
+        for (int i = 0; i < 60; i++) at60Hz.updateZoom(true, 1.0 / 60);
+        for (int i = 0; i < 240; i++) at240Hz.updateZoom(true, 1.0 / 240);
+
+        assertEquals(at60Hz.fieldOfView(), at240Hz.fieldOfView(), .02);
+    }
+
+    @Test
+    void mouseSensitivityFollowsCurrentFov() {
+        Camera camera = new Camera();
+        float normal = camera.mouseSensitivity();
+
+        camera.updateZoom(true, .2);
+
+        assertTrue(camera.mouseSensitivity() < normal);
+    }
+
+    @Test
+    void rejectsInvalidZoomDeltaWithoutChangingFov() {
+        Camera camera = new Camera();
+        float before = camera.fieldOfView();
+
+        assertThrows(IllegalArgumentException.class, () -> camera.updateZoom(true, -1));
+        assertEquals(before, camera.fieldOfView());
     }
 }
