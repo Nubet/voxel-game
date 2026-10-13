@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 final class HeldPlacementCooldown {
+    static final int INITIAL_DELAY_TICKS = 12;
     static final int REPEAT_DELAY_TICKS = 4;
     private int remaining;
 
@@ -8,7 +9,11 @@ final class HeldPlacementCooldown {
         return remaining == 0;
     }
 
-    void placed() {
+    void placedAfterClick() {
+        remaining = INITIAL_DELAY_TICKS;
+    }
+
+    void placedAfterRepeat() {
         remaining = REPEAT_DELAY_TICKS;
     }
 

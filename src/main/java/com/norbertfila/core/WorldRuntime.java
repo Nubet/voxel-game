@@ -171,7 +171,7 @@ public final class WorldRuntime implements AutoCloseable {
                                         var result = edit(interaction, player, edit, player.renderEyePosition(1));
                                         if (!edit.remove() && result.isPresent()) {
                                             placementChanged = true;
-                                            placementCooldown.placed();
+                                            placementCooldown.placedAfterClick();
                                         }
                                         result.ifPresent(chunks::requestRemesh);
                                     }
@@ -180,7 +180,7 @@ public final class WorldRuntime implements AutoCloseable {
                         }
                         if (!placementChanged && placementCooldown.ready()) {
                             var result = placeHeld(interaction, player, state);
-                            if (result.isPresent()) placementCooldown.placed();
+                            if (result.isPresent()) placementCooldown.placedAfterRepeat();
                             result.ifPresent(chunks::requestRemesh);
                         }
                         if (!state.paused()) {
