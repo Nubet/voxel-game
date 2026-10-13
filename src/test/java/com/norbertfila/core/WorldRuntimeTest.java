@@ -8,6 +8,7 @@ import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.persistence.WorldSave;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.PlayerState;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.*;
@@ -49,6 +50,23 @@ class WorldRuntimeTest {
                 .anyMatch(c -> c.value() == BlockId.WATER && c.waterState() > WaterState.SOURCE));
         try (WorldRuntime restarted = start(new Flat(), save)) {
             assertTrue(await(restarted, f -> true).tick() > saved.fluids().tick());
+        }
+    }
+
+    @Test
+    void publishesActualFractionalContactWithoutAddingSwimmingPhysics() throws Exception {
+        Path save = directory.resolve("contact.vxl");
+        World world = new World();
+        for (int x = -1; x <= 1; x++)
+            for (int z = -1; z <= 1; z++) world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, 64);
+        WorldSave.save(save, 42, 1, world);
+        try (WorldRuntime runtime = new WorldRuntime(
+                new Flat(), new GreedyMesher(), new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE), save)) {
+            var frame = await(runtime, f -> f.tick() >= 40 && f.waterContact().available());
+            assertEquals(
+                    (8 / 9d) / PlayerState.STANDING_HEIGHT, frame.waterContact().submergedFraction(), 1e-7);
+            assertFalse(frame.waterContact().eyesSubmerged());
+            assertEquals(1, frame.playerState().position().y());
         }
     }
 
@@ -149,6 +167,45 @@ class WorldRuntimeTest {
             assertTrue(runtime.offer(new WorldRuntime.Jump(10)));
             assertTrue(runtime.offer(new WorldRuntime.Jump(10.1)));
             assertTrue(await(runtime, WorldRuntime.Frame::flying).flying());
+        }
+    }
+
+    @Test
+    void heldForwardFlightCrossesUnviewedChunksEvenWithoutRendererAcknowledgements() throws Exception {
+        try (WorldRuntime runtime = new WorldRuntime(
+                new Flat(),
+                new GreedyMesher(),
+                new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE),
+                directory.resolve("continuous.vxl"))) {
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 4));
+            var heldMeshes = new java.util.ArrayList<ChunkManager.MeshResult>();
+            await(runtime, f -> {
+                ChunkManager.MeshResult mesh;
+                while ((mesh = runtime.pollMesh()) != null) heldMeshes.add(mesh);
+                return heldMeshes.size() == 64;
+            });
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(runtime, f -> f.mode() == PlayerController.Mode.CREATIVE);
+            assertTrue(runtime.offer(new WorldRuntime.Jump(10)));
+            assertTrue(runtime.offer(new WorldRuntime.Jump(10.1)));
+            var start = await(runtime, WorldRuntime.Frame::flying);
+            runtime.controls(new WorldRuntime.Controls(
+                    new PlayerInput(true, false, false, false, true, false, true), 0, 0, false, false, 4));
+            var previous = await(runtime, f -> f.tick() > start.tick() + 30);
+            long end = previous.tick() + 120;
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (previous.tick() < end && System.nanoTime() < deadline) {
+                long tick = previous.tick();
+                var next = await(runtime, f -> f.tick() > tick);
+                assertTrue(
+                        next.playerState().position().x()
+                                > previous.playerState().position().x(),
+                        "Held forward stopped at tick " + next.tick());
+                previous = next;
+            }
+            assertTrue(previous.tick() >= end);
+            assertTrue(previous.playerState().position().y() > 16);
+            assertEquals(64, heldMeshes.size());
         }
     }
 

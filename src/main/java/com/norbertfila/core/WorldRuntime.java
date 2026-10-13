@@ -23,6 +23,7 @@ import java.util.logging.Logger;
 public final class WorldRuntime implements AutoCloseable {
     private static final int CAPACITY = 64;
     private static final int FAR_TILE_SIZE = 64;
+    private static final double COLLISION_LOOKAHEAD_SECONDS = .5;
     private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
     private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
     private final ArrayBlockingQueue<Acknowledgement> acknowledgements = new ArrayBlockingQueue<>(CAPACITY);
@@ -122,15 +123,19 @@ public final class WorldRuntime implements AutoCloseable {
                         ChunkPos center = Coordinates.worldToChunk(
                                 new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
                                         Math.floor(position.z())));
-                        chunks.ensureCollisionChunks(
+                        var collisionDemand = new LinkedHashSet<>(
                                 player.requiredCollisionChunks(input.peekTick(), dt, state.yaw(), state.pitch()));
+                        collisionDemand.addAll(player.requiredCollisionChunks(
+                                input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
+                        chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
                         chunks.update(center);
-                        List<ChunkManager.MeshResult> ready = List.of();
-                        if (outstanding.size() <= CAPACITY - ChunkManager.RESULTS_PER_UPDATE
-                                && meshes.remainingCapacity() >= ChunkManager.RESULTS_PER_UPDATE) {
-                            ready = chunks.processResults().meshes();
-                            for (var mesh : ready) outstanding.put(mesh.token(), mesh);
-                        }
+                        // Upload backpressure must not prevent collision-data admission.
+                        int meshBudget = Math.min(
+                                ChunkManager.RESULTS_PER_UPDATE,
+                                Math.min(CAPACITY - outstanding.size(), meshes.remainingCapacity()));
+                        List<ChunkManager.MeshResult> ready =
+                                chunks.processResults(4, meshBudget).meshes();
+                        for (var mesh : ready) outstanding.put(mesh.token(), mesh);
                         Action action;
                         for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
                             if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
@@ -154,8 +159,10 @@ public final class WorldRuntime implements AutoCloseable {
                         if (!state.paused()) {
                             chunks.requestRemesh(water.tick(tick[0]).dirtyChunks());
                             if (!state.blocked()
-                                    && chunks.ensureCollisionChunks(player.requiredCollisionChunks(
-                                            input.peekTick(), dt, state.yaw(), state.pitch()))) {
+                                    && player
+                                            .requiredCollisionChunks(input.peekTick(), dt, state.yaw(), state.pitch())
+                                            .stream()
+                                            .allMatch(chunks::readyForPlayer)) {
                                 var before = player.mode();
                                 boolean wasFlying = player.flying(),
                                         wasCrouching = player.state().crouching();
@@ -190,6 +197,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 player.mode(),
                                 player.modeChangePending(),
                                 player.state(),
+                                WaterContact.sample(world, player.state()),
                                 player.flying(),
                                 state.paused(),
                                 chunks.residentTokens(),
@@ -291,6 +299,7 @@ public final class WorldRuntime implements AutoCloseable {
             PlayerController.Mode mode,
             boolean modePending,
             PlayerState playerState,
+            WaterContact.Result waterContact,
             boolean flying,
             boolean paused,
             Map<ChunkPos, Long> residents,

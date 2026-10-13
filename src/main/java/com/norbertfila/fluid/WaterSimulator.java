@@ -185,7 +185,7 @@ public final class WaterSimulator {
             // Changing support changes the lateral feed from the block above, even if its state is unchanged.
             schedule(WaterFlowRules.offset(above, dx, 0, dz), tick, dependenciesChanged);
         }
-        if (extended) {
+        if (extended && dependenciesChanged) {
             // A terrain edit can change a donor's best route four steps away, and its recipients one step farther.
             for (int dx = -5; dx <= 5; dx++) {
                 for (int dz = -5; dz <= 5; dz++) {

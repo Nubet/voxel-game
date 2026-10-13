@@ -122,10 +122,19 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ProcessResult processResults() {
+        return processResults(RESULTS_PER_UPDATE, RESULTS_PER_UPDATE);
+    }
+
+    public ProcessResult processResults(int generationBudget, int meshBudget) {
+        if (generationBudget < 0
+                || generationBudget > RESULTS_PER_UPDATE
+                || meshBudget < 0
+                || meshBudget > RESULTS_PER_UPDATE)
+            throw new IllegalArgumentException("Result budget is outside the batch limit");
         processPendingRemeshes();
         int generated = 0;
         int discarded = 0;
-        for (int index = 0; index < RESULTS_PER_UPDATE; index++) {
+        for (int index = 0; index < generationBudget; index++) {
             ChunkTask.Outcome<ChunkData> outcome = generationScheduler.pollReady();
             if (outcome == null) break;
             ChunkEntry entry = entries.get(outcome.position());
@@ -154,7 +163,7 @@ public final class ChunkManager implements AutoCloseable {
         }
 
         List<MeshResult> meshes = new ArrayList<>();
-        for (int index = 0; index < RESULTS_PER_UPDATE; index++) {
+        for (int index = 0; index < meshBudget; index++) {
             ChunkTask.Outcome<MeshData> outcome = meshingScheduler.pollReady();
             if (outcome == null) break;
             ChunkEntry entry = entries.get(outcome.position());
