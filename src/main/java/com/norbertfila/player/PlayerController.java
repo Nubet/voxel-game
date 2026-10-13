@@ -117,15 +117,22 @@ public final class PlayerController {
         } else if (move.flying) {
             result = physics.fly(world, start, move.x, move.y, move.z, input.sprintHeld(), fixedDeltaSeconds);
         } else {
+            WaterContact.Result water = WaterContact.sample(world, start);
+            if (!water.available()) {
+                pauseInterpolation();
+                return;
+            }
             result = physics.step(
                     world,
                     start,
                     move.x,
                     move.z,
                     !move.toggled && (input.jumpHeld() || input.jumpPressed()),
+                    input.sneakHeld(),
                     sprinting(input),
                     yawDegrees,
-                    fixedDeltaSeconds);
+                    fixedDeltaSeconds,
+                    water);
         }
         if (result == start) {
             pauseInterpolation();
@@ -142,6 +149,11 @@ public final class PlayerController {
 
     public List<ChunkPos> requiredCollisionChunks(
             PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
+        return requiredCollisionChunks(null, input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
+    }
+
+    public List<ChunkPos> requiredCollisionChunks(
+            World world, PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         Movement move = movement(input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
         if (requestedMode != null)
             return requestedMode == Mode.SPECTATOR
@@ -149,16 +161,38 @@ public final class PlayerController {
                     : VoxelCollision.requiredChunks(VoxelCollision.requiredRegion(current.body(), 0, 0, 0));
         if (mode == Mode.SPECTATOR) return List.of();
         PlayerState start = movementStart(input, move);
-        List<ChunkPos> required = requiredMovementChunks(start, input, move, fixedDeltaSeconds, yawDegrees);
+        List<ChunkPos> required = requiredMovementChunks(world, start, input, move, fixedDeltaSeconds, yawDegrees);
         if (!start.crouching() || wantsCrouch(input, move)) return required;
         // Expansion and either movement path must be known before choosing the actual pose.
         var combined = new LinkedHashSet<>(required);
-        combined.addAll(requiredMovementChunks(start.withCrouching(false), input, move, fixedDeltaSeconds, yawDegrees));
+        combined.addAll(
+                requiredMovementChunks(world, start.withCrouching(false), input, move, fixedDeltaSeconds, yawDegrees));
         return List.copyOf(combined);
     }
 
     private List<ChunkPos> requiredMovementChunks(
-            PlayerState start, PlayerInput input, Movement move, double fixedDeltaSeconds, double yawDegrees) {
+            World world,
+            PlayerState start,
+            PlayerInput input,
+            Movement move,
+            double fixedDeltaSeconds,
+            double yawDegrees) {
+        if (world != null && !move.flying) {
+            var required = new LinkedHashSet<>(WaterContact.requiredChunks(start));
+            var water = WaterContact.sample(world, start);
+            if (water.available())
+                required.addAll(physics.requiredChunks(
+                        start,
+                        move.x,
+                        move.z,
+                        !move.toggled && (input.jumpHeld() || input.jumpPressed()),
+                        input.sneakHeld(),
+                        sprinting(input),
+                        yawDegrees,
+                        fixedDeltaSeconds,
+                        water));
+            return List.copyOf(required);
+        }
         return move.flying
                 ? physics.requiredFlightChunks(start, move.x, move.y, move.z, input.sprintHeld(), fixedDeltaSeconds)
                 : physics.requiredChunks(

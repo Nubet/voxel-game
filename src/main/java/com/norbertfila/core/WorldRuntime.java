@@ -123,10 +123,10 @@ public final class WorldRuntime implements AutoCloseable {
                         ChunkPos center = Coordinates.worldToChunk(
                                 new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
                                         Math.floor(position.z())));
-                        var collisionDemand = new LinkedHashSet<>(
-                                player.requiredCollisionChunks(input.peekTick(), dt, state.yaw(), state.pitch()));
+                        var collisionDemand = new LinkedHashSet<>(player.requiredCollisionChunks(
+                                world, input.peekTick(), dt, state.yaw(), state.pitch()));
                         collisionDemand.addAll(player.requiredCollisionChunks(
-                                input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
+                                world, input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
                         chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
                         chunks.update(center);
                         // Upload backpressure must not prevent collision-data admission.
@@ -160,7 +160,8 @@ public final class WorldRuntime implements AutoCloseable {
                             chunks.requestRemesh(water.tick(tick[0]).dirtyChunks());
                             if (!state.blocked()
                                     && player
-                                            .requiredCollisionChunks(input.peekTick(), dt, state.yaw(), state.pitch())
+                                            .requiredCollisionChunks(
+                                                    world, input.peekTick(), dt, state.yaw(), state.pitch())
                                             .stream()
                                             .allMatch(chunks::readyForPlayer)) {
                                 var before = player.mode();

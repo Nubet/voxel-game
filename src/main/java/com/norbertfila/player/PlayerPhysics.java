@@ -21,6 +21,11 @@ public final class PlayerPhysics {
     private static final double VERTICAL_DRAG = -Math.log(.98) / .05;
     private static final double AIR_ACCELERATION = 8.0;
     private static final double CROUCH_MULTIPLIER = .3;
+    public static final double WATER_DRAG = 4;
+    public static final double SWIM_SPEED = 2.5;
+    public static final double SUBMERGED_GRAVITY = -2;
+    public static final double SWIM_ACCELERATION = 16;
+    public static final double CURRENT_ACCELERATION = 4;
     private final VoxelCollision collision = new VoxelCollision();
 
     public PlayerState step(
@@ -55,6 +60,84 @@ public final class PlayerPhysics {
             double deltaSeconds) {
         return resolve(
                 world, start, flightMotion(start, inputX, inputY, inputZ, sprint, deltaSeconds), deltaSeconds, false);
+    }
+
+    public PlayerState step(
+            World world,
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sneak,
+            boolean sprint,
+            double yawDegrees,
+            double dt,
+            WaterContact.Result water) {
+        Objects.requireNonNull(water);
+        if (!water.available()) return start;
+        return resolve(
+                world,
+                start,
+                waterMotion(start, inputX, inputZ, jump, sneak, sprint, yawDegrees, dt, water),
+                dt,
+                water.submergedFraction() < .5);
+    }
+
+    public List<ChunkPos> requiredChunks(
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sneak,
+            boolean sprint,
+            double yawDegrees,
+            double dt,
+            WaterContact.Result water) {
+        return requiredChunks(
+                start, waterMotion(start, inputX, inputZ, jump, sneak, sprint, yawDegrees, dt, water), dt);
+    }
+
+    private static Motion waterMotion(
+            PlayerState start,
+            double inputX,
+            double inputZ,
+            boolean jump,
+            boolean sneak,
+            boolean sprint,
+            double yawDegrees,
+            double dt,
+            WaterContact.Result water) {
+        Motion dry = motion(start, inputX, inputZ, jump, sprint, yawDegrees, dt);
+        double f = water.submergedFraction();
+        if (f == 0) return dry;
+        double length = Math.hypot(inputX, inputZ);
+        if (length > 1) {
+            inputX /= length;
+            inputZ /= length;
+        }
+        double dryDrag = start.grounded() ? GROUND_DRAG : AIR_DRAG;
+        double drag = dryDrag * (1 - f) + WATER_DRAG * f;
+        double acceleration = (start.grounded() ? WALK_SPEED * dryDrag : AIR_ACCELERATION)
+                        * (start.crouching() ? CROUCH_MULTIPLIER : sprint ? SPRINT_MULTIPLIER : 1)
+                        * (1 - f)
+                + SWIM_SPEED * WATER_DRAG * f;
+        double decay = Math.exp(-drag * dt), response = -Math.expm1(-drag * dt) / drag;
+        double cooldown = Math.max(0, start.jumpCooldownSeconds() - dt);
+        boolean jumping = jump && start.grounded() && f < .5 && cooldown <= 1e-9;
+        double impulse = jumping && sprint && !start.crouching() ? SPRINT_JUMP_IMPULSE * (1 - f) : 0;
+        double yaw = Math.toRadians(yawDegrees);
+        double x = (start.velocityX() + Math.cos(yaw) * impulse) * decay
+                + (inputX * acceleration + water.currentX() * CURRENT_ACCELERATION * f) * response;
+        double z = (start.velocityZ() + Math.sin(yaw) * impulse) * decay
+                + (inputZ * acceleration + water.currentZ() * CURRENT_ACCELERATION * f) * response;
+        double verticalDrag = VERTICAL_DRAG * (1 - f) + WATER_DRAG * f;
+        double verticalAcceleration = GRAVITY * (1 - f)
+                + SUBMERGED_GRAVITY * f
+                + ((jump ? 1 : 0) - (sneak ? 1 : 0)) * SWIM_ACCELERATION * f
+                + water.currentY() * CURRENT_ACCELERATION * f;
+        double y = (jumping ? JUMP_VELOCITY * (1 - f) : start.velocityY()) * Math.exp(-verticalDrag * dt)
+                + verticalAcceleration * (-Math.expm1(-verticalDrag * dt) / verticalDrag);
+        return new Motion(x, y, z, jumping ? JUMP_COOLDOWN_SECONDS : cooldown);
     }
 
     private PlayerState resolve(World world, PlayerState start, Motion motion, double deltaSeconds, boolean walking) {

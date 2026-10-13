@@ -54,7 +54,7 @@ class WorldRuntimeTest {
     }
 
     @Test
-    void publishesActualFractionalContactWithoutAddingSwimmingPhysics() throws Exception {
+    void publishesActualFractionalContactWhileControlsAreBlocked() throws Exception {
         Path save = directory.resolve("contact.vxl");
         World world = new World();
         for (int x = -1; x <= 1; x++)
@@ -68,6 +68,42 @@ class WorldRuntimeTest {
             assertFalse(frame.waterContact().eyesSubmerged());
             assertEquals(1, frame.playerState().position().y());
         }
+    }
+
+    @Test
+    void swimmingCrossesChunkBoundaryWithSixtyFourMeshesAwaitingAck() throws Exception {
+        Path save = directory.resolve("swim-backpressure.vxl");
+        World world = new World();
+        for (int x = -2; x <= 36; x++)
+            for (int y = 1; y <= 3; y++)
+                for (int z = -2; z <= 2; z++) world.setBlock(new BlockPos(x, y, z), BlockId.WATER, 64);
+        WorldSave.save(save, 42, 1, world);
+        try (WorldRuntime runtime = new WorldRuntime(
+                new Flat(), new GreedyMesher(), new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE), save)) {
+            var held = new java.util.ArrayList<ChunkManager.MeshResult>();
+            await(runtime, f -> {
+                ChunkManager.MeshResult mesh;
+                while ((mesh = runtime.pollMesh()) != null) held.add(mesh);
+                return held.size() == 64 && f.waterContact().available();
+            });
+            runtime.controls(new WorldRuntime.Controls(
+                    new PlayerInput(true, false, false, false, false, false, false), 0, 0, false, false, 4));
+            var previous = await(runtime, f -> f.playerState().position().x() > 2);
+            long end = previous.tick() + 390;
+            while (previous.tick() < end) {
+                long tick = previous.tick();
+                var next = await(runtime, f -> f.tick() > tick);
+                assertTrue(
+                        next.playerState().position().x()
+                                > previous.playerState().position().x(),
+                        "Swimming stopped at tick " + next.tick());
+                assertTrue(next.waterContact().available());
+                previous = next;
+            }
+            assertTrue(previous.playerState().position().x() > 16);
+            assertEquals(64, held.size());
+        }
+        assertTrue(WorldSave.load(save).fluids().tick() > 390);
     }
 
     @Test
