@@ -151,6 +151,7 @@ public final class WorldRuntime implements AutoCloseable {
                             issuedAt.put(mesh.token(), System.nanoTime());
                         }
                         Action action;
+                        boolean placementChanged = false;
                         for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
                             if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
                             switch (action) {
@@ -164,11 +165,24 @@ public final class WorldRuntime implements AutoCloseable {
                                     input.clear();
                                 }
                                 case Edit edit -> {
-                                    if (!player.modeChangePending())
-                                        edit(interaction, player, edit, player.renderEyePosition(1))
-                                                .ifPresent(chunks::requestRemesh);
+                                    if (!player.modeChangePending()) {
+                                        var result = edit(interaction, player, edit, player.renderEyePosition(1));
+                                        if (!edit.remove()) placementChanged = result.isPresent();
+                                        result.ifPresent(chunks::requestRemesh);
+                                    }
                                 }
                             }
+                        }
+                        if (!placementChanged
+                                && state.placeHeld()
+                                && !player.modeChangePending()
+                                && state.placeBlock() != BlockId.AIR) {
+                            edit(
+                                            interaction,
+                                            player,
+                                            new Edit(false, state.placeBlock(), state.yaw(), state.pitch()),
+                                            player.renderEyePosition(1))
+                                    .ifPresent(chunks::requestRemesh);
                         }
                         if (!state.paused()) {
                             long waterStarted = System.nanoTime();
