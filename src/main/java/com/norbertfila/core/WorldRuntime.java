@@ -173,17 +173,8 @@ public final class WorldRuntime implements AutoCloseable {
                                 }
                             }
                         }
-                        if (!placementChanged
-                                && state.placeHeld()
-                                && !player.modeChangePending()
-                                && state.placeBlock() != BlockId.AIR) {
-                            edit(
-                                            interaction,
-                                            player,
-                                            new Edit(false, state.placeBlock(), state.yaw(), state.pitch()),
-                                            player.renderEyePosition(1))
-                                    .ifPresent(chunks::requestRemesh);
-                        }
+                        if (!placementChanged)
+                            placeHeld(interaction, player, state).ifPresent(chunks::requestRemesh);
                         if (!state.paused()) {
                             long waterStarted = System.nanoTime();
                             var waterResult = water.tick(tick[0]);
@@ -313,6 +304,20 @@ public final class WorldRuntime implements AutoCloseable {
                         edit.block(),
                         player.mode(),
                         player.state().body());
+    }
+
+    static Optional<BlockChangeResult> placeHeld(
+            BlockInteraction interaction, PlayerController player, Controls controls) {
+        if (controls.blocked()
+                || controls.paused()
+                || !controls.placeHeld()
+                || controls.placeBlock() == BlockId.AIR
+                || player.modeChangePending()) return Optional.empty();
+        return edit(
+                interaction,
+                player,
+                new Edit(false, controls.placeBlock(), controls.yaw(), controls.pitch()),
+                player.renderEyePosition(1));
     }
 
     @Override

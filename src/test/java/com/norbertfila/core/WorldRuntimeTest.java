@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
+import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.persistence.WorldSave;
 import com.norbertfila.player.PlayerController;
@@ -243,6 +244,41 @@ class WorldRuntimeTest {
             assertTrue(previous.playerState().position().y() > 16);
             assertEquals(64, heldMeshes.size());
         }
+    }
+
+    @Test
+    void heldPlacementRetriesAgainstTheNextExposedFace() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        chunk.set(1, 2, 0, BlockId.STONE);
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        PlayerController player = new PlayerController();
+        player.setPosition(new PlayerState.Position(5.5, 1, .5));
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, true, BlockId.DIRT);
+
+        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isPresent());
+        assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
+        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isPresent());
+        assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(3, 2, 0)).orElseThrow());
+    }
+
+    @Test
+    void heldPlacementDoesNothingWhenIntentIsBlocked() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        chunk.set(1, 2, 0, BlockId.STONE);
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        BlockInteraction interaction = new BlockInteraction(world, 8);
+        PlayerController player = new PlayerController();
+        player.setPosition(new PlayerState.Position(5.5, 1, .5));
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, true, BlockId.DIRT);
+
+        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isEmpty());
+        assertEquals(BlockId.AIR, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, true, BlockId.AIR));
     }
 
     @Test
