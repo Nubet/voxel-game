@@ -39,28 +39,37 @@ public final class WaterContact {
                     double low = Math.max(body.minY() - y, 0), high = Math.min(body.maxY() - y, 1);
                     double left = Math.max(body.minX() - x, 0), right = Math.min(body.maxX() - x, 1);
                     double back = Math.max(body.minZ() - z, 0), front = Math.min(body.maxZ() - z, 1);
-                    double cellVolume = triangleVolume(
-                            List.of(
-                                    new Point(0, 0, surface.h00()),
-                                    new Point(1, 0, surface.h10()),
-                                    new Point(0, 1, surface.h01())),
-                            left,
-                            right,
-                            back,
-                            front,
-                            low,
-                            high);
-                    cellVolume += triangleVolume(
-                            List.of(
-                                    new Point(1, 1, surface.h11()),
-                                    new Point(0, 1, surface.h01()),
-                                    new Point(1, 0, surface.h10())),
-                            left,
-                            right,
-                            back,
-                            front,
-                            low,
-                            high);
+                    double minHeight =
+                            Math.min(Math.min(surface.h00(), surface.h10()), Math.min(surface.h01(), surface.h11()));
+                    double maxHeight =
+                            Math.max(Math.max(surface.h00(), surface.h10()), Math.max(surface.h01(), surface.h11()));
+                    double cellVolume;
+                    if (high <= minHeight) cellVolume = (right - left) * (front - back) * (high - low);
+                    else if (low >= maxHeight) cellVolume = 0;
+                    else {
+                        cellVolume = triangleVolume(
+                                List.of(
+                                        new Point(0, 0, surface.h00()),
+                                        new Point(1, 0, surface.h10()),
+                                        new Point(0, 1, surface.h01())),
+                                left,
+                                right,
+                                back,
+                                front,
+                                low,
+                                high);
+                        cellVolume += triangleVolume(
+                                List.of(
+                                        new Point(1, 1, surface.h11()),
+                                        new Point(0, 1, surface.h01()),
+                                        new Point(1, 0, surface.h10())),
+                                left,
+                                right,
+                                back,
+                                front,
+                                low,
+                                high);
+                    }
                     if (cellVolume > 0) {
                         var current = WaterCurrent.sample(world, new BlockPos((int) x, (int) y, (int) z));
                         available[0] &= current.available();

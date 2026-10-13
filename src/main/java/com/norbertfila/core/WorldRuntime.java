@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
@@ -94,6 +95,9 @@ public final class WorldRuntime implements AutoCloseable {
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             PlayerInputBuffer input = new PlayerInputBuffer();
             Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
+            Map<Long, Long> issuedAt = new HashMap<>();
+            WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
+            long[] estimatedChunkBytes = {0};
             BlockInteraction interaction =
                     new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
             try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
@@ -106,11 +110,16 @@ public final class WorldRuntime implements AutoCloseable {
                     double delta = Math.min(.1, (now - previous) / 1e9);
                     previous = now;
                     clock.advance(delta, dt -> {
+                        long tickStarted = System.nanoTime();
+                        long waterNanos = 0, playerNanos = 0, captureNanos = 0;
+                        int processed = 0, changed = 0, dirty = 0;
+                        boolean movementWaiting = false;
                         Controls state = controls.get();
                         if (!state.paused()) tick[0] = Math.incrementExact(tick[0]);
                         Acknowledgement ack;
                         while ((ack = acknowledgements.poll()) != null) {
                             if (outstanding.remove(ack.mesh().token()) == null) continue;
+                            issuedAt.remove(ack.mesh().token());
                             if (!ack.uploaded() || !chunks.markUploaded(ack.mesh())) chunks.rejectUpload(ack.mesh());
                         }
                         chunks.setRenderDistance(state.renderDistance());
@@ -123,10 +132,12 @@ public final class WorldRuntime implements AutoCloseable {
                         ChunkPos center = Coordinates.worldToChunk(
                                 new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
                                         Math.floor(position.z())));
+                        long predictionStarted = System.nanoTime();
                         var collisionDemand = new LinkedHashSet<>(player.requiredCollisionChunks(
                                 world, input.peekTick(), dt, state.yaw(), state.pitch()));
                         collisionDemand.addAll(player.requiredCollisionChunks(
                                 world, input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
+                        long predictionNanos = System.nanoTime() - predictionStarted;
                         chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
                         chunks.update(center);
                         // Upload backpressure must not prevent collision-data admission.
@@ -135,7 +146,10 @@ public final class WorldRuntime implements AutoCloseable {
                                 Math.min(CAPACITY - outstanding.size(), meshes.remainingCapacity()));
                         List<ChunkManager.MeshResult> ready =
                                 chunks.processResults(4, meshBudget).meshes();
-                        for (var mesh : ready) outstanding.put(mesh.token(), mesh);
+                        for (var mesh : ready) {
+                            outstanding.put(mesh.token(), mesh);
+                            issuedAt.put(mesh.token(), System.nanoTime());
+                        }
                         Action action;
                         for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
                             if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
@@ -157,7 +171,14 @@ public final class WorldRuntime implements AutoCloseable {
                             }
                         }
                         if (!state.paused()) {
-                            chunks.requestRemesh(water.tick(tick[0]).dirtyChunks());
+                            long waterStarted = System.nanoTime();
+                            var waterResult = water.tick(tick[0]);
+                            waterNanos = System.nanoTime() - waterStarted;
+                            processed = waterResult.processedUpdates();
+                            changed = waterResult.changedBlocks();
+                            dirty = waterResult.dirtyChunks().size();
+                            chunks.requestRemesh(waterResult.dirtyChunks());
+                            long playerStarted = System.nanoTime();
                             if (!state.blocked()
                                     && player
                                             .requiredCollisionChunks(
@@ -174,8 +195,13 @@ public final class WorldRuntime implements AutoCloseable {
                                 if (wasCrouching != player.state().crouching())
                                     LOG.info("Player crouching changed to "
                                             + player.state().crouching());
-                            } else player.pauseInterpolation();
-                            if (tick[0] % 300 == 0)
+                            } else {
+                                movementWaiting = !state.blocked();
+                                player.pauseInterpolation();
+                            }
+                            playerNanos = System.nanoTime() - playerStarted;
+                            if (tick[0] % 300 == 0) {
+                                long captureStarted = System.nanoTime();
                                 saves.request(
                                         WorldSave.capture(
                                                 generator.seed(),
@@ -183,6 +209,8 @@ public final class WorldRuntime implements AutoCloseable {
                                                 world,
                                                 water.snapshot(tick[0])),
                                         tick[0]);
+                                captureNanos = System.nanoTime() - captureStarted;
+                            }
                         } else player.pauseInterpolation();
                         if (saves.failure() != null)
                             throw new IllegalStateException("World save failed", saves.failure());
@@ -190,6 +218,36 @@ public final class WorldRuntime implements AutoCloseable {
                         outstanding.forEach((token, mesh) -> {
                             if (chunks.isCurrentMesh(mesh)) valid.put(token, mesh);
                         });
+                        if (tick[0] % 60 == 0) {
+                            fluidMetrics[0] = water.metrics(tick[0]);
+                            estimatedChunkBytes[0] = world.residentPositions().stream()
+                                    .mapToLong(p -> world.getChunk(p).estimatedBytes())
+                                    .sum();
+                        }
+                        long contactStarted = System.nanoTime();
+                        var contact = WaterContact.sample(world, player.state());
+                        long contactNanos = System.nanoTime() - contactStarted;
+                        long oldestAck =
+                                issuedAt.isEmpty() ? 0 : System.nanoTime() - Collections.min(issuedAt.values());
+                        var metrics = new SimulationMetrics(
+                                System.nanoTime() - tickStarted,
+                                predictionNanos,
+                                waterNanos,
+                                playerNanos,
+                                contactNanos,
+                                captureNanos,
+                                processed,
+                                changed,
+                                dirty,
+                                fluidMetrics[0],
+                                chunks.metrics(),
+                                saves.metrics(),
+                                outstanding.size(),
+                                meshes.size(),
+                                actions.size(),
+                                oldestAck,
+                                movementWaiting,
+                                estimatedChunkBytes[0]);
                         frame.set(new Frame(
                                 tick[0],
                                 System.nanoTime(),
@@ -198,12 +256,13 @@ public final class WorldRuntime implements AutoCloseable {
                                 player.mode(),
                                 player.modeChangePending(),
                                 player.state(),
-                                WaterContact.sample(world, player.state()),
+                                contact,
                                 player.flying(),
                                 state.paused(),
                                 chunks.residentTokens(),
                                 Map.copyOf(valid),
-                                water.pendingUpdates()));
+                                water.pendingUpdates(),
+                                metrics));
                         for (var mesh : ready) {
                             if (!meshes.offer(mesh))
                                 throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -305,7 +364,8 @@ public final class WorldRuntime implements AutoCloseable {
             boolean paused,
             Map<ChunkPos, Long> residents,
             Map<Long, ChunkManager.MeshResult> validUploads,
-            int pendingWater) {
+            int pendingWater,
+            SimulationMetrics metrics) {
         public Frame {
             residents = Map.copyOf(residents);
             validUploads = Map.copyOf(validUploads);

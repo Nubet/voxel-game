@@ -91,6 +91,23 @@ public final class FluidScheduler {
         return scheduled.size();
     }
 
+    public boolean hasDue(long tick) {
+        return !queue.isEmpty() && queue.first().executeAtTick() <= tick;
+    }
+
+    public long oldestDueAge(long tick) {
+        return queue.isEmpty() ? 0 : Math.max(0, tick - queue.first().executeAtTick());
+    }
+
+    public int dueUpdates(long tick) {
+        int count = 0;
+        for (var entry : queue) {
+            if (entry.executeAtTick() > tick) break;
+            count++;
+        }
+        return count;
+    }
+
     public List<PendingUpdate> pending() {
         return queue.stream()
                 .map(t -> new PendingUpdate(t.position(), t.executeAtTick()))

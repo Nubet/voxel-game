@@ -21,6 +21,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class ChunkScheduler<T> implements AutoCloseable {
+    private final java.util.concurrent.atomic.LongAdder workNanos = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder completedJobs = new java.util.concurrent.atomic.LongAdder();
+
+    public long workNanos() {
+        return workNanos.sum();
+    }
+
+    public long completedJobs() {
+        return completedJobs.sum();
+    }
+
     private static final Logger LOG = Logger.getLogger(ChunkScheduler.class.getName());
     private final ThreadPoolExecutor executor;
     private final BlockingQueue<ChunkTask.Outcome<T>> ready;
@@ -213,6 +224,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     private void execute(ChunkTask<T> task) {
+        long started = System.nanoTime();
         try {
             ChunkTask.Outcome<T> outcome;
             try {
@@ -243,6 +255,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 }
             }
         } finally {
+            workNanos.add(System.nanoTime() - started);
+            completedJobs.increment();
             submitted.remove(TaskKey.of(task));
         }
     }

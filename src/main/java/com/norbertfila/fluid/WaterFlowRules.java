@@ -6,6 +6,8 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 final class WaterFlowRules {
@@ -61,29 +63,45 @@ final class WaterFlowRules {
 
     private static boolean feedsDirection(World world, BlockPos donor, int targetDirection, Set<ChunkPos> missing) {
         int[] scores = new int[DX.length];
+        Map<BlockPos, Integer> samples = new HashMap<>();
         int best = Integer.MAX_VALUE;
         for (int direction = 0; direction < DX.length; direction++) {
             BlockPos next = offset(donor, DX[direction], 0, DZ[direction]);
-            scores[direction] = dropDistance(world, next, donor, 1, missing);
+            scores[direction] = dropDistance(world, next, donor, 1, missing, samples);
             best = Math.min(best, scores[direction]);
         }
         return scores[targetDirection] == best;
     }
 
     private static int dropDistance(
-            World world, BlockPos position, BlockPos previous, int depth, Set<ChunkPos> missing) {
-        int state = read(world, position, missing);
+            World world,
+            BlockPos position,
+            BlockPos previous,
+            int depth,
+            Set<ChunkPos> missing,
+            Map<BlockPos, Integer> samples) {
+        int state = cachedRead(world, position, missing, samples);
         if (state == BLOCKED || state == UNAVAILABLE || state == WaterState.SOURCE) return Integer.MAX_VALUE;
-        int below = read(world, offset(position, 0, -1, 0), missing);
+        int below = cachedRead(world, offset(position, 0, -1, 0), missing, samples);
         if (below == WaterState.EMPTY || below > WaterState.SOURCE) return depth;
         if (below == UNAVAILABLE || depth == 4) return Integer.MAX_VALUE;
         int best = Integer.MAX_VALUE;
         for (int direction = 0; direction < DX.length; direction++) {
             BlockPos next = offset(position, DX[direction], 0, DZ[direction]);
             if (next != null && !next.equals(previous))
-                best = Math.min(best, dropDistance(world, next, position, depth + 1, missing));
+                best = Math.min(best, dropDistance(world, next, position, depth + 1, missing, samples));
         }
         return best;
+    }
+
+    private static int cachedRead(
+            World world, BlockPos position, Set<ChunkPos> missing, Map<BlockPos, Integer> samples) {
+        if (position == null) return BLOCKED;
+        Integer known = samples.get(position);
+        if (known != null) return known;
+        int value = read(world, position, missing);
+        samples.put(position, value);
+        return value;
     }
 
     private static int read(World world, BlockPos position, Set<ChunkPos> missing) {

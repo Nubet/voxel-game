@@ -15,6 +15,13 @@ public final class SaveScheduler implements AutoCloseable {
     private long savedRevision = -1;
     private IOException failure;
     private boolean closing;
+    private long workerNanos, savedBytes;
+
+    public synchronized Metrics metrics() {
+        return new Metrics(savedRevision, workerNanos, savedBytes, failure != null);
+    }
+
+    public record Metrics(long savedRevision, long workerNanos, long savedBytes, boolean failed) {}
 
     public SaveScheduler(Path target, long debounceMillis) {
         this.target = Objects.requireNonNull(target);
@@ -69,8 +76,12 @@ public final class SaveScheduler implements AutoCloseable {
                 pending = null;
             }
             try {
+                long started = System.nanoTime();
                 WorldSave.save(target, work.snapshot());
+                long bytes = java.nio.file.Files.size(target);
                 synchronized (this) {
+                    workerNanos = System.nanoTime() - started;
+                    savedBytes = bytes;
                     savedRevision = Math.max(savedRevision, work.revision());
                     failure = null;
                     notifyAll();

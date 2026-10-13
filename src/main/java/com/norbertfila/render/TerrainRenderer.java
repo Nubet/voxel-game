@@ -364,4 +364,12 @@ public final class TerrainRenderer implements AutoCloseable {
             List<MeshResult> discarded) {}
 
     public record RenderStats(int visible, int culled, int drawCalls) {}
+
+    public MemoryStats memoryStats() {
+        var budget = meshPool.budget();
+        return new MemoryStats(
+                budget.allocatedBytes(), budget.peakBytes(), budget.uploadedBytes(), budget.deletedBytes());
+    }
+
+    public record MemoryStats(long allocated, long peak, long uploaded, long deleted) {}
 }

@@ -49,6 +49,44 @@ public final class ChunkManager implements AutoCloseable {
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
+    private long acceptedRemeshes;
+    private long generatedResults, meshResults, discardedResults;
+
+    public Metrics metrics() {
+        return new Metrics(
+                generationScheduler.queuedTasks(),
+                generationScheduler.activeTasks(),
+                generationScheduler.outstandingJobs(),
+                meshingScheduler.queuedTasks(),
+                meshingScheduler.activeTasks(),
+                meshingScheduler.outstandingJobs(),
+                pendingRemesh.size(),
+                acceptedRemeshes,
+                generationScheduler.workNanos(),
+                generationScheduler.completedJobs(),
+                meshingScheduler.workNanos(),
+                meshingScheduler.completedJobs(),
+                generatedResults,
+                meshResults,
+                discardedResults);
+    }
+
+    public record Metrics(
+            int generationQueued,
+            int generationActive,
+            int generationOutstanding,
+            int meshQueued,
+            int meshActive,
+            int meshOutstanding,
+            int pendingRemesh,
+            long acceptedRemeshes,
+            long generationNanos,
+            long generationCompleted,
+            long meshNanos,
+            long meshCompleted,
+            long generatedResults,
+            long meshResults,
+            long discardedResults) {}
 
     public void setChunkLifecycleListener(Consumer<ChunkPos> listener) {
         chunkLifecycleListener = Objects.requireNonNull(listener);
@@ -205,6 +243,9 @@ public final class ChunkManager implements AutoCloseable {
                     outcome.token()));
         }
         processPendingRemeshes();
+        generatedResults += generated;
+        meshResults += meshes.size();
+        discardedResults += discarded;
         return new ProcessResult(generated, meshes, discarded);
     }
 
@@ -366,7 +407,10 @@ public final class ChunkManager implements AutoCloseable {
             entry.meshFailed();
             requestRemesh(position);
             LOG.warning("Meshing task rejected position=" + position + " revision=" + chunk.revision());
-        } else pendingEdits.remove(position);
+        } else {
+            pendingEdits.remove(position);
+            acceptedRemeshes++;
+        }
     }
 
     private void requestRemesh(ChunkPos position) {

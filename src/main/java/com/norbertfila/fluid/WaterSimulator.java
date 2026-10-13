@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class WaterSimulator {
+    private static final TickResult IDLE = new TickResult(0, 0, List.of());
     private static final Comparator<ChunkPos> CHUNK_ORDER =
             Comparator.comparingInt(ChunkPos::x).thenComparingInt(ChunkPos::y).thenComparingInt(ChunkPos::z);
     private final World world;
@@ -55,6 +56,10 @@ public final class WaterSimulator {
     public TickResult tick(long tick) {
         long nextTick = nextTick(tick);
         advanceClock(tick);
+        if (!scheduler.hasDue(tick)) {
+            scheduler.processDue(tick, ignored -> {});
+            return IDLE;
+        }
         Set<ChunkPos> dirty = new TreeSet<>(CHUNK_ORDER);
         int[] changed = {0};
         int processed = scheduler.processDue(tick, position -> {
@@ -82,6 +87,18 @@ public final class WaterSimulator {
     public int deferredUpdates() {
         return deferred.size();
     }
+
+    public Metrics metrics(long tick) {
+        return new Metrics(
+                tick,
+                scheduler.size(),
+                deferred.size(),
+                waiting.size(),
+                scheduler.dueUpdates(tick),
+                scheduler.oldestDueAge(tick));
+    }
+
+    public record Metrics(long sampledTick, int active, int deferred, int waitingChunks, int due, long oldestDueAge) {}
 
     public void onChunkChanged(ChunkPos chunk, long tick) {
         Objects.requireNonNull(chunk);
