@@ -22,8 +22,7 @@ public final class Game {
                     ? new ViewDemand(TERRAIN_RADIUS, 0, 1, ViewDemand.Shape.SQUARE)
                     : terrainDemand(terrainConfig);
             TerrainSource generator = waterScene ? new WaterTestScene() : new TerrainGenerator(0, terrainConfig);
-            GreedyMesher greedyMesher = new GreedyMesher();
-            ChunkMesher mesher = greedyMesher::meshTextured;
+            ChunkMesher mesher = new WaterMesher();
             GameSettings settings = new GameSettings();
             SettingsPanel settingsPanel = new SettingsPanel(settings);
             var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();

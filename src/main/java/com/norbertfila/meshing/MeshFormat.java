@@ -6,6 +6,19 @@ public record MeshFormat(int version, int stride, int vertexCount, Bounds bounds
     public static final int POSITION_COLOR_VERSION = 1;
     public static final int TEXTURED_VERSION = 2;
     public static final int TEXTURED_VERTEX_STRIDE = 7;
+    public static final int FLOW_TEXTURED_VERSION = 3;
+    public static final int FLOW_TEXTURED_VERTEX_STRIDE = 9;
+
+    public static MeshFormat flowTextured(float[] vertices) {
+        if (vertices.length % FLOW_TEXTURED_VERTEX_STRIDE != 0)
+            throw new IllegalArgumentException("Invalid flow vertex stride");
+        return new MeshFormat(
+                FLOW_TEXTURED_VERSION,
+                FLOW_TEXTURED_VERTEX_STRIDE,
+                vertices.length / FLOW_TEXTURED_VERTEX_STRIDE,
+                Bounds.from(vertices, FLOW_TEXTURED_VERTEX_STRIDE),
+                Topology.TRIANGLES);
+    }
 
     public MeshFormat {
         if (version < 1) throw new IllegalArgumentException("Format version must be positive");

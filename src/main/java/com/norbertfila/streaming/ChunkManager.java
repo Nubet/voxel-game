@@ -388,13 +388,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private List<ChunkPos> neighbors(ChunkPos position) {
-        return List.of(
-                new ChunkPos(position.x() + 1, position.y(), position.z()),
-                new ChunkPos(position.x() - 1, position.y(), position.z()),
-                new ChunkPos(position.x(), position.y() + 1, position.z()),
-                new ChunkPos(position.x(), position.y() - 1, position.z()),
-                new ChunkPos(position.x(), position.y(), position.z() + 1),
-                new ChunkPos(position.x(), position.y(), position.z() - 1));
+        return World.meshNeighbors(position);
     }
 
     private boolean withinHysteresis(ChunkPos position, ChunkPos center) {

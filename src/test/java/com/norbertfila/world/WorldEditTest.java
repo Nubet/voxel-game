@@ -42,7 +42,8 @@ class WorldEditTest {
         "15,15,0,4",
         "15,15,15,4"
     })
-    void invalidatesOnlyFaceNeighborsWithoutChangingTheirData(int x, int y, int z, int dirtyCount) {
+    void invalidatesFaceEdgeAndCornerDependenciesWithoutChangingTheirData(int x, int y, int z, int faceCount) {
+        int dirtyCount = 1 << (faceCount - 1);
         World world = new World();
         ChunkPos center = new ChunkPos(-2, -1, -3);
         for (int dx = -1; dx <= 1; dx++)
@@ -64,7 +65,7 @@ class WorldEditTest {
             int dx = dirty.x() - center.x();
             int dy = dirty.y() - center.y();
             int dz = dirty.z() - center.z();
-            assertTrue(Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <= 1);
+            assertTrue(Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && Math.abs(dz) <= 1);
             if (dx != 0) assertEquals(dx < 0 ? 0 : Chunk.SIZE - 1, x);
             if (dy != 0) assertEquals(dy < 0 ? 0 : Chunk.SIZE - 1, y);
             if (dz != 0) assertEquals(dz < 0 ? 0 : Chunk.SIZE - 1, z);
@@ -113,7 +114,15 @@ class WorldEditTest {
         BlockChangeResult result = edit.setBlock(new BlockPos(15, 15, 15), BlockId.DIRT);
 
         assertEquals(
-                List.of(new ChunkPos(0, 0, 0), new ChunkPos(0, 0, 1), new ChunkPos(0, 1, 0), new ChunkPos(1, 0, 0)),
+                List.of(
+                        new ChunkPos(0, 0, 0),
+                        new ChunkPos(0, 0, 1),
+                        new ChunkPos(0, 1, 0),
+                        new ChunkPos(0, 1, 1),
+                        new ChunkPos(1, 0, 0),
+                        new ChunkPos(1, 0, 1),
+                        new ChunkPos(1, 1, 0),
+                        new ChunkPos(1, 1, 1)),
                 result.dirtyChunks());
         assertEquals(1, world.residentCount());
         assertEquals(1, world.getChunk(new ChunkPos(0, 0, 0)).meshDependencyRevision());
@@ -152,9 +161,13 @@ class WorldEditTest {
         assertEquals(
                 List.of(
                         new ChunkPos(-1, -1, -1),
+                        new ChunkPos(-1, -1, 0),
                         new ChunkPos(-1, 0, -1),
                         new ChunkPos(-1, 0, 0),
-                        new ChunkPos(0, 0, -1)),
+                        new ChunkPos(0, -1, -1),
+                        new ChunkPos(0, -1, 0),
+                        new ChunkPos(0, 0, -1),
+                        new ChunkPos(0, 0, 0)),
                 result.dirtyChunks());
     }
 

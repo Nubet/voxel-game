@@ -36,6 +36,8 @@ public final class TerrainRenderer implements AutoCloseable {
     private final int matrixUniform;
     private final int texturedUniform;
     private final int renderLayerUniform;
+    private final int waterTimeUniform;
+    private final long startedAt = System.nanoTime();
     private int program;
     private boolean closed;
 
@@ -86,6 +88,8 @@ public final class TerrainRenderer implements AutoCloseable {
             matrixUniform = uniform;
             texturedUniform = textured;
             renderLayerUniform = renderLayer;
+            waterTimeUniform = glGetUniformLocation(linkedProgram, "uWaterTime");
+            if (waterTimeUniform < 0) throw new IllegalStateException("Shader uniform not found: uWaterTime");
             glUseProgram(program);
             glUniform1i(sampler, 0);
             glEnable(GL_DEPTH_TEST);
@@ -137,9 +141,11 @@ public final class TerrainRenderer implements AutoCloseable {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
         int version = mesh.format().version();
-        if (version != MeshFormat.POSITION_COLOR_VERSION && version != MeshFormat.TEXTURED_VERSION)
+        if (version != MeshFormat.POSITION_COLOR_VERSION
+                && version != MeshFormat.TEXTURED_VERSION
+                && version != MeshFormat.FLOW_TEXTURED_VERSION)
             throw new IllegalArgumentException("Unsupported mesh format version: " + version);
-        if (version == MeshFormat.TEXTURED_VERSION && blockTextures == null)
+        if (version != MeshFormat.POSITION_COLOR_VERSION && blockTextures == null)
             throw new IllegalStateException("Textured meshes require a block texture array");
         if (mesh.vertexCount() == 0) {
             meshPool.remove(position);
@@ -156,8 +162,17 @@ public final class TerrainRenderer implements AutoCloseable {
             glVertexAttribPointer(0, 3, GL_FLOAT, false, strideBytes, 0);
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(
-                    1, version == MeshFormat.TEXTURED_VERSION ? 4 : 3, GL_FLOAT, false, strideBytes, 3L * Float.BYTES);
+                    1,
+                    version != MeshFormat.POSITION_COLOR_VERSION ? 4 : 3,
+                    GL_FLOAT,
+                    false,
+                    strideBytes,
+                    3L * Float.BYTES);
             glEnableVertexAttribArray(1);
+            if (version == MeshFormat.FLOW_TEXTURED_VERSION) {
+                glVertexAttribPointer(2, 2, GL_FLOAT, false, strideBytes, 7L * Float.BYTES);
+                glEnableVertexAttribArray(2);
+            }
             glBindVertexArray(0);
             meshPool.put(position, new GpuMesh(vao, vbo, mesh, (array, buffer) -> {
                 glDeleteBuffers(buffer);
@@ -231,6 +246,7 @@ public final class TerrainRenderer implements AutoCloseable {
         Comparator<ChunkPos> waterOrder = backToFront(cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
         if (blockTextures != null) blockTextures.bind(0);
         glUseProgram(program);
+        glUniform1f(waterTimeUniform, (float) ((System.nanoTime() - startedAt) / 1e9 % 4096));
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer mat = stack.mallocFloat(16);
             viewProjection.get(mat);
@@ -275,7 +291,7 @@ public final class TerrainRenderer implements AutoCloseable {
             if (mesh == null) continue;
             int count = mesh.ranges().vertexCount(layer);
             if (count == 0) continue;
-            int nextMode = mesh.format().version() == MeshFormat.TEXTURED_VERSION ? 1 : 0;
+            int nextMode = mesh.format().version() != MeshFormat.POSITION_COLOR_VERSION ? 1 : 0;
             if (nextMode != texturedMode) {
                 glUniform1i(texturedUniform, nextMode);
                 texturedMode = nextMode;

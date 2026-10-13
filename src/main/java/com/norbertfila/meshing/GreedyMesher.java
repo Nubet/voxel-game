@@ -20,11 +20,27 @@ public final class GreedyMesher implements ChunkMesher {
         return mesh(snapshot, neighborhood, cx, cy, cz, true);
     }
 
+    MeshData meshTexturedSolids(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
+        return mesh(snapshot, neighborhood, cx, cy, cz, true, true);
+    }
+
     private static MeshData mesh(
             ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz, boolean textured) {
+        return mesh(snapshot, neighborhood, cx, cy, cz, textured, false);
+    }
+
+    private static MeshData mesh(
+            ChunkSnapshot snapshot,
+            BlockNeighborhood neighborhood,
+            int cx,
+            int cy,
+            int cz,
+            boolean textured,
+            boolean excludeWater) {
         VisibleFaceMesher.Floats[] out = new VisibleFaceMesher.Floats[textured ? RenderLayer.values().length : 1];
         for (int layer = 0; layer < out.length; layer++) out[layer] = new VisibleFaceMesher.Floats(1024);
-        for (int face = 0; face < 6; face++) meshFace(snapshot, neighborhood, cx, cy, cz, face, out, textured);
+        for (int face = 0; face < 6; face++)
+            meshFace(snapshot, neighborhood, cx, cy, cz, face, out, textured, excludeWater);
         if (!textured) return new MeshData(out[0].toArray());
         MeshRanges ranges = new MeshRanges(
                 out[RenderLayer.OPAQUE.ordinal()].size() / MeshFormat.TEXTURED_VERTEX_STRIDE,
@@ -43,7 +59,8 @@ public final class GreedyMesher implements ChunkMesher {
             int cz,
             int face,
             VisibleFaceMesher.Floats[] out,
-            boolean textured) {
+            boolean textured,
+            boolean excludeWater) {
         for (int depth = 0; depth < Chunk.SIZE; depth++) {
             byte[][] mask = new byte[Chunk.SIZE][Chunk.SIZE];
             boolean[][] used = new boolean[Chunk.SIZE][Chunk.SIZE];
@@ -51,10 +68,11 @@ public final class GreedyMesher implements ChunkMesher {
                 for (int u = 0; u < Chunk.SIZE; u++) {
                     int[] cell = cell(face, depth, u, v);
                     byte block = snapshot.get(cell[0], cell[1], cell[2]);
-                    mask[v][u] =
-                            FaceVisibility.isVisible(block, snapshot, neighborhood, face, cell[0], cell[1], cell[2])
-                                    ? block
-                                    : BlockId.AIR;
+                    mask[v][u] = !(excludeWater && block == BlockId.WATER)
+                                    && FaceVisibility.isVisible(
+                                            block, snapshot, neighborhood, face, cell[0], cell[1], cell[2])
+                            ? block
+                            : BlockId.AIR;
                 }
             }
             for (int v = 0; v < Chunk.SIZE; v++) {

@@ -39,12 +39,12 @@ public final class WorldEdit {
         Set<ChunkPos> dirty = new LinkedHashSet<>();
         dirty.add(chunk);
         BlockPos local = Coordinates.worldToLocal(position);
-        if (local.x() == 0) dirty.add(new ChunkPos(chunk.x() - 1, chunk.y(), chunk.z()));
-        if (local.x() == Chunk.SIZE - 1) dirty.add(new ChunkPos(chunk.x() + 1, chunk.y(), chunk.z()));
-        if (local.y() == 0) dirty.add(new ChunkPos(chunk.x(), chunk.y() - 1, chunk.z()));
-        if (local.y() == Chunk.SIZE - 1) dirty.add(new ChunkPos(chunk.x(), chunk.y() + 1, chunk.z()));
-        if (local.z() == 0) dirty.add(new ChunkPos(chunk.x(), chunk.y(), chunk.z() - 1));
-        if (local.z() == Chunk.SIZE - 1) dirty.add(new ChunkPos(chunk.x(), chunk.y(), chunk.z() + 1));
+        for (ChunkPos neighbor : World.meshNeighbors(chunk)) {
+            int dx = neighbor.x() - chunk.x(), dy = neighbor.y() - chunk.y(), dz = neighbor.z() - chunk.z();
+            if ((dx == 0 || (dx < 0 ? local.x() == 0 : local.x() == Chunk.SIZE - 1))
+                    && (dy == 0 || (dy < 0 ? local.y() == 0 : local.y() == Chunk.SIZE - 1))
+                    && (dz == 0 || (dz < 0 ? local.z() == 0 : local.z() == Chunk.SIZE - 1))) dirty.add(neighbor);
+        }
         for (ChunkPos dirtyPosition : dirty) {
             if (dirtyPosition.equals(chunk)) continue;
             Chunk neighbor = world.getChunk(dirtyPosition);

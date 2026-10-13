@@ -2,6 +2,7 @@ package com.norbertfila.world;
 
 import com.norbertfila.lod.WorldChangeOverlay;
 import com.norbertfila.meshing.BlockNeighborhood;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -49,16 +50,28 @@ public final class World {
     }
 
     private void invalidateNeighbors(ChunkPos position) {
-        for (ChunkPos neighborPosition : List.of(
-                new ChunkPos(position.x() + 1, position.y(), position.z()),
-                new ChunkPos(position.x() - 1, position.y(), position.z()),
-                new ChunkPos(position.x(), position.y() + 1, position.z()),
-                new ChunkPos(position.x(), position.y() - 1, position.z()),
-                new ChunkPos(position.x(), position.y(), position.z() + 1),
-                new ChunkPos(position.x(), position.y(), position.z() - 1))) {
+        for (ChunkPos neighborPosition : meshNeighbors(position)) {
             Chunk neighbor = storage.get(neighborPosition);
             if (neighbor != null) neighbor.invalidateMesh();
         }
+    }
+
+    public static List<ChunkPos> meshNeighbors(ChunkPos position) {
+        var neighbors = new java.util.ArrayList<ChunkPos>();
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) continue;
+                    long x = (long) position.x() + dx, y = (long) position.y() + dy, z = (long) position.z() + dz;
+                    if (x < Integer.MIN_VALUE
+                            || x > Integer.MAX_VALUE
+                            || y < Integer.MIN_VALUE
+                            || y > Integer.MAX_VALUE
+                            || z < Integer.MIN_VALUE
+                            || z > Integer.MAX_VALUE) continue;
+                    neighbors.add(new ChunkPos((int) x, (int) y, (int) z));
+                }
+        return List.copyOf(neighbors);
     }
 
     public int residentCount() {
@@ -139,14 +152,16 @@ public final class World {
         if (center == null) {
             throw new IllegalArgumentException("Center chunk is not resident: " + position);
         }
-        return new BlockNeighborhood(
-                center,
-                snapshot(new ChunkPos(position.x() + 1, position.y(), position.z())),
-                snapshot(new ChunkPos(position.x() - 1, position.y(), position.z())),
-                snapshot(new ChunkPos(position.x(), position.y() + 1, position.z())),
-                snapshot(new ChunkPos(position.x(), position.y() - 1, position.z())),
-                snapshot(new ChunkPos(position.x(), position.y(), position.z() + 1)),
-                snapshot(new ChunkPos(position.x(), position.y(), position.z() - 1)));
+        var halo = new HashMap<ChunkPos, ChunkSnapshot>();
+        for (ChunkPos neighbor : meshNeighbors(position)) {
+            var data = snapshot(neighbor);
+            if (data != null)
+                halo.put(
+                        new ChunkPos(
+                                neighbor.x() - position.x(), neighbor.y() - position.y(), neighbor.z() - position.z()),
+                        data);
+        }
+        return new BlockNeighborhood(center, halo);
     }
 
     private ChunkSnapshot snapshot(ChunkPos position) {

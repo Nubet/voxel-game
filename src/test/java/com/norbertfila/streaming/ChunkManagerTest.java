@@ -328,7 +328,7 @@ class ChunkManagerTest {
             manager.update(center);
             assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
             var change = new WorldEdit(world, 8).setBlock(new BlockPos(15, 15, 15), BlockId.STONE);
-            assertEquals(4, change.dirtyChunks().size());
+            assertEquals(8, change.dirtyChunks().size());
             manager.requestRemesh(change);
             var result = awaitMesh(manager).meshes();
             assertEquals(1, result.size());

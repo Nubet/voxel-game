@@ -132,7 +132,7 @@ class BlockInteractionTest {
         assertEquals(BlockId.WATER, change.previous().orElseThrow());
         assertEquals(BlockId.STONE, world.getBlock(target).orElseThrow());
         assertEquals(BlockId.AIR, world.getBlock(new BlockPos(-1, 17, -1)).orElseThrow());
-        assertEquals(4, change.dirtyChunks().size());
+        assertEquals(8, change.dirtyChunks().size());
         var removed = interaction
                 .remove(PlayerController.Mode.CREATIVE, -.5, 19, -.5, 0, -1, 0)
                 .orElseThrow();

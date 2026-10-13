@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.WaterTestScene;
 import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.*;
 import java.time.Duration;
@@ -22,6 +23,51 @@ import org.junit.jupiter.api.Test;
 class WaterStreamingTest {
     private static final ChunkPos CENTER = new ChunkPos(-1, 1, -1);
     private final GreedyMesher mesher = new GreedyMesher();
+
+    @Test
+    void diagonalStateChangeRejectsPendingWaterSurfaceUploadAndProducesFreshGeometry() throws Exception {
+        World world = new World();
+        ChunkPos center = new ChunkPos(0, 0, 0), diagonal = new ChunkPos(1, 1, 1);
+        try (ChunkManager manager = new ChunkManager(
+                world, new WaterTestScene(), new WaterMesher(), new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE))) {
+            manager.update(center);
+            ChunkManager.MeshResult pending = null;
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (pending == null && System.nanoTime() < deadline) {
+                manager.update(center);
+                for (var result : manager.processResults().meshes()) {
+                    if (result.position().equals(diagonal)) pending = result;
+                    else manager.markUploaded(result);
+                }
+                Thread.sleep(1);
+            }
+            assertNotNull(pending);
+            assertTrue(manager.isCurrentMesh(pending));
+            var oldSnapshot = world.blockNeighborhood(diagonal);
+            var change =
+                    new WorldEdit(world, 64).setBlock(new BlockPos(15, 15, 15), BlockId.WATER, WaterState.flowing(7));
+            assertTrue(change.dirtyChunks().contains(diagonal));
+            manager.requestRemesh(change);
+            assertFalse(manager.isCurrentMesh(pending));
+            assertFalse(manager.markUploaded(pending));
+            assertTrue(manager.rejectUpload(pending));
+            assertNotEquals(
+                    oldSnapshot.center().meshDependencyRevision(),
+                    world.getChunk(diagonal).meshDependencyRevision());
+            ChunkManager.MeshResult fresh = null;
+            while (fresh == null && System.nanoTime() < deadline) {
+                for (var result : manager.processResults().meshes()) {
+                    if (result.position().equals(diagonal)) fresh = result;
+                    else manager.markUploaded(result);
+                }
+                Thread.sleep(1);
+            }
+            assertNotNull(fresh);
+            assertNotEquals(pending.token(), fresh.token());
+            assertEquals(pending.dataRevision(), fresh.dataRevision());
+            assertTrue(manager.markUploaded(fresh));
+        }
+    }
 
     @Test
     void managerLifecycleFreezesAndReactivatesWaterOnItsOwnerThread() throws Exception {
@@ -108,7 +154,7 @@ class WaterStreamingTest {
             BlockPos removed = new BlockPos(-1, 16, -6);
             BlockPos stone = new BlockPos(-2, 17, -6);
             var change = edit.setBlock(removed, BlockId.AIR);
-            assertEquals(3, change.dirtyChunks().size());
+            assertEquals(4, change.dirtyChunks().size());
             manager.requestRemesh(change);
             manager.requestRemesh(edit.setBlock(stone, BlockId.STONE));
             assertFalse(manager.isCurrentMesh(ownBefore));

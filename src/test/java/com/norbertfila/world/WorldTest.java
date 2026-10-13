@@ -19,11 +19,11 @@ class WorldTest {
         world.putChunk(new ChunkPos(0, 0, 0), new Chunk());
         assertEquals(1, center.meshDependencyRevision());
         world.putChunk(new ChunkPos(0, 0, 1), new Chunk());
-        assertEquals(1, center.meshDependencyRevision());
-        world.removeChunk(new ChunkPos(0, 0, 0));
         assertEquals(2, center.meshDependencyRevision());
         world.removeChunk(new ChunkPos(0, 0, 0));
-        assertEquals(2, center.meshDependencyRevision());
+        assertEquals(3, center.meshDependencyRevision());
+        world.removeChunk(new ChunkPos(0, 0, 0));
+        assertEquals(3, center.meshDependencyRevision());
         assertEquals(0, center.revision());
         assertEquals(0, snapshot.meshDependencyRevision());
         assertEquals(0, world.changes().size());
