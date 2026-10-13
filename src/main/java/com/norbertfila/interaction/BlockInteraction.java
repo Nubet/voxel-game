@@ -85,7 +85,6 @@ public final class BlockInteraction {
         if (!world.hasChunk(Coordinates.worldToChunk(position))) return Optional.empty();
         int previous = world.getBlock(position).orElseThrow();
         if (previous != BlockId.AIR && previous != BlockId.WATER) return Optional.empty();
-        if (previous != BlockId.AIR && !canBreak(mode, previous)) return Optional.empty();
         if (BlockRegistry.DEFAULT.isCollidable(blockId)
                 && playerBody.intersects(new Aabb(
                         position.x(),

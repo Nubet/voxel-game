@@ -14,12 +14,15 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class BlockInteractionTest {
     private static final Aabb DISTANT_BODY =
@@ -208,23 +211,51 @@ class BlockInteractionTest {
 
     @ParameterizedTest
     @CsvSource({"SURVIVAL,.5", "SURVIVAL,1.5", "CREATIVE,.5", "CREATIVE,1.5", "SPECTATOR,.5", "SPECTATOR,1.5"})
-    void placementCannotReplaceWaterOutsideCreativeEvenWhenTargetingGroundBehindIt(
-            PlayerController.Mode mode, double originX) {
+    void placementCanDisplaceWaterAgainstGroundInSurvivalAndCreative(PlayerController.Mode mode, double originX) {
         World world = worldWithBlock(new BlockPos(2, 1, 1));
         Chunk chunk = world.getChunk(new ChunkPos(0, 0, 0));
         chunk.set(1, 1, 1, BlockId.WATER);
         long revision = chunk.revision(), dependency = chunk.meshDependencyRevision();
         var result = new BlockInteraction(world, 8).place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, mode, DISTANT_BODY);
-        boolean creative = mode == PlayerController.Mode.CREATIVE;
-        assertEquals(creative, result.isPresent());
+        boolean allowed = mode != PlayerController.Mode.SPECTATOR;
+        assertEquals(allowed, result.isPresent());
         assertEquals(
-                creative ? BlockId.DIRT : BlockId.WATER,
+                allowed ? BlockId.DIRT : BlockId.WATER,
                 world.getBlock(new BlockPos(1, 1, 1)).orElseThrow());
         assertEquals(BlockId.STONE, world.getBlock(new BlockPos(2, 1, 1)).orElseThrow());
-        assertEquals(revision + (creative ? 1 : 0), chunk.revision());
-        assertEquals(dependency + (creative ? 1 : 0), chunk.meshDependencyRevision());
-        assertEquals(creative ? 1 : 0, world.changes().size());
-        assertEquals(creative ? 1 : 0, world.changes().drainDirtyTiles().size());
+        assertEquals(revision + (allowed ? 1 : 0), chunk.revision());
+        assertEquals(dependency + (allowed ? 1 : 0), chunk.meshDependencyRevision());
+        assertEquals(allowed ? 1 : 0, world.changes().size());
+        assertEquals(allowed ? 1 : 0, world.changes().drainDirtyTiles().size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, 4, 5, 6, 7, 8})
+    void survivalDisplacesEveryWaterStateButDoesNotMineIt(int state) {
+        World world = worldWithBlock(new BlockPos(2, 1, 1));
+        BlockPos wet = new BlockPos(1, 1, 1);
+        world.setBlock(wet, BlockId.WATER, (byte) state, 8);
+        var notifications = new ArrayList<BlockPos>();
+        BlockInteraction interaction = new BlockInteraction(world, 8, notifications::add);
+        var overlap = new Aabb(1, 1, 1, 2, 2, 2);
+        assertTrue(interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.SURVIVAL, overlap)
+                .isEmpty());
+        assertEquals(state, world.getWaterState(wet).orElseThrow());
+        assertTrue(notifications.isEmpty());
+        var placed = interaction
+                .place(.5, 1.5, 1.5, 1, 0, 0, BlockId.STONE, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
+                .orElseThrow();
+        assertEquals(BlockId.WATER, placed.previous().orElseThrow());
+        assertTrue(placed.changed());
+        assertEquals(WaterState.EMPTY, world.getWaterState(wet).orElseThrow());
+        assertEquals(List.of(wet), notifications);
+        world.setBlock(wet, BlockId.WATER, (byte) state, 8);
+        var mined = interaction
+                .remove(PlayerController.Mode.SURVIVAL, .5, 1.5, 1.5, 1, 0, 0)
+                .orElseThrow();
+        assertEquals(BlockId.STONE, mined.previous().orElseThrow());
+        assertEquals(state, world.getWaterState(wet).orElseThrow());
     }
 
     @ParameterizedTest
