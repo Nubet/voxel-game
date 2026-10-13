@@ -10,6 +10,7 @@ import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.Frustum;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
+import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -31,6 +32,7 @@ public final class GameLoop {
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
         Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
+        UnderwaterVisibility visibility = new UnderwaterVisibility();
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             String hardware =
@@ -136,11 +138,16 @@ public final class GameLoop {
                 }
                 metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
                 metrics.recordResidentChunks(residents.size());
+                if (state != null)
+                    visibility.update(
+                            state.waterContact().eyesSubmerged(),
+                            state.waterContact().available(),
+                            delta);
                 glViewport(0, 0, width[0], height[0]);
-                glClearColor(.55f, .76f, .96f, 1f);
+                glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 var vp = camera.viewProjection(width[0], height[0]);
-                var stats = renderer.render(vp, Frustum.from(vp), camera.position());
+                var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
                 metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
                 uiRenderer.render(settingsPanel, hotbar, width[0], height[0]);
                 window.swapBuffers();

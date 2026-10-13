@@ -96,10 +96,12 @@ public final class FluidRuntimeBenchmark {
             renderer = new TerrainRenderer(textures);
             runtime = start(save);
             Camera camera = new Camera();
+            UnderwaterVisibility visibility = new UnderwaterVisibility();
             Map<ChunkPos, Long> residents = Map.of();
             Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
             long start = System.nanoTime(), measureStart = start + 10_000_000_000L;
             long deadline = measureStart + seconds * 1_000_000_000L, previousFrame = start;
+            long previousVisibility = start;
             while (System.nanoTime() < deadline) {
                 long frameStarted = System.nanoTime();
                 window.pollEvents();
@@ -214,11 +216,16 @@ public final class FluidRuntimeBenchmark {
                 }
                 var eye = frame.interpolatedEye(frameStarted);
                 camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
+                visibility.update(
+                        frame.waterContact().eyesSubmerged(),
+                        frame.waterContact().available(),
+                        Math.min(.1, (frameStarted - previousVisibility) / 1e9));
+                previousVisibility = frameStarted;
                 glViewport(0, 0, 1280, 720);
-                glClearColor(.55f, .76f, .96f, 1);
+                glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 var vp = camera.viewProjection(1280, 720);
-                renderer.render(vp, Frustum.from(vp), camera.position());
+                renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
                 check(glGetError() == GL_NO_ERROR, "GL error");
                 window.swapBuffers();
                 var metrics = frame.metrics();

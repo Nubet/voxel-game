@@ -37,6 +37,8 @@ public final class TerrainRenderer implements AutoCloseable {
     private final int texturedUniform;
     private final int renderLayerUniform;
     private final int waterTimeUniform;
+    private final int cameraUniform;
+    private final int waterFogUniform;
     private final long startedAt = System.nanoTime();
     private int program;
     private boolean closed;
@@ -90,8 +92,14 @@ public final class TerrainRenderer implements AutoCloseable {
             renderLayerUniform = renderLayer;
             waterTimeUniform = glGetUniformLocation(linkedProgram, "uWaterTime");
             if (waterTimeUniform < 0) throw new IllegalStateException("Shader uniform not found: uWaterTime");
+            cameraUniform = glGetUniformLocation(linkedProgram, "uCameraPosition");
+            waterFogUniform = glGetUniformLocation(linkedProgram, "uWaterFog");
+            int fogRange = glGetUniformLocation(linkedProgram, "uWaterFogRange");
+            if (cameraUniform < 0 || waterFogUniform < 0 || fogRange < 0)
+                throw new IllegalStateException("Underwater shader uniforms not found");
             glUseProgram(program);
             glUniform1i(sampler, 0);
+            glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
@@ -242,10 +250,23 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition) {
+        return render(viewProjection, frustum, cameraPosition, 0);
+    }
+
+    public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition, float underwater) {
         Objects.requireNonNull(cameraPosition);
+        if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
+            throw new IllegalArgumentException("Underwater visibility must be in [0, 1]");
         Comparator<ChunkPos> waterOrder = backToFront(cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
         if (blockTextures != null) blockTextures.bind(0);
         glUseProgram(program);
+        glUniform3f(cameraUniform, cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
+        glUniform4f(
+                waterFogUniform,
+                UnderwaterVisibility.FOG_RED,
+                UnderwaterVisibility.FOG_GREEN,
+                UnderwaterVisibility.FOG_BLUE,
+                underwater);
         glUniform1f(waterTimeUniform, (float) ((System.nanoTime() - startedAt) / 1e9 % 4096));
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer mat = stack.mallocFloat(16);

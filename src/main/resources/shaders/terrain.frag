@@ -5,11 +5,14 @@ in vec2 vUv;
 flat in float vLayer;
 in float vShade;
 flat in vec2 vFlow;
+in vec3 vCameraOffset;
 
 uniform int uTextured;
 uniform int uRenderLayer;
 uniform sampler2DArray uBlockTextures;
 uniform float uWaterTime;
+uniform vec4 uWaterFog;
+uniform vec2 uWaterFogRange;
 
 out vec4 fragColor;
 
@@ -21,5 +24,11 @@ void main() {
         fragColor = vec4(texel.rgb * vShade, uRenderLayer == 2 ? 0.55 : 1.0);
     } else {
         fragColor = vec4(vColor, 1.0);
+    }
+    if (uWaterFog.a > 0.0) {
+        float distanceInWater = max(length(vCameraOffset) - uWaterFogRange.x, 0.0);
+        float haze = (1.0 - exp(-distanceInWater * uWaterFogRange.y)) * uWaterFog.a;
+        vec3 tinted = fragColor.rgb * mix(vec3(1.0), vec3(0.78, 0.94, 1.0), uWaterFog.a);
+        fragColor.rgb = mix(tinted, uWaterFog.rgb, haze);
     }
 }
