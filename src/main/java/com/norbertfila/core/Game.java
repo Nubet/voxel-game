@@ -15,7 +15,8 @@ public final class Game {
 
     public void run() {
         try (Window window = new Window(1280, 720, "Voxel Engine | M0")) {
-            Camera camera = new Camera();
+            GameSettings settings = new GameSettings();
+            Camera camera = new Camera(settings);
             TerrainConfig terrainConfig = TerrainConfig.defaults();
             boolean waterScene = Boolean.getBoolean("voxel.waterScene");
             ViewDemand viewDemand = waterScene
@@ -23,7 +24,6 @@ public final class Game {
                     : terrainDemand(terrainConfig);
             TerrainSource generator = waterScene ? new WaterTestScene() : new TerrainGenerator(0, terrainConfig);
             ChunkMesher mesher = new WaterMesher();
-            GameSettings settings = new GameSettings();
             SettingsPanel settingsPanel = new SettingsPanel(settings);
             var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
             try (BlockTextureArray textureArray = new BlockTextureArray(blockTextures);

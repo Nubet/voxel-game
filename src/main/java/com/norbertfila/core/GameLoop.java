@@ -55,6 +55,7 @@ public final class GameLoop {
                 if (settingsPanel.update(
                         input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY()))
                     window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
+                camera.updateZoom(!blocked && input.zoomHeld(), delta);
                 if (blocked) input.clearPlayerInput();
                 else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
                 PlayerInput held = input.peekPlayerTick();
