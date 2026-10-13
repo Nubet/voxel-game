@@ -255,7 +255,7 @@ class WorldRuntimeTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(5.5, 1, .5));
-        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, true, BlockId.DIRT);
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true, BlockId.DIRT);
 
         assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isPresent());
         assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
@@ -272,13 +272,13 @@ class WorldRuntimeTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(5.5, 1, .5));
-        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, true, BlockId.DIRT);
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, 0, true, BlockId.DIRT);
 
         assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isEmpty());
         assertEquals(BlockId.AIR, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, true, BlockId.AIR));
+                () -> new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true, BlockId.AIR));
     }
 
     @Test

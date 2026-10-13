@@ -105,6 +105,7 @@ public final class WorldRuntime implements AutoCloseable {
                 chunks.setChunkLifecycleListener(position -> water.onChunkChanged(position, tick[0]));
                 FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
+                long[] lastPlacePress = {0};
                 long previous = System.nanoTime();
                 while (!stopping) {
                     long now = System.nanoTime();
@@ -153,7 +154,6 @@ public final class WorldRuntime implements AutoCloseable {
                             issuedAt.put(mesh.token(), System.nanoTime());
                         }
                         Action action;
-                        boolean placementChanged = false;
                         for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
                             if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
                             switch (action) {
@@ -167,21 +167,24 @@ public final class WorldRuntime implements AutoCloseable {
                                     input.clear();
                                 }
                                 case Edit edit -> {
-                                    if (!player.modeChangePending() && (edit.remove() || placementCooldown.ready())) {
+                                    if (edit.remove() && !player.modeChangePending()) {
                                         var result = edit(interaction, player, edit, player.renderEyePosition(1));
-                                        if (!edit.remove() && result.isPresent()) {
-                                            placementChanged = true;
-                                            placementCooldown.placedAfterClick();
-                                        }
                                         result.ifPresent(chunks::requestRemesh);
                                     }
                                 }
                             }
                         }
-                        if (!placementChanged && placementCooldown.ready()) {
-                            var result = placeHeld(interaction, player, state);
-                            if (result.isPresent()) placementCooldown.placedAfterRepeat();
-                            result.ifPresent(chunks::requestRemesh);
+                        boolean newPress = state.placePressId() != lastPlacePress[0];
+                        lastPlacePress[0] = state.placePressId();
+                        boolean placementAttempted = false;
+                        if (newPress) {
+                            placementAttempted = true;
+                            placementCooldown.attempted();
+                            place(interaction, player, state).ifPresent(chunks::requestRemesh);
+                        }
+                        if (!placementAttempted && placementCooldown.ready() && state.placeHeld()) {
+                            placementCooldown.attempted();
+                            place(interaction, player, state).ifPresent(chunks::requestRemesh);
                         }
                         if (!state.paused()) {
                             long waterStarted = System.nanoTime();
@@ -316,9 +319,14 @@ public final class WorldRuntime implements AutoCloseable {
 
     static Optional<BlockChangeResult> placeHeld(
             BlockInteraction interaction, PlayerController player, Controls controls) {
+        if (!controls.placeHeld()) return Optional.empty();
+        return place(interaction, player, controls);
+    }
+
+    private static Optional<BlockChangeResult> place(
+            BlockInteraction interaction, PlayerController player, Controls controls) {
         if (controls.blocked()
                 || controls.paused()
-                || !controls.placeHeld()
                 || controls.placeBlock() == BlockId.AIR
                 || player.modeChangePending()) return Optional.empty();
         return edit(
@@ -351,11 +359,12 @@ public final class WorldRuntime implements AutoCloseable {
             boolean blocked,
             boolean paused,
             int renderDistance,
+            long placePressId,
             boolean placeHeld,
             byte placeBlock) {
         public Controls(
                 PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
-            this(input, yaw, pitch, blocked, paused, renderDistance, false, BlockId.AIR);
+            this(input, yaw, pitch, blocked, paused, renderDistance, 0, false, BlockId.AIR);
         }
 
         public Controls {
@@ -365,6 +374,7 @@ public final class WorldRuntime implements AutoCloseable {
                     || !Double.isFinite(pitch)
                     || renderDistance < 0
                     || renderDistance > GameSettings.MAX_RENDER_DISTANCE
+                    || placePressId < 0
                     || !BlockId.isValid(placeBlock)
                     || (placeHeld && placeBlock == BlockId.AIR))
                 throw new IllegalArgumentException("Invalid runtime controls");

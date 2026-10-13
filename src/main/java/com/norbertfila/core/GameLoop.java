@@ -35,6 +35,7 @@ public final class GameLoop {
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
+            long placePressId = 0;
             String hardware =
                     System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
             int[] width = new int[1], height = new int[1];
@@ -56,6 +57,12 @@ public final class GameLoop {
                         input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY()))
                     window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
                 blocked = minimized || settingsPanel.open() || !input.focused();
+                int slotPressed = input.hotbarSlotPressed();
+                if (!blocked) {
+                    if (slotPressed >= 0) hotbar.select(slotPressed);
+                    else hotbar.scroll(scroll);
+                    if (input.rightMousePressed()) placePressId++;
+                }
                 camera.updateZoom(!blocked && input.zoomHeld(), delta);
                 if (blocked) input.clearPlayerInput();
                 else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
@@ -74,6 +81,7 @@ public final class GameLoop {
                         blocked,
                         minimized,
                         settingsPanel.renderDistance(),
+                        placePressId,
                         !blocked && input.rightMouseDown() && hotbar.selectedBlock() != BlockId.AIR,
                         hotbar.selectedBlock()));
                 WorldRuntime.Frame state = runtime.frame();
@@ -96,9 +104,9 @@ public final class GameLoop {
                                 hotbar,
                                 editingBlocked,
                                 input.leftMousePressed(),
-                                input.rightMousePressed(),
-                                input.hotbarSlotPressed(),
-                                scroll,
+                                false,
+                                -1,
+                                0,
                                 camera.yaw(),
                                 camera.pitch())
                         .ifPresent(action -> submit(runtime, action));
