@@ -104,6 +104,7 @@ public final class WorldRuntime implements AutoCloseable {
                     SaveScheduler saves = new SaveScheduler(savePath, 0)) {
                 chunks.setChunkLifecycleListener(position -> water.onChunkChanged(position, tick[0]));
                 FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
+                HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long previous = System.nanoTime();
                 while (!stopping) {
                     long now = System.nanoTime();
@@ -116,6 +117,7 @@ public final class WorldRuntime implements AutoCloseable {
                         boolean movementWaiting = false;
                         Controls state = controls.get();
                         if (!state.paused()) tick[0] = Math.incrementExact(tick[0]);
+                        if (!state.paused()) placementCooldown.tick();
                         Acknowledgement ack;
                         while ((ack = acknowledgements.poll()) != null) {
                             if (outstanding.remove(ack.mesh().token()) == null) continue;
@@ -165,16 +167,22 @@ public final class WorldRuntime implements AutoCloseable {
                                     input.clear();
                                 }
                                 case Edit edit -> {
-                                    if (!player.modeChangePending()) {
+                                    if (!player.modeChangePending() && (edit.remove() || placementCooldown.ready())) {
                                         var result = edit(interaction, player, edit, player.renderEyePosition(1));
-                                        if (!edit.remove()) placementChanged = result.isPresent();
+                                        if (!edit.remove() && result.isPresent()) {
+                                            placementChanged = true;
+                                            placementCooldown.placed();
+                                        }
                                         result.ifPresent(chunks::requestRemesh);
                                     }
                                 }
                             }
                         }
-                        if (!placementChanged)
-                            placeHeld(interaction, player, state).ifPresent(chunks::requestRemesh);
+                        if (!placementChanged && placementCooldown.ready()) {
+                            var result = placeHeld(interaction, player, state);
+                            if (result.isPresent()) placementCooldown.placed();
+                            result.ifPresent(chunks::requestRemesh);
+                        }
                         if (!state.paused()) {
                             long waterStarted = System.nanoTime();
                             var waterResult = water.tick(tick[0]);
