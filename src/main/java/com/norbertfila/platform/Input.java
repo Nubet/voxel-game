@@ -26,6 +26,7 @@ public final class Input implements AutoCloseable {
     private boolean previousLeftMouse;
     private boolean rightMouse;
     private boolean previousRightMouse;
+    private boolean zoom;
     private int hotbarKeys;
     private int previousHotbarKeys;
     private double scrollDeltaY;
@@ -73,6 +74,7 @@ public final class Input implements AutoCloseable {
     public void update() {
         previousToggleMode = toggleMode;
         previousSettings = settings;
+        focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE;
         glfwGetCursorPos(window, cursorX, cursorY);
         if (!mouseInitialized) {
             lastCursorX = cursorX[0];
@@ -104,8 +106,8 @@ public final class Input implements AutoCloseable {
         updateButtons(
                 glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
                 glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS,
-                slots);
-        focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE;
+                slots,
+                focused && isPressed(GLFW_KEY_X));
         if (!focused) {
             clearPlayerInput();
             resetMouseTracking();
@@ -113,16 +115,25 @@ public final class Input implements AutoCloseable {
     }
 
     void updateButtons(boolean left, boolean right, int slots) {
+        updateButtons(left, right, slots, false);
+    }
+
+    void updateButtons(boolean left, boolean right, int slots, boolean zoom) {
         previousLeftMouse = leftMouse;
         previousRightMouse = rightMouse;
         previousHotbarKeys = hotbarKeys;
         leftMouse = left;
         rightMouse = right;
         hotbarKeys = slots;
+        this.zoom = zoom;
     }
 
     public boolean rightMousePressed() {
         return rightMouse && !previousRightMouse;
+    }
+
+    public boolean zoomHeld() {
+        return zoom;
     }
 
     public int hotbarSlotPressed() {

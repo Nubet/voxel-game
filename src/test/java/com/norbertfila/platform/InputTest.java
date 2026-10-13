@@ -28,6 +28,18 @@ class InputTest {
     }
 
     @Test
+    void zoomIsAHeldStateRatherThanAOneShotEvent() {
+        Input input = new Input();
+
+        input.updateButtons(false, false, 0, true);
+        assertTrue(input.zoomHeld());
+        input.updateButtons(false, false, 0, true);
+        assertTrue(input.zoomHeld());
+        input.updateButtons(false, false, 0, false);
+        assertFalse(input.zoomHeld());
+    }
+
+    @Test
     void slotKeysTriggerOnNewPressIncludingWhileAnotherKeyIsHeld() {
         Input input = new Input();
         for (int slot = 0; slot < 16; slot++) {
