@@ -132,6 +132,10 @@ public final class Input implements AutoCloseable {
         return rightMouse && !previousRightMouse;
     }
 
+    public boolean rightMouseDown() {
+        return rightMouse;
+    }
+
     public boolean zoomHeld() {
         return zoom;
     }

@@ -21,7 +21,9 @@ class InputTest {
         input.updateButtons(true, true, 0);
         assertFalse(input.leftMousePressed());
         assertFalse(input.rightMousePressed());
+        assertTrue(input.rightMouseDown());
         input.updateButtons(false, false, 0);
+        assertFalse(input.rightMouseDown());
         input.updateButtons(true, true, 0);
         assertTrue(input.leftMousePressed());
         assertTrue(input.rightMousePressed());

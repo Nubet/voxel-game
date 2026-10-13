@@ -73,7 +73,9 @@ public final class GameLoop {
                         camera.pitch(),
                         blocked,
                         minimized,
-                        settingsPanel.renderDistance()));
+                        settingsPanel.renderDistance(),
+                        !blocked && input.rightMouseDown() && hotbar.selectedBlock() != BlockId.AIR,
+                        hotbar.selectedBlock()));
                 WorldRuntime.Frame state = runtime.frame();
                 if (!blocked && input.toggleModePressed()) {
                     submit(runtime, new WorldRuntime.NextMode());

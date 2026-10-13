@@ -318,14 +318,28 @@ public final class WorldRuntime implements AutoCloseable {
     }
 
     public record Controls(
-            PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
+            PlayerInput input,
+            double yaw,
+            double pitch,
+            boolean blocked,
+            boolean paused,
+            int renderDistance,
+            boolean placeHeld,
+            byte placeBlock) {
+        public Controls(
+                PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
+            this(input, yaw, pitch, blocked, paused, renderDistance, false, BlockId.AIR);
+        }
+
         public Controls {
             Objects.requireNonNull(input);
             if (input.jumpPressed()
                     || !Double.isFinite(yaw)
                     || !Double.isFinite(pitch)
                     || renderDistance < 0
-                    || renderDistance > GameSettings.MAX_RENDER_DISTANCE)
+                    || renderDistance > GameSettings.MAX_RENDER_DISTANCE
+                    || !BlockId.isValid(placeBlock)
+                    || (placeHeld && placeBlock == BlockId.AIR))
                 throw new IllegalArgumentException("Invalid runtime controls");
         }
     }
