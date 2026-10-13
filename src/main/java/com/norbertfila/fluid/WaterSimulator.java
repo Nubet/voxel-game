@@ -26,6 +26,7 @@ public final class WaterSimulator {
     private final World world;
     private final WorldEdit edits;
     private final FluidScheduler scheduler;
+    private final boolean extended;
     private final Map<BlockPos, FluidSnapshot.Update> deferred = new LinkedHashMap<>();
     private final Map<ChunkPos, Set<BlockPos>> waiting = new HashMap<>();
     private long currentTick;
@@ -35,9 +36,14 @@ public final class WaterSimulator {
     }
 
     public WaterSimulator(World world, int farTileSize, int maxUpdatesPerTick) {
+        this(world, farTileSize, maxUpdatesPerTick, false);
+    }
+
+    public WaterSimulator(World world, int farTileSize, int maxUpdatesPerTick, boolean extended) {
         this.world = Objects.requireNonNull(world);
         edits = new WorldEdit(world, farTileSize);
         scheduler = new FluidScheduler(maxUpdatesPerTick);
+        this.extended = extended;
     }
 
     public void onBlockChanged(BlockPos position, long tick) {
@@ -53,7 +59,7 @@ public final class WaterSimulator {
         int[] changed = {0};
         int processed = scheduler.processDue(tick, position -> {
             Set<ChunkPos> missing = new LinkedHashSet<>();
-            int next = WaterFlowRules.nextState(world, position, missing);
+            int next = WaterFlowRules.nextState(world, position, missing, extended);
             if (next == WaterFlowRules.UNAVAILABLE) {
                 defer(new FluidSnapshot.Update(position, FluidScheduler.WATER_TICK_DELAY, List.copyOf(missing)));
                 return;
@@ -96,9 +102,10 @@ public final class WaterSimulator {
             }
         }
         // Include the edge halo: support changes can affect a donor across two chunk axes.
+        int halo = extended ? 5 : 1;
         for (int y = -1; y <= Chunk.SIZE; y++) {
-            for (int z = -1; z <= Chunk.SIZE; z++) {
-                for (int x = -1; x <= Chunk.SIZE; x++) {
+            for (int z = -halo; z < Chunk.SIZE + halo; z++) {
+                for (int x = -halo; x < Chunk.SIZE + halo; x++) {
                     long wx = (long) chunk.x() * Chunk.SIZE + x;
                     long wy = (long) chunk.y() * Chunk.SIZE + y;
                     long wz = (long) chunk.z() * Chunk.SIZE + z;
@@ -177,6 +184,31 @@ public final class WaterSimulator {
             schedule(WaterFlowRules.offset(position, dx, 0, dz), tick, dependenciesChanged);
             // Changing support changes the lateral feed from the block above, even if its state is unchanged.
             schedule(WaterFlowRules.offset(above, dx, 0, dz), tick, dependenciesChanged);
+        }
+        if (extended) {
+            // A terrain edit can change a donor's best route four steps away, and its recipients one step farther.
+            for (int dx = -5; dx <= 5; dx++) {
+                for (int dz = -5; dz <= 5; dz++) {
+                    if (Math.abs(dx) + Math.abs(dz) > 5) continue;
+                    for (int dy = 0; dy <= 1; dy++) {
+                        BlockPos affected = WaterFlowRules.offset(position, dx, dy, dz);
+                        if (affected != null
+                                && world.hasChunk(Coordinates.worldToChunk(affected))
+                                && world.getBlock(affected).orElseThrow() == BlockId.WATER) {
+                            schedule(affected, tick, dependenciesChanged);
+                            for (int direction = 0; direction < WaterFlowRules.DX.length; direction++)
+                                schedule(
+                                        WaterFlowRules.offset(
+                                                affected,
+                                                WaterFlowRules.DX[direction],
+                                                0,
+                                                WaterFlowRules.DZ[direction]),
+                                        tick,
+                                        dependenciesChanged);
+                        }
+                    }
+                }
+            }
         }
     }
 

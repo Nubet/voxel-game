@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.interaction.BlockInteraction;
@@ -77,7 +78,8 @@ public final class WorldRuntime implements AutoCloseable {
     private void run(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path savePath) {
         try {
             World world = new World();
-            WaterSimulator water = new WaterSimulator(world, FAR_TILE_SIZE);
+            WaterSimulator water =
+                    new WaterSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
             long[] tick = {0};
             if (Files.exists(savePath)) {
                 var saved = WorldSave.load(savePath);

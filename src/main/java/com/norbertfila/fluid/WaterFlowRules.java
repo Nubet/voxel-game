@@ -17,8 +17,23 @@ final class WaterFlowRules {
     private WaterFlowRules() {}
 
     static int nextState(World world, BlockPos position, Set<ChunkPos> missing) {
+        return nextState(world, position, missing, false);
+    }
+
+    static int nextState(World world, BlockPos position, Set<ChunkPos> missing, boolean extended) {
         int current = read(world, position, missing);
         if (current == BLOCKED || current == UNAVAILABLE || current == WaterState.SOURCE) return current;
+        if (extended && current >= WaterState.SOURCE) {
+            int sources = 0;
+            for (int direction = 0; direction < DX.length; direction++)
+                if (read(world, offset(position, DX[direction], 0, DZ[direction]), missing) == WaterState.SOURCE)
+                    sources++;
+            if (sources >= 2) {
+                int support = read(world, offset(position, 0, -1, 0), missing);
+                if (support == BLOCKED || support == WaterState.SOURCE) return WaterState.SOURCE;
+            }
+            if (!missing.isEmpty()) return UNAVAILABLE;
+        }
         int above = read(world, offset(position, 0, 1, 0), missing);
         if (above == UNAVAILABLE) return UNAVAILABLE;
         if (above >= WaterState.SOURCE) return WaterState.FALLING;
@@ -35,10 +50,40 @@ final class WaterFlowRules {
             int below = read(world, offset(neighbor, 0, -1, 0), missing);
             if (below == UNAVAILABLE) unknown = true;
             // A donor that can continue downward must not feed a horizontal sheet.
-            if (below == BLOCKED || below == WaterState.SOURCE) best = Math.min(best, distance);
+            if (below == BLOCKED || below == WaterState.SOURCE) {
+                if (!extended || feedsDirection(world, neighbor, direction ^ 1, missing))
+                    best = Math.min(best, distance);
+            }
         }
-        if (unknown) return UNAVAILABLE;
+        if (unknown || !missing.isEmpty()) return UNAVAILABLE;
         return best <= WaterState.MAX_DISTANCE ? best : WaterState.EMPTY;
+    }
+
+    private static boolean feedsDirection(World world, BlockPos donor, int targetDirection, Set<ChunkPos> missing) {
+        int[] scores = new int[DX.length];
+        int best = Integer.MAX_VALUE;
+        for (int direction = 0; direction < DX.length; direction++) {
+            BlockPos next = offset(donor, DX[direction], 0, DZ[direction]);
+            scores[direction] = dropDistance(world, next, donor, 1, missing);
+            best = Math.min(best, scores[direction]);
+        }
+        return scores[targetDirection] == best;
+    }
+
+    private static int dropDistance(
+            World world, BlockPos position, BlockPos previous, int depth, Set<ChunkPos> missing) {
+        int state = read(world, position, missing);
+        if (state == BLOCKED || state == UNAVAILABLE || state == WaterState.SOURCE) return Integer.MAX_VALUE;
+        int below = read(world, offset(position, 0, -1, 0), missing);
+        if (below == WaterState.EMPTY || below > WaterState.SOURCE) return depth;
+        if (below == UNAVAILABLE || depth == 4) return Integer.MAX_VALUE;
+        int best = Integer.MAX_VALUE;
+        for (int direction = 0; direction < DX.length; direction++) {
+            BlockPos next = offset(position, DX[direction], 0, DZ[direction]);
+            if (next != null && !next.equals(previous))
+                best = Math.min(best, dropDistance(world, next, position, depth + 1, missing));
+        }
+        return best;
     }
 
     private static int read(World world, BlockPos position, Set<ChunkPos> missing) {
