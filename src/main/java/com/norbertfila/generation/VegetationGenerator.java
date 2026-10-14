@@ -23,7 +23,7 @@ final class VegetationGenerator {
         this.forest = forest;
     }
 
-    void generate(int ox, int oy, int oz, byte[] blocks, TerrainSummary[] columns) {
+    void generate(int ox, int oy, int oz, byte[] blocks, TerrainColumn columns) {
         long firstX = Math.floorDiv((long) ox - PATCH_RADIUS, PATCH_CELL_SIZE);
         long lastX = Math.floorDiv((long) ox + Chunk.SIZE - 1 + PATCH_RADIUS, PATCH_CELL_SIZE);
         long firstZ = Math.floorDiv((long) oz - PATCH_RADIUS, PATCH_CELL_SIZE);
@@ -45,9 +45,9 @@ final class VegetationGenerator {
             }
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
-                TerrainSummary column = columns[z * Chunk.SIZE + x];
-                long y = (long) column.surfaceHeight() + 1 - oy;
-                if (y < 0 || y >= Chunk.SIZE || !suitable(column)) continue;
+                int column = z * Chunk.SIZE + x;
+                long y = (long) columns.surfaceHeight(column) + 1 - oy;
+                if (y < 0 || y >= Chunk.SIZE || !suitable(columns, column)) continue;
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
                 double t =
                         Math.clamp((sample(density, ((long) ox + x) * .012, ((long) oz + z) * .012) + .4) / .9, 0, 1);
@@ -60,16 +60,17 @@ final class VegetationGenerator {
             }
     }
 
-    private static void place(int x, int z, int oy, byte[] blocks, TerrainSummary[] columns, byte plant) {
-        TerrainSummary column = columns[z * Chunk.SIZE + x];
-        long y = (long) column.surfaceHeight() + 1 - oy;
-        if (y < 0 || y >= Chunk.SIZE || !suitable(column)) return;
+    private static void place(int x, int z, int oy, byte[] blocks, TerrainColumn columns, byte plant) {
+        int column = z * Chunk.SIZE + x;
+        long y = (long) columns.surfaceHeight(column) + 1 - oy;
+        if (y < 0 || y >= Chunk.SIZE || !suitable(columns, column)) return;
         int index = ((int) y * Chunk.SIZE + z) * Chunk.SIZE + x;
         if (blocks[index] == BlockId.AIR) blocks[index] = plant;
     }
 
-    private static boolean suitable(TerrainSummary column) {
-        return PlantRules.supports(column.surfaceMaterial()) && column.surfaceHeight() >= column.waterLevel();
+    private static boolean suitable(TerrainColumn columns, int column) {
+        return PlantRules.supports(columns.surfaceMaterial(column))
+                && columns.surfaceHeight(column) >= columns.waterLevel();
     }
 
     private static int bounded(long seed, int index, int bound) {

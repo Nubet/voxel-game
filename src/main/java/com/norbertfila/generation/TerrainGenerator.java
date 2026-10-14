@@ -7,6 +7,8 @@ import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
     private static final int GENERATOR_VERSION = 11;
+    // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
+    private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -19,6 +21,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpZ;
     private final TreeGenerator trees;
     private final VegetationGenerator vegetation;
+    private final ColumnCache<TerrainColumn> columns = new ColumnCache<>(COLUMN_CACHE_CAPACITY);
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
@@ -137,20 +140,28 @@ public final class TerrainGenerator implements TerrainSource {
         int originX = origin(position.x());
         int originY = origin(position.y());
         int originZ = origin(position.z());
+        TerrainColumn column = columns.get(position.x(), position.z(), () -> column(originX, originZ));
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
-        TerrainSummary[] columns = new TerrainSummary[Chunk.SIZE * Chunk.SIZE];
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
-                TerrainSummary summary = sample(originX + x, originZ + z);
-                columns[z * Chunk.SIZE + x] = summary;
-                for (int y = 0; y < Chunk.SIZE; y++) {
-                    int worldY = originY + y;
-                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = summary.materialAt(worldY);
-                }
+                int index = z * Chunk.SIZE + x;
+                for (int y = 0; y < Chunk.SIZE; y++)
+                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
             }
-        trees.generate(originX, originY, originZ, blocks);
-        vegetation.generate(originX, originY, originZ, blocks, columns);
+        TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
+        vegetation.generate(originX, originY, originZ, blocks, column);
         return new ChunkData(position, blocks);
+    }
+
+    private TerrainColumn column(int originX, int originZ) {
+        TerrainSummary[] summaries = new TerrainSummary[TerrainColumn.AREA];
+        for (int z = 0; z < Chunk.SIZE; z++)
+            for (int x = 0; x < Chunk.SIZE; x++) summaries[z * Chunk.SIZE + x] = sample(originX + x, originZ + z);
+        return TerrainColumn.of(summaries, trees.trees(originX, originZ));
+    }
+
+    ColumnCache.Stats columnCacheStats() {
+        return columns.stats();
     }
 
     private static double layer(Noise2D noise, TerrainConfig.Layer layer, double x, double z) {

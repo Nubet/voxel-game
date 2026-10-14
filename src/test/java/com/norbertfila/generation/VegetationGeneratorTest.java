@@ -58,7 +58,7 @@ class VegetationGeneratorTest {
         Arrays.fill(occupied, 0, 128, BlockId.LOG);
         Arrays.fill(occupied, 128, 256, BlockId.LEAVES);
         byte[] before = occupied.clone();
-        generator.generate(0, 16, 0, occupied, columns(GRASS));
+        generator.generate(0, 16, 0, occupied, TerrainColumn.of(columns(GRASS), java.util.List.of()));
         assertArrayEquals(before, occupied);
     }
 
@@ -88,7 +88,12 @@ class VegetationGeneratorTest {
 
     private static byte[] generate(VegetationGenerator generator, ChunkPos position, TerrainSummary summary) {
         byte[] blocks = new byte[4096];
-        generator.generate(position.x() * 16, position.y() * 16, position.z() * 16, blocks, columns(summary));
+        generator.generate(
+                position.x() * 16,
+                position.y() * 16,
+                position.z() * 16,
+                blocks,
+                TerrainColumn.of(columns(summary), java.util.List.of()));
         return blocks;
     }
 }
