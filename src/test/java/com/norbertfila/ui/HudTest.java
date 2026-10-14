@@ -44,7 +44,7 @@ class HudTest {
         }
         for (int offset = 0; offset < count; offset += 48) {
             float r = vertices[offset + 2], g = vertices[offset + 3], b = vertices[offset + 4];
-            if ((r == .96f && g == .8f && b == .3f) || (r == .25f && g == .29f && b == .35f)) slots++;
+            if (r == .25f && g == .29f && b == .35f) slots++;
         }
         assertEquals(Hotbar.SLOTS, slots);
     }
@@ -62,8 +62,8 @@ class HudTest {
         int count = canvas.floatCount();
         assertTrue(count > 0 && count <= vertices.length);
         assertEquals(0, count % 48);
-        assertEquals((int) viewport.width() / 2 - 8, vertices[0]);
-        assertEquals((int) viewport.height() / 2 - 2, vertices[1]);
+        assertEquals((int) viewport.width() / 2 - 7, vertices[0]);
+        assertEquals((int) viewport.height() / 2 - 1, vertices[1]);
         int selected = 0;
         int slots = 0;
         for (int offset = 0; offset < count; offset += 48) {
@@ -73,9 +73,9 @@ class HudTest {
             boolean selectedBorder = r == .96f && g == .8f && b == .3f;
             boolean ordinaryBorder = r == .25f && g == .29f && b == .35f;
             if (selectedBorder) selected++;
-            if (selectedBorder || ordinaryBorder) slots++;
+            if (ordinaryBorder) slots++;
         }
-        assertEquals(1, selected);
+        assertEquals(4, selected);
         assertEquals(Hotbar.SLOTS, slots);
         for (int offset = 0; offset < count; offset += 8) {
             assertTrue(vertices[offset] >= 0 && vertices[offset] <= viewport.width());
@@ -86,7 +86,25 @@ class HudTest {
         hud.render(canvas, hotbar, viewport);
         assertEquals(count, canvas.floatCount());
         vertices = vertices(canvas);
-        assertEquals(.96f, vertices[4 * 48 + 2]);
+        assertEquals(.12f, vertices[4 * 48 + 2]);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1", "2", "3", "4", "0"})
+    void hudUsesLogicalMetricsAtEveryRequestedScale(int requested) {
+        var viewport = new UiViewport(1920, 1080, 1920, 1080, requested);
+        var canvas = new UiCanvas();
+        new Hud().render(canvas, new Hotbar(), viewport);
+        float[] data = vertices(canvas);
+
+        assertEquals(HudMetrics.CROSSHAIR_SIZE, data[8] - data[0]);
+        int bar = 4 * 48;
+        assertEquals(HudMetrics.HOTBAR_WIDTH, data[bar + 8] - data[bar]);
+        assertEquals(HudMetrics.HOTBAR_HEIGHT, data[bar + 17] - data[bar + 1]);
+        assertEquals((int) viewport.height(), data[bar + 17]);
+        int frame = data.length - 4 * 48;
+        assertEquals(HudMetrics.SLOT_FRAME_WIDTH, data[frame + 8] - data[frame]);
+        assertEquals(HudMetrics.SLOT_FRAME_HEIGHT, data[frame + 48 + 17] - data[frame + 48 + 1]);
     }
 
     private static float[] vertices(UiCanvas canvas) {

@@ -452,22 +452,17 @@ public final class UiViewportSmoke {
     }
 
     private static void checkSlots(ByteBuffer pixels, UiViewport viewport) {
-        int y = ((int) viewport.height() - 17) * viewport.scale();
-        int slots = 0, selected = 0;
-        boolean previous = false;
-        for (int x = 0; x < viewport.framebufferWidth(); x++) {
-            int color = rgb(pixels, viewport, x, y);
-            boolean selection = color == 0xf5cc4c || color == 0xf5cc4d;
-            boolean border = color == 0x404a59 || selection;
-            if (border && !previous) {
-                slots++;
-                if (selection) selected++;
-            }
-            previous = border;
+        int s = viewport.scale();
+        int left = ((int) viewport.width() - 182) / 2;
+        int top = (int) viewport.height() - 22;
+        int selected = 0;
+        for (int slot = 0; slot < Hotbar.SLOTS; slot++) {
+            int color = rgb(pixels, viewport, (left + 1 + slot * 20 + 5) * s, (top + 1) * s);
+            check(color == 0x404a59, "Missing slot border " + slot);
+            int frame = rgb(pixels, viewport, (left + slot * 20 + 5) * s, (top - 1) * s);
+            if (frame == 0xf5cc4c || frame == 0xf5cc4d) selected++;
         }
-        check(
-                slots == Hotbar.SLOTS && selected == 1,
-                "Expected " + Hotbar.SLOTS + " slots with one selection, got " + slots + "/" + selected);
+        check(selected == 1, "Expected one selection, got " + selected);
     }
 
     private static int rgb(ByteBuffer pixels, UiViewport viewport, int x, int y) {
