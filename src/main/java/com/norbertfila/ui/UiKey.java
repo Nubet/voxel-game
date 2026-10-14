@@ -5,5 +5,6 @@ public enum UiKey {
     PREVIOUS,
     ACTIVATE,
     DECREASE,
-    INCREASE
+    INCREASE,
+    BACK
 }

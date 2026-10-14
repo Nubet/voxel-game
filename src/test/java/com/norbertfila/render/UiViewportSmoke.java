@@ -5,17 +5,17 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
-import com.norbertfila.core.SettingsPanel;
 import com.norbertfila.platform.Window;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Hud;
-import com.norbertfila.ui.SettingsPanelView;
+import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.Slider;
 import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.screens.SettingsScreen;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -28,7 +28,7 @@ public final class UiViewportSmoke {
         Path output = Path.of(args[0]);
         check(Files.isDirectory(output), "Output directory must exist");
         UiCanvas canvas = new UiCanvas();
-        try (Window window = new Window(1280, 720, "UI-04 controls smoke");
+        try (Window window = new Window(1280, 720, "UI-05 screens smoke");
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION) + " OS="
                     + System.getProperty("os.name") + " Java=" + Runtime.version());
@@ -42,7 +42,7 @@ public final class UiViewportSmoke {
                 UiViewport viewport = new UiViewport(ww[0], wh[0], fw[0], fh[0]);
                 glViewport(0, 0, fw[0], fh[0]);
                 clear();
-                render(ui, canvas, new SettingsPanel(new GameSettings()), new Hotbar(), viewport);
+                render(ui, canvas, new ScreenManager(), new Hotbar(), viewport);
                 check(glGetError() == GL_NO_ERROR, "Window resize render error");
                 window.swapBuffers();
             }
@@ -77,11 +77,12 @@ public final class UiViewportSmoke {
                             glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
                             "Incomplete framebuffer");
                     glViewport(0, 0, size[2], size[3]);
-                    SettingsPanel panel = new SettingsPanel(new GameSettings());
+                    SettingsScreen panel = new SettingsScreen(new GameSettings());
+                    ScreenManager screens = new ScreenManager();
                     Hotbar hotbar = new Hotbar();
                     hotbar.select(Hotbar.SLOTS - 1);
                     clear();
-                    render(ui, canvas, panel, hotbar, viewport);
+                    render(ui, canvas, screens, hotbar, viewport);
                     ByteBuffer pixels = capture(viewport);
                     if (i == 0) referenceHud = pixels;
                     if (i == 1) checkDoubleScale(referenceHud, pixels, reference, viewport);
@@ -89,16 +90,15 @@ public final class UiViewportSmoke {
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
-                    write(output.resolve("ui04-" + i + "-hud.png"), pixels, viewport);
-                    panel.toggle();
-                    double windowX = (SettingsPanel.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
-                    double windowY = (SettingsPanel.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
-                    check(
-                            panel.update(true, true, viewport.cursorX(windowX), viewport.cursorY(windowY)),
-                            "Slider missed");
+                    write(output.resolve("ui05-" + i + "-hud.png"), pixels, viewport);
+                    screens.open(panel);
+                    screens.updatePointer(false, false, 0, 0);
+                    double windowX = (SettingsScreen.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
+                    double windowY = (SettingsScreen.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
+                    screens.updatePointer(true, true, viewport.cursorX(windowX), viewport.cursorY(windowY));
                     check(panel.renderDistance() == GameSettings.MIN_RENDER_DISTANCE, "Wrong slider value");
                     clear();
-                    render(ui, canvas, panel, hotbar, viewport);
+                    render(ui, canvas, screens, hotbar, viewport);
                     pixels = capture(viewport);
                     if (i == 0) referencePanel = pixels;
                     if (i == 1) checkDoubleScale(referencePanel, pixels, reference, viewport);
@@ -109,7 +109,7 @@ public final class UiViewportSmoke {
                         check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
                         check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
                     }
-                    write(output.resolve("ui04-" + i + "-panel.png"), pixels, viewport);
+                    write(output.resolve("ui05-" + i + "-panel.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
@@ -131,6 +131,7 @@ public final class UiViewportSmoke {
                 check(glGetError() == GL_NO_ERROR, "Canvas growth/reuse GL error");
                 checkFont(ui, canvas, small, output);
                 checkWidgets(ui, canvas, small, output);
+                checkScreens(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -142,13 +143,13 @@ public final class UiViewportSmoke {
             check(!glIsTexture(atlas), "Atlas leaked after renderer close");
             check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-04 GPU smoke PASS");
+        System.out.println("UI-05 GPU smoke PASS");
     }
 
     private static void render(
-            UiRenderer ui, UiCanvas canvas, SettingsPanel panel, Hotbar hotbar, UiViewport viewport) {
+            UiRenderer ui, UiCanvas canvas, ScreenManager screens, Hotbar hotbar, UiViewport viewport) {
         canvas.clear();
-        if (panel.open()) new SettingsPanelView().render(canvas, panel);
+        if (screens.isOpen()) screens.render(canvas, viewport);
         else new Hud().render(canvas, hotbar, viewport);
         ui.render(canvas, viewport);
     }
@@ -158,7 +159,7 @@ public final class UiViewportSmoke {
         canvas.clear();
         canvas.rectangle(0, 0, 180, 100, 0, 0, 1, 1);
         canvas.textWithShadow(font, "F", 8, 8, 1, 1, 1, 1);
-        canvas.textWithShadow(font, "F10: Aa? 16", 8, 32, 1, 1, 1, 1);
+        canvas.textWithShadow(font, "F10: Aa? 9", 8, 32, 1, 1, 1, 1);
         canvas.text(font, "Snowman: \u2603", 8, 56, 1, 1, 1, 1);
         clear();
         ui.render(canvas, viewport);
@@ -186,7 +187,7 @@ public final class UiViewportSmoke {
             }
         check(ink > 0 && shadow > 0 && background > 0, "Incomplete font pixel checks");
         check(glGetError() == GL_NO_ERROR, "Font render GL error");
-        write(output.resolve("ui04-font.png"), pixels, viewport);
+        write(output.resolve("ui05-font.png"), pixels, viewport);
     }
 
     private static void checkWidgets(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output)
@@ -199,11 +200,11 @@ public final class UiViewportSmoke {
         renderWidgets(ui, canvas, viewport, button, slider);
         int hovered = rgb(capture(viewport), viewport, 21, 11);
         check(hovered != normal, "Button hover is not visible");
-        write(output.resolve("ui04-button-hover.png"), capture(viewport), viewport);
+        write(output.resolve("ui05-button-hover.png"), capture(viewport), viewport);
         check(!button.updatePointer(true, true, 21, 11), "Button fired before release");
         renderWidgets(ui, canvas, viewport, button, slider);
         check(rgb(capture(viewport), viewport, 21, 11) != hovered, "Button press is not visible");
-        write(output.resolve("ui04-button-pressed.png"), capture(viewport), viewport);
+        write(output.resolve("ui05-button-pressed.png"), capture(viewport), viewport);
         check(!button.updatePointer(false, false, 150, 40), "Release outside activated button");
         button.updatePointer(true, true, 21, 11);
         check(button.updatePointer(false, false, 21, 11), "Release inside did not activate");
@@ -211,13 +212,13 @@ public final class UiViewportSmoke {
         check(button.keyPress(UiKey.ACTIVATE), "Focused button rejected keyboard");
         renderWidgets(ui, canvas, viewport, button, slider);
         check((rgb(capture(viewport), viewport, 19, 9) & 0xffff00) == 0xf5cc00, "Button focus is not visible");
-        write(output.resolve("ui04-button-focus.png"), capture(viewport), viewport);
+        write(output.resolve("ui05-button-focus.png"), capture(viewport), viewport);
         button.setEnabled(false);
         check(!button.keyPress(UiKey.ACTIVATE), "Disabled button activated");
         renderWidgets(ui, canvas, viewport, button, slider);
         check(rgb(capture(viewport), viewport, 21, 11) != normal, "Disabled button is not visible");
         check(rgb(capture(viewport), viewport, 19, 9) == 0, "Disabled button retained focus border");
-        write(output.resolve("ui04-button-disabled.png"), capture(viewport), viewport);
+        write(output.resolve("ui05-button-disabled.png"), capture(viewport), viewport);
         slider.setFocused(true);
         slider.updatePointer(true, true, 20, 60);
         check(slider.dragging() && slider.value() == 2, "Slider did not capture press");
@@ -225,7 +226,7 @@ public final class UiViewportSmoke {
         check(slider.value() == 16, "Slider drag did not clamp outside bounds");
         renderWidgets(ui, canvas, viewport, button, slider);
         check((rgb(capture(viewport), viewport, 14, 83) & 0xffff00) == 0xf5cc00, "Slider focus is not visible");
-        write(output.resolve("ui04-slider-drag.png"), capture(viewport), viewport);
+        write(output.resolve("ui05-slider-drag.png"), capture(viewport), viewport);
         slider.updatePointer(false, false, 1000, -500);
         check(!slider.dragging() && slider.keyPress(UiKey.DECREASE) && slider.value() == 15, "Slider keyboard failed");
         slider.cancelInteraction();
@@ -240,6 +241,63 @@ public final class UiViewportSmoke {
         slider.render(canvas);
         clear();
         ui.render(canvas, viewport);
+    }
+
+    private static void checkScreens(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        UiViewport viewport = new UiViewport(640, 360, 640, 360);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 640, 360, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+        glViewport(0, 0, 640, 360);
+        check(
+                glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE,
+                "Screen fixture framebuffer incomplete");
+        GameSettings settings = new GameSettings();
+        SettingsScreen screen = new SettingsScreen(settings);
+        ScreenManager screens = new ScreenManager();
+        Hotbar hotbar = new Hotbar();
+        hotbar.select(Hotbar.SLOTS - 1);
+        screens.beginFrame();
+        screens.open(screen);
+        screens.updatePointer(false, false, 0, 0);
+        screens.keyPress(UiKey.PREVIOUS);
+        check(screen.backButton().focused(), "Back missing from keyboard navigation");
+        clear();
+        render(ui, canvas, screens, hotbar, viewport);
+        ByteBuffer pixels = capture(viewport);
+        check(
+                (rgb(pixels, viewport, SettingsScreen.BACK_BOUNDS.x() - 1, SettingsScreen.BACK_BOUNDS.y() - 1)
+                                & 0xffff00)
+                        == 0xf5cc00,
+                "Back focus not rendered");
+        write(output.resolve("ui05-settings-back-focus.png"), pixels, viewport);
+        double x = SettingsScreen.BACK_BOUNDS.x() + 2, y = SettingsScreen.BACK_BOUNDS.y() + 2;
+        screens.updatePointer(true, true, x, y);
+        check(screens.isOpen(), "Back activated before release");
+        screens.updatePointer(false, false, x, y);
+        check(!screens.isOpen() && screens.blocksGameplay(), "Back did not close and consume its frame");
+        clear();
+        render(ui, canvas, screens, hotbar, viewport);
+        pixels = capture(viewport);
+        checkSlots(pixels, viewport);
+        write(output.resolve("ui05-back-to-hud.png"), pixels, viewport);
+        screens.beginFrame();
+        check(!screens.blocksGameplay(), "Gameplay remained blocked after close frame");
+        screens.open(screen);
+        screens.updatePointer(false, false, 0, 0);
+        screens.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
+        check(screen.slider().dragging(), "Settings slider did not capture");
+        screens.cancelInteraction();
+        screens.updatePointer(
+                true, true, SettingsScreen.SLIDER_X + SettingsScreen.SLIDER_WIDTH, SettingsScreen.SLIDER_Y);
+        check(
+                !screen.slider().dragging() && settings.renderDistance() == GameSettings.MIN_RENDER_DISTANCE,
+                "Cancelled screen reacquired held pointer");
+        screens.keyPress(UiKey.BACK);
+        check(!screens.isOpen() && screens.blocksGameplay(), "Escape did not close settings");
+        screens.beginFrame();
+        screens.keyPress(UiKey.ACTIVATE);
+        check(!screens.blocksGameplay() && hotbar.selectedSlot() == 8, "Closed screen retained input");
+        check(glGetError() == GL_NO_ERROR, "Screen lifecycle GL error");
     }
 
     private static boolean opaque(byte[] atlas, BitmapFont font, int character, int x, int y) {
@@ -287,7 +345,7 @@ public final class UiViewportSmoke {
         }
         check(
                 slots == Hotbar.SLOTS && selected == 1,
-                "Expected 16 slots with one selection, got " + slots + "/" + selected);
+                "Expected " + Hotbar.SLOTS + " slots with one selection, got " + slots + "/" + selected);
     }
 
     private static int rgb(ByteBuffer pixels, UiViewport viewport, int x, int y) {

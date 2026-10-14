@@ -1,0 +1,61 @@
+package com.norbertfila.ui;
+
+import java.util.Objects;
+
+public final class ScreenManager {
+    private Screen current;
+    private boolean inputConsumed;
+
+    public void beginFrame() {
+        inputConsumed = current != null;
+    }
+
+    public void open(Screen screen) {
+        Objects.requireNonNull(screen);
+        if (current != null) current.cancelInteraction();
+        screen.cancelInteraction();
+        current = screen;
+        inputConsumed = true;
+    }
+
+    public void close() {
+        if (current == null) return;
+        current.cancelInteraction();
+        current = null;
+        // The closing click/key still belongs to the screen for the rest of this frame.
+        inputConsumed = true;
+    }
+
+    public Screen current() {
+        return current;
+    }
+
+    public boolean isOpen() {
+        return current != null;
+    }
+
+    public boolean blocksGameplay() {
+        return inputConsumed || isOpen();
+    }
+
+    public void updatePointer(boolean down, boolean pressed, double x, double y) {
+        if (current != null) handle(current.updatePointer(down, pressed, x, y));
+    }
+
+    public void keyPress(UiKey key) {
+        Objects.requireNonNull(key);
+        if (current != null) handle(current.keyPress(key));
+    }
+
+    public void cancelInteraction() {
+        if (current != null) current.cancelInteraction();
+    }
+
+    public void render(UiCanvas canvas, UiViewport viewport) {
+        if (current != null) current.render(canvas, viewport);
+    }
+
+    private void handle(Screen.Action action) {
+        if (action == Screen.Action.CLOSE) close();
+    }
+}

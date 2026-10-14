@@ -60,6 +60,7 @@ public final class Input implements AutoCloseable {
             case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER, GLFW_KEY_SPACE -> action == GLFW_PRESS ? UiKey.ACTIVATE : null;
             case GLFW_KEY_LEFT, GLFW_KEY_DOWN -> UiKey.DECREASE;
             case GLFW_KEY_RIGHT, GLFW_KEY_UP -> UiKey.INCREASE;
+            case GLFW_KEY_ESCAPE -> action == GLFW_PRESS ? UiKey.BACK : null;
             default -> null;
         };
         if (uiKey != null && uiKeys.size() < MAX_UI_KEYS) uiKeys.addLast(uiKey);
@@ -115,10 +116,9 @@ public final class Input implements AutoCloseable {
         toggleMode = isPressed(GLFW_KEY_F4);
         settings = isPressed(GLFW_KEY_F10);
         int slots = 0;
-        boolean extendedHotbar = isPressed(GLFW_KEY_RIGHT_SHIFT);
         for (int key = GLFW_KEY_1; key <= GLFW_KEY_9; key++) {
             if (!isPressed(key)) continue;
-            int slot = hotbarSlot(key, extendedHotbar);
+            int slot = hotbarSlot(key);
             if (slot >= 0) slots |= 1 << slot;
         }
         updateButtons(
@@ -170,11 +170,9 @@ public final class Input implements AutoCloseable {
         return steps;
     }
 
-    static int hotbarSlot(int key, boolean extended) {
+    static int hotbarSlot(int key) {
         if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return -1;
-        int slot = key - GLFW_KEY_1;
-        if (!extended) return slot;
-        return slot < 7 ? slot + 9 : -1;
+        return key - GLFW_KEY_1;
     }
 
     public float mouseDeltaX() {

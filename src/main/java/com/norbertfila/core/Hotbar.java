@@ -8,17 +8,10 @@ public final class Hotbar {
         BlockId.DIRT,
         BlockId.STONE,
         BlockId.SAND,
-        BlockId.GRAVEL,
-        BlockId.BEDROCK,
-        BlockId.SNOW,
         BlockId.LOG,
         BlockId.LEAVES,
         BlockId.PLANKS,
-        BlockId.COBBLE,
-        BlockId.BRICKS,
         BlockId.GLASS,
-        BlockId.SANDSTONE,
-        BlockId.STONE_BRICKS,
         BlockId.WATER
     };
     public static final int SLOTS = BLOCKS.length;

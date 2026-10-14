@@ -24,7 +24,6 @@ public final class Game {
                     : terrainDemand(terrainConfig);
             TerrainSource generator = waterScene ? new WaterTestScene() : new TerrainGenerator(0, terrainConfig);
             ChunkMesher mesher = new WaterMesher();
-            SettingsPanel settingsPanel = new SettingsPanel(settings);
             var blockTextures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
             try (BlockTextureArray textureArray = new BlockTextureArray(blockTextures);
                     WorldRuntime runtime = new WorldRuntime(
@@ -38,7 +37,7 @@ public final class Game {
                     UiRenderer uiRenderer = new UiRenderer()) {
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());
                 window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
-                new GameLoop().run(window, camera, renderer, uiRenderer, metrics, runtime, settingsPanel);
+                new GameLoop().run(window, camera, renderer, uiRenderer, metrics, runtime, settings);
             }
         }
     }

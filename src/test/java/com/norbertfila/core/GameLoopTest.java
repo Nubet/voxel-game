@@ -7,6 +7,8 @@ import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.ui.ScreenManager;
+import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
@@ -84,11 +86,11 @@ class GameLoopTest {
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
 
-        var placement = updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 12)
+        var placement = updateBlockEditing(camera, player, interaction, hotbar, false, false, true, 7)
                 .orElseThrow();
         assertTrue(placement.changed());
         assertEquals(BlockId.GLASS, world.getBlock(new BlockPos(8, 9, 7)).orElseThrow());
-        assertEquals(12, hotbar.selectedSlot());
+        assertEquals(7, hotbar.selectedSlot());
 
         var removal = updateBlockEditing(camera, player, interaction, hotbar, false, true, true, -1)
                 .orElseThrow();
@@ -109,10 +111,10 @@ class GameLoopTest {
 
         assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, false, -1, 1)
                 .isEmpty());
-        assertEquals(15, hotbar.selectedSlot());
+        assertEquals(8, hotbar.selectedSlot());
         assertTrue(updateBlockEditing(camera, player, interaction, hotbar, true, false, false, -1, -1)
                 .isEmpty());
-        assertEquals(15, hotbar.selectedSlot());
+        assertEquals(8, hotbar.selectedSlot());
     }
 
     @Test
@@ -162,6 +164,24 @@ class GameLoopTest {
         chunk.set(8, 9, 6, BlockId.STONE);
         world.putChunk(new ChunkPos(0, 0, 0), chunk);
         return world;
+    }
+
+    @Test
+    void backClosingFrameCannotEditOrChangeHotbarSelection() {
+        ScreenManager screens = new ScreenManager();
+        screens.open(new SettingsScreen(new GameSettings()));
+        screens.updatePointer(false, false, 0, 0);
+        screens.updatePointer(true, true, SettingsScreen.BACK_BOUNDS.x() + 1, SettingsScreen.BACK_BOUNDS.y() + 1);
+        screens.updatePointer(false, false, SettingsScreen.BACK_BOUNDS.x() + 1, SettingsScreen.BACK_BOUNDS.y() + 1);
+        assertTrue(!screens.isOpen() && screens.blocksGameplay());
+        Hotbar hotbar = new Hotbar();
+        assertTrue(GameLoop.editCommand(hotbar, screens.blocksGameplay(), true, true, 2, 1, 0, 0)
+                .isEmpty());
+        assertEquals(0, hotbar.selectedSlot());
+        screens.beginFrame();
+        assertTrue(GameLoop.editCommand(hotbar, screens.blocksGameplay(), false, false, 2, 0, 0, 0)
+                .isEmpty());
+        assertEquals(2, hotbar.selectedSlot());
     }
 
     private static java.util.Optional<com.norbertfila.world.BlockChangeResult> updateBlockEditing(

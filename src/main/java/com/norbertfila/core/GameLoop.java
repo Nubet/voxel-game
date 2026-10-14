@@ -13,10 +13,12 @@ import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.ui.Hud;
-import com.norbertfila.ui.SettingsPanelView;
+import com.norbertfila.ui.Screen;
+import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
 import java.util.HashMap;
@@ -33,14 +35,15 @@ public final class GameLoop {
             UiRenderer uiRenderer,
             FrameMetrics metrics,
             WorldRuntime runtime,
-            SettingsPanel settingsPanel) {
+            GameSettings settings) {
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
         Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
-        SettingsPanelView panelView = new SettingsPanelView();
+        ScreenManager screens = new ScreenManager();
+        SettingsScreen settingsScreen = new SettingsScreen(settings);
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             long placePressId = 0;
@@ -49,35 +52,41 @@ public final class GameLoop {
             int[] width = new int[1], height = new int[1];
             int[] windowWidth = new int[1], windowHeight = new int[1];
             while (!window.shouldClose()) {
+                screens.beginFrame();
+                Screen previousScreen = screens.current();
+                int previousDistance = settings.renderDistance();
                 window.pollEvents();
                 double now = window.time(), delta = clampDelta(now - previous);
                 previous = now;
                 input.update();
                 int scroll = input.hotbarScrollSteps();
                 if (input.focused() && input.settingsPressed()) {
-                    settingsPanel.toggle();
-                    window.setCursorCaptured(!settingsPanel.open());
-                    input.resetMouseTracking();
+                    if (screens.isOpen()) screens.close();
+                    else screens.open(settingsScreen);
                 }
                 window.framebufferSize(width, height);
                 window.windowSize(windowWidth, windowHeight);
                 boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
                 UiViewport viewport =
                         minimized ? null : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0]);
-                boolean settingsChanged = false;
                 if (!minimized && input.focused()) {
-                    settingsChanged = settingsPanel.update(
+                    screens.updatePointer(
                             input.leftMouseDown(),
                             input.leftMousePressed(),
                             viewport.cursorX(input.cursorX()),
                             viewport.cursorY(input.cursorY()));
-                } else settingsPanel.cancelInteraction();
+                } else screens.cancelInteraction();
                 UiKey key;
-                while ((key = input.pollUiKey()) != null)
-                    if (!minimized && input.focused()) settingsChanged |= settingsPanel.keyPress(key);
-                if (settingsChanged)
-                    window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
-                boolean blocked = minimized || settingsPanel.open() || !input.focused();
+                while ((key = input.pollUiKey()) != null) {
+                    if (!minimized && input.focused()) screens.keyPress(key);
+                }
+                if (previousScreen != screens.current()) {
+                    window.setCursorCaptured(!screens.isOpen());
+                    input.resetMouseTracking();
+                }
+                if (previousDistance != settings.renderDistance())
+                    window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
+                boolean blocked = minimized || screens.blocksGameplay() || !input.focused();
                 int slotPressed = input.hotbarSlotPressed();
                 if (!blocked) {
                     if (slotPressed >= 0) hotbar.select(slotPressed);
@@ -101,7 +110,7 @@ public final class GameLoop {
                         camera.pitch(),
                         blocked,
                         minimized,
-                        settingsPanel.renderDistance(),
+                        settings.renderDistance(),
                         placePressId,
                         !blocked && input.rightMouseDown() && hotbar.selectedBlock() != BlockId.AIR,
                         hotbar.selectedBlock()));
@@ -116,7 +125,6 @@ public final class GameLoop {
                         input.nextPlayerTick();
                 }
                 boolean editingBlocked = blocked
-                        || input.settingsPressed()
                         || input.toggleModePressed()
                         || state == null
                         || state.modePending()
@@ -183,7 +191,7 @@ public final class GameLoop {
                 var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
                 metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
                 canvas.clear();
-                if (settingsPanel.open()) panelView.render(canvas, settingsPanel);
+                if (screens.isOpen()) screens.render(canvas, viewport);
                 else hud.render(canvas, hotbar, viewport);
                 uiRenderer.render(canvas, viewport);
                 window.swapBuffers();
