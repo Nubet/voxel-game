@@ -102,7 +102,11 @@ public final class WorldRuntime implements AutoCloseable {
                     new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
             try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
                     SaveScheduler saves = new SaveScheduler(savePath, 0)) {
-                chunks.setChunkLifecycleListener(position -> water.onChunkChanged(position, tick[0]));
+                WorldEdit plantEdits = new WorldEdit(world, FAR_TILE_SIZE);
+                chunks.setChunkLifecycleListener(position -> {
+                    chunks.requestRemesh(plantEdits.validatePlants(position));
+                    water.onChunkChanged(position, tick[0]);
+                });
                 FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};

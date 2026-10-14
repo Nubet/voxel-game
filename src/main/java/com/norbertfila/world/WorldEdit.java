@@ -50,9 +50,42 @@ public final class WorldEdit {
             Chunk neighbor = world.getChunk(dirtyPosition);
             if (neighbor != null) neighbor.invalidateMesh();
         }
+        if (position.y() < Integer.MAX_VALUE) {
+            BlockPos above = new BlockPos(position.x(), position.y() + 1, position.z());
+            if (world.hasChunk(Coordinates.worldToChunk(above))
+                    && PlantRules.isPlant((byte) world.getBlock(above).orElseThrow())
+                    && !PlantRules.supports(value))
+                dirty.addAll(setBlock(above, BlockId.AIR).dirtyChunks());
+        }
         List<ChunkPos> ordered = new ArrayList<>(dirty);
         ordered.sort(ORDER);
         return new BlockChangeResult(BlockChangeResult.Status.CHANGED, previous, ordered, revision(position));
+    }
+
+    public List<ChunkPos> validatePlants(ChunkPos loaded) {
+        if (!world.hasChunk(loaded)) return List.of();
+        Set<ChunkPos> dirty = new LinkedHashSet<>();
+        validatePlantsIn(loaded, false, dirty);
+        if (loaded.y() < Integer.MAX_VALUE) {
+            ChunkPos above = new ChunkPos(loaded.x(), loaded.y() + 1, loaded.z());
+            if (world.hasChunk(above)) validatePlantsIn(above, true, dirty);
+        }
+        return List.copyOf(dirty);
+    }
+
+    private void validatePlantsIn(ChunkPos chunkPos, boolean bottomOnly, Set<ChunkPos> dirty) {
+        Chunk chunk = world.getChunk(chunkPos);
+        for (int y = 0; y < (bottomOnly ? 1 : Chunk.SIZE); y++)
+            for (int z = 0; z < Chunk.SIZE; z++)
+                for (int x = 0; x < Chunk.SIZE; x++) {
+                    if (!PlantRules.isPlant(chunk.get(x, y, z))) continue;
+                    BlockPos position = new BlockPos(
+                            Math.toIntExact((long) chunkPos.x() * Chunk.SIZE + x),
+                            Math.toIntExact((long) chunkPos.y() * Chunk.SIZE + y),
+                            Math.toIntExact((long) chunkPos.z() * Chunk.SIZE + z));
+                    if (PlantRules.unsupported(world, position))
+                        dirty.addAll(setBlock(position, BlockId.AIR).dirtyChunks());
+                }
     }
 
     private long revision(BlockPos position) {

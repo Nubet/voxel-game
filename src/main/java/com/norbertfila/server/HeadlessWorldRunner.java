@@ -29,6 +29,9 @@ public final class HeadlessWorldRunner {
         this.world = Objects.requireNonNull(world);
         this.chunks = new ChunkManager(world, Objects.requireNonNull(generator), Objects.requireNonNull(demand));
         this.edits = new WorldEdit(world, farTileSize);
+        chunks.setChunkLifecycleListener(position -> {
+            chunks.requestRemesh(edits.validatePlants(position));
+        });
     }
 
     public TickResult tick(ChunkPos center, List<? extends Command> commands) {

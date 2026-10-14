@@ -28,6 +28,39 @@ class WorldRuntimeTest {
     Path directory;
 
     @Test
+    void vegetationAdmissionRemovesPlantsWhoseProceduralSupportWasEdited() throws Exception {
+        TerrainConfig.Layer disabled = new TerrainConfig.Layer(.01, 1, .5, 2, 0);
+        TerrainGenerator generator =
+                new TerrainGenerator(42, new TerrainConfig(8, disabled, disabled, disabled), (x, z) -> 0);
+        ChunkPos position = new ChunkPos(0, 0, 0);
+        byte[] generated = generator.generate(position).blocks();
+        BlockPos plant = null;
+        for (int z = 0; z < 16 && plant == null; z++)
+            for (int x = 0; x < 16; x++)
+                if (PlantRules.isPlant(generated[(9 * 16 + z) * 16 + x])) {
+                    plant = new BlockPos(x, 9, z);
+                    break;
+                }
+        assertNotNull(plant);
+        World world = new World();
+        world.setBlock(new BlockPos(plant.x(), 8, plant.z()), BlockId.AIR, 64);
+        Path save = directory.resolve("vegetation.vxl");
+        WorldSave.save(save, generator.seed(), generator.generatorVersion(), world);
+        try (WorldRuntime runtime = new WorldRuntime(
+                generator,
+                new com.norbertfila.meshing.WaterMesher(),
+                new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE),
+                save)) {
+            var mesh = awaitMesh(runtime, position);
+            runtime.acknowledge(mesh, true);
+            await(runtime, frame -> frame.tick() >= 5);
+        }
+        World restored = new World();
+        WorldSave.restore(restored, WorldSave.load(save), 64);
+        assertEquals(BlockId.AIR, restored.changes().get(plant).orElseThrow());
+    }
+
+    @Test
     void ownerRunsWaterWhileControlsAreBlockedAndShutdownRestoresItsClock() throws Exception {
         Path save = directory.resolve("water.vxl");
         World world = new World();

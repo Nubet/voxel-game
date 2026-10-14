@@ -6,7 +6,7 @@ import com.norbertfila.world.ChunkPos;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 10;
+    private static final int GENERATOR_VERSION = 11;
     private final long seed;
     private final TerrainConfig config;
     private final Noise2D continental;
@@ -18,6 +18,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpX;
     private final Noise2D warpZ;
     private final TreeGenerator trees;
+    private final VegetationGenerator vegetation;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
@@ -46,6 +47,7 @@ public final class TerrainGenerator implements TerrainSource {
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         trees = new TreeGenerator(seed, forestDensity, this);
+        vegetation = new VegetationGenerator(seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity);
     }
 
     private static Noise2D forestNoise(Noise2D noise) {
@@ -136,15 +138,18 @@ public final class TerrainGenerator implements TerrainSource {
         int originY = origin(position.y());
         int originZ = origin(position.z());
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
+        TerrainSummary[] columns = new TerrainSummary[Chunk.SIZE * Chunk.SIZE];
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
                 TerrainSummary summary = sample(originX + x, originZ + z);
+                columns[z * Chunk.SIZE + x] = summary;
                 for (int y = 0; y < Chunk.SIZE; y++) {
                     int worldY = originY + y;
                     blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = summary.materialAt(worldY);
                 }
             }
         trees.generate(originX, originY, originZ, blocks);
+        vegetation.generate(originX, originY, originZ, blocks, columns);
         return new ChunkData(position, blocks);
     }
 

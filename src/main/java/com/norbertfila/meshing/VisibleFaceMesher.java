@@ -1,6 +1,8 @@
 package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
+import com.norbertfila.world.BlockShape;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import java.util.Arrays;
@@ -23,6 +25,8 @@ public final class VisibleFaceMesher implements ChunkMesher {
     private static final float[] GLASS = {.55f, .75f, .82f};
     private static final float[] SANDSTONE = {.76f, .64f, .42f};
     private static final float[] STONE_BRICKS = {.42f, .43f, .45f};
+    private static final float[] YELLOW_FLOWER = {1, .85f, .1f};
+    private static final float[] RED_FLOWER = {.9f, .1f, .1f};
     // Each face: four corner offsets in CCW order as viewed from outside.
     static final int[][][] FACES = {
         {{1, 0, 0}, {1, 1, 0}, {1, 1, 1}, {1, 0, 1}},
@@ -41,7 +45,8 @@ public final class VisibleFaceMesher implements ChunkMesher {
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
                     byte block = snapshot.get(x, y, z);
-                    if (block == BlockId.AIR) continue;
+                    if (block == BlockId.AIR
+                            || BlockRegistry.DEFAULT.definition(block).shape() == BlockShape.CROSS) continue;
                     for (int f = 0; f < 6; f++) {
                         if (!FaceVisibility.isVisible(block, snapshot, neighborhood, f, x, y, z)) continue;
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
@@ -57,6 +62,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
                         }
                     }
                 }
+        CrossPlantMesher.append(out, snapshot, cx, cy, cz, false);
         return new MeshData(out.toArray());
     }
 
@@ -77,6 +83,10 @@ public final class VisibleFaceMesher implements ChunkMesher {
             case BlockId.GLASS -> GLASS;
             case BlockId.SANDSTONE -> SANDSTONE;
             case BlockId.STONE_BRICKS -> STONE_BRICKS;
+            case BlockId.SHORT_GRASS, BlockId.FERN -> GRASS_TOP;
+            case BlockId.DANDELION_YELLOW -> YELLOW_FLOWER;
+            case BlockId.DANDELION_WHITE -> SNOW;
+            case BlockId.POPPY -> RED_FLOWER;
             default -> STONE;
         };
     }

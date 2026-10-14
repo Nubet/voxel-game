@@ -2,6 +2,7 @@ package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
+import com.norbertfila.world.BlockShape;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import com.norbertfila.world.RenderLayer;
@@ -41,6 +42,7 @@ public final class GreedyMesher implements ChunkMesher {
         for (int layer = 0; layer < out.length; layer++) out[layer] = new VisibleFaceMesher.Floats(1024);
         for (int face = 0; face < 6; face++)
             meshFace(snapshot, neighborhood, cx, cy, cz, face, out, textured, excludeWater);
+        CrossPlantMesher.append(out[textured ? RenderLayer.CUTOUT.ordinal() : 0], snapshot, cx, cy, cz, textured);
         if (!textured) return new MeshData(out[0].toArray());
         MeshRanges ranges = new MeshRanges(
                 out[RenderLayer.OPAQUE.ordinal()].size() / MeshFormat.TEXTURED_VERTEX_STRIDE,
@@ -68,7 +70,8 @@ public final class GreedyMesher implements ChunkMesher {
                 for (int u = 0; u < Chunk.SIZE; u++) {
                     int[] cell = cell(face, depth, u, v);
                     byte block = snapshot.get(cell[0], cell[1], cell[2]);
-                    mask[v][u] = !(excludeWater && block == BlockId.WATER)
+                    mask[v][u] = BlockRegistry.DEFAULT.definition(block).shape() == BlockShape.CUBE
+                                    && !(excludeWater && block == BlockId.WATER)
                                     && FaceVisibility.isVisible(
                                             block, snapshot, neighborhood, face, cell[0], cell[1], cell[2])
                             ? block

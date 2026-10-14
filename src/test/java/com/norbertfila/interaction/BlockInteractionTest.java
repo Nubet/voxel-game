@@ -28,6 +28,45 @@ class BlockInteractionTest {
     private static final Aabb DISTANT_BODY =
             PlayerState.at(new PlayerState.Position(0, 10, 0)).body();
 
+    @Test
+    void replacesPlantsInPlaceButCannotUseThemAsFullBlockAnchors() {
+        for (byte id : new byte[] {
+            BlockId.SHORT_GRASS, BlockId.FERN, BlockId.DANDELION_YELLOW, BlockId.DANDELION_WHITE, BlockId.POPPY
+        }) {
+            World world = worldWithBlock(new BlockPos(8, 0, 8));
+            world.setBlock(new BlockPos(8, 0, 8), BlockId.GRASS, 8);
+            world.setBlock(new BlockPos(8, 1, 8), id, 8);
+            var interaction = new BlockInteraction(world, 8);
+            assertTrue(interaction
+                    .place(8.5, 1.5, 5, 0, 0, 1, BlockId.STONE, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
+                    .orElseThrow()
+                    .changed());
+            assertEquals(BlockId.STONE, world.getBlock(new BlockPos(8, 1, 8)).orElseThrow());
+            assertEquals(BlockId.AIR, world.getBlock(new BlockPos(8, 1, 7)).orElseThrow());
+            world.setBlock(new BlockPos(8, 1, 8), id, 8);
+            assertTrue(interaction
+                    .remove(PlayerController.Mode.SURVIVAL, 8.5, 1.5, 5, 0, 0, 1)
+                    .orElseThrow()
+                    .changed());
+        }
+    }
+
+    @Test
+    void plantPlacementRequiresKnownGrassSupportAndDoesNotCollideWithPlayer() {
+        World world = worldWithBlock(new BlockPos(8, 0, 8));
+        var interaction = new BlockInteraction(world, 8);
+        assertTrue(interaction
+                .place(8.5, 3, 8.5, 0, -1, 0, BlockId.POPPY, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
+                .isEmpty());
+        world.setBlock(new BlockPos(8, 0, 8), BlockId.GRASS, 8);
+        Aabb body = new Aabb(8.1, 1, 8.1, 8.9, 2.8, 8.9);
+        assertTrue(interaction
+                .place(8.5, 3, 8.5, 0, -1, 0, BlockId.POPPY, PlayerController.Mode.SURVIVAL, body)
+                .orElseThrow()
+                .changed());
+        assertFalse(world.isSolid(new BlockPos(8, 1, 8)));
+    }
+
     @ParameterizedTest
     @CsvSource({"11,8,8,1,0,0", "5,8,8,-1,0,0", "8,11,8,0,1,0", "8,5,8,0,-1,0", "8,8,11,0,0,1", "8,8,5,0,0,-1"})
     void placesOnEachFaceThenRemovesTheNearestBlock(int x, int y, int z, int dx, int dy, int dz) {

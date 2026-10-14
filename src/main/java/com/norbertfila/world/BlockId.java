@@ -17,7 +17,12 @@ public final class BlockId {
             GLASS = 13,
             SANDSTONE = 14,
             STONE_BRICKS = 15,
-            WATER = 16;
+            WATER = 16,
+            SHORT_GRASS = 17,
+            FERN = 18,
+            DANDELION_YELLOW = 19,
+            DANDELION_WHITE = 20,
+            POPPY = 21;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -41,7 +46,12 @@ public final class BlockId {
                     GLASS,
                     SANDSTONE,
                     STONE_BRICKS,
-                    WATER -> true;
+                    WATER,
+                    SHORT_GRASS,
+                    FERN,
+                    DANDELION_YELLOW,
+                    DANDELION_WHITE,
+                    POPPY -> true;
             default -> false;
         };
     }

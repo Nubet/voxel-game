@@ -228,7 +228,21 @@ class WaterSimulatorTest {
     }
 
     @Test
-    void everyRegisteredNonWaterNonAirBlockStopsFlowRegardlessOfRenderingFlags() {
+    void schedulingDryPlantsDoesNotRemoveThemWithoutActualIncomingWater() {
+        Scene scene = new Scene();
+        scene.raw(1, 0, 0, BlockId.GRASS);
+        scene.set(1, 1, 0, BlockId.DANDELION_WHITE);
+        scene.settle();
+        assertEquals(
+                BlockId.DANDELION_WHITE,
+                scene.world.getBlock(new BlockPos(1, 1, 0)).orElseThrow());
+        scene.set(0, 1, 0, BlockId.WATER);
+        scene.settle();
+        assertEquals(BlockId.WATER, scene.world.getBlock(new BlockPos(1, 1, 0)).orElseThrow());
+    }
+
+    @Test
+    void nonReplaceableBlocksStopFlowAndPlantsAreWashedAway() {
         for (int id = 1; id <= 255; id++) {
             byte block = (byte) id;
             if (!BlockId.isValid(block) || block == BlockId.WATER) continue;
@@ -236,8 +250,15 @@ class WaterSimulatorTest {
             scene.raw(1, 1, 0, block);
             scene.set(0, 1, 0, BlockId.WATER);
             scene.settle();
-            assertEquals(id, scene.world.getBlock(new BlockPos(1, 1, 0)).orElseThrow());
-            assertEquals(WaterState.EMPTY, scene.state(1, 1, 0));
+            if (com.norbertfila.world.PlantRules.isPlant(block)) {
+                assertEquals(
+                        BlockId.WATER,
+                        scene.world.getBlock(new BlockPos(1, 1, 0)).orElseThrow());
+                assertEquals(1, scene.state(1, 1, 0));
+            } else {
+                assertEquals(id, scene.world.getBlock(new BlockPos(1, 1, 0)).orElseThrow());
+                assertEquals(WaterState.EMPTY, scene.state(1, 1, 0));
+            }
         }
     }
 

@@ -12,7 +12,35 @@ public record BlockDefinition(
         boolean occludesFullFace,
         RenderLayer renderLayer,
         boolean breakable,
-        boolean targetable) {
+        boolean targetable,
+        BlockShape shape,
+        boolean replaceable) {
+    public BlockDefinition(
+            int id,
+            String name,
+            int topTexture,
+            int bottomTexture,
+            int sideTexture,
+            boolean collidable,
+            boolean occludesFullFace,
+            RenderLayer renderLayer,
+            boolean breakable,
+            boolean targetable) {
+        this(
+                id,
+                name,
+                topTexture,
+                bottomTexture,
+                sideTexture,
+                collidable,
+                occludesFullFace,
+                renderLayer,
+                breakable,
+                targetable,
+                BlockShape.CUBE,
+                id == BlockId.AIR || id == BlockId.WATER);
+    }
+
     public BlockDefinition(
             int id,
             String name,
@@ -41,6 +69,7 @@ public record BlockDefinition(
         if (topTexture < 0 || bottomTexture < 0 || sideTexture < 0)
             throw new IllegalArgumentException("Texture layers must be non-negative");
         Objects.requireNonNull(renderLayer);
+        Objects.requireNonNull(shape);
     }
 
     public int textureLayer(int face) {

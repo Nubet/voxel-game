@@ -185,7 +185,7 @@ class WorldSaveTest {
         Path save = temporaryDirectory.resolve("procedural-water.vxl");
         WorldSave.save(save, generator.seed(), generator.generatorVersion(), world);
         var loaded = WorldSave.load(save);
-        assertEquals(10, loaded.generatorVersion());
+        assertEquals(11, loaded.generatorVersion());
         World restored = new World();
         WorldSave.restore(restored, loaded, 8);
         restored.putChunk(

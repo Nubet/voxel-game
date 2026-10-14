@@ -12,9 +12,39 @@ import org.junit.jupiter.api.Test;
 
 class AssetLoaderTest {
     @Test
+    void plantAssetsAreColoredCutoutsAndDecodeExactlyWithoutFallback() throws IOException {
+        TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
+        for (String name : java.util.List.of(
+                "refi_short_grass", "refi_fern", "refi_dandelion_yellow", "refi_dandelion_white", "refi_poppy")) {
+            var texture = textures.layer(BlockRegistry.DEFAULT.textureLayer(name));
+            try (var input = AssetLoaderTest.class.getResourceAsStream("/assets/textures/blocks/" + name + ".png")) {
+                assertNotNull(input);
+                BufferedImage image = ImageIO.read(input);
+                assertEquals(16, image.getWidth());
+                assertEquals(16, image.getHeight());
+                int opaque = 0, transparent = 0, colored = 0;
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++) {
+                        int pixel = image.getRGB(x, y);
+                        for (int c = 0; c < 4; c++)
+                            assertEquals((pixel >>> (c == 3 ? 24 : 16 - c * 8)) & 255, texture.rgbaAt(x, y, c));
+                        if ((pixel >>> 24) >= 128) {
+                            opaque++;
+                            if (((pixel >>> 16) & 255) != ((pixel >>> 8) & 255)) colored++;
+                        } else transparent++;
+                    }
+                assertTrue(opaque > 0 && transparent > 0 && colored > 0, name);
+                assertTrue(
+                        java.util.stream.IntStream.range(0, 16).anyMatch(x -> (image.getRGB(x, 15) >>> 24) >= 128),
+                        name + " must reach the ground without a renderer offset");
+            }
+        }
+    }
+
+    @Test
     void loadsAllDefaultImagesInRegistryLayerOrderAsIndependentRgba() {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
-        assertEquals(19, textures.layerCount());
+        assertEquals(24, textures.layerCount());
         for (TextureSet.Texture texture : textures.layers()) {
             assertEquals(16, texture.width());
             assertEquals(16, texture.height());

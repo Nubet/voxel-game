@@ -2,6 +2,7 @@ package com.norbertfila.meshing;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
+import com.norbertfila.world.BlockShape;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkSnapshot;
 import java.util.Arrays;
@@ -15,6 +16,8 @@ public final class PackedVertexMesher {
                 for (int x = 0; x < Chunk.SIZE; x++) {
                     byte block = snapshot.get(x, y, z);
                     if (block == BlockId.AIR) continue;
+                    if (BlockRegistry.DEFAULT.definition(block).shape() != BlockShape.CUBE)
+                        throw new IllegalArgumentException("Packed mesher only supports cube blocks");
                     for (int face = 0; face < VisibleFaceMesher.NORMALS.length; face++) {
                         if (!FaceVisibility.isVisible(block, snapshot, neighborhood, face, x, y, z)) continue;
                         int textureLayer =

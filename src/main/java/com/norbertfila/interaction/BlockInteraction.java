@@ -7,6 +7,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.PlantRules;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
 import java.util.Objects;
@@ -74,17 +75,24 @@ public final class BlockInteraction {
         if (target.isEmpty()) return Optional.empty();
         VoxelRaycaster.Hit hit = target.get();
         VoxelRaycaster.Normal normal = hit.normal();
-        boolean replacesWater = hit.blockId() == BlockId.WATER;
-        if (!replacesWater && normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
-        BlockPos position = replacesWater
-                ? hit.block()
-                : new BlockPos(
-                        hit.block().x() + normal.x(),
-                        hit.block().y() + normal.y(),
-                        hit.block().z() + normal.z());
+        boolean replacesTarget =
+                BlockRegistry.DEFAULT.definition((byte) hit.blockId()).replaceable();
+        if (!replacesTarget && normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
+        long x = (long) hit.block().x() + normal.x();
+        long y = (long) hit.block().y() + normal.y();
+        long z = (long) hit.block().z() + normal.z();
+        if (!replacesTarget
+                && (x < Integer.MIN_VALUE
+                        || x > Integer.MAX_VALUE
+                        || y < Integer.MIN_VALUE
+                        || y > Integer.MAX_VALUE
+                        || z < Integer.MIN_VALUE
+                        || z > Integer.MAX_VALUE)) return Optional.empty();
+        BlockPos position = replacesTarget ? hit.block() : new BlockPos((int) x, (int) y, (int) z);
         if (!world.hasChunk(Coordinates.worldToChunk(position))) return Optional.empty();
         int previous = world.getBlock(position).orElseThrow();
-        if (previous != BlockId.AIR && previous != BlockId.WATER) return Optional.empty();
+        if (!BlockRegistry.DEFAULT.definition((byte) previous).replaceable()) return Optional.empty();
+        if (PlantRules.isPlant(blockId) && !PlantRules.canPlace(world, position)) return Optional.empty();
         if (BlockRegistry.DEFAULT.isCollidable(blockId)
                 && playerBody.intersects(new Aabb(
                         position.x(),

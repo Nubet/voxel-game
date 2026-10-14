@@ -32,7 +32,8 @@ public final class Game {
                             mesher,
                             viewDemand,
                             Path.of(System.getProperty(
-                                    "voxel.save", waterScene ? "saves/water-test.vxl" : "saves/world.vxl")));
+                                    "voxel.save",
+                                    waterScene ? "saves/water-test.vxl" : "saves/world-vegetation.vxl")));
                     TerrainRenderer renderer = new TerrainRenderer(textureArray);
                     UiRenderer uiRenderer = new UiRenderer()) {
                 FrameMetrics metrics = new FrameMetrics(0, 0, 0, Boolean.getBoolean("voxel.debug"), window.time());

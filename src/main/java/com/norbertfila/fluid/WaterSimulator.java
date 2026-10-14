@@ -70,6 +70,7 @@ public final class WaterSimulator {
                 return;
             }
             if (next == WaterFlowRules.BLOCKED) return;
+            if (next == WaterState.EMPTY && world.getBlock(position).orElseThrow() != BlockId.WATER) return;
             byte block = next == WaterState.EMPTY ? BlockId.AIR : BlockId.WATER;
             BlockChangeResult result = edits.setBlock(position, block, (byte) next);
             if (!result.changed()) return;

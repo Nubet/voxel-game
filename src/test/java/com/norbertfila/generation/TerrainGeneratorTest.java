@@ -70,17 +70,19 @@ class TerrainGeneratorTest {
     }
 
     @Test
-    void classicPresetHasVersionTenReferenceChunks() {
+    void vegetationPreservesVersionTenTerrainAndTrees() {
         ChunkPos[] positions = {new ChunkPos(0, 2, 0), new ChunkPos(-2, 2, 3), new ChunkPos(-12, 4, 14)};
         int[][] expected = {{1180583825, -1863016422, 1742602241}, {1633097437, -283642084, 1228333330}};
         long[] seeds = {0, 42};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.classic());
-            assertEquals(10, generator.generatorVersion());
-            for (int j = 0; j < positions.length; j++)
-                assertEquals(
-                        expected[i][j],
-                        Arrays.hashCode(generator.generate(positions[j]).blocks()));
+            assertEquals(11, generator.generatorVersion());
+            for (int j = 0; j < positions.length; j++) {
+                byte[] blocks = generator.generate(positions[j]).blocks();
+                for (int k = 0; k < blocks.length; k++)
+                    if (com.norbertfila.world.PlantRules.isPlant(blocks[k])) blocks[k] = BlockId.AIR;
+                assertEquals(expected[i][j], Arrays.hashCode(blocks));
+            }
         }
     }
 
@@ -99,7 +101,7 @@ class TerrainGeneratorTest {
                 (x, z) -> -1);
         ChunkData data = generator.generate(new ChunkPos(-1, 0, 1));
         assertEquals(256, calls[0]);
-        assertEquals(BlockId.AIR, data.get(0, 8, 0));
+        assertTrue(data.get(0, 8, 0) == BlockId.AIR || com.norbertfila.world.PlantRules.isPlant(data.get(0, 8, 0)));
         assertEquals(BlockId.GRASS, data.get(0, 7, 0));
         assertEquals(BlockId.BEDROCK, data.get(0, 6, 0));
         assertEquals(BlockId.AIR, data.get(0, 4, 0));
@@ -122,7 +124,9 @@ class TerrainGeneratorTest {
                                 byte expected = sample.materialAt(worldY);
                                 assertTrue(actual == expected
                                         || expected == BlockId.AIR
-                                                && (actual == BlockId.LOG || actual == BlockId.LEAVES));
+                                                && (actual == BlockId.LOG
+                                                        || actual == BlockId.LEAVES
+                                                        || com.norbertfila.world.PlantRules.isPlant(actual)));
                             }
                         }
                 }
@@ -150,7 +154,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(10, generator.generatorVersion());
+        assertEquals(11, generator.generatorVersion());
     }
 
     @Test

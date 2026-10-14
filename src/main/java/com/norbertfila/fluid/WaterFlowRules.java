@@ -4,6 +4,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.PlantRules;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
 import java.util.HashMap;
@@ -112,7 +113,7 @@ final class WaterFlowRules {
             return UNAVAILABLE;
         }
         int block = world.getBlock(position).orElseThrow();
-        if (block == BlockId.AIR) return WaterState.EMPTY;
+        if (block == BlockId.AIR || PlantRules.isPlant((byte) block)) return WaterState.EMPTY;
         if (block != BlockId.WATER) return BLOCKED;
         return world.getWaterState(position).orElseThrow();
     }
