@@ -3,6 +3,8 @@ package com.norbertfila.render;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.norbertfila.meshing.QuadMesh;
+import com.norbertfila.meshing.QuadRanges;
 import com.norbertfila.world.ChunkPos;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +57,13 @@ class GpuMeshPoolTest {
         assertEquals(144_000, budget.deletedBytes());
     }
 
-    private static GpuMesh mesh(int vao, int vbo, List<String> deleted) {
-        return new GpuMesh(vao, vbo, 6, (array, buffer) -> deleted.add(array + ":" + buffer));
+    /** A 144-byte mesh whose deletion records both ids, so tests can tell instances apart. */
+    private static GpuMesh mesh(int first, int second, List<String> deleted) {
+        return new GpuMesh(
+                first,
+                QuadMesh.Format.SOLID,
+                new QuadRanges(18, 0, 0),
+                144,
+                buffer -> deleted.add(first + ":" + second));
     }
 }

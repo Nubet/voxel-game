@@ -93,15 +93,15 @@ class WaterMesherTest {
         world.setBlock(new BlockPos(10, 8, 8), BlockId.LEAVES, 64);
         var n = world.blockNeighborhood(new ChunkPos(0, 0, 0));
         var result = new WaterMesher().mesh(n.center(), n, 0, 0, 0, ChunkMesh.ALL);
-        assertTrue(result.solid().ranges().opaqueVertices() > 0);
-        assertTrue(result.solid().ranges().cutoutVertices() > 0);
-        assertEquals(0, result.solid().ranges().translucentVertices());
-        assertEquals(MeshFormat.TEXTURED_VERSION, result.solid().format().version());
-        assertEquals(new MeshRanges(0, 0, 24), result.water().ranges());
-        assertEquals(MeshFormat.FLOW_TEXTURED_VERSION, result.water().format().version());
+        assertTrue(result.solid().ranges().opaque() > 0);
+        assertTrue(result.solid().ranges().cutout() > 0);
+        assertEquals(0, result.solid().ranges().translucent());
+        assertEquals(QuadMesh.Format.SOLID, result.solid().format());
+        assertEquals(new QuadRanges(0, 0, 4), result.water().ranges());
+        assertEquals(QuadMesh.Format.WATER, result.water().format());
         var waterOnly = new WaterMesher().mesh(n.center(), n, 0, 0, 0, ChunkMesh.WATER);
         assertEquals(null, waterOnly.solid());
-        assertArrayEquals(result.water().vertices(), waterOnly.water().vertices());
+        assertArrayEquals(result.water().records(), waterOnly.water().records());
     }
 
     @Test
@@ -141,8 +141,12 @@ class WaterMesherTest {
 
     private static MeshData mesh(World world, ChunkPos position) {
         var n = world.blockNeighborhood(position);
-        return new WaterMesher()
-                .mesh(n.center(), n, position.x(), position.y(), position.z(), ChunkMesh.WATER)
-                .water();
+        return QuadMeshes.water(
+                new WaterMesher()
+                        .mesh(n.center(), n, position.x(), position.y(), position.z(), ChunkMesh.WATER)
+                        .water(),
+                position.x(),
+                position.y(),
+                position.z());
     }
 }

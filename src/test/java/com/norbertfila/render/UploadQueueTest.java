@@ -5,9 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import com.norbertfila.meshing.ChunkMesh;
-import com.norbertfila.meshing.MeshData;
-import com.norbertfila.meshing.MeshFormat;
-import com.norbertfila.meshing.MeshRanges;
+import com.norbertfila.meshing.QuadMesh;
+import com.norbertfila.meshing.QuadRanges;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.world.ChunkPos;
 import org.junit.jupiter.api.Test;
@@ -15,9 +14,9 @@ import org.junit.jupiter.api.Test;
 class UploadQueueTest {
     @Test
     void accountsForAllLayersAndReplacesTheirRangesTogether() {
-        MeshData mixed = MeshData.textured(new float[18 * MeshFormat.TEXTURED_VERTEX_STRIDE], new MeshRanges(6, 6, 6));
+        QuadMesh mixed = solid(3, new QuadRanges(1, 1, 1));
         MeshResult request = result(new ChunkPos(-1, 0, 0), mixed);
-        long expectedBytes = 18L * MeshFormat.TEXTURED_VERTEX_STRIDE * Float.BYTES;
+        long expectedBytes = 3L * QuadMesh.Format.SOLID.ints() * Integer.BYTES;
         assertEquals(expectedBytes, request.bytes());
         UploadQueue queue = new UploadQueue();
         queue.enqueue(request);
@@ -25,22 +24,21 @@ class UploadQueueTest {
         assertSame(request, queue.poll(expectedBytes, false, current -> true));
 
         queue.enqueue(request);
-        MeshData dry = MeshData.textured(new float[6 * MeshFormat.TEXTURED_VERTEX_STRIDE], new MeshRanges(6, 0, 0));
-        MeshResult replacement = new MeshResult(request.position(), ChunkMesh.single(dry), 2, 3, 4, 5);
+        QuadMesh dry = solid(1, new QuadRanges(1, 0, 0));
+        MeshResult replacement = new MeshResult(request.position(), new ChunkMesh(dry, null), 2, 3, 4, 5);
         queue.enqueue(replacement);
         assertEquals(1, queue.size());
         assertSame(replacement, queue.poll(expectedBytes, false, current -> true));
-        assertEquals(new MeshRanges(6, 0, 0), replacement.mesh().solid().ranges());
+        assertEquals(new QuadRanges(1, 0, 0), replacement.mesh().solid().ranges());
         assertEquals(5, replacement.token());
     }
 
     @Test
     void dropsStaleOversizedResultsBeforeCheckingTheByteBudget() {
         UploadQueue queue = new UploadQueue();
-        MeshData large = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE * 2]);
-        MeshResult stale = new MeshResult(new ChunkPos(0, 0, 0), ChunkMesh.single(large), 1, 2, 0, 3);
-        MeshResult current =
-                new MeshResult(new ChunkPos(1, 0, 0), ChunkMesh.single(new MeshData(new float[0])), 4, 5, 1, 6);
+        QuadMesh large = solid(2);
+        MeshResult stale = new MeshResult(new ChunkPos(0, 0, 0), new ChunkMesh(large, null), 1, 2, 0, 3);
+        MeshResult current = new MeshResult(new ChunkPos(1, 0, 0), new ChunkMesh(solid(0), null), 4, 5, 1, 6);
         queue.enqueue(stale);
         queue.enqueue(current);
         var discarded = new java.util.ArrayList<MeshResult>();
@@ -62,8 +60,8 @@ class UploadQueueTest {
     @Test
     void respectsByteBudgetAfterAllowingOneOversizedUpload() {
         UploadQueue queue = new UploadQueue();
-        MeshData small = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE]);
-        MeshData large = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE * 2]);
+        QuadMesh small = solid(1);
+        QuadMesh large = solid(2);
         queue.enqueue(result(new ChunkPos(0, 0, 0), large));
         queue.enqueue(result(new ChunkPos(1, 0, 0), small));
 
@@ -76,7 +74,7 @@ class UploadQueueTest {
     @Test
     void preservesFifoOrderForSmallUploads() {
         UploadQueue queue = new UploadQueue();
-        MeshData mesh = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE]);
+        QuadMesh mesh = solid(1);
         queue.enqueue(result(new ChunkPos(0, 0, 0), mesh));
         queue.enqueue(result(new ChunkPos(1, 0, 0), mesh));
 
@@ -92,8 +90,8 @@ class UploadQueueTest {
     @Test
     void replacesQueuedMeshForTheSameChunkAndCanRemoveIt() {
         UploadQueue queue = new UploadQueue();
-        MeshData first = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE]);
-        MeshData replacement = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE * 2]);
+        QuadMesh first = solid(1);
+        QuadMesh replacement = solid(2);
         ChunkPos position = new ChunkPos(3, 0, 4);
 
         queue.enqueue(result(position, first));
@@ -108,11 +106,19 @@ class UploadQueueTest {
         assertEquals(0, queue.size());
     }
 
-    private static long smallBytes(MeshData mesh) {
-        return mesh.vertexCount() * (long) MeshData.VERTEX_STRIDE * Float.BYTES;
+    private static long smallBytes(QuadMesh mesh) {
+        return mesh.bytes();
     }
 
-    private static MeshResult result(ChunkPos position, MeshData mesh) {
-        return new MeshResult(position, ChunkMesh.single(mesh), 0, 0, 0, 0);
+    private static QuadMesh solid(int quads) {
+        return solid(quads, new QuadRanges(quads, 0, 0));
+    }
+
+    private static QuadMesh solid(int quads, QuadRanges ranges) {
+        return new QuadMesh(QuadMesh.Format.SOLID, new int[quads * QuadMesh.Format.SOLID.ints()], ranges);
+    }
+
+    private static MeshResult result(ChunkPos position, QuadMesh mesh) {
+        return new MeshResult(position, new ChunkMesh(mesh, null), 0, 0, 0, 0);
     }
 }

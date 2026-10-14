@@ -15,9 +15,13 @@ class CrossPlantMesherTest {
             chunk.set(2, 3, 4, id);
             var snapshot = chunk.snapshot();
             var neighborhood = BlockNeighborhood.centerOnly(snapshot);
-            MeshData mesh = new WaterMesher()
-                    .mesh(snapshot, neighborhood, -1, 0, 1, ChunkMesh.ALL)
-                    .solid();
+            MeshData mesh = QuadMeshes.solid(
+                    new WaterMesher()
+                            .mesh(snapshot, neighborhood, -1, 0, 1, ChunkMesh.ALL)
+                            .solid(),
+                    -1,
+                    0,
+                    1);
             assertEquals(new MeshRanges(0, 24, 0), mesh.ranges());
             float[] vertices = mesh.vertices();
             int stride = MeshFormat.TEXTURED_VERTEX_STRIDE;
@@ -34,7 +38,6 @@ class CrossPlantMesherTest {
                     assertEquals(vertices[a + 2 * stride + attribute], vertices[a + 6 * stride + attribute]);
                 }
             }
-            assertThrows(IllegalArgumentException.class, () -> new PackedVertexMesher().mesh(snapshot, neighborhood));
             assertEquals(
                     24,
                     new VisibleFaceMesher()
@@ -53,7 +56,7 @@ class CrossPlantMesherTest {
         var snapshot = chunk.snapshot();
         ChunkMesh mesh =
                 new WaterMesher().mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0, ChunkMesh.ALL);
-        assertEquals(new MeshRanges(36, 48, 0), mesh.solid().ranges());
-        assertEquals(new MeshRanges(0, 0, 36), mesh.water().ranges());
+        assertEquals(new QuadRanges(6, 8, 0), mesh.solid().ranges());
+        assertEquals(new QuadRanges(0, 0, 6), mesh.water().ranges());
     }
 }

@@ -95,7 +95,7 @@ public final class VegetationSmoke {
                 var n = neighborhoods.get(i);
                 ChunkMesh mesh = MESHER.mesh(n.center(), n, p.x(), p.y(), p.z(), ChunkMesh.ALL);
                 batchBytes += mesh.bytes();
-                sink = mesh.vertexCount();
+                sink = mesh.quadCount();
             }
             if (round >= 0) batches[round] = System.nanoTime() - started;
             bytes = batchBytes;
@@ -153,7 +153,12 @@ public final class VegetationSmoke {
         glViewport(0, 0, WIDTH, HEIGHT);
         glClearColor(32 / 255f, 64 / 255f, 96 / 255f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        check(renderer.render(vp, Frustum.from(vp), eye).drawCalls() > 0, "No draws");
+        var relative = new Matrix4f(vp).translate(eye);
+        check(
+                renderer.render(relative, Frustum.from(vp), eye.x, eye.y, eye.z, 0)
+                                .drawCalls()
+                        > 0,
+                "No draws");
         check(glGetError() == GL_NO_ERROR, "Render GL error");
     }
 

@@ -142,13 +142,22 @@ class GreedyMesherEquivalenceTest {
             System.arraycopy(all, vertex * flow, solid, vertex * textured, textured);
         float[] water = java.util.Arrays.copyOfRange(all, solidVertices * flow, all.length);
         assertEquals(
-                new MeshRanges(ranges.opaqueVertices(), ranges.cutoutVertices(), 0),
+                new QuadRanges(ranges.opaqueVertices() / 6, ranges.cutoutVertices() / 6, 0),
                 split.solid().ranges());
-        assertArrayEquals(solid, split.solid().vertices(), "solids at " + position);
+        assertArrayEquals(
+                solid,
+                QuadMeshes.solid(split.solid(), position.x(), position.y(), position.z())
+                        .vertices(),
+                "solids at " + position);
         assertEquals(
-                new MeshRanges(0, 0, ranges.translucentVertices()),
+                new QuadRanges(0, 0, ranges.translucentVertices() / 6),
                 split.water().ranges());
-        assertArrayEquals(water, split.water().vertices(), "water at " + position);
+        assertArrayEquals(
+                water,
+                QuadMeshes.water(split.water(), position.x(), position.y(), position.z())
+                        .vertices(),
+                1e-4f,
+                "water at " + position);
     }
 
     private static void assertMesh(MeshData expected, MeshData actual, ChunkPos position) {

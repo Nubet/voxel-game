@@ -42,15 +42,20 @@ class WaterFaceVisibilityTest {
             chunk.set(7 + normal[0], 7 + normal[1], 7 + normal[2], neighbor);
             var snapshot = chunk.snapshot();
             var neighborhood = BlockNeighborhood.centerOnly(snapshot);
-            PackedMesh packed = new PackedVertexMesher().mesh(snapshot, neighborhood);
-            int[] vertices = packed.vertices();
+            float[] vertices = new VisibleFaceMesher()
+                    .mesh(snapshot, neighborhood, 0, 0, 0)
+                    .vertices();
+            int stride = MeshData.VERTEX_STRIDE;
             int ownFaces = 0;
             boolean sharedFace = false;
-            for (int i = 0; i < packed.vertexCount(); i += 6) {
-                var vertex = PackedVertex.decode(vertices[i]);
-                if (vertex.x() == 7 && vertex.y() == 7 && vertex.z() == 7) {
+            for (int i = 0; i < vertices.length; i += stride * MeshData.VERTICES_PER_FACE) {
+                int faceIndex = faceOf(vertices, i, stride);
+                int[] corner = VisibleFaceMesher.FACES[faceIndex][0];
+                if (vertices[i] - corner[0] == 7
+                        && vertices[i + 1] - corner[1] == 7
+                        && vertices[i + 2] - corner[2] == 7) {
                     ownFaces++;
-                    sharedFace |= vertex.face() == face;
+                    sharedFace |= faceIndex == face;
                 }
             }
             assertEquals(block == BlockId.AIR ? 0 : visible ? 6 : 5, ownFaces);
@@ -141,12 +146,24 @@ class WaterFaceVisibilityTest {
                 expected,
                 directionalAreas(
                         greedy.meshTextured(snapshot, neighborhood, position.x(), position.y(), position.z())));
-        int[] packed = new PackedVertexMesher().mesh(snapshot, neighborhood).vertices();
-        int[] packedAreas = new int[6];
-        for (int i = 0; i < packed.length; i += 6)
-            packedAreas[PackedVertex.decode(packed[i]).face()]++;
-        assertArrayEquals(expected, packedAreas);
         return expected;
+    }
+
+    /** Face index of a triangle pair from its outward normal; meshes wind counter-clockwise seen from outside. */
+    private static int faceOf(float[] vertices, int offset, int stride) {
+        float ax = vertices[offset + stride] - vertices[offset];
+        float ay = vertices[offset + stride + 1] - vertices[offset + 1];
+        float az = vertices[offset + stride + 2] - vertices[offset + 2];
+        float bx = vertices[offset + stride * 2] - vertices[offset];
+        float by = vertices[offset + stride * 2 + 1] - vertices[offset + 1];
+        float bz = vertices[offset + stride * 2 + 2] - vertices[offset + 2];
+        float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+        for (int face = 0; face < 6; face++) {
+            int[] normal = VisibleFaceMesher.NORMALS[face];
+            if (Math.signum(nx) == normal[0] && Math.signum(ny) == normal[1] && Math.signum(nz) == normal[2])
+                return face;
+        }
+        throw new AssertionError("Degenerate face");
     }
 
     private static int[] directionalAreas(MeshData mesh) {

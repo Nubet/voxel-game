@@ -3,8 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.meshing.ChunkMesh;
-import com.norbertfila.meshing.MeshData;
-import com.norbertfila.meshing.MeshFormat;
+import com.norbertfila.meshing.QuadMesh;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
 import com.norbertfila.streaming.RegionIndex;
 import com.norbertfila.world.Chunk;
@@ -22,136 +21,56 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4f;
-import org.joml.Vector3fc;
 import org.lwjgl.system.MemoryStack;
 
+/**
+ * Draws chunk quad meshes by vertex pulling: each mesh part is a shader storage buffer of quad records, and the vertex
+ * shaders rebuild the vertices. Positions are camera-relative so far-away chunks keep full float precision.
+ */
 public final class TerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
+    private static final GpuMesh.Deleter DELETE_BUFFER = buffer -> glDeleteBuffers(buffer);
     private final GpuMemoryBudget memoryBudget;
     // Solid and water parts of a chunk are separate GPU meshes so either can be replaced alone.
     private final GpuMeshPool solidMeshes;
     private final GpuMeshPool waterMeshes;
-    private final GpuMeshPool[] pools;
-    private final List<GpuMesh> visibleMeshes = new ArrayList<>();
+    private final List<ChunkPos> visibleSolids = new ArrayList<>();
+    private final List<ChunkPos> visibleWater = new ArrayList<>();
     private final UploadQueue uploads = new UploadQueue();
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
-    private final IndirectTerrainRenderer indirectRenderer = new IndirectTerrainRenderer();
     private final BlockTextureArray blockTextures;
-    private final int matrixUniform;
-    private final int texturedUniform;
-    private final int renderLayerUniform;
-    private final int waterTimeUniform;
-    private final int cameraUniform;
-    private final int waterFogUniform;
+    private final Program solidProgram;
+    private final Program waterProgram;
+    private final int emptyVertexArray;
     private final long startedAt = System.nanoTime();
-    private int program;
     private boolean closed;
 
-    public TerrainRenderer() {
-        this(null, 8, DEFAULT_GPU_BUDGET_BYTES);
-    }
-
-    public TerrainRenderer(int regionEdge) {
-        this(null, regionEdge, DEFAULT_GPU_BUDGET_BYTES);
-    }
-
-    public TerrainRenderer(int regionEdge, long gpuBudgetBytes) {
-        this(null, regionEdge, gpuBudgetBytes);
-    }
-
     public TerrainRenderer(BlockTextureArray blockTextures) {
-        this(Objects.requireNonNull(blockTextures), 8, DEFAULT_GPU_BUDGET_BYTES);
+        this(blockTextures, 8, DEFAULT_GPU_BUDGET_BYTES);
     }
 
-    private TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
-        this.blockTextures = blockTextures;
+    public TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
+        this.blockTextures = Objects.requireNonNull(blockTextures);
         regionIndex = new RegionIndex(regionEdge);
         memoryBudget = new GpuMemoryBudget(gpuBudgetBytes);
         solidMeshes = new GpuMeshPool(memoryBudget);
         waterMeshes = new GpuMeshPool(memoryBudget);
-        pools = new GpuMeshPool[] {solidMeshes, waterMeshes};
-        int vertex = 0;
-        int fragment = 0;
-        int linkedProgram = 0;
+        Program solid = null;
         try {
-            vertex = compile(GL_VERTEX_SHADER, "/shaders/terrain.vert");
-            fragment = compile(GL_FRAGMENT_SHADER, "/shaders/terrain.frag");
-            linkedProgram = glCreateProgram();
-            glAttachShader(linkedProgram, vertex);
-            glAttachShader(linkedProgram, fragment);
-            glLinkProgram(linkedProgram);
-            if (glGetProgrami(linkedProgram, GL_LINK_STATUS) == GL_FALSE) {
-                throw new IllegalStateException("Shader program link failed: " + glGetProgramInfoLog(linkedProgram));
-            }
-            int uniform = glGetUniformLocation(linkedProgram, "uVP");
-            if (uniform < 0) {
-                throw new IllegalStateException("Shader uniform not found: uVP");
-            }
-            int textured = glGetUniformLocation(linkedProgram, "uTextured");
-            if (textured < 0) throw new IllegalStateException("Shader uniform not found: uTextured");
-            int sampler = glGetUniformLocation(linkedProgram, "uBlockTextures");
-            if (sampler < 0) throw new IllegalStateException("Shader uniform not found: uBlockTextures");
-            int renderLayer = glGetUniformLocation(linkedProgram, "uRenderLayer");
-            if (renderLayer < 0) throw new IllegalStateException("Shader uniform not found: uRenderLayer");
-            program = linkedProgram;
-            matrixUniform = uniform;
-            texturedUniform = textured;
-            renderLayerUniform = renderLayer;
-            waterTimeUniform = glGetUniformLocation(linkedProgram, "uWaterTime");
-            if (waterTimeUniform < 0) throw new IllegalStateException("Shader uniform not found: uWaterTime");
-            cameraUniform = glGetUniformLocation(linkedProgram, "uCameraPosition");
-            waterFogUniform = glGetUniformLocation(linkedProgram, "uWaterFog");
-            int fogRange = glGetUniformLocation(linkedProgram, "uWaterFogRange");
-            if (cameraUniform < 0 || waterFogUniform < 0 || fogRange < 0)
-                throw new IllegalStateException("Underwater shader uniforms not found");
-            glUseProgram(program);
-            glUniform1i(sampler, 0);
-            glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
-            glEnable(GL_DEPTH_TEST);
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_BACK);
+            solid = new Program("/shaders/terrain_solid.vert");
+            waterProgram = new Program("/shaders/terrain_water.vert");
         } catch (RuntimeException | Error failure) {
-            if (linkedProgram != 0) {
-                glDeleteProgram(linkedProgram);
-            }
-            throw failure;
-        } finally {
-            if (vertex != 0) {
-                glDeleteShader(vertex);
-            }
-            if (fragment != 0) {
-                glDeleteShader(fragment);
-            }
-        }
-    }
-
-    private static int compile(int type, String resource) {
-        int shader = glCreateShader(type);
-        try {
-            glShaderSource(shader, loadSource(resource));
-            glCompileShader(shader);
-            if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
-                throw new IllegalStateException(
-                        "Shader compilation failed for " + resource + ": " + glGetShaderInfoLog(shader));
-            }
-            return shader;
-        } catch (RuntimeException | Error failure) {
-            glDeleteShader(shader);
+            if (solid != null) solid.close();
             throw failure;
         }
-    }
-
-    private static String loadSource(String resource) {
-        try (InputStream stream = TerrainRenderer.class.getResourceAsStream(resource)) {
-            if (stream == null) {
-                throw new IllegalStateException("Shader resource not found: " + resource);
-            }
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException failure) {
-            throw new IllegalStateException("Cannot read shader resource: " + resource, failure);
-        }
+        solidProgram = solid;
+        // Vertex pulling reads no attributes, but the core profile still requires a bound vertex array.
+        emptyVertexArray = glGenVertexArrays();
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
     }
 
     public void upload(ChunkPos position, ChunkMesh mesh) {
@@ -163,48 +82,21 @@ public final class TerrainRenderer implements AutoCloseable {
         else regionIndex.remove(position);
     }
 
-    private void upload(GpuMeshPool pool, ChunkPos position, MeshData mesh) {
-        int version = mesh.format().version();
-        if (version != MeshFormat.POSITION_COLOR_VERSION
-                && version != MeshFormat.TEXTURED_VERSION
-                && version != MeshFormat.FLOW_TEXTURED_VERSION)
-            throw new IllegalArgumentException("Unsupported mesh format version: " + version);
-        if (version != MeshFormat.POSITION_COLOR_VERSION && blockTextures == null)
-            throw new IllegalStateException("Textured meshes require a block texture array");
-        if (mesh.vertexCount() == 0) {
+    private static void upload(GpuMeshPool pool, ChunkPos position, QuadMesh mesh) {
+        if (mesh.quadCount() == 0) {
             pool.remove(position);
             pool.drainDeletions(1);
             return;
         }
-        int vao = glGenVertexArrays(), vbo = glGenBuffers();
+        int buffer = glGenBuffers();
         try {
-            glBindVertexArray(vao);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferData(GL_ARRAY_BUFFER, mesh.vertices(), GL_STATIC_DRAW);
-            int strideBytes = mesh.format().stride() * Float.BYTES;
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, strideBytes, 0);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(
-                    1,
-                    version != MeshFormat.POSITION_COLOR_VERSION ? 4 : 3,
-                    GL_FLOAT,
-                    false,
-                    strideBytes,
-                    3L * Float.BYTES);
-            glEnableVertexAttribArray(1);
-            if (version == MeshFormat.FLOW_TEXTURED_VERSION) {
-                glVertexAttribPointer(2, 2, GL_FLOAT, false, strideBytes, 7L * Float.BYTES);
-                glEnableVertexAttribArray(2);
-            }
-            glBindVertexArray(0);
-            pool.put(position, new GpuMesh(vao, vbo, mesh, (array, buffer) -> {
-                glDeleteBuffers(buffer);
-                glDeleteVertexArrays(array);
-            }));
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, mesh.records(), GL_STATIC_DRAW);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            pool.put(position, new GpuMesh(buffer, mesh, DELETE_BUFFER));
             pool.drainDeletions(1);
         } catch (RuntimeException | Error failure) {
-            glDeleteBuffers(vbo);
-            glDeleteVertexArrays(vao);
+            glDeleteBuffers(buffer);
             throw failure;
         }
     }
@@ -258,94 +150,90 @@ public final class TerrainRenderer implements AutoCloseable {
 
     public void remove(ChunkPos position) {
         uploads.remove(Objects.requireNonNull(position));
-        solidMeshes.remove(Objects.requireNonNull(position));
+        solidMeshes.remove(position);
         waterMeshes.remove(position);
         regionIndex.remove(position);
         solidMeshes.drainDeletions(1);
         waterMeshes.drainDeletions(1);
     }
 
-    public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition) {
-        return render(viewProjection, frustum, cameraPosition, 0);
-    }
-
-    public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition, float underwater) {
-        Objects.requireNonNull(cameraPosition);
+    /**
+     * Draws visible terrain. {@code viewProjection} must place the camera at the origin; {@code frustum} is built from
+     * the absolute view projection and only selects chunks.
+     */
+    public RenderStats render(
+            Matrix4f viewProjection,
+            Frustum frustum,
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            float underwater) {
+        if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ))
+            throw new IllegalArgumentException("Camera position must be finite");
         if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
             throw new IllegalArgumentException("Underwater visibility must be in [0, 1]");
-        Comparator<ChunkPos> waterOrder = backToFront(cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
-        if (blockTextures != null) blockTextures.bind(0);
-        glUseProgram(program);
-        glUniform3f(cameraUniform, cameraPosition.x(), cameraPosition.y(), cameraPosition.z());
-        glUniform4f(
-                waterFogUniform,
-                UnderwaterVisibility.FOG_RED,
-                UnderwaterVisibility.FOG_GREEN,
-                UnderwaterVisibility.FOG_BLUE,
-                underwater);
-        glUniform1f(waterTimeUniform, (float) ((System.nanoTime() - startedAt) / 1e9 % 4096));
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            FloatBuffer mat = stack.mallocFloat(16);
-            viewProjection.get(mat);
-            glUniformMatrix4fv(matrixUniform, false, mat);
-        }
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
-        visibleMeshes.clear();
-        List<ChunkPos> water = new ArrayList<>();
+        visibleSolids.clear();
+        visibleWater.clear();
         for (ChunkPos position : culling.visible()) {
-            int translucent = 0;
-            for (GpuMeshPool pool : pools) {
-                GpuMesh mesh = pool.get(position);
-                if (mesh == null) continue;
-                visibleMeshes.add(mesh);
-                translucent += mesh.ranges().translucentVertices();
-            }
-            if (translucent > 0) water.add(position);
+            if (solidMeshes.get(position) != null) visibleSolids.add(position);
+            if (waterMeshes.get(position) != null) visibleWater.add(position);
         }
-        // shortcut: chunk-center ordering approximates transparency; sort faces or use OIT when overlap artifacts
-        // require it.
-        water.sort(waterOrder);
-        int draws;
+        // Chunk-center ordering approximates back-to-front blending; overlapping water inside one chunk can still sort
+        // incorrectly.
+        visibleWater.sort(backToFront(cameraX, cameraY, cameraZ));
+        float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
+        blockTextures.bind(0);
+        glBindVertexArray(emptyVertexArray);
+        int draws = 0;
         try {
             restoreTerrainState();
-            draws = drawLayer(visibleMeshes, RenderLayer.OPAQUE);
-            draws += drawLayer(visibleMeshes, RenderLayer.CUTOUT);
-            if (!water.isEmpty()) {
+            solidProgram.use(viewProjection, underwater, time);
+            draws += draw(solidProgram, solidMeshes, visibleSolids, RenderLayer.OPAQUE, cameraX, cameraY, cameraZ);
+            draws += draw(solidProgram, solidMeshes, visibleSolids, RenderLayer.CUTOUT, cameraX, cameraY, cameraZ);
+            if (!visibleWater.isEmpty()) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
-                visibleMeshes.clear();
-                for (ChunkPos position : water)
-                    for (GpuMeshPool pool : pools) {
-                        GpuMesh mesh = pool.get(position);
-                        if (mesh != null) visibleMeshes.add(mesh);
-                    }
-                draws += drawLayer(visibleMeshes, RenderLayer.TRANSLUCENT);
+                waterProgram.use(viewProjection, underwater, time);
+                draws += draw(
+                        waterProgram, waterMeshes, visibleWater, RenderLayer.TRANSLUCENT, cameraX, cameraY, cameraZ);
             }
         } finally {
             restoreTerrainState();
-            glUniform1i(renderLayerUniform, RenderLayer.OPAQUE.ordinal());
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
             glBindVertexArray(0);
         }
         int visible = culling.visible().size();
         return new RenderStats(visible, regionIndex.size() - visible, draws);
     }
 
-    private int drawLayer(List<GpuMesh> meshes, RenderLayer layer) {
-        glUniform1i(renderLayerUniform, layer.ordinal());
-        int texturedMode = -1;
+    private static int draw(
+            Program program,
+            GpuMeshPool pool,
+            List<ChunkPos> positions,
+            RenderLayer layer,
+            double cameraX,
+            double cameraY,
+            double cameraZ) {
+        glUniform1i(program.renderLayer, layer.ordinal());
         int draws = 0;
-        for (GpuMesh mesh : meshes) {
-            int count = mesh.ranges().vertexCount(layer);
-            if (count == 0) continue;
-            int nextMode = mesh.format().version() != MeshFormat.POSITION_COLOR_VERSION ? 1 : 0;
-            if (nextMode != texturedMode) {
-                glUniform1i(texturedUniform, nextMode);
-                texturedMode = nextMode;
-            }
-            glBindVertexArray(mesh.vao());
-            glDrawArrays(GL_TRIANGLES, mesh.ranges().firstVertex(layer), count);
+        for (ChunkPos position : positions) {
+            GpuMesh mesh = pool.get(position);
+            int quads = mesh.ranges().count(layer);
+            if (quads == 0) continue;
+            // Subtract in double precision so chunk origins far from zero stay exact relative to the camera.
+            glUniform3f(
+                    program.chunkOrigin,
+                    (float) ((double) position.x() * Chunk.SIZE - cameraX),
+                    (float) ((double) position.y() * Chunk.SIZE - cameraY),
+                    (float) ((double) position.z() * Chunk.SIZE - cameraZ));
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.buffer());
+            glDrawArrays(
+                    GL_TRIANGLES,
+                    mesh.ranges().first(layer) * QuadMesh.VERTICES_PER_QUAD,
+                    quads * QuadMesh.VERTICES_PER_QUAD);
             draws++;
         }
         return draws;
@@ -376,31 +264,15 @@ public final class TerrainRenderer implements AutoCloseable {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    public IndirectTerrainRenderer.Result prepareIndirectCommands(Frustum frustum) {
-        return prepareIndirectCommands(frustum, RenderLayer.OPAQUE);
-    }
-
-    public IndirectTerrainRenderer.Result prepareIndirectCommands(Frustum frustum, RenderLayer layer) {
-        Objects.requireNonNull(layer);
-        if (layer == RenderLayer.TRANSLUCENT)
-            throw new IllegalArgumentException("Translucent meshes require sorted direct rendering");
-        RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
-        List<IndirectTerrainRenderer.Batch> batches =
-                new ArrayList<>(culling.visible().size());
-        for (ChunkPos position : culling.visible()) {
-            GpuMesh mesh = solidMeshes.get(position);
-            if (mesh != null) batches.add(new IndirectTerrainRenderer.Batch(position, mesh.ranges(), layer));
-        }
-        return indirectRenderer.build(batches, frustum);
-    }
-
     @Override
     public void close() {
         if (closed) return;
         closed = true;
         solidMeshes.close();
         waterMeshes.close();
-        glDeleteProgram(program);
+        solidProgram.close();
+        waterProgram.close();
+        glDeleteVertexArrays(emptyVertexArray);
     }
 
     public record UploadStats(
@@ -415,10 +287,107 @@ public final class TerrainRenderer implements AutoCloseable {
     public record RenderStats(int visible, int culled, int drawCalls) {}
 
     public MemoryStats memoryStats() {
-        var budget = memoryBudget;
         return new MemoryStats(
-                budget.allocatedBytes(), budget.peakBytes(), budget.uploadedBytes(), budget.deletedBytes());
+                memoryBudget.allocatedBytes(),
+                memoryBudget.peakBytes(),
+                memoryBudget.uploadedBytes(),
+                memoryBudget.deletedBytes());
     }
 
     public record MemoryStats(long allocated, long peak, long uploaded, long deleted) {}
+
+    /** One linked terrain program; solid and water programs share the fragment shader and uniform names. */
+    private static final class Program implements AutoCloseable {
+        private final int id;
+        private final int viewProjection;
+        private final int chunkOrigin;
+        private final int renderLayer;
+        private final int waterTime;
+        private final int waterFog;
+
+        Program(String vertexShader) {
+            int vertex = 0, fragment = 0, linked = 0;
+            try {
+                vertex = compile(GL_VERTEX_SHADER, vertexShader);
+                fragment = compile(GL_FRAGMENT_SHADER, "/shaders/terrain.frag");
+                linked = glCreateProgram();
+                glAttachShader(linked, vertex);
+                glAttachShader(linked, fragment);
+                glLinkProgram(linked);
+                if (glGetProgrami(linked, GL_LINK_STATUS) == GL_FALSE)
+                    throw new IllegalStateException("Shader program link failed: " + glGetProgramInfoLog(linked));
+                viewProjection = uniform(linked, "uVP");
+                chunkOrigin = uniform(linked, "uChunkOrigin");
+                renderLayer = uniform(linked, "uRenderLayer");
+                waterTime = uniform(linked, "uWaterTime");
+                waterFog = uniform(linked, "uWaterFog");
+                int sampler = uniform(linked, "uBlockTextures");
+                int fogRange = uniform(linked, "uWaterFogRange");
+                glUseProgram(linked);
+                glUniform1i(sampler, 0);
+                glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
+                id = linked;
+            } catch (RuntimeException | Error failure) {
+                if (linked != 0) glDeleteProgram(linked);
+                throw failure;
+            } finally {
+                if (vertex != 0) glDeleteShader(vertex);
+                if (fragment != 0) glDeleteShader(fragment);
+            }
+        }
+
+        void use(Matrix4f viewProjectionMatrix, float underwater, float time) {
+            glUseProgram(id);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                FloatBuffer matrix = stack.mallocFloat(16);
+                viewProjectionMatrix.get(matrix);
+                glUniformMatrix4fv(viewProjection, false, matrix);
+            }
+            glUniform1f(waterTime, time);
+            glUniform4f(
+                    waterFog,
+                    UnderwaterVisibility.FOG_RED,
+                    UnderwaterVisibility.FOG_GREEN,
+                    UnderwaterVisibility.FOG_BLUE,
+                    underwater);
+        }
+
+        private static int uniform(int program, String name) {
+            int location = glGetUniformLocation(program, name);
+            if (location < 0) throw new IllegalStateException("Shader uniform not found: " + name);
+            return location;
+        }
+
+        @Override
+        public void close() {
+            glDeleteProgram(id);
+        }
+    }
+
+    private static int compile(int type, String resource) {
+        int shader = glCreateShader(type);
+        try {
+            glShaderSource(shader, loadSource(resource));
+            glCompileShader(shader);
+            if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
+                throw new IllegalStateException(
+                        "Shader compilation failed for " + resource + ": " + glGetShaderInfoLog(shader));
+            }
+            return shader;
+        } catch (RuntimeException | Error failure) {
+            glDeleteShader(shader);
+            throw failure;
+        }
+    }
+
+    private static String loadSource(String resource) {
+        try (InputStream stream = TerrainRenderer.class.getResourceAsStream(resource)) {
+            if (stream == null) {
+                throw new IllegalStateException("Shader resource not found: " + resource);
+            }
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Cannot read shader resource: " + resource, failure);
+        }
+    }
 }

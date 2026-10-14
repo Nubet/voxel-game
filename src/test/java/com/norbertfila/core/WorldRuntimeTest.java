@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.interaction.BlockInteraction;
-import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.TestWorlds;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
@@ -180,7 +180,7 @@ class WorldRuntimeTest {
             for (int z = -1; z <= 1; z++) world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, 64);
         TestWorlds.save(save, 42, 1, world);
         try (WorldRuntime runtime = new WorldRuntime(
-                new Flat(), new GreedyMesher(), new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE), save)) {
+                new Flat(), new WaterMesher(), new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE), save)) {
             var frame = await(runtime, f -> f.tick() >= 40 && f.waterContact().available());
             assertEquals(
                     (8 / 9d) / PlayerState.STANDING_HEIGHT, frame.waterContact().submergedFraction(), 1e-7);
@@ -198,7 +198,7 @@ class WorldRuntimeTest {
                 for (int z = -2; z <= 2; z++) world.setBlock(new BlockPos(x, y, z), BlockId.WATER, 64);
         TestWorlds.save(save, 42, 1, world);
         try (WorldRuntime runtime = new WorldRuntime(
-                new Flat(), new GreedyMesher(), new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE), save)) {
+                new Flat(), new WaterMesher(), new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE), save)) {
             var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             await(runtime, f -> {
                 WorldRuntime.SessionMesh mesh;
@@ -336,7 +336,7 @@ class WorldRuntimeTest {
     void heldForwardFlightCrossesUnviewedChunksEvenWithoutRendererAcknowledgements() throws Exception {
         try (WorldRuntime runtime = new WorldRuntime(
                 new Flat(),
-                new GreedyMesher(),
+                new WaterMesher(),
                 new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE),
                 TestWorlds.prepare(directory.resolve("continuous.vxl"), 42, 1))) {
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 4));
@@ -519,7 +519,7 @@ class WorldRuntimeTest {
     private WorldRuntime start(Flat terrain, Path save) throws Exception {
         return new WorldRuntime(
                 terrain,
-                new GreedyMesher(),
+                new WaterMesher(),
                 new ViewDemand(0, 0, 1, ViewDemand.Shape.SQUARE),
                 TestWorlds.prepare(save, terrain.seed(), terrain.generatorVersion()));
     }

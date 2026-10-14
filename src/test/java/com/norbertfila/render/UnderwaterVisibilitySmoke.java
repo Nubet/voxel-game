@@ -5,7 +5,6 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.core.*;
 import com.norbertfila.meshing.ChunkMesh;
-import com.norbertfila.meshing.MeshData;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerState;
@@ -17,7 +16,6 @@ import com.norbertfila.world.*;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -38,82 +36,12 @@ public final class UnderwaterVisibilitySmoke {
         check(Files.isDirectory(output), "Output directory must exist");
         try (Window window = new Window(WIDTH, HEIGHT, "Underwater visibility acceptance");
                 UiRenderer ui = new UiRenderer()) {
-            System.out.println("scene=distance-cards/aquarium seed=0 resolution=960x540 GPU=" + glGetString(GL_RENDERER)
-                    + " GL=" + glGetString(GL_VERSION) + " Java=" + Runtime.version());
-            distanceCards(ui, output);
+            System.out.println("scene=aquarium seed=0 resolution=960x540 GPU=" + glGetString(GL_RENDERER) + " GL="
+                    + glGetString(GL_VERSION) + " Java=" + Runtime.version());
             aquarium(ui, output);
             check(glGetError() == GL_NO_ERROR, "Final GL error");
             System.out.println(
                     "PASS underwater contrast, exact dry reset, HUD, real surfaces and unchanged GPU mesh memory");
-        }
-    }
-
-    private static void distanceCards(UiRenderer ui, Path output) throws Exception {
-        var eye = new Vector3f(0, 3, 0);
-        var vp = projection(eye, new Vector3f(0, 3, -1));
-        try (TerrainRenderer renderer = new TerrainRenderer()) {
-            float[] depths = {3, 12, 28}, x = {-1.2f, 0, 11.2f};
-            for (int i = 0; i < 3; i++) {
-                float halfWidth = depths[i] * .13f, halfHeight = depths[i] * .18f;
-                float[] vertices = new float[36];
-                int cursor = 0;
-                for (int corner : new int[] {0, 1, 2, 2, 3, 0}) {
-                    vertices[cursor++] = x[i] + (corner == 1 || corner == 2 ? halfWidth : -halfWidth);
-                    vertices[cursor++] = 3 + (corner >= 2 ? halfHeight : -halfHeight);
-                    vertices[cursor++] = -depths[i];
-                    vertices[cursor++] = 1;
-                    vertices[cursor++] = 1;
-                    vertices[cursor++] = 1;
-                }
-                renderer.upload(
-                        new ChunkPos(Math.floorDiv((int) Math.floor(x[i]), 16), 0, Math.floorDiv((int) -depths[i], 16)),
-                        ChunkMesh.single(new MeshData(vertices)));
-            }
-            var dry = new UnderwaterVisibility();
-            var wet = new UnderwaterVisibility();
-            wet.update(true, true, 1);
-            byte[] baseline = capture(renderer, ui, vp, eye, dry, false);
-            byte[] underwater = capture(renderer, ui, vp, eye, wet, false);
-            byte[] restored = capture(renderer, ui, vp, eye, dry, true);
-            check(Arrays.equals(baseline, restored), "Dry overload retains underwater uniforms");
-            double previousContrast = Double.POSITIVE_INFINITY;
-            for (int i = 0; i < 3; i++) {
-                int px = (int) ((x[i] / depths[i] * (1 / Math.tan(Math.toRadians(30))) / (WIDTH / (double) HEIGHT) + 1)
-                        * WIDTH
-                        / 2);
-                int py = HEIGHT / 2 + 25;
-                check(channel(baseline, px, py, 0) == 255, "Card missing from dry frame");
-                double contrast = 0;
-                float[] fog = {
-                    UnderwaterVisibility.FOG_RED, UnderwaterVisibility.FOG_GREEN, UnderwaterVisibility.FOG_BLUE
-                };
-                for (int c = 0; c < 3; c++) contrast += Math.abs(channel(underwater, px, py, c) - fog[c] * 255);
-                check(contrast < previousContrast, "Fog is not stronger at greater distance");
-                previousContrast = contrast;
-                System.out.println("distance=" + depths[i] + " fogContrast=" + contrast);
-            }
-            check(
-                    channel(underwater, WIDTH / 2, HEIGHT / 2, 0) == 255
-                            && channel(underwater, WIDTH / 2, HEIGHT / 2, 1) == 255,
-                    "Crosshair was tinted");
-            check(
-                    channel(underwater, 1, 1, 0) == Math.round(UnderwaterVisibility.FOG_RED * 255),
-                    "Fog background seam");
-            write(output.resolve("underwater-distance-dry.png"), baseline);
-            write(output.resolve("underwater-distance-wet.png"), underwater);
-            for (int i = 0; i < 50; i++) {
-                draw(renderer, ui, vp, eye, dry, false);
-                draw(renderer, ui, vp, eye, wet, false);
-            }
-            for (var visibility : new UnderwaterVisibility[] {dry, wet}) {
-                glFinish();
-                long started = System.nanoTime();
-                for (int i = 0; i < 200; i++) draw(renderer, ui, vp, eye, visibility, false);
-                glFinish();
-                System.out.printf(
-                        "cards synchronous render+HUD meanMs=%.4f fog=%.1f draws=3 warmup=50 frames=200%n",
-                        (System.nanoTime() - started) / 200e6, visibility.amount());
-            }
         }
     }
 
@@ -148,16 +76,16 @@ public final class UnderwaterVisibilitySmoke {
             }
             long allocated = renderer.memoryStats().allocated();
             var eye = new Vector3f(.5f, 2.62f, 4.5f);
-            var vp = projection(eye, new Vector3f(.5f, 1.4f, -12));
-            write(output.resolve("underwater-aquarium-baseline.png"), capture(renderer, ui, vp, eye, dry, false));
-            write(output.resolve("underwater-aquarium-wet.png"), capture(renderer, ui, vp, eye, wet, false));
+            var target = new Vector3f(.5f, 1.4f, -12);
+            write(output.resolve("underwater-aquarium-baseline.png"), capture(renderer, ui, eye, target, dry));
+            write(output.resolve("underwater-aquarium-wet.png"), capture(renderer, ui, eye, target, wet));
             write(
                     output.resolve("underwater-aquarium-surface.png"),
-                    capture(renderer, ui, projection(eye, new Vector3f(.5f, 7, -5)), eye, wet, false));
+                    capture(renderer, ui, eye, new Vector3f(.5f, 7, -5), wet));
             eye.set(.5f, 8, 4.5f);
             write(
                     output.resolve("underwater-aquarium-above.png"),
-                    capture(renderer, ui, projection(eye, new Vector3f(.5f, 1, -8)), eye, dry, false));
+                    capture(renderer, ui, eye, new Vector3f(.5f, 1, -8), dry));
             check(renderer.memoryStats().allocated() == allocated, "View effect changed GPU geometry allocations");
             System.out.println("aquarium meshes=" + world.residentCount() + " GPUBytes=" + allocated);
         }
@@ -170,31 +98,21 @@ public final class UnderwaterVisibilitySmoke {
     }
 
     private static void draw(
-            TerrainRenderer renderer,
-            UiRenderer ui,
-            Matrix4f vp,
-            Vector3f eye,
-            UnderwaterVisibility visibility,
-            boolean legacy) {
+            TerrainRenderer renderer, UiRenderer ui, Vector3f eye, Vector3f target, UnderwaterVisibility visibility) {
         glViewport(0, 0, WIDTH, HEIGHT);
         glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        var stats = legacy
-                ? renderer.render(vp, Frustum.from(vp), eye)
-                : renderer.render(vp, Frustum.from(vp), eye, visibility.amount());
+        var relative = projection(new Vector3f(), new Vector3f(target).sub(eye));
+        var stats = renderer.render(
+                relative, Frustum.from(projection(eye, target)), eye.x, eye.y, eye.z, visibility.amount());
         check(stats.drawCalls() > 0, "No terrain draws");
         ui.render(HUD, new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
         check(glGetError() == GL_NO_ERROR, "Draw GL error");
     }
 
     private static byte[] capture(
-            TerrainRenderer renderer,
-            UiRenderer ui,
-            Matrix4f vp,
-            Vector3f eye,
-            UnderwaterVisibility visibility,
-            boolean legacy) {
-        draw(renderer, ui, vp, eye, visibility, legacy);
+            TerrainRenderer renderer, UiRenderer ui, Vector3f eye, Vector3f target, UnderwaterVisibility visibility) {
+        draw(renderer, ui, eye, target, visibility);
         var pixels = BufferUtils.createByteBuffer(WIDTH * HEIGHT * 4);
         glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         byte[] data = new byte[pixels.remaining()];

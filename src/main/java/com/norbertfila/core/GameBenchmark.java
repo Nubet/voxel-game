@@ -226,7 +226,7 @@ public final class GameBenchmark {
             if (phase == Phase.LOADING) return;
             double t = phase == Phase.RUNNING ? (now - phaseStarted) / 1e9 : 0;
             var pose = scene().pose(t, site);
-            camera.setPosition((float) pose.x(), (float) pose.y(), (float) pose.z());
+            camera.setPosition(pose.x(), pose.y(), pose.z());
             camera.restoreLook((float) pose.yaw(), (float) pose.pitch());
             if (phase != Phase.RUNNING) return;
             if (state != null && state.tick() != lastTeleportTick) {

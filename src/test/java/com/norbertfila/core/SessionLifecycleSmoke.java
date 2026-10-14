@@ -103,7 +103,7 @@ public final class SessionLifecycleSmoke {
                                 initializedCamera = true;
                             }
                             var eye = frame.interpolatedEye(System.nanoTime());
-                            camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
+                            camera.setPosition(eye.x(), eye.y(), eye.z());
                             if (frame.ready() && uploadedView && session.state() == GameSession.State.LOADING) {
                                 check(session.activate(), "Ready session did not activate");
                                 System.out.printf(
@@ -116,8 +116,13 @@ public final class SessionLifecycleSmoke {
                         glViewport(0, 0, 960, 540);
                         glClearColor(.45f, .65f, .85f, 1);
                         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                        var vp = camera.viewProjection(960, 540);
-                        renderer.render(vp, Frustum.from(vp), camera.position());
+                        renderer.render(
+                                camera.relativeViewProjection(960, 540),
+                                Frustum.from(camera.viewProjection(960, 540)),
+                                camera.x(),
+                                camera.y(),
+                                camera.z(),
+                                0);
                         check(glGetError() == GL_NO_ERROR, "Session render GL error");
                         window.swapBuffers();
                         Thread.sleep(2);
