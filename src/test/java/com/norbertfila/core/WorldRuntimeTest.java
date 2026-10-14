@@ -7,6 +7,7 @@ import com.norbertfila.generation.ChunkData;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
@@ -288,12 +289,106 @@ class WorldRuntimeTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(5.5, 1, .5));
-        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true, BlockId.DIRT);
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true);
+        var inventory = new Inventory();
+        inventory.add(BlockId.DIRT);
+        inventory.add(BlockId.DIRT);
 
-        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isPresent());
+        assertTrue(WorldRuntime.placeInventory(interaction, player, controls, inventory)
+                .isPresent());
         assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
-        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isPresent());
+        assertTrue(WorldRuntime.placeInventory(interaction, player, controls, inventory)
+                .isPresent());
         assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(3, 2, 0)).orElseThrow());
+    }
+
+    @Test
+    void inventoryPlacementConsumesOnlySuccessfulSurvivalChangesAndMiningCollects() {
+        World world = new World();
+        Chunk chunk = new Chunk();
+        chunk.set(1, 2, 0, BlockId.STONE);
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        var interaction = new BlockInteraction(world, 8);
+        var player = new PlayerController();
+        player.setPosition(new PlayerState.Position(5.5, 1, .5));
+        var inventory = new Inventory();
+        inventory.add(BlockId.DIRT);
+        var blocked = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, 0, true);
+        assertTrue(WorldRuntime.placeInventory(interaction, player, blocked, inventory)
+                .isEmpty());
+        assertEquals(1, inventory.snapshot().count(0));
+        var active = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true);
+        assertTrue(WorldRuntime.placeInventory(interaction, player, active, inventory)
+                .orElseThrow()
+                .changed());
+        assertEquals(BlockId.DIRT, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
+        assertEquals(0, inventory.snapshot().count(0));
+        assertTrue(WorldRuntime.placeInventory(interaction, player, active, inventory)
+                .isEmpty());
+        var remove = new WorldRuntime.Edit(true, BlockId.AIR, 180, 0);
+        assertTrue(WorldRuntime.remove(interaction, player, remove, inventory)
+                .orElseThrow()
+                .changed());
+        assertEquals(1, inventory.snapshot().count(0));
+        inventory.creativePick(0, BlockId.DIRT);
+        for (int i = 1; i < 9; i++) inventory.creativePick(i, BlockId.DIRT);
+        for (int i = 9; i < 36; i++) {
+            inventory.click(0, false, true);
+            inventory.creativePick(0, BlockId.DIRT);
+        }
+        assertTrue(WorldRuntime.remove(interaction, player, remove, inventory).isEmpty());
+        assertEquals(BlockId.STONE, world.getBlock(new BlockPos(1, 2, 0)).orElseThrow());
+        assertTrue(player.setMode(world, PlayerController.Mode.CREATIVE));
+        assertTrue(WorldRuntime.placeInventory(interaction, player, active, inventory)
+                .orElseThrow()
+                .changed());
+        assertEquals(64, inventory.snapshot().count(0));
+    }
+
+    @Test
+    void inventoryCommandsWorkWhileMenuBlocksGameplayAndPersistAcrossRestart() throws Exception {
+        Path save = directory.resolve("inventory-runtime.vxl");
+        var inventory = new Inventory();
+        inventory.creativePick(0, BlockId.POPPY);
+        WorldSave.save(
+                save,
+                WorldSave.capture(42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, false));
+            await(runtime, frame -> frame.inventory().count(0) == 64);
+            assertTrue(runtime.offer(new WorldRuntime.ClickSlot(0, true, false)));
+            assertTrue(runtime.offer(new WorldRuntime.PickCreative(1, BlockId.BEDROCK)));
+            assertTrue(runtime.offer(new WorldRuntime.SelectSlot(8)));
+            await(
+                    runtime,
+                    frame -> frame.inventory().count(36) == 32
+                            && frame.inventory().selectedSlot() == 8);
+            assertEquals(0, runtime.frame().inventory().count(1));
+        }
+        try (var runtime = start(new Flat(), save)) {
+            var restored = await(runtime, frame -> frame.inventory().count(36) == 32);
+            assertEquals(8, restored.inventory().selectedSlot());
+            assertEquals(32, restored.inventory().count(0));
+            assertTrue(runtime.offer(new WorldRuntime.ReturnCarried()));
+            await(
+                    runtime,
+                    frame -> frame.inventory().count(36) == 0
+                            && frame.inventory().count(0) == 64);
+            runtime.controls(controls(false, false));
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(runtime, frame -> frame.mode() == PlayerController.Mode.CREATIVE && !frame.modePending());
+            runtime.controls(controls(true, false));
+            assertTrue(runtime.offer(new WorldRuntime.PickCreative(1, BlockId.BEDROCK)));
+            await(runtime, frame -> frame.inventory().count(1) == 64);
+            runtime.controls(controls(false, false));
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            var spectator = await(runtime, frame -> frame.mode() == PlayerController.Mode.SPECTATOR);
+            runtime.controls(controls(true, false));
+            assertTrue(runtime.offer(new WorldRuntime.ClickSlot(1, false, false)));
+            assertTrue(runtime.offer(new WorldRuntime.PickCreative(2, BlockId.STONE)));
+            var later = await(runtime, frame -> frame.tick() > spectator.tick() + 3);
+            assertEquals(spectator.inventory(), later.inventory());
+        }
     }
 
     @Test
@@ -305,13 +400,14 @@ class WorldRuntimeTest {
         BlockInteraction interaction = new BlockInteraction(world, 8);
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(5.5, 1, .5));
-        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, 0, true, BlockId.DIRT);
+        var controls = new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, true, false, 0, 0, true);
+        var inventory = new Inventory();
+        inventory.add(BlockId.DIRT);
 
-        assertTrue(WorldRuntime.placeHeld(interaction, player, controls).isEmpty());
+        assertTrue(WorldRuntime.placeInventory(interaction, player, controls, inventory)
+                .isEmpty());
         assertEquals(BlockId.AIR, world.getBlock(new BlockPos(2, 2, 0)).orElseThrow());
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new WorldRuntime.Controls(PlayerInput.NONE, 180, 0, false, false, 0, 0, true, BlockId.AIR));
+        assertEquals(1, inventory.snapshot().count(0));
     }
 
     @Test

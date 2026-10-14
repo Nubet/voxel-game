@@ -36,6 +36,8 @@ public final class Input implements AutoCloseable {
     private double scrollDeltaY;
     private boolean previousToggleMode;
     private boolean previousSettings;
+    private boolean inventoryPressed;
+    private boolean shift;
 
     public Input(long window) {
         if (window == 0) throw new IllegalArgumentException("Input requires a window");
@@ -52,6 +54,7 @@ public final class Input implements AutoCloseable {
     }
 
     void keyEvent(int key, int action, int mods, double timeSeconds) {
+        if (key == GLFW_KEY_E && action == GLFW_PRESS) inventoryPressed = true;
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
         if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
         UiKey uiKey = switch (key) {
@@ -68,6 +71,16 @@ public final class Input implements AutoCloseable {
 
     public UiKey pollUiKey() {
         return uiKeys.pollFirst();
+    }
+
+    public boolean inventoryPressed() {
+        boolean pressed = inventoryPressed;
+        inventoryPressed = false;
+        return pressed;
+    }
+
+    public boolean shiftHeld() {
+        return shift;
     }
 
     void scrollEvent(double yOffset) {
@@ -115,6 +128,7 @@ public final class Input implements AutoCloseable {
                 isPressed(GLFW_KEY_LEFT_CONTROL)));
         toggleMode = isPressed(GLFW_KEY_F4);
         settings = isPressed(GLFW_KEY_F10);
+        shift = isPressed(GLFW_KEY_LEFT_SHIFT) || isPressed(GLFW_KEY_RIGHT_SHIFT);
         int slots = 0;
         for (int key = GLFW_KEY_1; key <= GLFW_KEY_9; key++) {
             if (!isPressed(key)) continue;
@@ -127,6 +141,7 @@ public final class Input implements AutoCloseable {
                 slots,
                 focused && isPressed(GLFW_KEY_X));
         if (!focused) {
+            inventoryPressed = false;
             uiKeys.clear();
             clearPlayerInput();
             resetMouseTracking();

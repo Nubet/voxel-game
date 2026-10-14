@@ -2,6 +2,7 @@ package com.norbertfila.persistence;
 
 import com.norbertfila.fluid.FluidSnapshot;
 import com.norbertfila.lod.WorldChangeOverlay;
+import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -26,7 +27,7 @@ import java.util.Objects;
 
 public final class WorldSave {
     private static final int MAGIC = 0x56584C31;
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
     private static final int MAX_DELTAS = 1_000_000;
     private static final int MAX_CHANGES_PER_CHUNK = Chunk.BLOCK_BYTES;
     private static final long MAX_SAVE_BYTES = 64L * 1024 * 1024;
@@ -47,6 +48,11 @@ public final class WorldSave {
     }
 
     public static Snapshot capture(long seed, int generatorVersion, World world, FluidSnapshot fluids) {
+        return capture(seed, generatorVersion, world, fluids, InventorySnapshot.EMPTY);
+    }
+
+    public static Snapshot capture(
+            long seed, int generatorVersion, World world, FluidSnapshot fluids, InventorySnapshot inventory) {
         Objects.requireNonNull(world);
         if (generatorVersion < 0) throw new IllegalArgumentException("Generator version must not be negative");
         return new Snapshot(
@@ -54,7 +60,8 @@ public final class WorldSave {
                 generatorVersion,
                 SCHEMA_VERSION,
                 chunkDeltas(world.changes().changes()),
-                fluids);
+                fluids,
+                inventory);
     }
 
     public static void save(Path target, Snapshot snapshot) throws IOException {
@@ -84,7 +91,7 @@ public final class WorldSave {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(source)))) {
             if (input.readInt() != MAGIC) throw new IOException("Invalid world save header");
             int schemaVersion = input.readInt();
-            if (schemaVersion != 1 && schemaVersion != SCHEMA_VERSION)
+            if (schemaVersion < 1 || schemaVersion > SCHEMA_VERSION)
                 throw new IOException("Unsupported world save schema");
             long seed = input.readLong();
             int generatorVersion = input.readInt();
@@ -94,8 +101,9 @@ public final class WorldSave {
             List<ChunkDelta> deltas = new ArrayList<>(deltaCount);
             for (int index = 0; index < deltaCount; index++) deltas.add(readDelta(input, schemaVersion));
             FluidSnapshot fluids = schemaVersion == 1 ? FluidSnapshot.EMPTY : readFluids(input);
+            InventorySnapshot inventory = schemaVersion < 3 ? InventorySnapshot.EMPTY : readInventory(input);
             if (input.read() != -1) throw new IOException("Trailing bytes in world save");
-            return new Loaded(seed, generatorVersion, schemaVersion, List.copyOf(deltas), fluids);
+            return new Loaded(seed, generatorVersion, schemaVersion, List.copyOf(deltas), fluids, inventory);
         } catch (EOFException malformed) {
             throw new IOException("Truncated world save", malformed);
         } catch (IllegalArgumentException | ArithmeticException malformed) {
@@ -148,7 +156,23 @@ public final class WorldSave {
                     output.writeInt(missing.z());
                 }
             }
+            output.writeByte(snapshot.inventory().selectedSlot());
+            for (int slot = 0; slot < 37; slot++) {
+                output.writeByte(snapshot.inventory().block(slot));
+                output.writeByte(snapshot.inventory().count(slot));
+            }
         }
+    }
+
+    private static InventorySnapshot readInventory(DataInputStream input) throws IOException {
+        int selected = input.readUnsignedByte();
+        byte[] blocks = new byte[37];
+        int[] counts = new int[37];
+        for (int i = 0; i < 37; i++) {
+            blocks[i] = input.readByte();
+            counts[i] = input.readUnsignedByte();
+        }
+        return new InventorySnapshot(blocks, counts, selected);
     }
 
     private static FluidSnapshot readFluids(DataInputStream input) throws IOException {
@@ -204,24 +228,36 @@ public final class WorldSave {
     }
 
     public record Loaded(
-            long seed, int generatorVersion, int schemaVersion, List<ChunkDelta> deltas, FluidSnapshot fluids) {
+            long seed,
+            int generatorVersion,
+            int schemaVersion,
+            List<ChunkDelta> deltas,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory) {
         public Loaded {
-            if (generatorVersion < 0 || (schemaVersion != 1 && schemaVersion != SCHEMA_VERSION))
+            if (generatorVersion < 0 || schemaVersion < 1 || schemaVersion > SCHEMA_VERSION)
                 throw new IllegalArgumentException("Unsupported world save metadata");
             Objects.requireNonNull(fluids);
+            Objects.requireNonNull(inventory);
             Objects.requireNonNull(deltas);
             deltas = List.copyOf(deltas);
         }
     }
 
     public record Snapshot(
-            long seed, int generatorVersion, int schemaVersion, List<ChunkDelta> deltas, FluidSnapshot fluids) {
+            long seed,
+            int generatorVersion,
+            int schemaVersion,
+            List<ChunkDelta> deltas,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory) {
         public Snapshot {
             if (generatorVersion < 0 || schemaVersion != SCHEMA_VERSION) {
                 throw new IllegalArgumentException("Invalid world save metadata");
             }
             Objects.requireNonNull(deltas);
             Objects.requireNonNull(fluids);
+            Objects.requireNonNull(inventory);
             if (deltas.size() > MAX_DELTAS) throw new IllegalArgumentException("Too many chunk deltas");
             deltas = List.copyOf(deltas);
         }

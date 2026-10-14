@@ -1,0 +1,76 @@
+package com.norbertfila.ui.screens;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.norbertfila.player.*;
+import com.norbertfila.ui.*;
+import com.norbertfila.world.BlockId;
+import org.junit.jupiter.api.Test;
+
+class InventoryScreenTest {
+    private static final UiViewport VIEWPORT = new UiViewport(1280, 720, 1280, 720);
+
+    @Test
+    void survivalMapsAllSlotsAndConsumesCloseFrame() {
+        var screen = new InventoryScreen(false);
+        screen.update(InventorySnapshot.EMPTY, 0, VIEWPORT);
+        var manager = new ScreenManager();
+        manager.open(screen);
+        var box = screen.bounds(0);
+        manager.updatePointer(new Screen.Pointer(true, true, false, false, false, box.x() + 1, box.y() + 1));
+        assertNull(manager.pollAction());
+        manager.updatePointer(new Screen.Pointer(false, false, false, false, false, 0, 0));
+        for (int cell = 0; cell < 36; cell++) {
+            box = screen.bounds(cell);
+            manager.updatePointer(new Screen.Pointer(false, false, true, true, true, box.x() + 1, box.y() + 1));
+            assertEquals(
+                    new Screen.Action.SlotClick(cell >= 27 ? cell - 27 : cell + 9, true, true), manager.pollAction());
+        }
+        manager.keyPress(UiKey.BACK);
+        assertTrue(manager.blocksGameplay());
+        assertFalse(manager.isOpen());
+        manager.beginFrame();
+        assertFalse(manager.blocksGameplay());
+    }
+
+    @Test
+    void creativeCatalogIncludesEveryBlockAndTargetsSelectedHotbarSlot() {
+        var screen = new InventoryScreen(true);
+        screen.update(InventorySnapshot.EMPTY, 8, VIEWPORT);
+        screen.updatePointer(false, false, 0, 0);
+        var catalog = InventoryScreen.catalogBlocks();
+        for (int id = 1; id < 256; id++) assertEquals(BlockId.isValid((byte) id), catalog.contains((byte) id));
+        for (int i = 0; i < catalog.size(); i++) {
+            var box = screen.bounds(i);
+            assertEquals(
+                    new Screen.Action.CreativePick(catalog.get(i), 8),
+                    screen.updatePointer(true, true, box.x() + 1, box.y() + 1));
+        }
+        screen.cancelInteraction();
+        assertEquals(
+                Screen.Action.NONE,
+                screen.updatePointer(
+                        true, true, screen.bounds(0).x(), screen.bounds(0).y()));
+        assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
+    }
+
+    @Test
+    void renderHandlesAllBlocksCountsAndCarriedStackAtScaledCoordinates() {
+        var screen = new InventoryScreen(true);
+        var inventory = new Inventory();
+        inventory.creativePick(0, BlockId.POPPY);
+        inventory.click(0, true, false);
+        screen.update(inventory.snapshot(), 0, VIEWPORT);
+        screen.updatePointer(false, false, 200, 100);
+        var canvas = new UiCanvas();
+        screen.render(canvas, VIEWPORT);
+        assertTrue(canvas.floatCount() > 0);
+        for (int cell = 0; cell < 36; cell++) {
+            var box = screen.bounds(cell);
+            assertTrue(box.x() >= 0 && box.x() + box.width() <= VIEWPORT.width());
+            assertTrue(box.y() >= 0 && box.y() + box.height() <= VIEWPORT.height());
+        }
+        assertEquals(Screen.Action.NONE, screen.keyPress(UiKey.NEXT));
+        assertInstanceOf(Screen.Action.CreativePick.class, screen.keyPress(UiKey.ACTIVATE));
+    }
+}

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.interaction.BlockInteraction;
+import com.norbertfila.player.InventoryFixtures;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
@@ -28,7 +29,7 @@ class GameLoopTest {
     void selectsBeforePlacementAndPassesEditMetadataBackToTheLoop() {
         World world = editableWorld();
         Camera camera = editingCamera();
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(8.5, 9, 9.5));
 
@@ -45,7 +46,7 @@ class GameLoopTest {
     @Test
     void panelAndToggleFrameBlockBothEditsAndSelection() {
         World world = editableWorld();
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         var result = updateBlockEditing(
                 editingCamera(), new PlayerController(), new BlockInteraction(world, 64), hotbar, true, true, true, 2);
 
@@ -60,7 +61,7 @@ class GameLoopTest {
         World world = editableWorld();
         PlayerController player = new PlayerController();
         player.setPosition(new PlayerState.Position(8.5, 9, 7.5));
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         Camera camera = editingCamera();
         BlockInteraction interaction = new BlockInteraction(world, 64);
 
@@ -81,7 +82,7 @@ class GameLoopTest {
     @Test
     void selectsAndPlacesGlassThenSimultaneousClicksRemoveWithoutReplacing() {
         World world = editableWorld();
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         BlockInteraction interaction = new BlockInteraction(world, 64);
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
@@ -104,7 +105,7 @@ class GameLoopTest {
     @Test
     void scrollSelectsHotbarItemButBlockedInputDoesNotChangeSelection() {
         World world = editableWorld();
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         BlockInteraction interaction = new BlockInteraction(world, 64);
         Camera camera = editingCamera();
         PlayerController player = new PlayerController();
@@ -120,7 +121,7 @@ class GameLoopTest {
     @Test
     void spectatorClicksAndHotbarSelectionHaveNoEditingSideEffects() {
         World world = editableWorld();
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         PlayerController player = new PlayerController();
         player.setMode(world, PlayerController.Mode.SPECTATOR);
         assertTrue(updateBlockEditing(
@@ -143,7 +144,7 @@ class GameLoopTest {
         Camera camera = new Camera();
         camera.setPosition(8.5f, 10.5f, 9.5f);
         camera.updateLook(0, -25 / .11f);
-        Hotbar hotbar = new Hotbar();
+        Hotbar hotbar = InventoryFixtures.hotbar();
         BlockInteraction interaction = new BlockInteraction(world, 64);
         assertTrue(updateBlockEditing(camera, player, interaction, hotbar, false, false, true, -1)
                 .isEmpty());

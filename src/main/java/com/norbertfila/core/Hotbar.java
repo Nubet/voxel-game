@@ -1,21 +1,21 @@
 package com.norbertfila.core;
 
-import com.norbertfila.world.BlockId;
+import com.norbertfila.player.InventorySnapshot;
+import java.util.Objects;
 
 public final class Hotbar {
-    private static final byte[] BLOCKS = {
-        BlockId.GRASS,
-        BlockId.DIRT,
-        BlockId.STONE,
-        BlockId.SAND,
-        BlockId.LOG,
-        BlockId.LEAVES,
-        BlockId.PLANKS,
-        BlockId.GLASS,
-        BlockId.WATER
-    };
-    public static final int SLOTS = BLOCKS.length;
+    public static final int SLOTS = 9;
+    private InventorySnapshot inventory = InventorySnapshot.EMPTY;
     private int selectedSlot;
+
+    public void inventory(InventorySnapshot snapshot) {
+        inventory = Objects.requireNonNull(snapshot);
+    }
+
+    public int count(int slot) {
+        checkSlot(slot);
+        return inventory.count(slot);
+    }
 
     public int selectedSlot() {
         return selectedSlot;
@@ -36,7 +36,7 @@ public final class Hotbar {
 
     public byte block(int slot) {
         checkSlot(slot);
-        return BLOCKS[slot];
+        return inventory.block(slot);
     }
 
     private static void checkSlot(int slot) {

@@ -1,10 +1,12 @@
 package com.norbertfila.ui;
 
+import java.util.ArrayDeque;
 import java.util.Objects;
 
 public final class ScreenManager {
     private Screen current;
     private boolean inputConsumed;
+    private final ArrayDeque<Screen.Action> actions = new ArrayDeque<>();
 
     public void beginFrame() {
         inputConsumed = current != null;
@@ -42,6 +44,14 @@ public final class ScreenManager {
         if (current != null) handle(current.updatePointer(down, pressed, x, y));
     }
 
+    public void updatePointer(Screen.Pointer pointer) {
+        if (current != null) handle(current.updatePointer(pointer));
+    }
+
+    public Screen.Action pollAction() {
+        return actions.pollFirst();
+    }
+
     public void keyPress(UiKey key) {
         Objects.requireNonNull(key);
         if (current != null) handle(current.keyPress(key));
@@ -57,5 +67,9 @@ public final class ScreenManager {
 
     private void handle(Screen.Action action) {
         if (action == Screen.Action.CLOSE) close();
+        else if (action != Screen.Action.NONE) {
+            if (actions.size() == 64) throw new IllegalStateException("UI action queue full");
+            actions.addLast(Objects.requireNonNull(action));
+        }
     }
 }

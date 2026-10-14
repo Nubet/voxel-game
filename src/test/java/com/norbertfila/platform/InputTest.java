@@ -10,6 +10,18 @@ import org.junit.jupiter.api.Test;
 
 class InputTest {
     @Test
+    void inventoryTapIsRetainedAndRepeatDoesNotToggleAgain() {
+        try (Input input = new Input()) {
+            input.keyEvent(GLFW_KEY_E, GLFW_PRESS, 0, 0);
+            input.keyEvent(GLFW_KEY_E, GLFW_RELEASE, 0, 0);
+            assertTrue(input.inventoryPressed());
+            assertFalse(input.inventoryPressed());
+            input.keyEvent(GLFW_KEY_E, GLFW_REPEAT, 0, 0);
+            assertFalse(input.inventoryPressed());
+        }
+    }
+
+    @Test
     void uiKeysRetainOrderAndTapsButDoNotRepeatButtonActivation() {
         Input input = new Input();
         input.keyEvent(GLFW_KEY_TAB, GLFW_PRESS, 0, 1);

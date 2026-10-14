@@ -1,5 +1,6 @@
 package com.norbertfila.interaction;
 
+import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
@@ -39,6 +40,18 @@ public final class BlockInteraction {
             double directionX,
             double directionY,
             double directionZ) {
+        return remove(mode, originX, originY, originZ, directionX, directionY, directionZ, null);
+    }
+
+    public Optional<BlockChangeResult> remove(
+            PlayerController.Mode mode,
+            double originX,
+            double originY,
+            double originZ,
+            double directionX,
+            double directionY,
+            double directionZ,
+            Inventory inventory) {
         if (Objects.requireNonNull(mode) == PlayerController.Mode.SPECTATOR) return Optional.empty();
         return raycaster
                 .cast(
@@ -52,7 +65,13 @@ public final class BlockInteraction {
                         REACH,
                         id -> canTarget(mode, id))
                 .filter(hit -> canBreak(mode, hit.blockId()))
-                .map(hit -> setBlock(hit.block(), BlockId.AIR));
+                .filter(hit -> inventory == null || inventory.canAdd((byte) hit.blockId()))
+                .map(hit -> {
+                    var result = setBlock(hit.block(), BlockId.AIR);
+                    if (result.changed() && inventory != null && !inventory.add((byte) hit.blockId()))
+                        throw new IllegalStateException("Inventory capacity changed during mining");
+                    return result;
+                });
     }
 
     public Optional<BlockChangeResult> place(

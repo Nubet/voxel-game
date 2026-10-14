@@ -6,16 +6,20 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.Inventory;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Hud;
+import com.norbertfila.ui.Screen;
 import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.Slider;
 import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
+import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -28,7 +32,7 @@ public final class UiViewportSmoke {
         Path output = Path.of(args[0]);
         check(Files.isDirectory(output), "Output directory must exist");
         UiCanvas canvas = new UiCanvas();
-        try (Window window = new Window(1280, 720, "UI-05 screens smoke");
+        try (Window window = new Window(1280, 720, "Inventory screens smoke");
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION) + " OS="
                     + System.getProperty("os.name") + " Java=" + Runtime.version());
@@ -90,7 +94,7 @@ public final class UiViewportSmoke {
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
-                    write(output.resolve("ui05-" + i + "-hud.png"), pixels, viewport);
+                    write(output.resolve("inventory-" + i + "-hud.png"), pixels, viewport);
                     screens.open(panel);
                     screens.updatePointer(false, false, 0, 0);
                     double windowX = (SettingsScreen.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
@@ -109,7 +113,7 @@ public final class UiViewportSmoke {
                         check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
                         check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
                     }
-                    write(output.resolve("ui05-" + i + "-panel.png"), pixels, viewport);
+                    write(output.resolve("inventory-" + i + "-settings.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
@@ -132,6 +136,7 @@ public final class UiViewportSmoke {
                 checkFont(ui, canvas, small, output);
                 checkWidgets(ui, canvas, small, output);
                 checkScreens(ui, canvas, texture, output);
+                checkInventory(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -143,7 +148,7 @@ public final class UiViewportSmoke {
             check(!glIsTexture(atlas), "Atlas leaked after renderer close");
             check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-05 GPU smoke PASS");
+        System.out.println("UI-INVENTORY-01 GPU smoke PASS");
     }
 
     private static void render(
@@ -305,6 +310,94 @@ public final class UiViewportSmoke {
         int atlasX = character % 16 * BitmapFont.CELL_SIZE + x;
         int atlasY = character / 16 * BitmapFont.CELL_SIZE + y;
         return atlas[(atlasY * BitmapFont.ATLAS_WIDTH + atlasX) * 4 + 3] != 0;
+    }
+
+    private static void checkInventory(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        int[][] sizes = {
+            {640, 360, 640, 360},
+            {1280, 720, 1280, 720},
+            {1920, 1080, 1920, 1080},
+            {1281, 721, 1281, 721},
+            {640, 360, 1280, 720},
+            {1280, 720, 1920, 1080},
+            {640, 480, 1280, 720}
+        };
+        for (boolean creative : new boolean[] {false, true}) {
+            ByteBuffer reference = null;
+            for (int i = 0; i < sizes.length; i++) {
+                int[] size = sizes[i];
+                var viewport = new UiViewport(size[0], size[1], size[2], size[3]);
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glTexImage2D(
+                        GL_TEXTURE_2D, 0, GL_RGBA8, size[2], size[3], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+                glViewport(0, 0, size[2], size[3]);
+                Inventory inventory = new Inventory();
+                inventory.creativePick(0, BlockId.POPPY);
+                inventory.creativePick(8, BlockId.WATER);
+                inventory.click(0, false, true);
+                var screen = new InventoryScreen(creative);
+                screen.update(inventory.snapshot(), 8, viewport);
+                var screens = new ScreenManager();
+                screens.open(screen);
+                screens.updatePointer(false, false, 0, 0);
+                var box = screen.bounds(0);
+                double windowX = (box.x() + 5) * viewport.scale() * (double) size[0] / size[2];
+                double windowY = (box.y() + 5) * viewport.scale() * (double) size[1] / size[3];
+                screens.updatePointer(new Screen.Pointer(
+                        false, false, true, true, false, viewport.cursorX(windowX), viewport.cursorY(windowY)));
+                var action = screens.pollAction();
+                if (creative) {
+                    check(
+                            action instanceof Screen.Action.CreativePick pick && pick.slot() == 8,
+                            "Creative slot mapping");
+                    var pick = (Screen.Action.CreativePick) action;
+                    inventory.creativePick(pick.slot(), pick.block());
+                } else {
+                    check(action.equals(new Screen.Action.SlotClick(9, true, false)), "Survival DPI slot mapping");
+                    inventory.click(9, true, false);
+                    check(
+                            inventory.snapshot().count(36) == 32
+                                    && inventory.snapshot().count(9) == 32,
+                            "Right split lost items");
+                }
+                screen.update(inventory.snapshot(), 8, viewport);
+                clear();
+                render(ui, canvas, screens, new Hotbar(), viewport);
+                ByteBuffer pixels = capture(viewport);
+                for (int cell = 0; cell < 36; cell++) {
+                    var bounds = screen.bounds(cell);
+                    int color = rgb(
+                            pixels,
+                            viewport,
+                            (bounds.x() + bounds.width() - 1) * viewport.scale(),
+                            (bounds.y() + bounds.height() - 1) * viewport.scale());
+                    check(
+                            (color & 0xffff00) == (cell == 35 ? 0xf2cc00 : 0x666e00),
+                            "Inventory slot border missing " + cell);
+                }
+                if (i == 0) reference = pixels;
+                if (i == 1) checkDoubleScale(reference, pixels, new UiViewport(640, 360, 640, 360), viewport);
+                write(
+                        output.resolve("inventory-" + (creative ? "creative-" : "survival-") + i + ".png"),
+                        pixels,
+                        viewport);
+                screens.cancelInteraction();
+                screens.updatePointer(new Screen.Pointer(true, true, false, false, false, box.x() + 1, box.y() + 1));
+                check(screens.pollAction() == null, "Cancelled inventory reacquired held pointer");
+                screens.keyPress(UiKey.BACK);
+                check(!screens.isOpen() && screens.blocksGameplay(), "Inventory close leaked input");
+                inventory.returnCarried();
+                check(inventory.snapshot().count(36) == 0, "Inventory close failed to return carried stack");
+                Hotbar hotbar = new Hotbar();
+                hotbar.inventory(inventory.snapshot());
+                hotbar.select(8);
+                clear();
+                render(ui, canvas, screens, hotbar, viewport);
+                checkSlots(capture(viewport), viewport);
+                check(glGetError() == GL_NO_ERROR, "Inventory GL error");
+            }
+        }
+        System.out.println("PASS inventory: Survival/Creative, 7 DPI/resolution cases, split/catalog/cursor/close/HUD");
     }
 
     private static void clear() {

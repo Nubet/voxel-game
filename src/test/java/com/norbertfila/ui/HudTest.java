@@ -4,11 +4,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.core.Hotbar;
+import com.norbertfila.player.Inventory;
+import com.norbertfila.world.BlockId;
 import java.nio.FloatBuffer;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class HudTest {
+    @Test
+    void populatedHotbarRendersAllCurrentBlockIdsIncludingPlantsAndCounts() {
+        Hotbar hotbar = new Hotbar();
+        var inventory = new Inventory();
+        for (int id = 1; id < 256; id++) {
+            if (!BlockId.isValid((byte) id)) continue;
+            inventory.creativePick(0, (byte) id);
+            hotbar.inventory(inventory.snapshot());
+            UiCanvas populated = new UiCanvas(), empty = new UiCanvas();
+            UiViewport viewport = new UiViewport(1280, 720, 1280, 720);
+            new Hud().render(populated, hotbar, viewport);
+            new Hud().render(empty, new Hotbar(), viewport);
+            assertTrue(populated.floatCount() > empty.floatCount());
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({"640,360", "1280,720", "1920,1080", "1281,721", "180,100"})
     void scaledHudKeepsEverySlotInsideFramebuffer(int width, int height) {

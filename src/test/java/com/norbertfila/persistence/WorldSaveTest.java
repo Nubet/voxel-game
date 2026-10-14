@@ -9,6 +9,8 @@ import com.norbertfila.fluid.FluidSnapshot;
 import com.norbertfila.generation.HillsGenerator;
 import com.norbertfila.generation.TerrainConfig;
 import com.norbertfila.generation.TerrainGenerator;
+import com.norbertfila.player.Inventory;
+import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
@@ -29,6 +31,37 @@ import org.junit.jupiter.api.io.TempDir;
 class WorldSaveTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void inventoryAndCarriedStackSurviveSaveWithLegacyFallbackAndValidation() throws Exception {
+        var inventory = new Inventory();
+        inventory.creativePick(8, BlockId.POPPY);
+        inventory.select(8);
+        inventory.click(8, true, false);
+        var expected = inventory.snapshot();
+        Path file = temporaryDirectory.resolve("inventory.vxl");
+        WorldSave.save(file, WorldSave.capture(42, 11, new World(), FluidSnapshot.EMPTY, expected));
+        assertEquals(expected, WorldSave.load(file).inventory());
+        byte[] bytes = Files.readAllBytes(file);
+        byte[] bad = bytes.clone();
+        bad[bad.length - 1] = 65;
+        Files.write(file, bad);
+        assertThrows(IOException.class, () -> WorldSave.load(file));
+        bad = bytes.clone();
+        bad[bytes.length - 75] = 9;
+        Files.write(file, bad);
+        assertThrows(IOException.class, () -> WorldSave.load(file));
+        bad = bytes.clone();
+        bad[bytes.length - 74] = (byte) 255;
+        Files.write(file, bad);
+        assertThrows(IOException.class, () -> WorldSave.load(file));
+        Files.write(file, Arrays.copyOf(bytes, bytes.length - 1));
+        assertThrows(IOException.class, () -> WorldSave.load(file));
+        byte[] legacy = Arrays.copyOf(bytes, bytes.length - 75);
+        java.nio.ByteBuffer.wrap(legacy).putInt(4, 2);
+        Files.write(file, legacy);
+        assertEquals(InventorySnapshot.EMPTY, WorldSave.load(file).inventory());
+    }
 
     @Test
     void schemaOneWaterLoadsAsSourceWithNoFluidTasks() throws Exception {
@@ -73,7 +106,7 @@ class WorldSaveTest {
         WorldSave.save(save, snapshot);
         World restored = new World();
         var loaded = WorldSave.load(save);
-        assertEquals(2, loaded.schemaVersion());
+        assertEquals(3, loaded.schemaVersion());
         assertEquals(fluids, loaded.fluids());
         WorldSave.restore(restored, loaded, 8);
         restored.putChunk(new ChunkPos(-1, 0, 0), new Chunk());

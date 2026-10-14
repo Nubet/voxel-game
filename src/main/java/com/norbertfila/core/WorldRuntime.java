@@ -83,6 +83,7 @@ public final class WorldRuntime implements AutoCloseable {
             WaterSimulator water =
                     new WaterSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
             long[] tick = {0};
+            InventorySnapshot restoredInventory = InventorySnapshot.EMPTY;
             if (Files.exists(savePath)) {
                 var saved = WorldSave.load(savePath);
                 if (saved.seed() != generator.seed() || saved.generatorVersion() != generator.generatorVersion())
@@ -90,8 +91,10 @@ public final class WorldRuntime implements AutoCloseable {
                 WorldSave.restore(world, saved, FAR_TILE_SIZE);
                 water.restore(saved.fluids());
                 tick[0] = saved.fluids().tick();
+                restoredInventory = saved.inventory();
             }
             PlayerController player = new PlayerController();
+            Inventory inventory = new Inventory(restoredInventory);
             player.setPosition(new SpawnResolver(generator).resolve(0, 0));
             PlayerInputBuffer input = new PlayerInputBuffer();
             Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
@@ -158,8 +161,12 @@ public final class WorldRuntime implements AutoCloseable {
                             issuedAt.put(mesh.token(), System.nanoTime());
                         }
                         Action action;
+                        boolean inventoryInput = false;
                         for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
-                            if ((state.blocked() || state.paused()) && !(action instanceof ResetInput)) continue;
+                            if ((state.blocked() || state.paused())
+                                    && !(action instanceof ResetInput)
+                                    && !(action instanceof InventoryAction)
+                                    && !(action instanceof SelectSlot)) continue;
                             switch (action) {
                                 case ResetInput ignored -> {
                                     input.clear();
@@ -167,13 +174,27 @@ public final class WorldRuntime implements AutoCloseable {
                                 }
                                 case Jump jump -> input.pressJump(jump.time());
                                 case NextMode ignored -> {
+                                    inventory.returnCarried();
                                     player.requestNextMode();
                                     input.clear();
                                 }
                                 case Edit edit -> {
                                     if (edit.remove() && !player.modeChangePending()) {
-                                        var result = edit(interaction, player, edit, player.renderEyePosition(1));
+                                        var result = remove(interaction, player, edit, inventory);
                                         result.ifPresent(chunks::requestRemesh);
+                                    }
+                                }
+                                case SelectSlot selected -> inventory.select(selected.slot());
+                                case InventoryAction command -> {
+                                    inventoryInput = true;
+                                    if (command instanceof ReturnCarried) inventory.returnCarried();
+                                    else if (!player.modeChangePending()
+                                            && player.mode() != PlayerController.Mode.SPECTATOR) {
+                                        if (command instanceof ClickSlot click)
+                                            inventory.click(click.slot(), click.right(), click.quickMove());
+                                        else if (command instanceof PickCreative pick
+                                                && player.mode() == PlayerController.Mode.CREATIVE)
+                                            inventory.creativePick(pick.slot(), pick.block());
                                     }
                                 }
                             }
@@ -184,11 +205,15 @@ public final class WorldRuntime implements AutoCloseable {
                         if (newPress) {
                             placementAttempted = true;
                             placementCooldown.attempted();
-                            place(interaction, player, state).ifPresent(chunks::requestRemesh);
+                            if (!inventoryInput)
+                                placeInventory(interaction, player, state, inventory)
+                                        .ifPresent(chunks::requestRemesh);
                         }
-                        if (!placementAttempted && placementCooldown.ready() && state.placeHeld()) {
+                        // UI commands can arrive after this tick sampled gameplay controls.
+                        if (!inventoryInput && !placementAttempted && placementCooldown.ready() && state.placeHeld()) {
                             placementCooldown.attempted();
-                            place(interaction, player, state).ifPresent(chunks::requestRemesh);
+                            placeInventory(interaction, player, state, inventory)
+                                    .ifPresent(chunks::requestRemesh);
                         }
                         if (!state.paused()) {
                             long waterStarted = System.nanoTime();
@@ -227,7 +252,8 @@ public final class WorldRuntime implements AutoCloseable {
                                                 generator.seed(),
                                                 generator.generatorVersion(),
                                                 world,
-                                                water.snapshot(tick[0])),
+                                                water.snapshot(tick[0]),
+                                                inventory.snapshot()),
                                         tick[0]);
                                 captureNanos = System.nanoTime() - captureStarted;
                             }
@@ -282,7 +308,8 @@ public final class WorldRuntime implements AutoCloseable {
                                 chunks.residentTokens(),
                                 Map.copyOf(valid),
                                 water.pendingUpdates(),
-                                metrics));
+                                metrics,
+                                inventory.snapshot()));
                         for (var mesh : ready) {
                             if (!meshes.offer(mesh))
                                 throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -292,7 +319,11 @@ public final class WorldRuntime implements AutoCloseable {
                 }
                 saves.request(
                         WorldSave.capture(
-                                generator.seed(), generator.generatorVersion(), world, water.snapshot(tick[0])),
+                                generator.seed(),
+                                generator.generatorVersion(),
+                                world,
+                                water.snapshot(tick[0]),
+                                inventory.snapshot()),
                         tick[0]);
                 saves.close();
                 if (saves.failure() != null)
@@ -321,23 +352,34 @@ public final class WorldRuntime implements AutoCloseable {
                         player.state().body());
     }
 
-    static Optional<BlockChangeResult> placeHeld(
-            BlockInteraction interaction, PlayerController player, Controls controls) {
-        if (!controls.placeHeld()) return Optional.empty();
-        return place(interaction, player, controls);
+    static Optional<BlockChangeResult> remove(
+            BlockInteraction interaction, PlayerController player, Edit edit, Inventory inventory) {
+        double yaw = Math.toRadians(edit.yaw()), pitch = Math.toRadians(edit.pitch());
+        var eye = player.renderEyePosition(1);
+        return interaction.remove(
+                player.mode(),
+                eye.x(),
+                eye.y(),
+                eye.z(),
+                Math.cos(yaw) * Math.cos(pitch),
+                Math.sin(pitch),
+                Math.sin(yaw) * Math.cos(pitch),
+                player.mode() == PlayerController.Mode.SURVIVAL ? inventory : null);
     }
 
-    private static Optional<BlockChangeResult> place(
-            BlockInteraction interaction, PlayerController player, Controls controls) {
-        if (controls.blocked()
-                || controls.paused()
-                || controls.placeBlock() == BlockId.AIR
-                || player.modeChangePending()) return Optional.empty();
-        return edit(
+    static Optional<BlockChangeResult> placeInventory(
+            BlockInteraction interaction, PlayerController player, Controls controls, Inventory inventory) {
+        byte block = inventory.selectedBlock();
+        if (controls.blocked() || controls.paused() || block == BlockId.AIR || player.modeChangePending())
+            return Optional.empty();
+        var result = edit(
                 interaction,
                 player,
-                new Edit(false, controls.placeBlock(), controls.yaw(), controls.pitch()),
+                new Edit(false, block, controls.yaw(), controls.pitch()),
                 player.renderEyePosition(1));
+        if (player.mode() == PlayerController.Mode.SURVIVAL
+                && result.filter(BlockChangeResult::changed).isPresent()) inventory.consumeSelected();
+        return result;
     }
 
     @Override
@@ -364,11 +406,10 @@ public final class WorldRuntime implements AutoCloseable {
             boolean paused,
             int renderDistance,
             long placePressId,
-            boolean placeHeld,
-            byte placeBlock) {
+            boolean placeHeld) {
         public Controls(
                 PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
-            this(input, yaw, pitch, blocked, paused, renderDistance, 0, false, BlockId.AIR);
+            this(input, yaw, pitch, blocked, paused, renderDistance, 0, false);
         }
 
         public Controls {
@@ -378,14 +419,34 @@ public final class WorldRuntime implements AutoCloseable {
                     || !Double.isFinite(pitch)
                     || renderDistance < 0
                     || renderDistance > GameSettings.MAX_RENDER_DISTANCE
-                    || placePressId < 0
-                    || !BlockId.isValid(placeBlock)
-                    || (placeHeld && placeBlock == BlockId.AIR))
-                throw new IllegalArgumentException("Invalid runtime controls");
+                    || placePressId < 0) throw new IllegalArgumentException("Invalid runtime controls");
         }
     }
 
-    public sealed interface Action permits Jump, NextMode, Edit, ResetInput {}
+    public sealed interface Action permits Jump, NextMode, Edit, ResetInput, SelectSlot, InventoryAction {}
+
+    public record SelectSlot(int slot) implements Action {
+        public SelectSlot {
+            if (slot < 0 || slot >= 9) throw new IllegalArgumentException("Invalid hotbar slot");
+        }
+    }
+
+    public sealed interface InventoryAction extends Action permits ClickSlot, PickCreative, ReturnCarried {}
+
+    public record ClickSlot(int slot, boolean right, boolean quickMove) implements InventoryAction {
+        public ClickSlot {
+            if (slot < 0 || slot >= 36) throw new IllegalArgumentException("Invalid inventory slot");
+        }
+    }
+
+    public record PickCreative(int slot, byte block) implements InventoryAction {
+        public PickCreative {
+            if (slot < 0 || slot >= 9 || block == BlockId.AIR || !BlockId.isValid(block))
+                throw new IllegalArgumentException("Invalid creative selection");
+        }
+    }
+
+    public record ReturnCarried() implements InventoryAction {}
 
     private record ResetInput() implements Action {}
 
@@ -420,10 +481,12 @@ public final class WorldRuntime implements AutoCloseable {
             Map<ChunkPos, Long> residents,
             Map<Long, ChunkManager.MeshResult> validUploads,
             int pendingWater,
-            SimulationMetrics metrics) {
+            SimulationMetrics metrics,
+            InventorySnapshot inventory) {
         public Frame {
             residents = Map.copyOf(residents);
             validUploads = Map.copyOf(validUploads);
+            Objects.requireNonNull(inventory);
         }
 
         public boolean isCurrent(ChunkManager.MeshResult mesh) {

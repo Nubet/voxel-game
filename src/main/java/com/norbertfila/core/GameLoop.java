@@ -18,6 +18,7 @@ import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -47,6 +48,7 @@ public final class GameLoop {
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             long placePressId = 0;
+            boolean inventoryInitialized = false;
             String hardware =
                     System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
             int[] width = new int[1], height = new int[1];
@@ -59,6 +61,15 @@ public final class GameLoop {
                 double now = window.time(), delta = clampDelta(now - previous);
                 previous = now;
                 input.update();
+                WorldRuntime.Frame state = runtime.frame();
+                if (state != null) {
+                    hotbar.inventory(state.inventory());
+                    if (!inventoryInitialized) {
+                        hotbar.select(state.inventory().selectedSlot());
+                        inventoryInitialized = true;
+                    }
+                }
+                int previousSlot = hotbar.selectedSlot();
                 int scroll = input.hotbarScrollSteps();
                 if (input.focused() && input.settingsPressed()) {
                     if (screens.isOpen()) screens.close();
@@ -69,12 +80,37 @@ public final class GameLoop {
                 boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
                 UiViewport viewport =
                         minimized ? null : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0]);
+                boolean inventoryPressed = input.inventoryPressed();
+                if (!minimized && input.focused() && inventoryPressed && !input.settingsPressed()) {
+                    if (screens.current() instanceof InventoryScreen) screens.close();
+                    else if (!screens.isOpen()
+                            && state != null
+                            && !state.modePending()
+                            && state.mode() != PlayerController.Mode.SPECTATOR)
+                        screens.open(new InventoryScreen(state.mode() == PlayerController.Mode.CREATIVE));
+                }
+                if (screens.current() instanceof InventoryScreen inventoryScreen && state != null) {
+                    if (state.modePending()
+                            || state.mode() == PlayerController.Mode.SPECTATOR
+                            || inventoryScreen.creative() != (state.mode() == PlayerController.Mode.CREATIVE))
+                        screens.close();
+                    else if (!minimized) {
+                        if (input.focused() && inventoryScreen.creative()) {
+                            if (input.hotbarSlotPressed() >= 0) hotbar.select(input.hotbarSlotPressed());
+                            else hotbar.scroll(scroll);
+                        }
+                        inventoryScreen.update(state.inventory(), hotbar.selectedSlot(), viewport);
+                    }
+                }
                 if (!minimized && input.focused()) {
-                    screens.updatePointer(
+                    screens.updatePointer(new Screen.Pointer(
                             input.leftMouseDown(),
                             input.leftMousePressed(),
+                            input.rightMouseDown(),
+                            input.rightMousePressed(),
+                            input.shiftHeld(),
                             viewport.cursorX(input.cursorX()),
-                            viewport.cursorY(input.cursorY()));
+                            viewport.cursorY(input.cursorY())));
                 } else screens.cancelInteraction();
                 UiKey key;
                 while ((key = input.pollUiKey()) != null) {
@@ -112,9 +148,21 @@ public final class GameLoop {
                         minimized,
                         settings.renderDistance(),
                         placePressId,
-                        !blocked && input.rightMouseDown() && hotbar.selectedBlock() != BlockId.AIR,
-                        hotbar.selectedBlock()));
-                WorldRuntime.Frame state = runtime.frame();
+                        !blocked && input.rightMouseDown()));
+                if (previousSlot != hotbar.selectedSlot())
+                    submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
+                Screen.Action uiAction;
+                while ((uiAction = screens.pollAction()) != null) {
+                    switch (uiAction) {
+                        case Screen.Action.SlotClick click ->
+                            submit(runtime, new WorldRuntime.ClickSlot(click.slot(), click.right(), click.quickMove()));
+                        case Screen.Action.CreativePick pick ->
+                            submit(runtime, new WorldRuntime.PickCreative(pick.slot(), pick.block()));
+                        default -> {}
+                    }
+                }
+                if (previousScreen instanceof InventoryScreen && previousScreen != screens.current())
+                    submit(runtime, new WorldRuntime.ReturnCarried());
                 if (!blocked && input.toggleModePressed()) {
                     submit(runtime, new WorldRuntime.NextMode());
                     input.clearPlayerInput();
