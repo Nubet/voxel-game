@@ -509,6 +509,31 @@ class BlockInteractionTest {
         assertEquals(allowed ? 2 : 1, world.getChunk(new ChunkPos(0, 0, 0)).revision());
     }
 
+    @Test
+    void fillSetsLoadedBlocksAcrossChunkBordersAndReportsDirtyChunks() {
+        World world = new World();
+        world.putChunk(new ChunkPos(0, 0, 0), new Chunk());
+        world.putChunk(new ChunkPos(-1, 0, 0), new Chunk());
+        List<BlockPos> changed = new ArrayList<>();
+        var interaction = new BlockInteraction(world, 8, changed::add);
+
+        var dirty = interaction.fill(new BlockPos(-1, 0, 0), new BlockPos(0, 1, 0), BlockId.STONE);
+
+        assertEquals(4, changed.size());
+        for (int x = -1; x <= 0; x++)
+            for (int y = 0; y <= 1; y++)
+                assertEquals(
+                        BlockId.STONE, world.getBlock(new BlockPos(x, y, 0)).orElseThrow());
+        assertTrue(dirty.contains(new ChunkPos(0, 0, 0)));
+        assertTrue(dirty.contains(new ChunkPos(-1, 0, 0)));
+        assertTrue(interaction
+                .fill(new BlockPos(-1, 0, 0), new BlockPos(0, 1, 0), BlockId.STONE)
+                .isEmpty());
+        assertTrue(interaction
+                .fill(new BlockPos(40, 0, 0), new BlockPos(41, 0, 0), BlockId.STONE)
+                .isEmpty());
+    }
+
     private static World worldWithBlock(BlockPos position) {
         World world = new World();
         world.putChunk(new ChunkPos(0, 0, 0), new Chunk());
