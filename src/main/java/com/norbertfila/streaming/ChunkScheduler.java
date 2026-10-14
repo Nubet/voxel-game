@@ -47,6 +47,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     private final Set<TaskKey> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<TaskKey> submitted = ConcurrentHashMap.newKeySet();
     private final Set<TaskKey> running = ConcurrentHashMap.newKeySet();
+    // A position stays here only while its newest task is queued, running or holds an unpolled outcome, so the map is
+    // bounded by in-flight work. Removal is conditional because an older task may finish after a newer submission.
     private final ConcurrentMap<ChunkPos, TaskKey> latest = new ConcurrentHashMap<>();
     private final Object readyLock = new Object();
 
@@ -94,24 +96,12 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     public ChunkTask.Outcome<T> pollReady() {
         synchronized (readyLock) {
             ChunkTask.Outcome<T> outcome = ready.poll();
-            if (outcome != null) outstanding.release();
+            if (outcome != null) {
+                outstanding.release();
+                forget(TaskKey.of(outcome));
+            }
             return outcome;
         }
-    }
-
-    public ChunkTask.Outcome<T> pollLatestReady() {
-        ChunkTask.Outcome<T> outcome;
-        while ((outcome = pollReady()) != null) {
-            if (isLatest(outcome)) return outcome;
-            outcome.discard();
-        }
-        return null;
-    }
-
-    public boolean isLatest(ChunkTask.Outcome<T> outcome) {
-        Objects.requireNonNull(outcome);
-        return new TaskKey(outcome.position(), outcome.revision(), outcome.token())
-                .equals(latest.get(outcome.position()));
     }
 
     public List<ChunkTask.Outcome<T>> drainReady() {
@@ -120,7 +110,13 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             ready.drainTo(outcomes);
             outstanding.release(outcomes.size());
         }
+        for (ChunkTask.Outcome<T> outcome : outcomes) forget(TaskKey.of(outcome));
         return outcomes;
+    }
+
+    /** Bookkeeping entries held for queued, running, cancelled and unpolled work. */
+    public int metadataEntries() {
+        return latest.size() + submitted.size() + cancelled.size() + running.size();
     }
 
     public int queuedTasks() {
@@ -186,6 +182,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                     outcome.discard();
                     discarded++;
                     outstanding.release();
+                    forget(TaskKey.of(outcome));
                 }
             }
             ready.addAll(retained);
@@ -203,6 +200,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 outstanding.release();
                 submitted.remove(key);
                 cancelled.remove(key);
+                forget(key);
                 removed = true;
             }
         }
@@ -225,6 +223,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             TaskKey key = TaskKey.of(((PrioritizedTask) queued).task);
             submitted.remove(key);
             cancelled.remove(key);
+            forget(key);
             outstanding.release();
         }
     }
@@ -253,6 +252,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             if (cancelled.contains(TaskKey.of(task))) {
                 outcome.discard();
                 outstanding.release();
+                forget(TaskKey.of(task));
                 return;
             }
             synchronized (readyLock) {
@@ -267,8 +267,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         }
     }
 
-    private static boolean withinRadius(ChunkPos position, ChunkPos center, int radius) {
-        return withinRadius(position, center, radius, false);
+    private void forget(TaskKey key) {
+        latest.remove(key.position(), key);
     }
 
     private static boolean withinRadius(ChunkPos position, ChunkPos center, int radius, boolean square) {
@@ -312,6 +312,10 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     private record TaskKey(ChunkPos position, long revision, long token) {
         private static TaskKey of(ChunkTask<?> task) {
             return new TaskKey(task.position(), task.revision(), task.token());
+        }
+
+        private static TaskKey of(ChunkTask.Outcome<?> outcome) {
+            return new TaskKey(outcome.position(), outcome.revision(), outcome.token());
         }
     }
 

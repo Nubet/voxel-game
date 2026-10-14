@@ -73,7 +73,8 @@ public final class ChunkManager implements AutoCloseable {
                 generationScheduler.queueWaitNanos(),
                 meshingScheduler.queueWaitNanos(),
                 generationLatency.snapshot(),
-                visibleLatency.snapshot());
+                visibleLatency.snapshot(),
+                generationScheduler.metadataEntries() + meshingScheduler.metadataEntries());
     }
 
     public record Metrics(
@@ -95,7 +96,8 @@ public final class ChunkManager implements AutoCloseable {
             long generationWaitNanos,
             long meshWaitNanos,
             LatencyTotals generationLatency,
-            LatencyTotals visibleLatency) {}
+            LatencyTotals visibleLatency,
+            int schedulerMetadata) {}
 
     /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
     public record LatencyTotals(long count, long totalNanos, long maxNanos) {}
