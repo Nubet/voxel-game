@@ -5,10 +5,38 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.lwjgl.glfw.GLFW.*;
 
+import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import org.junit.jupiter.api.Test;
 
 class InputTest {
+    @Test
+    void characterCallbackAndEditingKeysShareOrderWithoutKeyboardLayoutGuessing() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_A, GLFW_PRESS, 0, 0);
+        input.characterEvent('ą');
+        input.characterEvent(0x1F332);
+        input.keyEvent(GLFW_KEY_BACKSPACE, GLFW_REPEAT, 0, 0);
+        input.keyEvent(GLFW_KEY_UP, GLFW_PRESS, 0, 0);
+        input.keyEvent(GLFW_KEY_HOME, GLFW_PRESS, 0, 0);
+        input.characterEvent(0xD800);
+        input.characterEvent(-1);
+        assertEquals(new UiEvent.Character('ą'), input.pollUiEvent());
+        assertEquals(new UiEvent.Character(0x1F332), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.BACKSPACE), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.UP), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.HOME), input.pollUiEvent());
+        assertEquals(null, input.pollUiEvent());
+        input.characterEvent('ę');
+        input.scrollEvent(.25);
+        input.discardTransientInput();
+        assertEquals(null, input.pollUiEvent());
+        assertEquals(0, input.consumeScroll());
+        input.scrollEvent(.25);
+        assertEquals(.25, input.consumeScroll());
+        assertEquals(0, input.consumeScroll());
+    }
+
     @Test
     void sessionTransitionDiscardsEdgesButRequiresARealNewPressForHeldButtons() {
         var input = new Input();
@@ -18,7 +46,7 @@ class InputTest {
         input.scrollEvent(3);
         input.updateButtons(true, true, 1);
         input.discardTransientInput();
-        assertEquals(null, input.pollUiKey());
+        assertEquals(null, input.pollUiEvent());
         assertFalse(input.inventoryPressed());
         assertFalse(input.peekPlayerTick().jumpPressed());
         assertEquals(0, input.hotbarScrollSteps());
@@ -56,13 +84,13 @@ class InputTest {
         input.keyEvent(GLFW_KEY_TAB, GLFW_PRESS, GLFW_MOD_SHIFT, 7);
         input.keyEvent(GLFW_KEY_LEFT, GLFW_PRESS, 0, 8);
         input.keyEvent(GLFW_KEY_LEFT, GLFW_REPEAT, 0, 9);
-        assertEquals(UiKey.NEXT, input.pollUiKey());
-        assertEquals(UiKey.ACTIVATE, input.pollUiKey());
-        assertEquals(UiKey.ACTIVATE, input.pollUiKey());
-        assertEquals(UiKey.PREVIOUS, input.pollUiKey());
-        assertEquals(UiKey.DECREASE, input.pollUiKey());
-        assertEquals(UiKey.DECREASE, input.pollUiKey());
-        assertEquals(null, input.pollUiKey());
+        assertEquals(new UiEvent.Key(UiKey.NEXT), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.ACTIVATE), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.SPACE), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.PREVIOUS), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.DECREASE), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.DECREASE), input.pollUiEvent());
+        assertEquals(null, input.pollUiEvent());
         assertTrue(input.nextPlayerTick().jumpPressed());
     }
 
@@ -71,7 +99,7 @@ class InputTest {
         Input input = new Input();
         for (int i = 0; i < 1000; i++) input.keyEvent(GLFW_KEY_RIGHT, GLFW_REPEAT, 0, i);
         int count = 0;
-        while (input.pollUiKey() != null) count++;
+        while (input.pollUiEvent() != null) count++;
         assertEquals(64, count);
     }
 
@@ -138,8 +166,8 @@ class InputTest {
         input.keyEvent(GLFW_KEY_ESCAPE, GLFW_PRESS, 0, 1);
         input.keyEvent(GLFW_KEY_ESCAPE, GLFW_REPEAT, 0, 2);
         input.keyEvent(GLFW_KEY_ESCAPE, GLFW_RELEASE, 0, 3);
-        assertEquals(UiKey.BACK, input.pollUiKey());
-        assertEquals(null, input.pollUiKey());
+        assertEquals(new UiEvent.Key(UiKey.BACK), input.pollUiEvent());
+        assertEquals(null, input.pollUiEvent());
     }
 
     @Test

@@ -4,8 +4,10 @@ import static org.lwjgl.glfw.GLFW.*;
 
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerInputBuffer;
+import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import java.util.ArrayDeque;
+import org.lwjgl.glfw.GLFWCharCallback;
 import org.lwjgl.glfw.GLFWKeyCallback;
 import org.lwjgl.glfw.GLFWScrollCallback;
 
@@ -13,8 +15,9 @@ public final class Input implements AutoCloseable {
     private static final int MAX_UI_KEYS = 64;
     private final long window;
     private final PlayerInputBuffer playerInput = new PlayerInputBuffer();
-    private final ArrayDeque<UiKey> uiKeys = new ArrayDeque<>();
+    private final ArrayDeque<UiEvent> uiEvents = new ArrayDeque<>();
     private GLFWKeyCallback keyCallback;
+    private GLFWCharCallback charCallback;
     private GLFWScrollCallback scrollCallback;
     private boolean focused;
     private final double[] cursorX = new double[1];
@@ -45,6 +48,8 @@ public final class Input implements AutoCloseable {
         keyCallback = GLFWKeyCallback.create(
                 (handle, key, scanCode, action, mods) -> keyEvent(key, action, mods, glfwGetTime()));
         glfwSetKeyCallback(window, keyCallback);
+        charCallback = GLFWCharCallback.create((handle, codePoint) -> characterEvent(codePoint));
+        glfwSetCharCallback(window, charCallback);
         scrollCallback = GLFWScrollCallback.create((handle, xOffset, yOffset) -> scrollDeltaY += yOffset);
         glfwSetScrollCallback(window, scrollCallback);
     }
@@ -60,17 +65,32 @@ public final class Input implements AutoCloseable {
         UiKey uiKey = switch (key) {
             case GLFW_KEY_TAB ->
                 action == GLFW_PRESS ? ((mods & GLFW_MOD_SHIFT) != 0 ? UiKey.PREVIOUS : UiKey.NEXT) : null;
-            case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER, GLFW_KEY_SPACE -> action == GLFW_PRESS ? UiKey.ACTIVATE : null;
-            case GLFW_KEY_LEFT, GLFW_KEY_DOWN -> UiKey.DECREASE;
-            case GLFW_KEY_RIGHT, GLFW_KEY_UP -> UiKey.INCREASE;
+            case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER -> action == GLFW_PRESS ? UiKey.ACTIVATE : null;
+            case GLFW_KEY_SPACE -> action == GLFW_PRESS ? UiKey.SPACE : null;
+            case GLFW_KEY_LEFT -> UiKey.DECREASE;
+            case GLFW_KEY_RIGHT -> UiKey.INCREASE;
+            case GLFW_KEY_UP -> UiKey.UP;
+            case GLFW_KEY_DOWN -> UiKey.DOWN;
+            case GLFW_KEY_HOME -> UiKey.HOME;
+            case GLFW_KEY_END -> UiKey.END;
+            case GLFW_KEY_PAGE_UP -> UiKey.PAGE_UP;
+            case GLFW_KEY_PAGE_DOWN -> UiKey.PAGE_DOWN;
+            case GLFW_KEY_BACKSPACE -> UiKey.BACKSPACE;
+            case GLFW_KEY_DELETE -> UiKey.DELETE;
             case GLFW_KEY_ESCAPE -> action == GLFW_PRESS ? UiKey.BACK : null;
             default -> null;
         };
-        if (uiKey != null && uiKeys.size() < MAX_UI_KEYS) uiKeys.addLast(uiKey);
+        if (uiKey != null && uiEvents.size() < MAX_UI_KEYS) uiEvents.addLast(new UiEvent.Key(uiKey));
     }
 
-    public UiKey pollUiKey() {
-        return uiKeys.pollFirst();
+    void characterEvent(int codePoint) {
+        if (Character.isValidCodePoint(codePoint)
+                && !(codePoint >= 0xD800 && codePoint <= 0xDFFF)
+                && uiEvents.size() < MAX_UI_KEYS) uiEvents.addLast(new UiEvent.Character(codePoint));
+    }
+
+    public UiEvent pollUiEvent() {
+        return uiEvents.pollFirst();
     }
 
     public boolean inventoryPressed() {
@@ -142,7 +162,8 @@ public final class Input implements AutoCloseable {
                 focused && isPressed(GLFW_KEY_X));
         if (!focused) {
             inventoryPressed = false;
-            uiKeys.clear();
+            uiEvents.clear();
+            scrollDeltaY = 0;
             clearPlayerInput();
             resetMouseTracking();
         }
@@ -183,6 +204,12 @@ public final class Input implements AutoCloseable {
         int steps = (int) scrollDeltaY;
         scrollDeltaY -= steps;
         return steps;
+    }
+
+    public double consumeScroll() {
+        double amount = scrollDeltaY;
+        scrollDeltaY = 0;
+        return amount;
     }
 
     static int hotbarSlot(int key) {
@@ -229,7 +256,7 @@ public final class Input implements AutoCloseable {
     }
 
     public void discardTransientInput() {
-        uiKeys.clear();
+        uiEvents.clear();
         clearPlayerInput();
         inventoryPressed = false;
         scrollDeltaY = 0;
@@ -247,6 +274,11 @@ public final class Input implements AutoCloseable {
 
     @Override
     public void close() {
+        if (charCallback != null) {
+            glfwSetCharCallback(window, null);
+            charCallback.free();
+            charCallback = null;
+        }
         if (keyCallback != null) {
             glfwSetKeyCallback(window, null);
             keyCallback.free();

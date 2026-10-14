@@ -54,7 +54,22 @@ public final class ScreenManager {
 
     public void keyPress(UiKey key) {
         Objects.requireNonNull(key);
-        if (current != null) handle(current.keyPress(key));
+        if (current != null)
+            handle(current.keyPress(key == UiKey.SPACE && !current.acceptsText() ? UiKey.ACTIVATE : key));
+    }
+
+    public void input(UiEvent event) {
+        Objects.requireNonNull(event);
+        switch (event) {
+            case UiEvent.Key key -> keyPress(key.key());
+            case UiEvent.Character character -> {
+                if (current != null && current.acceptsText()) current.textInput(character.codePoint());
+            }
+        }
+    }
+
+    public void scroll(double amount, double x, double y) {
+        if (current != null) handle(current.scroll(amount, x, y));
     }
 
     public void cancelInteraction() {

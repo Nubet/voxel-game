@@ -8,8 +8,37 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class BitmapFontTest {
+    @Test
+    void polishFontRegenerationIsIdempotent(@TempDir java.nio.file.Path directory) throws Exception {
+        var source = atlasImage();
+        var path = directory.resolve("font.png");
+        ImageIO.write(source, "png", path.toFile());
+        ExtendPolishFont.main(new String[] {path.toString()});
+        var regenerated = ImageIO.read(path.toFile());
+        assertArrayEquals(
+                source.getRGB(0, 0, 256, 128, null, 0, 256), regenerated.getRGB(0, 0, 256, 128, null, 0, 256));
+    }
+
+    @Test
+    void polishGlyphsAreDistinctFromFallbackAndClippingKeepsScalarBoundaries() throws Exception {
+        var font = BitmapFont.DEFAULT;
+        for (int cp : BitmapFont.POLISH_GLYPHS.codePoints().toArray()) {
+            assertNotEquals('?', font.glyph(cp));
+            assertTrue(font.glyphWidth(cp) > 0);
+            assertEquals(font.advance(cp), font.width(new String(Character.toChars(cp))));
+        }
+        String value = "ą🌲ł";
+        assertEquals(3, font.prefixLength(value, font.width("ą🌲")));
+        assertEquals("ą...", font.ellipsize(value.repeat(8), font.width("ą...")));
+        assertEquals("", font.ellipsize(value, 0));
+        var missing = atlasImage();
+        for (int y = 0; y < 16; y++) for (int x = 16; x < 32; x++) missing.setRGB(x, y, 0);
+        assertThrows(IOException.class, () -> BitmapFont.load(png(missing)));
+    }
+
     @Test
     void measuresSpacesLinesAndCodePointFallbackConsistently() {
         BitmapFont font = BitmapFont.DEFAULT;

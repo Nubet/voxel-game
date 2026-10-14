@@ -6,5 +6,14 @@ public enum UiKey {
     ACTIVATE,
     DECREASE,
     INCREASE,
-    BACK
+    BACK,
+    SPACE,
+    UP,
+    DOWN,
+    HOME,
+    END,
+    PAGE_UP,
+    PAGE_DOWN,
+    BACKSPACE,
+    DELETE
 }

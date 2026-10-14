@@ -108,6 +108,8 @@ public final class Slider {
     }
 
     public boolean keyPress(UiKey key) {
+        if (key == UiKey.UP) key = UiKey.INCREASE;
+        if (key == UiKey.DOWN) key = UiKey.DECREASE;
         if (!focused || (key != UiKey.DECREASE && key != UiKey.INCREASE)) return false;
         long delta = key == UiKey.DECREASE ? -(long) step : step;
         int next = (int) Math.max(minimum, Math.min(maximum, value + delta));

@@ -83,15 +83,16 @@ public final class InventoryScreen implements Screen {
     public Action keyPress(UiKey key) {
         return switch (key) {
             case BACK -> Action.CLOSE;
-            case NEXT, INCREASE -> {
+            case NEXT, INCREASE, UP -> {
                 focus = (focus + 1) % 36;
                 yield Action.NONE;
             }
-            case PREVIOUS, DECREASE -> {
+            case PREVIOUS, DECREASE, DOWN -> {
                 focus = Math.floorMod(focus - 1, 36);
                 yield Action.NONE;
             }
             case ACTIVATE -> activate(focus, false, false);
+            default -> Action.NONE;
         };
     }
 

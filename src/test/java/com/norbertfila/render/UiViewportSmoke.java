@@ -17,14 +17,18 @@ import com.norbertfila.ui.Slider;
 import com.norbertfila.ui.UiAtlas;
 import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
+import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.WorldUiFixtures;
+import com.norbertfila.ui.screens.CreateWorldScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.MainMenuScreen;
 import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SaveErrorScreen;
 import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
+import com.norbertfila.ui.screens.WorldSelectionScreen;
 import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
@@ -150,6 +154,7 @@ public final class UiViewportSmoke {
                 checkInventory(ui, canvas, texture, output);
                 checkItemSprites(ui, canvas, texture, output);
                 checkSessionScreens(ui, canvas, texture, output);
+                checkWorldScreens(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -450,6 +455,99 @@ public final class UiViewportSmoke {
             if (frame == 0xf5cc4c || frame == 0xf5cc4d) selected++;
         }
         check(selected == 1, "Expected one selection, got " + selected);
+    }
+
+    private static void checkWorldScreens(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        int[][] cases = {
+            {320, 240, 320, 240, 0},
+            {1280, 720, 1280, 720, 0},
+            {1920, 1080, 1920, 1080, 0},
+            {640, 360, 1280, 720, 0},
+            {1280, 720, 1920, 1080, 0},
+            {1281, 721, 1281, 721, 0},
+            {640, 480, 1280, 960, 1},
+            {640, 480, 1280, 960, 2},
+            {640, 480, 1280, 960, 3},
+            {640, 480, 1280, 960, 4}
+        };
+        for (int index = 0; index < cases.length; index++) {
+            int[] size = cases[index];
+            var viewport = new UiViewport(size[0], size[1], size[2], size[3], size[4]);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size[2], size[3], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            glViewport(0, 0, size[2], size[3]);
+            clear();
+            canvas.clear();
+            canvas.text(BitmapFont.DEFAULT, BitmapFont.POLISH_GLYPHS, 8, 8, 1, 1, 1, 1);
+            ui.render(canvas, viewport);
+            var pixels = capture(viewport);
+            byte[] atlas = UiAtlas.defaultAtlas().pixels();
+            int x = 8, scale = viewport.scale();
+            for (int cp : BitmapFont.POLISH_GLYPHS.codePoints().toArray()) {
+                int glyph = BitmapFont.DEFAULT.glyph(cp);
+                for (int py = 0; py < BitmapFont.GLYPH_HEIGHT; py++)
+                    for (int px = 0; px < BitmapFont.DEFAULT.glyphWidth(cp); px++) {
+                        int alpha =
+                                atlas[((glyph / 16 * 16 + py) * UiAtlas.WIDTH + glyph % 16 * 16 + px) * 4 + 3] & 255;
+                        for (int dy = 0; dy < scale; dy++)
+                            for (int dx = 0; dx < scale; dx++)
+                                check(
+                                        rgb(pixels, viewport, (x + px) * scale + dx, (8 + py) * scale + dy)
+                                                == (alpha == 0 ? 0 : 0xffffff),
+                                        "Polish glyph pixel mismatch " + cp + " case " + index);
+                    }
+                x += BitmapFont.DEFAULT.advance(cp);
+            }
+            write(output.resolve("world04-polish-" + index + ".png"), pixels, viewport);
+            var screens = new ScreenManager();
+            var form = new CreateWorldScreen();
+            screens.open(form);
+            screens.layout(viewport);
+            "Zażółć gęślą jaźń ".repeat(4).codePoints().forEach(cp -> screens.input(new UiEvent.Character(cp)));
+            screens.keyPress(UiKey.NEXT);
+            "-9223372036854775808".codePoints().forEach(cp -> screens.input(new UiEvent.Character(cp)));
+            clear();
+            canvas.clear();
+            screens.render(canvas, viewport);
+            ui.render(canvas, viewport);
+            pixels = capture(viewport);
+            var seed = form.seedField().bounds();
+            check(
+                    (rgb(pixels, viewport, seed.x() * scale, seed.y() * scale) & 0xffff00) == 0xf5cc00,
+                    "Seed focus border missing");
+            write(output.resolve("world04-create-" + index + ".png"), pixels, viewport);
+            screens.keyPress(UiKey.ACTIVATE);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(
+                    screens.pollAction() instanceof Screen.Action.CreateWorld request
+                            && request.seed().orElseThrow() == Long.MIN_VALUE
+                            && request.name().codePointCount(0, request.name().length()) <= 64,
+                    "Create request mismatch");
+            check(screens.pollAction() == null, "Duplicate Create request");
+            var selection = new WorldSelectionScreen(WorldUiFixtures.entries(1000));
+            screens.open(selection);
+            screens.layout(viewport);
+            screens.keyPress(UiKey.END);
+            check(selection.firstVisible() == 1000 - selection.visibleRows(), "Last row inaccessible");
+            clear();
+            canvas.clear();
+            screens.render(canvas, viewport);
+            ui.render(canvas, viewport);
+            write(output.resolve("world04-list-" + index + ".png"), capture(viewport), viewport);
+            screens.updatePointer(false, false, 0, 0);
+            var play = selection.playButton().bounds();
+            double wx = (play.x() + 2) / viewport.width() * viewport.windowWidth();
+            double wy = (play.y() + 2) / viewport.height() * viewport.windowHeight();
+            screens.updatePointer(true, true, viewport.cursorX(wx), viewport.cursorY(wy));
+            screens.updatePointer(false, false, viewport.cursorX(wx), viewport.cursorY(wy));
+            check(
+                    screens.pollAction() instanceof Screen.Action.OpenWorld request
+                            && request.id().equals(selection.selectedId().orElseThrow()),
+                    "HiDPI Play click missed");
+            check(glGetError() == GL_NO_ERROR, "WORLD-04 GL error");
+        }
+        System.out.println(
+                "PASS WORLD-04: 18 Polish glyph pixel checks, Unicode form/long seed/one-shot Create, 1000 visible-only rows and HiDPI Play in 10 viewport/scale cases");
     }
 
     private static void checkSessionScreens(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {

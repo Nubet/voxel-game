@@ -6,8 +6,14 @@ import java.util.Objects;
 public record WorldMetadata(WorldIdentity identity, String name, Instant createdAt) {
     public WorldMetadata {
         Objects.requireNonNull(identity);
-        Objects.requireNonNull(name);
         Objects.requireNonNull(createdAt);
+        name = normalizeName(name);
+        if (createdAt.isBefore(Instant.EPOCH)) throw new IllegalArgumentException("Invalid world creation time");
+        createdAt = Instant.ofEpochMilli(createdAt.toEpochMilli());
+    }
+
+    public static String normalizeName(String name) {
+        Objects.requireNonNull(name);
         name = name.strip();
         if (name.isEmpty()
                 || name.codePointCount(0, name.length()) > 64
@@ -17,7 +23,6 @@ public record WorldMetadata(WorldIdentity identity, String name, Instant created
                                 || Character.getType(c) == Character.PARAGRAPH_SEPARATOR
                                 || c >= 0xD800 && c <= 0xDFFF))
             throw new IllegalArgumentException("World name must contain 1..64 printable Unicode code points");
-        if (createdAt.isBefore(Instant.EPOCH)) throw new IllegalArgumentException("Invalid world creation time");
-        createdAt = Instant.ofEpochMilli(createdAt.toEpochMilli());
+        return name;
     }
 }

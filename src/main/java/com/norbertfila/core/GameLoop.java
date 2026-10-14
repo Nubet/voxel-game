@@ -16,6 +16,7 @@ import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.Screen;
 import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.UiCanvas;
+import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
@@ -130,14 +131,17 @@ public final class GameLoop {
                         input.rightMousePressed(),
                         input.shiftHeld(),
                         viewport.cursorX(input.cursorX()),
-                        viewport.cursorY(input.cursorY())));
+                        viewport.cursorY(input.cursorY()),
+                        now));
             } else screens.cancelInteraction();
-            UiKey key;
-            while ((key = input.pollUiKey()) != null) {
+            UiEvent event;
+            while ((event = input.pollUiEvent()) != null) {
                 if (!minimized && input.focused()) {
-                    if (runtime.state() == WorldRuntime.State.LOADING && key == UiKey.BACK) return Exit.BACK_TO_MENU;
-                    if (key == UiKey.BACK && !screens.isOpen()) screens.open(pauseScreen);
-                    else screens.keyPress(key);
+                    if (event instanceof UiEvent.Key(var key) && key == UiKey.BACK) {
+                        if (runtime.state() == WorldRuntime.State.LOADING) return Exit.BACK_TO_MENU;
+                        if (!screens.isOpen()) screens.open(pauseScreen);
+                        else screens.input(event);
+                    } else screens.input(event);
                 }
             }
             if (previousScreen != screens.current()) {
@@ -355,28 +359,34 @@ public final class GameLoop {
                 input.update();
                 input.clearPlayerInput();
                 input.inventoryPressed();
-                input.hotbarScrollSteps();
+                double scroll = input.consumeScroll();
                 window.framebufferSize(width, height);
                 window.windowSize(ww, wh);
                 boolean drawable = width[0] > 0 && height[0] > 0 && ww[0] > 0 && wh[0] > 0;
                 UiViewport viewport =
                         drawable ? new UiViewport(ww[0], wh[0], width[0], height[0], settings.guiScale()) : null;
                 if (drawable) screens.layout(viewport);
-                if (drawable && input.focused())
-                    screens.updatePointer(
+                if (drawable && input.focused()) {
+                    screens.updatePointer(new Screen.Pointer(
                             input.leftMouseDown(),
                             input.leftMousePressed(),
+                            input.rightMouseDown(),
+                            input.rightMousePressed(),
+                            input.shiftHeld(),
                             viewport.cursorX(input.cursorX()),
-                            viewport.cursorY(input.cursorY()));
-                else screens.cancelInteraction();
-                UiKey key;
-                while ((key = input.pollUiKey()) != null)
+                            viewport.cursorY(input.cursorY()),
+                            window.time()));
+                    screens.scroll(scroll, viewport.cursorX(input.cursorX()), viewport.cursorY(input.cursorY()));
+                } else screens.cancelInteraction();
+                UiEvent event;
+                while ((event = input.pollUiEvent()) != null)
                     if (drawable && input.focused()) {
                         if (session != null
                                 && stopping == null
+                                && event instanceof UiEvent.Key(var key)
                                 && key == UiKey.BACK
                                 && session.state() == GameSession.State.LOADING) session.cancelLoading();
-                        else screens.keyPress(key);
+                        else screens.input(event);
                     }
                 Screen.Action action = screens.pollAction();
                 if (stopping != null && action == Screen.Action.RETRY_SAVE) {
@@ -388,6 +398,7 @@ public final class GameLoop {
                     else stopping.discardChanges();
                 }
                 if (stopping == null && session == null && action != null) return action;
+                if (stopping == null && session == null && !screens.isOpen()) return Screen.Action.CLOSE;
                 if (drawable) {
                     glViewport(0, 0, width[0], height[0]);
                     glClearColor(.045f, .06f, .085f, 1);

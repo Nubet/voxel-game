@@ -10,6 +10,8 @@ public final class BitmapFont {
     public static final int CELL_SIZE = 16;
     public static final int GLYPH_HEIGHT = 14;
     public static final int LINE_HEIGHT = 16;
+    // Unused control cells 1..18 keep the HUD sprite coordinates and atlas size stable.
+    public static final String POLISH_GLYPHS = "ĄąĆćĘęŁłŃńÓóŚśŹźŻż";
     public static final BitmapFont DEFAULT = loadDefault();
     private final int[] widths;
 
@@ -41,7 +43,8 @@ public final class BitmapFont {
                     throw new IOException("UI atlas pixels must be white or transparent");
                 int character = y / CELL_SIZE * 16 + x / CELL_SIZE;
                 if (alpha != 0) {
-                    if (character >= 32 && y % CELL_SIZE >= GLYPH_HEIGHT)
+                    if ((character >= 32 || character >= 1 && character <= POLISH_GLYPHS.length())
+                            && y % CELL_SIZE >= GLYPH_HEIGHT)
                         throw new IOException("Glyph exceeds font height: " + character);
                     widths[character] = Math.max(widths[character], x % CELL_SIZE + 1);
                 }
@@ -49,11 +52,34 @@ public final class BitmapFont {
         if (widths[' '] != 0) throw new IOException("Space glyph must be empty");
         for (int character = 33; character <= 126; character++)
             if (widths[character] == 0) throw new IOException("UI atlas is missing glyph " + character);
+        for (int character = 1; character <= POLISH_GLYPHS.length(); character++)
+            if (widths[character] == 0) throw new IOException("UI atlas is missing Polish glyph " + character);
         return new BitmapFont(widths);
     }
 
     public int glyph(int codePoint) {
-        return codePoint >= 32 && codePoint <= 126 ? codePoint : '?';
+        if (codePoint >= 32 && codePoint <= 126) return codePoint;
+        int polish = POLISH_GLYPHS.indexOf(codePoint);
+        return polish >= 0 ? polish + 1 : '?';
+    }
+
+    public int prefixLength(String text, int maximumWidth) {
+        int offset = 0, width = 0;
+        while (offset < text.length()) {
+            int codePoint = text.codePointAt(offset);
+            int next = advance(codePoint);
+            if (codePoint == '\n' || next > maximumWidth - width) break;
+            width += next;
+            offset += Character.charCount(codePoint);
+        }
+        return offset;
+    }
+
+    public String ellipsize(String text, int maximumWidth) {
+        if (width(text) <= maximumWidth) return text;
+        String suffix = "...";
+        if (maximumWidth < width(suffix)) return "";
+        return text.substring(0, prefixLength(text, maximumWidth - width(suffix))) + suffix;
     }
 
     public int glyphWidth(int codePoint) {
