@@ -20,7 +20,10 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
+import com.norbertfila.ui.screens.MainMenuScreen;
 import com.norbertfila.ui.screens.PauseScreen;
+import com.norbertfila.ui.screens.SaveErrorScreen;
+import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
@@ -146,6 +149,7 @@ public final class UiViewportSmoke {
                 checkScreens(ui, canvas, texture, output);
                 checkInventory(ui, canvas, texture, output);
                 checkItemSprites(ui, canvas, texture, output);
+                checkSessionScreens(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -157,7 +161,7 @@ public final class UiViewportSmoke {
             check(!glIsTexture(atlas), "Atlas leaked after renderer close");
             check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-08 GPU smoke PASS");
+        System.out.println("UI-09 GPU smoke PASS");
     }
 
     private static void render(
@@ -446,6 +450,63 @@ public final class UiViewportSmoke {
             if (frame == 0xf5cc4c || frame == 0xf5cc4d) selected++;
         }
         check(selected == 1, "Expected one selection, got " + selected);
+    }
+
+    private static void checkSessionScreens(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        for (int[] size : new int[][] {{320, 240}, {1280, 720}, {1920, 1080}}) {
+            var viewport = new UiViewport(size[0], size[1], size[0], size[1]);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size[0], size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            glViewport(0, 0, size[0], size[1]);
+            var menu = new MainMenuScreen(true);
+            var screens = new ScreenManager();
+            screens.open(menu);
+            screens.layout(viewport);
+            clear();
+            render(ui, canvas, screens, new Hotbar(), viewport);
+            var box = menu.playButton().bounds();
+            int s = viewport.scale();
+            int focus = rgb(capture(viewport), viewport, (box.x() - 1) * s, (box.y() - 1) * s);
+            check((focus & 0xffff00) == 0xf5cc00, "Main menu Play focus missing");
+            write(output.resolve("ui09-menu-" + size[0] + ".png"), capture(viewport), viewport);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(screens.pollAction() == Screen.Action.PLAY, "Main menu did not request Play");
+            var pause = new PauseScreen();
+            screens.open(pause);
+            screens.layout(viewport);
+            screens.keyPress(UiKey.NEXT);
+            screens.keyPress(UiKey.NEXT);
+            clear();
+            render(ui, canvas, screens, new Hotbar(), viewport);
+            box = pause.menuButton().bounds();
+            check(
+                    (rgb(capture(viewport), viewport, (box.x() - 1) * s, (box.y() - 1) * s) & 0xffff00) == 0xf5cc00,
+                    "Back to menu focus missing");
+            write(output.resolve("ui09-pause-" + size[0] + ".png"), capture(viewport), viewport);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(screens.pollAction() == Screen.Action.BACK_TO_MENU, "Pause did not request Back to menu");
+            screens.open(new SessionStatusScreen("Saving world..."));
+            screens.keyPress(UiKey.BACK);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(screens.pollAction() == null && screens.blocksGameplay(), "Saving screen accepted gameplay input");
+            clear();
+            render(ui, canvas, screens, new Hotbar(), viewport);
+            write(output.resolve("ui09-saving-" + size[0] + ".png"), capture(viewport), viewport);
+            screens.open(new SaveErrorScreen());
+            screens.layout(viewport);
+            screens.keyPress(UiKey.BACK);
+            check(screens.pollAction() == null, "Escape discarded a failed save");
+            clear();
+            render(ui, canvas, screens, new Hotbar(), viewport);
+            write(output.resolve("world03-save-error-" + size[0] + ".png"), capture(viewport), viewport);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(screens.pollAction() == Screen.Action.RETRY_SAVE, "Save-error retry action missing");
+            screens.keyPress(UiKey.NEXT);
+            screens.keyPress(UiKey.ACTIVATE);
+            check(screens.pollAction() == Screen.Action.DISCARD_CHANGES, "Save-error discard action missing");
+            check(glGetError() == GL_NO_ERROR, "Session screen GL error");
+        }
+        System.out.println("PASS UI-09: main menu/error, pause/back-to-menu, saving screen at min/720p/1080p");
     }
 
     private static void checkItemSprites(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {

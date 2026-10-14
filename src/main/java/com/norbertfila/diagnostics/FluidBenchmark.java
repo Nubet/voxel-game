@@ -1,8 +1,10 @@
 package com.norbertfila.diagnostics;
 
 import com.norbertfila.fluid.*;
-import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.*;
+import com.norbertfila.player.InventorySnapshot;
+import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.world.*;
 import com.sun.management.ThreadMXBean;
 import java.lang.management.ManagementFactory;
@@ -203,19 +205,24 @@ public final class FluidBenchmark {
             check(fixture.water().deferredUpdates() >= parked, "Deferred work disappeared");
             fixture.world().putChunk(seam, base);
             fixture.water().onChunkChanged(seam, 800);
-            var snapshot =
-                    WorldSave.capture(0, 1, fixture.world(), fixture.water().snapshot(800));
-            WorldSave.save(save, snapshot);
-            var loaded = WorldSave.load(save);
+            var identity = new WorldIdentity(new java.util.UUID(0, 1), 0, "default", 1);
+            var snapshot = WorldSnapshots.capture(
+                    identity,
+                    1,
+                    fixture.world(),
+                    fixture.water().snapshot(800),
+                    InventorySnapshot.EMPTY,
+                    new SavedPlayerState(.5, 1, .5, -90, 0, Mode.SURVIVAL, false));
+            WorldStateCodec.write(save, snapshot);
+            var loaded = WorldStateCodec.read(save, identity);
             check(
                     snapshot.deltas().equals(loaded.deltas())
                             && snapshot.fluids().equals(loaded.fluids())
-                            && snapshot.seed() == loaded.seed()
-                            && snapshot.generatorVersion() == loaded.generatorVersion(),
+                            && snapshot.identity().equals(loaded.identity()),
                     "Save round trip differs");
             var resumed = fixture(Scene.SOURCE, true);
             // The restored overlay and task clock replace the fresh source simulation, not its generated floor.
-            WorldSave.restore(resumed.world(), loaded, 64);
+            WorldSnapshots.restore(resumed.world(), loaded, 64);
             WaterSimulator water = new WaterSimulator(resumed.world(), 64, 2000, true);
             water.restore(loaded.fluids());
             resumed.world().setBlock(resumed.source(), BlockId.AIR, 64);

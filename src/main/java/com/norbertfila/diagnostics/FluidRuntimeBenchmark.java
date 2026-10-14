@@ -8,7 +8,7 @@ import com.norbertfila.core.*;
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.meshing.WaterMesher;
-import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.persistence.world.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.*;
 import com.norbertfila.render.*;
@@ -98,7 +98,7 @@ public final class FluidRuntimeBenchmark {
             Camera camera = new Camera();
             UnderwaterVisibility visibility = new UnderwaterVisibility();
             Map<ChunkPos, Long> residents = Map.of();
-            Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
+            Map<ChunkPos, WorldRuntime.SessionMesh> pending = new HashMap<>();
             long start = System.nanoTime(), measureStart = start + 10_000_000_000L;
             long deadline = measureStart + seconds * 1_000_000_000L, previousFrame = start;
             long previousVisibility = start;
@@ -118,7 +118,8 @@ public final class FluidRuntimeBenchmark {
                     lastRestart = elapsed;
                     long oldTick = frame.tick();
                     runtime.close();
-                    var saved = WorldSave.load(save);
+                    var saved = WorldStateCodec.read(
+                            save, WorldStateCodec.readHeader(save).identity());
                     check(saved.fluids().tick() >= oldTick, "Shutdown did not flush save");
                     renderer.close();
                     check(renderer.memoryStats().allocated() == 0, "GPU allocations survive close");
@@ -193,11 +194,11 @@ public final class FluidRuntimeBenchmark {
                         evictions++;
                     }
                     residents = frame.residents();
-                    ChunkManager.MeshResult mesh;
+                    WorldRuntime.SessionMesh mesh;
                     while ((mesh = runtime.pollMesh()) != null) {
-                        var old = pending.put(mesh.position(), mesh);
+                        var old = pending.put(mesh.mesh().position(), mesh);
                         if (old != null) runtime.acknowledge(old, false);
-                        renderer.enqueueUpload(mesh);
+                        renderer.enqueueUpload(mesh.mesh());
                     }
                     WorldRuntime owner = runtime;
                     var upload = renderer.processUploads(
@@ -205,15 +206,16 @@ public final class FluidRuntimeBenchmark {
                     check(upload.failed().isEmpty(), "GPU upload failed");
                     check(upload.queueDepth() <= 64, "Upload queue exceeds limit");
                     for (var m : upload.uploaded()) {
-                        pending.remove(m.position(), m);
-                        runtime.acknowledge(m, true);
+                        var issued = pending.remove(m.position());
+                        if (issued != null) runtime.acknowledge(issued, true);
                         uploads++;
                     }
                     for (var m : upload.discarded()) {
-                        pending.remove(m.position(), m);
-                        runtime.acknowledge(m, false);
+                        var issued = pending.remove(m.position());
+                        if (issued != null) runtime.acknowledge(issued, false);
                     }
                 }
+                if (frame.ready()) runtime.activate();
                 var eye = frame.interpolatedEye(frameStarted);
                 camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
                 visibility.update(
@@ -292,7 +294,8 @@ public final class FluidRuntimeBenchmark {
             runtime = null;
             renderer.close();
             check(renderer.memoryStats().allocated() == 0, "GPU memory did not release");
-            var saved = WorldSave.load(save);
+            var saved =
+                    WorldStateCodec.read(save, WorldStateCodec.readHeader(save).identity());
             check(saved.fluids().tick() > firstTick, "Clock did not survive save");
             check(
                     uploads > 0 && submergedSamples > 0 && movementSamples > 0 && evictions > 0,
@@ -316,7 +319,16 @@ public final class FluidRuntimeBenchmark {
         }
     }
 
-    private static WorldRuntime start(Path save) {
+    private static WorldRuntime start(Path save) throws Exception {
+        if (!java.nio.file.Files.exists(save)) {
+            var terrain = new Terrain();
+            WorldStateCodec.write(
+                    save,
+                    WorldSnapshot.initial(
+                            new WorldIdentity(
+                                    java.util.UUID.randomUUID(), terrain.seed(), "default", terrain.generatorVersion()),
+                            java.time.Instant.now()));
+        }
         return new WorldRuntime(
                 new Terrain(), new WaterMesher(), new ViewDemand(2, 0, 1, ViewDemand.Shape.SQUARE), save);
     }

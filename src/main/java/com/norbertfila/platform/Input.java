@@ -228,6 +228,19 @@ public final class Input implements AutoCloseable {
         mouseDeltaY = 0;
     }
 
+    public void discardTransientInput() {
+        uiKeys.clear();
+        clearPlayerInput();
+        inventoryPressed = false;
+        scrollDeltaY = 0;
+        previousLeftMouse = leftMouse;
+        previousRightMouse = rightMouse;
+        previousHotbarKeys = hotbarKeys;
+        previousToggleMode = toggleMode;
+        previousSettings = settings;
+        resetMouseTracking();
+    }
+
     private boolean isPressed(int key) {
         return glfwGetKey(window, key) == GLFW_PRESS;
     }

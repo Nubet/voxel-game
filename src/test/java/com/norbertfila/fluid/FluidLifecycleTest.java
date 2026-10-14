@@ -2,7 +2,7 @@ package com.norbertfila.fluid;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.persistence.TestWorlds;
 import com.norbertfila.world.*;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -137,11 +137,11 @@ class FluidLifecycleTest {
         assertTrue(captured.updates().stream().anyMatch(u -> u.missingChunks().isEmpty()));
         assertTrue(captured.updates().stream().anyMatch(u -> !u.missingChunks().isEmpty()));
         Path file = directory.resolve("flow.vxl");
-        WorldSave.save(file, WorldSave.capture(42, 1, first, captured));
-        var loaded = WorldSave.load(file);
+        TestWorlds.save(file, TestWorlds.capture(42, 1, first, captured));
+        var loaded = TestWorlds.load(file);
         assertEquals(captured, loaded.fluids());
         World second = new World();
-        WorldSave.restore(second, loaded, 8);
+        TestWorlds.restore(second, loaded, 8);
         second.putChunk(LEFT, floor());
         WaterSimulator resumed = new WaterSimulator(second, 8, 3);
         resumed.restore(loaded.fluids());

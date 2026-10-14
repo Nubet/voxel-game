@@ -10,6 +10,29 @@ import org.junit.jupiter.api.Test;
 
 class InputTest {
     @Test
+    void sessionTransitionDiscardsEdgesButRequiresARealNewPressForHeldButtons() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_ENTER, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_E, GLFW_PRESS, 0, 1);
+        input.scrollEvent(3);
+        input.updateButtons(true, true, 1);
+        input.discardTransientInput();
+        assertEquals(null, input.pollUiKey());
+        assertFalse(input.inventoryPressed());
+        assertFalse(input.peekPlayerTick().jumpPressed());
+        assertEquals(0, input.hotbarScrollSteps());
+        assertEquals(-1, input.hotbarSlotPressed());
+        assertFalse(input.leftMousePressed());
+        assertFalse(input.rightMousePressed());
+        assertTrue(input.rightMouseDown());
+        input.updateButtons(false, false, 0);
+        input.updateButtons(true, true, 1);
+        assertTrue(input.rightMousePressed());
+        assertTrue(input.leftMousePressed());
+    }
+
+    @Test
     void inventoryTapIsRetainedAndRepeatDoesNotToggleAgain() {
         try (Input input = new Input()) {
             input.keyEvent(GLFW_KEY_E, GLFW_PRESS, 0, 0);

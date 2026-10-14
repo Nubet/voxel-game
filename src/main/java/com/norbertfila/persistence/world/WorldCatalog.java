@@ -84,6 +84,20 @@ public final class WorldCatalog {
         return List.copyOf(entries);
     }
 
+    public record Loaded(WorldMetadata metadata, WorldSnapshot snapshot, Path statePath) {}
+
+    public Loaded open(UUID id) throws IOException {
+        Path directory = root.resolve(Objects.requireNonNull(id).toString());
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Missing world directory");
+        Path meta = directory.resolve("world.meta"), state = directory.resolve("state.vxl");
+        requireRegularFile(meta);
+        requireRegularFile(state);
+        var metadata = WorldMetadataCodec.read(meta);
+        if (!metadata.identity().id().equals(id)) throw new IOException("World directory UUID mismatch");
+        if (!supported(metadata.identity())) throw new UnsupportedWorldFormatException("Unsupported generator profile");
+        return new Loaded(metadata, WorldStateCodec.read(state, metadata.identity()), state);
+    }
+
     private WorldEntry inspect(Path directory, UUID id) {
         Optional<WorldMetadata> metadata = Optional.empty();
         Optional<WorldStateCodec.Header> header = Optional.empty();

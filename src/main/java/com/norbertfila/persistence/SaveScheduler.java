@@ -1,137 +1,83 @@
 package com.norbertfila.persistence;
 
-import java.io.IOException;
+import com.norbertfila.persistence.world.WorldIo;
+import com.norbertfila.persistence.world.WorldSnapshot;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public final class SaveScheduler implements AutoCloseable {
+public final class SaveScheduler {
+    private static final Logger LOG = Logger.getLogger(SaveScheduler.class.getName());
+    private final WorldIo io;
     private final Path target;
-    private final long debounceMillis;
-    private final Thread worker;
-    private WorldSave.Snapshot pending;
-    private long pendingRevision = -1;
-    private long pendingAtNanos;
-    private long dirtyRevision = -1;
-    private long savedRevision = -1;
-    private IOException failure;
-    private boolean closing;
-    private long workerNanos, savedBytes;
+    private WorldSnapshot pending, active;
+    private CompletableFuture<Void> work;
+    private Throwable failure;
+    private long savedRevision = -1, started, workerNanos;
 
-    public synchronized Metrics metrics() {
-        return new Metrics(savedRevision, workerNanos, savedBytes, failure != null);
-    }
-
-    public record Metrics(long savedRevision, long workerNanos, long savedBytes, boolean failed) {}
-
-    public SaveScheduler(Path target, long debounceMillis) {
+    public SaveScheduler(WorldIo io, Path target) {
+        this.io = Objects.requireNonNull(io);
         this.target = Objects.requireNonNull(target);
-        if (debounceMillis < 0) throw new IllegalArgumentException("Debounce must not be negative");
-        this.debounceMillis = debounceMillis;
-        worker = new Thread(this::run, "voxel-save-worker");
-        worker.start();
     }
 
-    public synchronized void request(WorldSave.Snapshot snapshot, long revision) {
+    public synchronized void request(WorldSnapshot snapshot) {
         Objects.requireNonNull(snapshot);
-        if (revision < 0) throw new IllegalArgumentException("Revision must not be negative");
-        if (revision < dirtyRevision) return;
+        long latest = Math.max(
+                savedRevision,
+                Math.max(active == null ? -1 : active.sequence(), pending == null ? -1 : pending.sequence()));
+        if (snapshot.sequence() <= latest) return;
         pending = snapshot;
-        pendingRevision = revision;
-        dirtyRevision = revision;
-        pendingAtNanos = System.nanoTime();
+        poll();
+    }
+
+    public synchronized void poll() {
+        if (work != null && work.isDone()) {
+            try {
+                work.join();
+                savedRevision = active.sequence();
+            } catch (CompletionException failed) {
+                failure = failed.getCause();
+                if (pending == null || pending.sequence() < active.sequence()) pending = active;
+                LOG.log(Level.WARNING, "World save failed; snapshot retained at " + target, failure);
+            }
+            workerNanos = System.nanoTime() - started;
+            active = null;
+            work = null;
+        }
+        if (work == null && pending != null && failure == null) {
+            active = pending;
+            pending = null;
+            started = System.nanoTime();
+            work = io.write(target, active);
+        }
+    }
+
+    public synchronized void retry() {
+        if (failure == null) return;
         failure = null;
-        notifyAll();
-    }
-
-    public synchronized long dirtyRevision() {
-        return dirtyRevision;
-    }
-
-    public synchronized long savedRevision() {
-        return savedRevision;
-    }
-
-    public synchronized IOException failure() {
-        return failure;
+        poll();
     }
 
     public synchronized boolean isIdle() {
-        return pending == null && savedRevision >= dirtyRevision;
+        poll();
+        return pending == null && work == null;
     }
 
-    public void awaitIdle() throws InterruptedException {
-        synchronized (this) {
-            while (!isIdle() && failure == null) wait();
-        }
+    public synchronized Throwable failure() {
+        poll();
+        return failure;
     }
 
-    private void run() {
-        while (true) {
-            Work work;
-            synchronized (this) {
-                while (pending == null && !closing) waitUninterruptibly();
-                if (pending == null && closing) return;
-                if (!closing && debounceMillis > 0) waitDebounce();
-                work = new Work(pending, pendingRevision);
-                pending = null;
-            }
-            try {
-                long started = System.nanoTime();
-                WorldSave.save(target, work.snapshot());
-                long bytes = java.nio.file.Files.size(target);
-                synchronized (this) {
-                    workerNanos = System.nanoTime() - started;
-                    savedBytes = bytes;
-                    savedRevision = Math.max(savedRevision, work.revision());
-                    failure = null;
-                    notifyAll();
-                }
-            } catch (IOException saveFailure) {
-                synchronized (this) {
-                    failure = saveFailure;
-                    pending = work.snapshot();
-                    pendingRevision = work.revision();
-                    pendingAtNanos = System.nanoTime();
-                    notifyAll();
-                }
-                if (closing) return;
-            }
-        }
+    public synchronized WorldSnapshot retained() {
+        return pending != null ? pending : active;
     }
 
-    private void waitDebounce() {
-        try {
-            long debounceNanos = debounceMillis * 1_000_000L;
-            while (!closing) {
-                long remaining = debounceNanos - (System.nanoTime() - pendingAtNanos);
-                if (remaining <= 0) return;
-                long millis = remaining / 1_000_000L;
-                int nanos = (int) (remaining % 1_000_000L);
-                wait(millis, nanos);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            closing = true;
-        }
+    public synchronized Metrics metrics() {
+        return new Metrics(savedRevision, workerNanos, failure != null);
     }
 
-    private void waitUninterruptibly() {
-        try {
-            wait();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            closing = true;
-        }
-    }
-
-    @Override
-    public void close() throws InterruptedException {
-        synchronized (this) {
-            closing = true;
-            notifyAll();
-        }
-        worker.join();
-    }
-
-    private record Work(WorldSave.Snapshot snapshot, long revision) {}
+    public record Metrics(long savedRevision, long workerNanos, boolean failed) {}
 }

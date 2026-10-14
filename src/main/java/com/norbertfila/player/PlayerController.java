@@ -76,6 +76,23 @@ public final class PlayerController {
         return current;
     }
 
+    public void restore(Position position, Mode mode, boolean flying) {
+        if (flying && mode != Mode.CREATIVE) throw new IllegalArgumentException("Invalid restored flight state");
+        setPosition(position);
+        current = current.withCrouching(false);
+        this.mode = Objects.requireNonNull(mode);
+        this.flying = flying;
+    }
+
+    public boolean fitRestoredPose(World world) {
+        if (mode == Mode.SPECTATOR || collision.spaceFree(world, current.body())) return true;
+        var crouching = current.withCrouching(true);
+        if (!collision.spaceFree(world, crouching.body())) return false;
+        current = crouching;
+        pauseInterpolation();
+        return true;
+    }
+
     public void tick(PlayerInput input, double fixedDeltaSeconds, double yawDegrees, double pitchDegrees) {
         tick(null, input, fixedDeltaSeconds, yawDegrees, pitchDegrees);
     }

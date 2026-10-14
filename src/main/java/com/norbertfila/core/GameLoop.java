@@ -19,7 +19,10 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
+import com.norbertfila.ui.screens.MainMenuScreen;
 import com.norbertfila.ui.screens.PauseScreen;
+import com.norbertfila.ui.screens.SaveErrorScreen;
+import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -30,116 +33,136 @@ import java.util.Optional;
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = .1;
 
-    public void run(
+    public enum Exit {
+        BACK_TO_MENU,
+        QUIT
+    }
+
+    public Exit run(
             Window window,
+            Input input,
             Camera camera,
             TerrainRenderer renderer,
             UiRenderer uiRenderer,
             FrameMetrics metrics,
-            WorldRuntime runtime,
+            GameSession session,
             GameSettings settings) {
+        WorldRuntime runtime = session.runtime();
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
-        Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
+        Map<ChunkPos, WorldRuntime.SessionMesh> pending = new HashMap<>();
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(settings);
         PauseScreen pauseScreen = new PauseScreen();
-        try (Input input = new Input(window.handle())) {
-            Hotbar hotbar = new Hotbar();
-            long placePressId = 0;
-            boolean inventoryInitialized = false;
-            String hardware =
-                    System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
-            int[] width = new int[1], height = new int[1];
-            int[] windowWidth = new int[1], windowHeight = new int[1];
-            while (!window.shouldClose()) {
-                screens.beginFrame();
-                Screen previousScreen = screens.current();
-                int previousDistance = settings.renderDistance();
-                window.pollEvents();
-                double now = window.time(), delta = clampDelta(now - previous);
-                previous = now;
-                input.update();
-                WorldRuntime.Frame state = runtime.frame();
-                if (state != null) {
-                    hotbar.inventory(state.inventory());
-                    if (!inventoryInitialized) {
-                        hotbar.select(state.inventory().selectedSlot());
-                        inventoryInitialized = true;
+        input.discardTransientInput();
+        window.setCursorCaptured(false);
+        var loading = new SessionStatusScreen("Loading world...");
+        boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
+        Hotbar hotbar = new Hotbar();
+        long placePressId = 0;
+        boolean inventoryInitialized = false;
+        boolean initialViewUploaded = false;
+        String hardware =
+                System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
+        int[] width = new int[1], height = new int[1];
+        int[] windowWidth = new int[1], windowHeight = new int[1];
+        while (!window.shouldClose() && !Thread.currentThread().isInterrupted()) {
+            screens.beginFrame();
+            Screen previousScreen = screens.current();
+            int previousDistance = settings.renderDistance();
+            window.pollEvents();
+            double now = window.time(), delta = clampDelta(now - previous);
+            previous = now;
+            input.update();
+            if (!input.leftMouseDown() && !input.rightMouseDown()) pointerReady = true;
+            WorldRuntime.Frame state = runtime.frame();
+            if (state != null) {
+                hotbar.inventory(state.inventory());
+                if (!inventoryInitialized) {
+                    camera.restoreLook((float) state.yaw(), (float) state.pitch());
+                    hotbar.select(state.inventory().selectedSlot());
+                    inventoryInitialized = true;
+                }
+            }
+            int previousSlot = hotbar.selectedSlot();
+            int scroll = input.hotbarScrollSteps();
+            if (input.focused() && input.settingsPressed()) {
+                if (screens.isOpen()) screens.close();
+                else screens.open(settingsScreen);
+            }
+            window.framebufferSize(width, height);
+            window.windowSize(windowWidth, windowHeight);
+            boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
+            UiViewport viewport = minimized
+                    ? null
+                    : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0], settings.guiScale());
+            if (viewport != null) screens.layout(viewport);
+            boolean inventoryPressed = input.inventoryPressed();
+            if (!minimized && input.focused() && inventoryPressed && !input.settingsPressed()) {
+                if (screens.current() instanceof InventoryScreen) screens.close();
+                else if (!screens.isOpen()
+                        && state != null
+                        && !state.modePending()
+                        && state.mode() != PlayerController.Mode.SPECTATOR)
+                    screens.open(new InventoryScreen(state.mode() == PlayerController.Mode.CREATIVE));
+            }
+            if (screens.current() instanceof InventoryScreen inventoryScreen && state != null) {
+                if (state.modePending()
+                        || state.mode() == PlayerController.Mode.SPECTATOR
+                        || inventoryScreen.creative() != (state.mode() == PlayerController.Mode.CREATIVE))
+                    screens.close();
+                else if (!minimized) {
+                    if (input.focused() && inventoryScreen.creative()) {
+                        if (input.hotbarSlotPressed() >= 0) hotbar.select(input.hotbarSlotPressed());
+                        else hotbar.scroll(scroll);
                     }
+                    inventoryScreen.update(state.inventory(), hotbar.selectedSlot(), viewport);
                 }
-                int previousSlot = hotbar.selectedSlot();
-                int scroll = input.hotbarScrollSteps();
-                if (input.focused() && input.settingsPressed()) {
-                    if (screens.isOpen()) screens.close();
-                    else screens.open(settingsScreen);
-                }
-                window.framebufferSize(width, height);
-                window.windowSize(windowWidth, windowHeight);
-                boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
-                UiViewport viewport = minimized
-                        ? null
-                        : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0], settings.guiScale());
-                if (viewport != null) screens.layout(viewport);
-                boolean inventoryPressed = input.inventoryPressed();
-                if (!minimized && input.focused() && inventoryPressed && !input.settingsPressed()) {
-                    if (screens.current() instanceof InventoryScreen) screens.close();
-                    else if (!screens.isOpen()
-                            && state != null
-                            && !state.modePending()
-                            && state.mode() != PlayerController.Mode.SPECTATOR)
-                        screens.open(new InventoryScreen(state.mode() == PlayerController.Mode.CREATIVE));
-                }
-                if (screens.current() instanceof InventoryScreen inventoryScreen && state != null) {
-                    if (state.modePending()
-                            || state.mode() == PlayerController.Mode.SPECTATOR
-                            || inventoryScreen.creative() != (state.mode() == PlayerController.Mode.CREATIVE))
-                        screens.close();
-                    else if (!minimized) {
-                        if (input.focused() && inventoryScreen.creative()) {
-                            if (input.hotbarSlotPressed() >= 0) hotbar.select(input.hotbarSlotPressed());
-                            else hotbar.scroll(scroll);
-                        }
-                        inventoryScreen.update(state.inventory(), hotbar.selectedSlot(), viewport);
-                    }
-                }
+            }
+            if (!minimized && input.focused()) {
+                screens.updatePointer(new Screen.Pointer(
+                        input.leftMouseDown(),
+                        input.leftMousePressed(),
+                        input.rightMouseDown(),
+                        input.rightMousePressed(),
+                        input.shiftHeld(),
+                        viewport.cursorX(input.cursorX()),
+                        viewport.cursorY(input.cursorY())));
+            } else screens.cancelInteraction();
+            UiKey key;
+            while ((key = input.pollUiKey()) != null) {
                 if (!minimized && input.focused()) {
-                    screens.updatePointer(new Screen.Pointer(
-                            input.leftMouseDown(),
-                            input.leftMousePressed(),
-                            input.rightMouseDown(),
-                            input.rightMousePressed(),
-                            input.shiftHeld(),
-                            viewport.cursorX(input.cursorX()),
-                            viewport.cursorY(input.cursorY())));
-                } else screens.cancelInteraction();
-                UiKey key;
-                while ((key = input.pollUiKey()) != null) {
-                    if (!minimized && input.focused()) {
-                        if (key == UiKey.BACK && !screens.isOpen()) screens.open(pauseScreen);
-                        else screens.keyPress(key);
-                    }
+                    if (runtime.state() == WorldRuntime.State.LOADING && key == UiKey.BACK) return Exit.BACK_TO_MENU;
+                    if (key == UiKey.BACK && !screens.isOpen()) screens.open(pauseScreen);
+                    else screens.keyPress(key);
                 }
-                if (previousScreen != screens.current()) {
-                    window.setCursorCaptured(!screens.isOpen());
-                    input.resetMouseTracking();
-                }
-                if (previousDistance != settings.renderDistance())
-                    window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
-                boolean blocked = minimized || screens.blocksGameplay() || !input.focused();
-                int slotPressed = input.hotbarSlotPressed();
-                if (!blocked) {
-                    if (slotPressed >= 0) hotbar.select(slotPressed);
-                    else hotbar.scroll(scroll);
-                    if (input.rightMousePressed()) placePressId++;
-                }
-                camera.updateZoom(!blocked && input.zoomHeld(), delta);
-                if (blocked) input.clearPlayerInput();
-                else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
-                PlayerInput held = input.peekPlayerTick();
+            }
+            if (previousScreen != screens.current()) {
+                window.setCursorCaptured(!screens.isOpen());
+                input.resetMouseTracking();
+            }
+            if (previousDistance != settings.renderDistance())
+                window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
+            boolean blocked = minimized
+                    || screens.blocksGameplay()
+                    || !input.focused()
+                    || state == null
+                    || !pointerReady
+                    || runtime.state() != WorldRuntime.State.PLAYING;
+            int slotPressed = input.hotbarSlotPressed();
+            if (!blocked) {
+                if (slotPressed >= 0) hotbar.select(slotPressed);
+                else hotbar.scroll(scroll);
+                if (input.rightMousePressed()) placePressId++;
+            }
+            camera.updateZoom(!blocked && input.zoomHeld(), delta);
+            if (blocked) input.clearPlayerInput();
+            else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
+            PlayerInput held = input.peekPlayerTick();
+            if (state != null)
                 runtime.controls(new WorldRuntime.Controls(
                         new PlayerInput(
                                 held.forward(),
@@ -156,103 +179,233 @@ public final class GameLoop {
                         settings.renderDistance(),
                         placePressId,
                         !blocked && input.rightMouseDown()));
-                if (previousSlot != hotbar.selectedSlot())
-                    submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
-                Screen.Action uiAction;
-                while ((uiAction = screens.pollAction()) != null) {
-                    switch (uiAction) {
-                        case Screen.Action.SlotClick click ->
-                            submit(runtime, new WorldRuntime.ClickSlot(click.slot(), click.right(), click.quickMove()));
-                        case Screen.Action.CreativePick pick ->
-                            submit(runtime, new WorldRuntime.PickCreative(pick.slot(), pick.block()));
-                        default -> {}
-                    }
+            if (previousSlot != hotbar.selectedSlot())
+                submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
+            Screen.Action uiAction;
+            while ((uiAction = screens.pollAction()) != null) {
+                if (uiAction == Screen.Action.BACK_TO_MENU) return Exit.BACK_TO_MENU;
+                switch (uiAction) {
+                    case Screen.Action.SlotClick click ->
+                        submit(runtime, new WorldRuntime.ClickSlot(click.slot(), click.right(), click.quickMove()));
+                    case Screen.Action.CreativePick pick ->
+                        submit(runtime, new WorldRuntime.PickCreative(pick.slot(), pick.block()));
+                    default -> {}
                 }
-                if (previousScreen instanceof InventoryScreen && previousScreen != screens.current())
-                    submit(runtime, new WorldRuntime.ReturnCarried());
-                if (!blocked && input.toggleModePressed()) {
-                    submit(runtime, new WorldRuntime.NextMode());
-                    input.clearPlayerInput();
-                }
-                if (!blocked && input.peekPlayerTick().jumpPressed()) {
-                    if (runtime.offer(
-                            new WorldRuntime.Jump(input.peekPlayerTick().jumpPressedAtSeconds())))
-                        input.nextPlayerTick();
-                }
-                boolean editingBlocked = blocked
-                        || input.toggleModePressed()
-                        || state == null
-                        || state.modePending()
-                        || state.mode() == PlayerController.Mode.SPECTATOR;
-                editCommand(
-                                hotbar,
-                                editingBlocked,
-                                input.leftMousePressed(),
-                                false,
-                                -1,
-                                0,
-                                camera.yaw(),
-                                camera.pitch())
-                        .ifPresent(action -> submit(runtime, action));
-                if (minimized) {
-                    if (!sleepWhileMinimized()) return;
-                    continue;
-                }
-                ChunkManager.MeshResult mesh;
-                while ((mesh = runtime.pollMesh()) != null) {
-                    var replaced = pending.put(mesh.position(), mesh);
-                    if (replaced != null) runtime.acknowledge(replaced, false);
-                    renderer.enqueueUpload(mesh);
-                }
-                state = runtime.frame();
-                if (state != null) {
-                    for (var entry : residents.entrySet()) {
-                        if (entry.getValue().equals(state.residents().get(entry.getKey()))) continue;
-                        var removed = pending.remove(entry.getKey());
-                        if (removed != null) runtime.acknowledge(removed, false);
-                        renderer.remove(entry.getKey());
-                    }
-                    residents = state.residents();
-                    var eye = state.interpolatedEye(System.nanoTime());
-                    camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
-                }
-                var uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000, result -> {
-                    var current = runtime.frame();
-                    return current != null && current.isCurrent(result);
-                });
-                for (var uploaded : uploads.uploaded()) {
-                    pending.remove(uploaded.position(), uploaded);
-                    runtime.acknowledge(uploaded, true);
-                }
-                for (var failed : uploads.failed()) {
-                    pending.remove(failed.position(), failed);
-                    runtime.acknowledge(failed, false);
-                }
-                for (var discarded : uploads.discarded()) {
-                    pending.remove(discarded.position(), discarded);
-                    runtime.acknowledge(discarded, false);
-                }
-                metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
-                metrics.recordResidentChunks(residents.size());
-                if (state != null)
-                    visibility.update(
-                            state.waterContact().eyesSubmerged(),
-                            state.waterContact().available(),
-                            delta);
-                glViewport(0, 0, width[0], height[0]);
-                glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                var vp = camera.viewProjection(width[0], height[0]);
-                var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
-                metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
-                canvas.clear();
-                if (screens.isOpen()) screens.render(canvas, viewport);
-                else hud.render(canvas, hotbar, viewport);
-                uiRenderer.render(canvas, viewport);
-                window.swapBuffers();
-                metrics.recordFrame(delta);
-                metrics.reportIfDue(now, width[0], height[0], hardware);
             }
+            if (previousScreen instanceof InventoryScreen && previousScreen != screens.current())
+                submit(runtime, new WorldRuntime.ReturnCarried());
+            if (!blocked && input.toggleModePressed()) {
+                submit(runtime, new WorldRuntime.NextMode());
+                input.clearPlayerInput();
+            }
+            if (!blocked && input.peekPlayerTick().jumpPressed()) {
+                if (runtime.offer(new WorldRuntime.Jump(input.peekPlayerTick().jumpPressedAtSeconds())))
+                    input.nextPlayerTick();
+            }
+            boolean editingBlocked = blocked
+                    || input.toggleModePressed()
+                    || state == null
+                    || state.modePending()
+                    || state.mode() == PlayerController.Mode.SPECTATOR;
+            editCommand(hotbar, editingBlocked, input.leftMousePressed(), false, -1, 0, camera.yaw(), camera.pitch())
+                    .ifPresent(action -> submit(runtime, action));
+            if (minimized) {
+                if (!sleepWhileIdle()) return Exit.QUIT;
+                continue;
+            }
+            WorldRuntime.SessionMesh mesh;
+            while ((mesh = runtime.pollMesh()) != null) {
+                var replaced = pending.put(mesh.mesh().position(), mesh);
+                if (replaced != null) runtime.acknowledge(replaced, false);
+                renderer.enqueueUpload(mesh.mesh());
+            }
+            state = runtime.frame();
+            if (state != null) {
+                for (var entry : residents.entrySet()) {
+                    if (entry.getValue().equals(state.residents().get(entry.getKey()))) continue;
+                    var removed = pending.remove(entry.getKey());
+                    if (removed != null) runtime.acknowledge(removed, false);
+                    renderer.remove(entry.getKey());
+                }
+                residents = state.residents();
+                var eye = state.interpolatedEye(System.nanoTime());
+                camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
+            }
+            var uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000, result -> {
+                var current = runtime.frame();
+                return current != null && current.isCurrent(result);
+            });
+            for (var uploaded : uploads.uploaded()) {
+                acknowledge(runtime, pending, uploaded, true);
+            }
+            for (var failed : uploads.failed()) {
+                acknowledge(runtime, pending, failed, false);
+            }
+            for (var discarded : uploads.discarded()) {
+                acknowledge(runtime, pending, discarded, false);
+            }
+            initialViewUploaded |= uploads.uploaded().stream()
+                    .anyMatch(result -> result.position().equals(runtime.initialView()));
+            if (runtime.state() == WorldRuntime.State.LOADING && initialViewUploaded && session.activate()) {
+                input.discardTransientInput();
+                window.setCursorCaptured(!screens.isOpen());
+            }
+            metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
+            metrics.recordResidentChunks(residents.size());
+            if (state != null)
+                visibility.update(
+                        state.waterContact().eyesSubmerged(),
+                        state.waterContact().available(),
+                        delta);
+            glViewport(0, 0, width[0], height[0]);
+            glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            var vp = camera.viewProjection(width[0], height[0]);
+            var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
+            metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
+            canvas.clear();
+            if (screens.isOpen()) screens.render(canvas, viewport);
+            else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
+            else hud.render(canvas, hotbar, viewport);
+            uiRenderer.render(canvas, viewport);
+            window.swapBuffers();
+            metrics.recordFrame(delta);
+            metrics.reportIfDue(now, width[0], height[0], hardware);
+        }
+        return Exit.QUIT;
+    }
+
+    public Screen.Action runMenu(
+            Window window, Input input, UiRenderer renderer, GameSettings settings, MainMenuScreen menu) {
+        return runScreen(window, input, renderer, settings, menu, null, null);
+    }
+
+    private static void acknowledge(
+            WorldRuntime runtime,
+            Map<ChunkPos, WorldRuntime.SessionMesh> pending,
+            ChunkManager.MeshResult result,
+            boolean uploaded) {
+        var issued = pending.get(result.position());
+        if (issued != null && issued.mesh().equals(result)) {
+            pending.remove(result.position());
+            runtime.acknowledge(issued, uploaded);
+        }
+    }
+
+    public void awaitStop(
+            Window window, Input input, UiRenderer renderer, GameSettings settings, WorldRuntime runtime) {
+        runtime.requestStop();
+        runScreen(window, input, renderer, settings, new SessionStatusScreen("Saving world..."), runtime, null);
+    }
+
+    public void awaitLoad(Window window, Input input, UiRenderer renderer, GameSettings settings, GameSession session) {
+        runScreen(window, input, renderer, settings, new SessionStatusScreen("Loading world..."), null, session);
+    }
+
+    public void awaitStop(Window window, Input input, UiRenderer renderer, GameSettings settings, GameSession session) {
+        runScreen(
+                window,
+                input,
+                renderer,
+                settings,
+                new SessionStatusScreen("Saving world..."),
+                session.runtime(),
+                session);
+    }
+
+    private Screen.Action runScreen(
+            Window window,
+            Input input,
+            UiRenderer renderer,
+            GameSettings settings,
+            Screen screen,
+            WorldRuntime stopping,
+            GameSession session) {
+        input.discardTransientInput();
+        window.setCursorCaptured(false);
+        var screens = new ScreenManager();
+        screens.open(screen);
+        var canvas = new UiCanvas();
+        int[] width = new int[1], height = new int[1], ww = new int[1], wh = new int[1];
+        boolean interrupted = Thread.interrupted();
+        boolean saveError = false;
+        try {
+            if (interrupted && stopping == null && session == null) return Screen.Action.QUIT;
+            if (interrupted && stopping == null && session != null) session.cancelLoading();
+            while (true) {
+                if (session != null) {
+                    session.poll();
+                    if (session.state() == GameSession.State.MENU) return Screen.Action.NONE;
+                    if (stopping == null) {
+                        if (window.shouldClose() && session.state() == GameSession.State.LOADING)
+                            session.cancelLoading();
+                        if (session.state() == GameSession.State.LOADING && session.runtime() != null)
+                            return Screen.Action.NONE;
+                    }
+                }
+                if (stopping != null && stopping.isStopped()) return Screen.Action.NONE;
+                if (stopping != null && (stopping.state() == WorldRuntime.State.SAVE_ERROR) != saveError) {
+                    saveError = stopping.state() == WorldRuntime.State.SAVE_ERROR;
+                    screens.open(saveError ? new SaveErrorScreen() : new SessionStatusScreen("Saving world..."));
+                    input.discardTransientInput();
+                }
+                if (stopping == null && session == null && window.shouldClose()) return Screen.Action.QUIT;
+                screens.beginFrame();
+                window.pollEvents();
+                input.update();
+                input.clearPlayerInput();
+                input.inventoryPressed();
+                input.hotbarScrollSteps();
+                window.framebufferSize(width, height);
+                window.windowSize(ww, wh);
+                boolean drawable = width[0] > 0 && height[0] > 0 && ww[0] > 0 && wh[0] > 0;
+                UiViewport viewport =
+                        drawable ? new UiViewport(ww[0], wh[0], width[0], height[0], settings.guiScale()) : null;
+                if (drawable) screens.layout(viewport);
+                if (drawable && input.focused())
+                    screens.updatePointer(
+                            input.leftMouseDown(),
+                            input.leftMousePressed(),
+                            viewport.cursorX(input.cursorX()),
+                            viewport.cursorY(input.cursorY()));
+                else screens.cancelInteraction();
+                UiKey key;
+                while ((key = input.pollUiKey()) != null)
+                    if (drawable && input.focused()) {
+                        if (session != null
+                                && stopping == null
+                                && key == UiKey.BACK
+                                && session.state() == GameSession.State.LOADING) session.cancelLoading();
+                        else screens.keyPress(key);
+                    }
+                Screen.Action action = screens.pollAction();
+                if (stopping != null && action == Screen.Action.RETRY_SAVE) {
+                    if (session != null) session.retrySave();
+                    else stopping.retrySave();
+                }
+                if (stopping != null && action == Screen.Action.DISCARD_CHANGES) {
+                    if (session != null) session.discardChanges();
+                    else stopping.discardChanges();
+                }
+                if (stopping == null && session == null && action != null) return action;
+                if (drawable) {
+                    glViewport(0, 0, width[0], height[0]);
+                    glClearColor(.045f, .06f, .085f, 1);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    canvas.clear();
+                    screens.render(canvas, viewport);
+                    renderer.render(canvas, viewport);
+                    window.swapBuffers();
+                }
+                if (!sleepWhileIdle()) {
+                    if (stopping == null && session == null) return Screen.Action.QUIT;
+                    if (session != null && stopping == null && session.state() == GameSession.State.LOADING)
+                        session.cancelLoading();
+                    interrupted |= Thread.interrupted();
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
@@ -280,7 +433,7 @@ public final class GameLoop {
         return Math.min(Math.max(deltaSeconds, 0), MAX_DELTA_SECONDS);
     }
 
-    private static boolean sleepWhileMinimized() {
+    private static boolean sleepWhileIdle() {
         try {
             Thread.sleep(16);
             return true;

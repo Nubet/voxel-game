@@ -2,7 +2,7 @@ package com.norbertfila.world;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.persistence.TestWorlds;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -26,9 +26,9 @@ class PlantRulesTest {
         assertEquals(BlockId.AIR, world.getBlock(plant).orElseThrow());
         assertTrue(result.dirtyChunks().containsAll(java.util.List.of(lower, upper)));
         Path save = temporary.resolve("vegetation.vxl");
-        WorldSave.save(save, 42, 11, world);
+        TestWorlds.save(save, 42, 11, world);
         World restored = new World();
-        WorldSave.restore(restored, WorldSave.load(save), 64);
+        TestWorlds.restore(restored, TestWorlds.load(save), 64);
         Chunk regenerated = new Chunk();
         regenerated.set(14, 0, 14, BlockId.DANDELION_WHITE);
         restored.putChunk(upper, regenerated);

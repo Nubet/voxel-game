@@ -2,11 +2,22 @@ package com.norbertfila.ui;
 
 public interface Screen {
     sealed interface Action {
-        Action NONE = Simple.NONE, CLOSE = Simple.CLOSE;
+        Action NONE = Simple.NONE,
+                CLOSE = Simple.CLOSE,
+                PLAY = Simple.PLAY,
+                QUIT = Simple.QUIT,
+                BACK_TO_MENU = Simple.BACK_TO_MENU,
+                RETRY_SAVE = Simple.RETRY_SAVE,
+                DISCARD_CHANGES = Simple.DISCARD_CHANGES;
 
         enum Simple implements Action {
             NONE,
-            CLOSE
+            CLOSE,
+            PLAY,
+            QUIT,
+            BACK_TO_MENU,
+            RETRY_SAVE,
+            DISCARD_CHANGES
         }
 
         record SlotClick(int slot, boolean right, boolean quickMove) implements Action {}

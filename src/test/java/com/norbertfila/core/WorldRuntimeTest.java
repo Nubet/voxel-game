@@ -6,12 +6,11 @@ import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.meshing.GreedyMesher;
-import com.norbertfila.persistence.WorldSave;
+import com.norbertfila.persistence.TestWorlds;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
-import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.*;
 import java.nio.file.Files;
@@ -27,6 +26,90 @@ import org.junit.jupiter.api.io.TempDir;
 class WorldRuntimeTest {
     @TempDir
     Path directory;
+
+    @Test
+    void asynchronousStopDoesNotWaitForStartupAndRejectsNewCommands() throws Exception {
+        var terrain = new Flat();
+        terrain.blockSpawn = true;
+        var save = directory.resolve("stop-startup.vxl");
+        var runtime = start(terrain, save);
+        try {
+            assertTrue(terrain.workerEntered.await(3, TimeUnit.SECONDS));
+            assertTimeout(java.time.Duration.ofMillis(100), runtime::requestStop);
+            assertFalse(runtime.isStopped());
+            assertFalse(runtime.offer(new WorldRuntime.NextMode()));
+            terrain.release.countDown();
+            awaitStopped(runtime);
+        } finally {
+            terrain.release.countDown();
+            runtime.close();
+        }
+        assertEquals(42, TestWorlds.load(save).identity().seed());
+        assertTrue(runtime.isStopped());
+    }
+
+    @Test
+    void repeatedAsyncStopAndRestartPreserveInventoryAndWorldClock() throws Exception {
+        var save = directory.resolve("cycles.vxl");
+        var inventory = new Inventory();
+        inventory.creativePick(0, BlockId.POPPY);
+        inventory.click(0, true, false);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        long tick = 0;
+        for (int cycle = 0; cycle < 3; cycle++) {
+            var runtime = start(new Flat(), save);
+            try {
+                long previousTick = tick;
+                var frame = await(runtime, f -> f.tick() > previousTick + 2);
+                assertEquals(inventory.snapshot(), frame.inventory());
+                runtime.controls(controls(true, true));
+                var paused = await(runtime, WorldRuntime.Frame::paused);
+                tick = paused.tick();
+                runtime.requestStop();
+                runtime.requestStop();
+                awaitStopped(runtime);
+            } finally {
+                runtime.close();
+            }
+            var stored = TestWorlds.load(save);
+            assertEquals(inventory.snapshot(), stored.inventory());
+            assertEquals(tick, stored.fluids().tick());
+        }
+    }
+
+    @Test
+    void failedFinalSaveRetainsSnapshotUntilExplicitRetry() throws Exception {
+        Path save = directory.resolve("retry.vxl"), backup = directory.resolve("previous.vxl");
+        var runtime = start(new Flat(), save);
+        await(runtime, f -> f.tick() >= 2);
+        Files.move(save, backup);
+        Files.createDirectory(save);
+        runtime.requestStop();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        try {
+            while (runtime.state() != WorldRuntime.State.SAVE_ERROR && System.nanoTime() < deadline) Thread.sleep(2);
+            assertEquals(WorldRuntime.State.SAVE_ERROR, runtime.state());
+            assertNotNull(runtime.retainedSnapshot());
+            assertFalse(runtime.isStopped());
+            Files.delete(save);
+            Files.move(backup, save);
+            runtime.retrySave();
+            awaitStopped(runtime);
+            assertEquals(runtime.retainedSnapshot(), TestWorlds.load(save));
+        } finally {
+            if (runtime.state() == WorldRuntime.State.SAVE_ERROR) runtime.discardChanges();
+            runtime.close();
+        }
+    }
+
+    private static void awaitStopped(WorldRuntime runtime) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!runtime.isStopped() && System.nanoTime() < deadline) Thread.sleep(2);
+        assertTrue(runtime.isStopped(), "World thread did not finish its final save and shutdown");
+    }
 
     @Test
     void vegetationAdmissionRemovesPlantsWhoseProceduralSupportWasEdited() throws Exception {
@@ -46,7 +129,7 @@ class WorldRuntimeTest {
         World world = new World();
         world.setBlock(new BlockPos(plant.x(), 8, plant.z()), BlockId.AIR, 64);
         Path save = directory.resolve("vegetation.vxl");
-        WorldSave.save(save, generator.seed(), generator.generatorVersion(), world);
+        TestWorlds.save(save, generator.seed(), generator.generatorVersion(), world);
         try (WorldRuntime runtime = new WorldRuntime(
                 generator,
                 new com.norbertfila.meshing.WaterMesher(),
@@ -57,7 +140,7 @@ class WorldRuntimeTest {
             await(runtime, frame -> frame.tick() >= 5);
         }
         World restored = new World();
-        WorldSave.restore(restored, WorldSave.load(save), 64);
+        TestWorlds.restore(restored, TestWorlds.load(save), 64);
         assertEquals(BlockId.AIR, restored.changes().get(plant).orElseThrow());
     }
 
@@ -66,7 +149,7 @@ class WorldRuntimeTest {
         Path save = directory.resolve("water.vxl");
         World world = new World();
         world.setBlock(new BlockPos(8, 1, 8), BlockId.WATER, 64);
-        WorldSave.save(save, 42, 1, world);
+        TestWorlds.save(save, 42, 1, world);
         Flat terrain = new Flat();
         long stopped;
         try (WorldRuntime runtime = start(terrain, save)) {
@@ -74,17 +157,18 @@ class WorldRuntimeTest {
             assertTrue(frame.pendingWater() > 0);
             assertThrows(
                     UnsupportedOperationException.class, () -> frame.residents().clear());
-            assertTrue(terrain.threads.contains("voxel-world"));
+            assertTrue(terrain.threads.stream().anyMatch(name -> name.startsWith("pool-")));
             assertFalse(terrain.threads.contains(Thread.currentThread().getName()));
             stopped = frame.tick();
         }
-        var saved = WorldSave.load(save);
+        var saved = TestWorlds.load(save);
         assertTrue(saved.fluids().tick() >= stopped);
         assertTrue(saved.deltas().stream()
                 .flatMap(d -> d.changes().stream())
                 .anyMatch(c -> c.value() == BlockId.WATER && c.waterState() > WaterState.SOURCE));
         try (WorldRuntime restarted = start(new Flat(), save)) {
-            assertTrue(await(restarted, f -> true).tick() > saved.fluids().tick());
+            assertTrue(await(restarted, f -> f.tick() > saved.fluids().tick()).tick()
+                    > saved.fluids().tick());
         }
     }
 
@@ -94,7 +178,7 @@ class WorldRuntimeTest {
         World world = new World();
         for (int x = -1; x <= 1; x++)
             for (int z = -1; z <= 1; z++) world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, 64);
-        WorldSave.save(save, 42, 1, world);
+        TestWorlds.save(save, 42, 1, world);
         try (WorldRuntime runtime = new WorldRuntime(
                 new Flat(), new GreedyMesher(), new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE), save)) {
             var frame = await(runtime, f -> f.tick() >= 40 && f.waterContact().available());
@@ -112,12 +196,12 @@ class WorldRuntimeTest {
         for (int x = -2; x <= 36; x++)
             for (int y = 1; y <= 3; y++)
                 for (int z = -2; z <= 2; z++) world.setBlock(new BlockPos(x, y, z), BlockId.WATER, 64);
-        WorldSave.save(save, 42, 1, world);
+        TestWorlds.save(save, 42, 1, world);
         try (WorldRuntime runtime = new WorldRuntime(
                 new Flat(), new GreedyMesher(), new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE), save)) {
-            var held = new java.util.ArrayList<ChunkManager.MeshResult>();
+            var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             await(runtime, f -> {
-                ChunkManager.MeshResult mesh;
+                WorldRuntime.SessionMesh mesh;
                 while ((mesh = runtime.pollMesh()) != null) held.add(mesh);
                 return held.size() == 64 && f.waterContact().available();
             });
@@ -138,7 +222,7 @@ class WorldRuntimeTest {
             assertTrue(previous.playerState().position().x() > 16);
             assertEquals(64, held.size());
         }
-        assertTrue(WorldSave.load(save).fluids().tick() > 390);
+        assertTrue(TestWorlds.load(save).fluids().tick() > 390);
     }
 
     @Test
@@ -158,14 +242,21 @@ class WorldRuntimeTest {
     }
 
     @Test
-    void blockedGenerationDoesNotBlockClockOrPublicationAndCommandsAreBounded() throws Exception {
+    void blockedGenerationKeepsLoadingResponsiveWithoutAdvancingSimulation() throws Exception {
         Flat terrain = new Flat();
         terrain.blockWorkers = true;
         try (WorldRuntime runtime = start(terrain, directory.resolve("slow.vxl"))) {
             assertTrue(terrain.workerEntered.await(3, TimeUnit.SECONDS));
-            var first = await(runtime, f -> f.tick() >= 3);
-            var later = await(runtime, f -> f.tick() > first.tick() + 5);
-            assertTrue(later.residents().isEmpty());
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (runtime.frame() == null && System.nanoTime() < deadline) Thread.sleep(2);
+            var first = runtime.frame();
+            assertNotNull(first);
+            Thread.sleep(80);
+            var later = runtime.frame();
+            assertTrue(later.publishedAt() > first.publishedAt());
+            assertEquals(first.tick(), later.tick());
+            assertFalse(later.ready());
+            assertEquals(WorldRuntime.State.LOADING, runtime.state());
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
         } finally {
             terrain.release.countDown();
@@ -193,8 +284,8 @@ class WorldRuntimeTest {
         try (WorldRuntime runtime = start(new Flat(), directory.resolve("backpressure.vxl"))) {
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, true, false, 3));
             var blocked = await(runtime, f -> f.tick() >= 60);
-            var held = new java.util.ArrayList<ChunkManager.MeshResult>();
-            ChunkManager.MeshResult mesh;
+            var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
+            WorldRuntime.SessionMesh mesh;
             while ((mesh = runtime.pollMesh()) != null) {
                 held.add(mesh);
             }
@@ -220,11 +311,11 @@ class WorldRuntimeTest {
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, -90)));
             await(runtime, f -> !f.isCurrent(old));
             runtime.acknowledge(old, true);
-            var replacement = awaitMesh(runtime, old.position());
-            assertNotEquals(old.token(), replacement.token());
-            assertTrue(replacement.dataRevision() > old.dataRevision());
+            var replacement = awaitMesh(runtime, old.mesh().position());
+            assertNotEquals(old.mesh().token(), replacement.mesh().token());
+            assertTrue(replacement.mesh().dataRevision() > old.mesh().dataRevision());
             runtime.acknowledge(replacement, true);
-            await(runtime, f -> !f.validUploads().containsKey(replacement.token()));
+            await(runtime, f -> !f.validUploads().containsKey(replacement.mesh().token()));
         }
     }
 
@@ -247,11 +338,11 @@ class WorldRuntimeTest {
                 new Flat(),
                 new GreedyMesher(),
                 new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE),
-                directory.resolve("continuous.vxl"))) {
+                TestWorlds.prepare(directory.resolve("continuous.vxl"), 42, 1))) {
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 4));
-            var heldMeshes = new java.util.ArrayList<ChunkManager.MeshResult>();
+            var heldMeshes = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             await(runtime, f -> {
-                ChunkManager.MeshResult mesh;
+                WorldRuntime.SessionMesh mesh;
                 while ((mesh = runtime.pollMesh()) != null) heldMeshes.add(mesh);
                 return heldMeshes.size() == 64;
             });
@@ -350,9 +441,10 @@ class WorldRuntimeTest {
         Path save = directory.resolve("inventory-runtime.vxl");
         var inventory = new Inventory();
         inventory.creativePick(0, BlockId.POPPY);
-        WorldSave.save(
+        TestWorlds.save(
                 save,
-                WorldSave.capture(42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
         try (var runtime = start(new Flat(), save)) {
             runtime.controls(controls(true, false));
             await(runtime, frame -> frame.inventory().count(0) == 64);
@@ -413,15 +505,32 @@ class WorldRuntimeTest {
     @Test
     void wrongGeneratorCannotOverwriteAnExistingSave() throws Exception {
         Path save = directory.resolve("wrong.vxl");
-        WorldSave.save(save, 99, 1, new World());
+        TestWorlds.save(save, 99, 1, new World());
         byte[] before = Files.readAllBytes(save);
         WorldRuntime runtime = start(new Flat(), save);
         assertThrows(IllegalStateException.class, runtime::close);
         assertArrayEquals(before, Files.readAllBytes(save));
     }
 
-    private WorldRuntime start(Flat terrain, Path save) {
-        return new WorldRuntime(terrain, new GreedyMesher(), new ViewDemand(0, 0, 1, ViewDemand.Shape.SQUARE), save);
+    private WorldRuntime start(Flat terrain, Path save) throws Exception {
+        return new WorldRuntime(
+                terrain,
+                new GreedyMesher(),
+                new ViewDemand(0, 0, 1, ViewDemand.Shape.SQUARE),
+                TestWorlds.prepare(save, terrain.seed(), terrain.generatorVersion()));
+    }
+
+    @Test
+    void controlsMustRemainRepresentableInSavedPlayerState() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new WorldRuntime.Controls(PlayerInput.NONE, Double.MAX_VALUE, 0, false, false, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new WorldRuntime.Controls(PlayerInput.NONE, 0, 91, false, false, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new WorldRuntime.Controls(PlayerInput.NONE, 0, Double.NaN, false, false, 0));
     }
 
     private static WorldRuntime.Controls controls(boolean blocked, boolean paused) {
@@ -433,19 +542,21 @@ class WorldRuntimeTest {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         do {
             var frame = runtime.frame();
-            if (frame != null && predicate.test(frame)) return frame;
+            if (frame != null && frame.ready()) runtime.activate();
+            if (frame != null && runtime.state() == WorldRuntime.State.PLAYING && predicate.test(frame)) return frame;
             Thread.sleep(2);
         } while (System.nanoTime() < deadline);
         throw new AssertionError("Runtime did not publish expected state");
     }
 
-    private static ChunkManager.MeshResult awaitMesh(WorldRuntime runtime, ChunkPos position) throws Exception {
+    private static WorldRuntime.SessionMesh awaitMesh(WorldRuntime runtime, ChunkPos position) throws Exception {
+        await(runtime, WorldRuntime.Frame::ready);
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         do {
             runtime.frame();
             var mesh = runtime.pollMesh();
             if (mesh != null) {
-                if (mesh.position().equals(position)) return mesh;
+                if (mesh.mesh().position().equals(position)) return mesh;
                 runtime.acknowledge(mesh, true);
             }
             Thread.sleep(2);

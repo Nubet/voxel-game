@@ -12,6 +12,7 @@ public final class PauseScreen implements Screen {
     public static final UiBounds RESUME_BOUNDS = new UiBounds(220, 132, 120, 24);
     private static final BitmapFont FONT = BitmapFont.DEFAULT;
     private final Button resume = new Button(RESUME_BOUNDS, "Resume");
+    private final Button menu = new Button(new UiBounds(220, 164, 200, 24), "Back to menu");
     private boolean pointerReady = true;
     private int panelX = 160, panelY = 100;
 
@@ -22,7 +23,8 @@ public final class PauseScreen implements Screen {
         boolean moved = panelX != nextPanelX || panelY != nextPanelY;
         panelX = nextPanelX;
         panelY = nextPanelY;
-        resume.setPosition(panelX + 100, panelY + 108);
+        resume.setPosition(panelX + 100, panelY + 76);
+        menu.setPosition(panelX + 60, panelY + 108);
         if (moved) cancelInteraction();
     }
 
@@ -30,21 +32,31 @@ public final class PauseScreen implements Screen {
     public Action updatePointer(boolean down, boolean pressed, double x, double y) {
         if (!down) pointerReady = true;
         if (!pointerReady) return Action.NONE;
-        if (pressed && !resume.bounds().contains(x, y)) resume.setFocused(false);
+        if (pressed) {
+            resume.setFocused(resume.bounds().contains(x, y));
+            menu.setFocused(menu.bounds().contains(x, y));
+        }
         boolean close = resume.updatePointer(down, pressed, x, y);
-        return close ? Action.CLOSE : Action.NONE;
+        boolean leave = menu.updatePointer(down, pressed, x, y);
+        return close ? Action.CLOSE : leave ? Action.BACK_TO_MENU : Action.NONE;
     }
 
     @Override
     public Action keyPress(UiKey key) {
         if (key == UiKey.BACK) return Action.CLOSE;
-        if (key == UiKey.NEXT || key == UiKey.PREVIOUS) resume.setFocused(true);
-        return resume.keyPress(key) ? Action.CLOSE : Action.NONE;
+        if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
+            boolean nextMenu = resume.focused();
+            resume.setFocused(!nextMenu);
+            menu.setFocused(nextMenu);
+        }
+        if (resume.keyPress(key)) return Action.CLOSE;
+        return menu.keyPress(key) ? Action.BACK_TO_MENU : Action.NONE;
     }
 
     @Override
     public void cancelInteraction() {
         resume.cancelInteraction();
+        menu.cancelInteraction();
         pointerReady = false;
     }
 
@@ -58,9 +70,14 @@ public final class PauseScreen implements Screen {
         canvas.textWithShadow(FONT, "Paused", x + 12, y + 16, 1, 1, 1, 1);
         canvas.textWithShadow(FONT, "ESC: resume", x + 12, y + 48, 1, .75f, .78f, .82f, 1);
         resume.render(canvas, FONT);
+        menu.render(canvas, FONT);
     }
 
     public Button resumeButton() {
         return resume;
+    }
+
+    public Button menuButton() {
+        return menu;
     }
 }

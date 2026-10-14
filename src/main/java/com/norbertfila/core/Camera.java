@@ -44,6 +44,13 @@ public final class Camera {
         position.set(x, y, z);
     }
 
+    public void restoreLook(float yaw, float pitch) {
+        if (!Float.isFinite(yaw) || !Float.isFinite(pitch))
+            throw new IllegalArgumentException("Invalid camera orientation");
+        this.yaw = yaw;
+        this.pitch = Math.clamp(pitch, -MAX_PITCH, MAX_PITCH);
+    }
+
     public float yaw() {
         return yaw;
     }
