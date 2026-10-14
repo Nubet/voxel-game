@@ -12,6 +12,8 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +31,7 @@ public final class ChunkManager implements AutoCloseable {
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
     public static final int RESULTS_PER_UPDATE = 32;
+    private static final long GENERATION_INTAKE_NANOS = 2_000_000;
 
     private final World world;
     private final WorldGenerator generator;
@@ -45,6 +48,14 @@ public final class ChunkManager implements AutoCloseable {
     private final Set<ChunkPos> pendingEdits = new HashSet<>();
     private Set<ChunkPos> collisionChunks = Set.of();
     private boolean collisionDemandChanged;
+    // Demanded sections that have no entry yet. Admission walks backlogOrder, a near-first snapshot of this set that is
+    // re-sorted only after the set or the center changes, so idle ticks do no demand work.
+    private final Set<ChunkPos> generationBacklog = new HashSet<>();
+    private List<ChunkPos> backlogOrder = List.of();
+    private int backlogCursor;
+    private boolean backlogUnsorted, backlogSeeded;
+    private final Set<ChunkPos> releasedCollisionChunks = new HashSet<>();
+    private ChunkPos evictionCenter;
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
@@ -144,46 +155,102 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public UpdateResult update(ChunkPos center) {
-        boolean changed = viewDemand.update(center) || collisionDemandChanged;
+        boolean moved = viewDemand.update(center);
+        if (!backlogSeeded) {
+            viewDemand.requested().forEach(this::addToBacklog);
+            backlogSeeded = true;
+        } else if (moved) {
+            viewDemand.removed().forEach(generationBacklog::remove);
+            viewDemand.added().forEach(this::addToBacklog);
+        }
+        if (moved) backlogUnsorted = true;
+        boolean changed = moved || collisionDemandChanged;
         collisionDemandChanged = false;
         int scheduled = 0;
         for (ChunkPos position : collisionChunks) {
             if (scheduleGeneration(position, ChunkPriority.collision())) scheduled++;
         }
-        for (ChunkPos position : viewDemand.requested()) {
-            if (scheduleGeneration(position, ChunkPriority.visual(position, viewDemand.center()))) scheduled++;
-        }
+        scheduled += admitGeneration();
 
-        List<ChunkPos> evicted = new ArrayList<>();
+        List<ChunkPos> evicted = List.of();
         if (changed) {
             boolean square = viewDemand.shape() == ViewDemand.Shape.SQUARE;
             generationScheduler.cancelOutside(center, hysteresisRadius, square, collisionChunks);
             meshingScheduler.cancelOutside(center, hysteresisRadius, square, collisionChunks);
             generationScheduler.discardReadyOutside(center, hysteresisRadius, square, collisionChunks);
             meshingScheduler.discardReadyOutside(center, hysteresisRadius, square, collisionChunks);
-            for (ChunkPos position : List.copyOf(entries.keySet())) {
-                if (withinHysteresis(position, center)) continue;
-                entries.remove(position);
-                meshTokens.remove(position);
-                pendingRemesh.remove(position);
-                pendingEdits.remove(position);
-                if (world.removeChunk(position) != null) chunkLifecycleListener.accept(position);
-                evicted.add(position);
-            }
-            for (ChunkPos position : evicted) {
-                for (ChunkPos neighbor : neighbors(position)) {
-                    if (world.hasChunk(neighbor)) requestRemesh(neighbor);
-                }
-            }
+            evicted = evictOutsideHysteresis(center);
         }
         processPendingRemeshes();
-        return new UpdateResult(
-                changed,
-                scheduled,
-                0,
-                viewDemand.center(),
-                viewDemand.requested().size(),
-                List.copyOf(evicted));
+        return new UpdateResult(changed, scheduled, 0, viewDemand.center(), viewDemand.size(), evicted);
+    }
+
+    private void addToBacklog(ChunkPos position) {
+        if (!entries.containsKey(position) && !world.hasChunk(position)) generationBacklog.add(position);
+    }
+
+    private int admitGeneration() {
+        if (generationBacklog.isEmpty() || !generationScheduler.hasCapacity()) return 0;
+        if (backlogUnsorted || backlogCursor == backlogOrder.size()) {
+            ChunkPos center = viewDemand.center();
+            List<ChunkPos> order = new ArrayList<>(generationBacklog);
+            order.sort(Comparator.comparingLong(position -> ChunkPriority.distanceSquared(position, center)));
+            backlogOrder = order;
+            backlogCursor = 0;
+            backlogUnsorted = false;
+        }
+        int admitted = 0;
+        while (backlogCursor < backlogOrder.size()) {
+            ChunkPos position = backlogOrder.get(backlogCursor);
+            if (!generationBacklog.contains(position)) {
+                backlogCursor++;
+                continue;
+            }
+            if (scheduleGeneration(position, ChunkPriority.visual(position, viewDemand.center()))) admitted++;
+            else if (!entries.containsKey(position) && !world.hasChunk(position)) break;
+            generationBacklog.remove(position);
+            backlogCursor++;
+        }
+        return admitted;
+    }
+
+    /**
+     * Evicts entries that left the hysteresis region. After a move only the columns that left it, and chunks no
+     * longer pinned for collision, are examined; after a configuration change every entry is.
+     */
+    private List<ChunkPos> evictOutsideHysteresis(ChunkPos center) {
+        List<ChunkPos> candidates = new ArrayList<>(releasedCollisionChunks);
+        releasedCollisionChunks.clear();
+        if (evictionCenter == null) candidates.addAll(entries.keySet());
+        else if (!evictionCenter.equals(center)) addLeavingColumns(evictionCenter, center, candidates);
+        evictionCenter = center;
+        List<ChunkPos> evicted = new ArrayList<>();
+        for (ChunkPos position : candidates) {
+            if (!entries.containsKey(position) || withinHysteresis(position, center)) continue;
+            entries.remove(position);
+            meshTokens.remove(position);
+            pendingRemesh.remove(position);
+            pendingEdits.remove(position);
+            generationBacklog.remove(position);
+            if (world.removeChunk(position) != null) chunkLifecycleListener.accept(position);
+            evicted.add(position);
+        }
+        for (ChunkPos position : evicted) {
+            for (ChunkPos neighbor : neighbors(position)) {
+                if (world.hasChunk(neighbor)) requestRemesh(neighbor);
+            }
+        }
+        return List.copyOf(evicted);
+    }
+
+    private void addLeavingColumns(ChunkPos from, ChunkPos to, List<ChunkPos> candidates) {
+        for (int dz = -hysteresisRadius; dz <= hysteresisRadius; dz++)
+            for (int dx = -hysteresisRadius; dx <= hysteresisRadius; dx++) {
+                long x = (long) from.x() + dx, z = (long) from.z() + dz;
+                if (!inHysteresisColumn(dx, dz) || inHysteresisColumn(x - to.x(), z - to.z())) continue;
+                for (int y = viewDemand.minChunkY(); y <= viewDemand.maxChunkY(); y++)
+                    candidates.add(new ChunkPos((int) x, y, (int) z));
+            }
     }
 
     public ProcessResult processResults() {
@@ -196,10 +263,12 @@ public final class ChunkManager implements AutoCloseable {
                 || meshBudget < 0
                 || meshBudget > RESULTS_PER_UPDATE)
             throw new IllegalArgumentException("Result budget is outside the batch limit");
-        processPendingRemeshes();
         int generated = 0;
         int discarded = 0;
-        for (int index = 0; index < generationBudget; index++) {
+        long intakeStarted = System.nanoTime();
+        for (int index = 0;
+                index < generationBudget && (index == 0 || System.nanoTime() - intakeStarted < GENERATION_INTAKE_NANOS);
+                index++) {
             ChunkTask.Outcome<ChunkData> outcome = generationScheduler.pollReady();
             if (outcome == null) break;
             ChunkEntry entry = entries.get(outcome.position());
@@ -210,6 +279,10 @@ public final class ChunkManager implements AutoCloseable {
                             "Chunk generation failed position=" + outcome.position() + " token=" + outcome.token(),
                             outcome.failure());
                     entries.remove(outcome.position());
+                    if (viewDemand.contains(outcome.position())) {
+                        generationBacklog.add(outcome.position());
+                        backlogUnsorted = true;
+                    }
                 }
                 outcome.discard();
                 discarded++;
@@ -338,6 +411,9 @@ public final class ChunkManager implements AutoCloseable {
         if (required.size() > 512) throw new IllegalArgumentException("Collision demand exceeds chunk budget");
         Set<ChunkPos> next = Set.copyOf(required);
         if (!next.equals(collisionChunks)) {
+            for (ChunkPos position : collisionChunks)
+                if (!next.contains(position)) releasedCollisionChunks.add(position);
+            releasedCollisionChunks.removeAll(next);
             collisionChunks = next;
             collisionDemandChanged = true;
             // A chunk already queued for display must not wait behind other visual work once the player needs it.
@@ -384,7 +460,12 @@ public final class ChunkManager implements AutoCloseable {
         if (radius < 0) throw new IllegalArgumentException("Render distance must not be negative");
         boolean changed =
                 viewDemand.configure(radius, viewDemand.minChunkY(), viewDemand.maxChunkY(), viewDemand.shape());
-        if (changed) hysteresisRadius = radius + 1;
+        if (changed) {
+            hysteresisRadius = radius + 1;
+            generationBacklog.clear();
+            backlogSeeded = false;
+            evictionCenter = null;
+        }
         return changed;
     }
 
@@ -460,11 +541,19 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private void processPendingRemeshes() {
-        List<ChunkPos> pending = new ArrayList<>(pendingRemesh);
-        pending.sort((left, right) -> ChunkPriority.compare(meshPriority(left), 0, meshPriority(right), 0));
-        for (ChunkPos position : pending) {
+        if (pendingRemesh.isEmpty() || !meshingScheduler.hasCapacity()) return;
+        ChunkPos[] pending = pendingRemesh.toArray(ChunkPos[]::new);
+        // Category, distance and array index packed into one long give the scheduling order with a primitive sort.
+        long[] keys = new long[pending.length];
+        for (int index = 0; index < pending.length; index++) {
+            ChunkPriority priority = meshPriority(pending[index]);
+            long distance = Math.min(priority.distanceSquared(), (1L << 34) - 1);
+            keys[index] = (long) priority.category().ordinal() << 58 | distance << 24 | index;
+        }
+        Arrays.sort(keys);
+        for (long key : keys) {
             if (!meshingScheduler.hasCapacity()) break;
-            processPendingRemesh(position);
+            processPendingRemesh(pending[(int) (key & 0xFFFFFF)]);
         }
     }
 
@@ -487,11 +576,13 @@ public final class ChunkManager implements AutoCloseable {
     private boolean withinHysteresis(ChunkPos position, ChunkPos center) {
         if (collisionChunks.contains(position)) return true;
         if (position.y() < viewDemand.minChunkY() || position.y() > viewDemand.maxChunkY()) return false;
-        int dx = position.x() - center.x();
-        int dz = position.z() - center.z();
+        return inHysteresisColumn((long) position.x() - center.x(), (long) position.z() - center.z());
+    }
+
+    private boolean inHysteresisColumn(long dx, long dz) {
         return viewDemand.shape() == ViewDemand.Shape.SQUARE
                 ? Math.abs(dx) <= hysteresisRadius && Math.abs(dz) <= hysteresisRadius
-                : (long) dx * dx + (long) dz * dz <= (long) hysteresisRadius * hysteresisRadius;
+                : dx * dx + dz * dz <= (long) hysteresisRadius * hysteresisRadius;
     }
 
     @Override

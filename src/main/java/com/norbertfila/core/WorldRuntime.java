@@ -240,8 +240,9 @@ public final class WorldRuntime implements AutoCloseable {
                             int meshBudget = Math.min(
                                     ChunkManager.RESULTS_PER_UPDATE,
                                     Math.min(CAPACITY - outstanding.size(), meshes.remainingCapacity()));
-                            List<ChunkManager.MeshResult> ready =
-                                    chunks.processResults(4, meshBudget).meshes();
+                            List<ChunkManager.MeshResult> ready = chunks.processResults(
+                                            ChunkManager.RESULTS_PER_UPDATE, meshBudget)
+                                    .meshes();
                             long streamingNanos = System.nanoTime() - streamingStarted;
                             if (!ready.isEmpty()) viewReady[0] = true;
                             if (!poseReady[0]
