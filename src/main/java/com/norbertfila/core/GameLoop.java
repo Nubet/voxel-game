@@ -15,6 +15,7 @@ import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.SettingsPanelView;
 import com.norbertfila.ui.UiCanvas;
+import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -63,14 +64,20 @@ public final class GameLoop {
                 boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
                 UiViewport viewport =
                         minimized ? null : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0]);
-                boolean blocked = minimized || settingsPanel.open() || !input.focused();
-                if (!minimized
-                        && input.focused()
-                        && settingsPanel.update(
-                                input.leftMouseDown(), input.leftMousePressed(),
-                                viewport.cursorX(input.cursorX()), viewport.cursorY(input.cursorY())))
+                boolean settingsChanged = false;
+                if (!minimized && input.focused()) {
+                    settingsChanged = settingsPanel.update(
+                            input.leftMouseDown(),
+                            input.leftMousePressed(),
+                            viewport.cursorX(input.cursorX()),
+                            viewport.cursorY(input.cursorY()));
+                } else settingsPanel.cancelInteraction();
+                UiKey key;
+                while ((key = input.pollUiKey()) != null)
+                    if (!minimized && input.focused()) settingsChanged |= settingsPanel.keyPress(key);
+                if (settingsChanged)
                     window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
-                blocked = minimized || settingsPanel.open() || !input.focused();
+                boolean blocked = minimized || settingsPanel.open() || !input.focused();
                 int slotPressed = input.hotbarSlotPressed();
                 if (!blocked) {
                     if (slotPressed >= 0) hotbar.select(slotPressed);

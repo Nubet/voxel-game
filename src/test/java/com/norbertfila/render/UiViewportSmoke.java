@@ -8,9 +8,13 @@ import com.norbertfila.core.Hotbar;
 import com.norbertfila.core.SettingsPanel;
 import com.norbertfila.platform.Window;
 import com.norbertfila.ui.BitmapFont;
+import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.SettingsPanelView;
+import com.norbertfila.ui.Slider;
+import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
+import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
@@ -24,7 +28,7 @@ public final class UiViewportSmoke {
         Path output = Path.of(args[0]);
         check(Files.isDirectory(output), "Output directory must exist");
         UiCanvas canvas = new UiCanvas();
-        try (Window window = new Window(1280, 720, "UI-03 viewport and font smoke");
+        try (Window window = new Window(1280, 720, "UI-04 controls smoke");
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION) + " OS="
                     + System.getProperty("os.name") + " Java=" + Runtime.version());
@@ -85,7 +89,7 @@ public final class UiViewportSmoke {
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
-                    write(output.resolve("ui03-" + i + "-hud.png"), pixels, viewport);
+                    write(output.resolve("ui04-" + i + "-hud.png"), pixels, viewport);
                     panel.toggle();
                     double windowX = (SettingsPanel.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
                     double windowY = (SettingsPanel.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
@@ -105,7 +109,7 @@ public final class UiViewportSmoke {
                         check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
                         check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
                     }
-                    write(output.resolve("ui03-" + i + "-panel.png"), pixels, viewport);
+                    write(output.resolve("ui04-" + i + "-panel.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
@@ -126,6 +130,7 @@ public final class UiViewportSmoke {
                 check(rgb(capture(small), small, 1, 1) == 0x0000ff, "Reused canvas drew stale vertices");
                 check(glGetError() == GL_NO_ERROR, "Canvas growth/reuse GL error");
                 checkFont(ui, canvas, small, output);
+                checkWidgets(ui, canvas, small, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -137,7 +142,7 @@ public final class UiViewportSmoke {
             check(!glIsTexture(atlas), "Atlas leaked after renderer close");
             check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-03 GPU smoke PASS");
+        System.out.println("UI-04 GPU smoke PASS");
     }
 
     private static void render(
@@ -181,7 +186,60 @@ public final class UiViewportSmoke {
             }
         check(ink > 0 && shadow > 0 && background > 0, "Incomplete font pixel checks");
         check(glGetError() == GL_NO_ERROR, "Font render GL error");
-        write(output.resolve("ui03-font.png"), pixels, viewport);
+        write(output.resolve("ui04-font.png"), pixels, viewport);
+    }
+
+    private static void checkWidgets(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output)
+            throws Exception {
+        Button button = new Button(new UiBounds(20, 10, 80, 24), "Button");
+        Slider slider = new Slider(new UiBounds(20, 60, 120, 16), 2, 16, 1, 4);
+        renderWidgets(ui, canvas, viewport, button, slider);
+        int normal = rgb(capture(viewport), viewport, 21, 11);
+        button.updatePointer(false, false, 21, 11);
+        renderWidgets(ui, canvas, viewport, button, slider);
+        int hovered = rgb(capture(viewport), viewport, 21, 11);
+        check(hovered != normal, "Button hover is not visible");
+        write(output.resolve("ui04-button-hover.png"), capture(viewport), viewport);
+        check(!button.updatePointer(true, true, 21, 11), "Button fired before release");
+        renderWidgets(ui, canvas, viewport, button, slider);
+        check(rgb(capture(viewport), viewport, 21, 11) != hovered, "Button press is not visible");
+        write(output.resolve("ui04-button-pressed.png"), capture(viewport), viewport);
+        check(!button.updatePointer(false, false, 150, 40), "Release outside activated button");
+        button.updatePointer(true, true, 21, 11);
+        check(button.updatePointer(false, false, 21, 11), "Release inside did not activate");
+        button.setFocused(true);
+        check(button.keyPress(UiKey.ACTIVATE), "Focused button rejected keyboard");
+        renderWidgets(ui, canvas, viewport, button, slider);
+        check((rgb(capture(viewport), viewport, 19, 9) & 0xffff00) == 0xf5cc00, "Button focus is not visible");
+        write(output.resolve("ui04-button-focus.png"), capture(viewport), viewport);
+        button.setEnabled(false);
+        check(!button.keyPress(UiKey.ACTIVATE), "Disabled button activated");
+        renderWidgets(ui, canvas, viewport, button, slider);
+        check(rgb(capture(viewport), viewport, 21, 11) != normal, "Disabled button is not visible");
+        check(rgb(capture(viewport), viewport, 19, 9) == 0, "Disabled button retained focus border");
+        write(output.resolve("ui04-button-disabled.png"), capture(viewport), viewport);
+        slider.setFocused(true);
+        slider.updatePointer(true, true, 20, 60);
+        check(slider.dragging() && slider.value() == 2, "Slider did not capture press");
+        slider.updatePointer(true, false, 1000, -500);
+        check(slider.value() == 16, "Slider drag did not clamp outside bounds");
+        renderWidgets(ui, canvas, viewport, button, slider);
+        check((rgb(capture(viewport), viewport, 14, 83) & 0xffff00) == 0xf5cc00, "Slider focus is not visible");
+        write(output.resolve("ui04-slider-drag.png"), capture(viewport), viewport);
+        slider.updatePointer(false, false, 1000, -500);
+        check(!slider.dragging() && slider.keyPress(UiKey.DECREASE) && slider.value() == 15, "Slider keyboard failed");
+        slider.cancelInteraction();
+        check(!slider.dragging() && !slider.focused(), "Slider cancellation failed");
+        check(glGetError() == GL_NO_ERROR, "Widget rendering GL error");
+    }
+
+    private static void renderWidgets(
+            UiRenderer ui, UiCanvas canvas, UiViewport viewport, Button button, Slider slider) {
+        canvas.clear();
+        button.render(canvas, BitmapFont.DEFAULT);
+        slider.render(canvas);
+        clear();
+        ui.render(canvas, viewport);
     }
 
     private static boolean opaque(byte[] atlas, BitmapFont font, int character, int x, int y) {

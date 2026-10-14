@@ -1,5 +1,9 @@
 package com.norbertfila.core;
 
+import com.norbertfila.ui.Button;
+import com.norbertfila.ui.Slider;
+import com.norbertfila.ui.UiBounds;
+import com.norbertfila.ui.UiKey;
 import java.util.Objects;
 
 public final class SettingsPanel {
@@ -17,10 +21,22 @@ public final class SettingsPanel {
     public static final int PLUS_X = 292;
 
     private final GameSettings settings;
+    private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
+    private final Button increase = new Button(new UiBounds(PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "+");
+    private final Slider slider;
     private boolean open;
+    private int focusIndex = -1;
+    private boolean pointerReady = true;
 
     public SettingsPanel(GameSettings settings) {
         this.settings = Objects.requireNonNull(settings);
+        slider = new Slider(
+                new UiBounds(SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT),
+                GameSettings.MIN_RENDER_DISTANCE,
+                GameSettings.MAX_RENDER_DISTANCE,
+                1,
+                settings.renderDistance());
+        syncControls();
     }
 
     public boolean open() {
@@ -29,29 +45,83 @@ public final class SettingsPanel {
 
     public void toggle() {
         open = !open;
+        cancelInteraction();
+        pointerReady = true;
     }
 
     public boolean update(boolean mouseDown, boolean mousePressed, double cursorX, double cursorY) {
         if (!open) return false;
-        if (mousePressed && inside(cursorX, cursorY, MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE)) {
-            if (!canDecrease()) return false;
-            return settings.setRenderDistance(settings.renderDistance() - 1);
+        syncControls();
+        if (!mouseDown) pointerReady = true;
+        if (!pointerReady) return false;
+        if (mousePressed) {
+            if (decrease.enabled() && decrease.bounds().contains(cursorX, cursorY)) focus(0);
+            else if (slider.bounds().contains(cursorX, cursorY)) focus(1);
+            else if (increase.enabled() && increase.bounds().contains(cursorX, cursorY)) focus(2);
+            else focus(-1);
         }
-        if (mousePressed && inside(cursorX, cursorY, PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE)) {
-            if (!canIncrease()) return false;
-            return settings.setRenderDistance(settings.renderDistance() + 1);
-        }
-        if (!mouseDown || !inside(cursorX, cursorY, SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT)) return false;
-        double clamped = Math.max(SLIDER_X, Math.min(SLIDER_X + SLIDER_WIDTH, cursorX));
-        double normalized = (clamped - SLIDER_X) / SLIDER_WIDTH;
-        int value = GameSettings.MIN_RENDER_DISTANCE
-                + (int) Math.round(normalized * (GameSettings.MAX_RENDER_DISTANCE - GameSettings.MIN_RENDER_DISTANCE));
-        return settings.setRenderDistance(value);
+        boolean minus = decrease.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        boolean plus = increase.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        slider.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        return applyControls(minus, plus);
     }
 
-    public double sliderFraction() {
-        return (settings.renderDistance() - GameSettings.MIN_RENDER_DISTANCE)
-                / (double) (GameSettings.MAX_RENDER_DISTANCE - GameSettings.MIN_RENDER_DISTANCE);
+    public boolean keyPress(UiKey key) {
+        Objects.requireNonNull(key);
+        if (!open) return false;
+        syncControls();
+        if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
+            int direction = key == UiKey.NEXT ? 1 : -1;
+            int next = focusIndex < 0 ? (direction > 0 ? 2 : 0) : focusIndex;
+            do {
+                next = Math.floorMod(next + direction, 3);
+            } while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
+            focus(next);
+            return false;
+        }
+        boolean minus = decrease.keyPress(key), plus = increase.keyPress(key);
+        slider.keyPress(key);
+        return applyControls(minus, plus);
+    }
+
+    private boolean applyControls(boolean minus, boolean plus) {
+        boolean changed =
+                settings.setRenderDistance(minus ? renderDistance() - 1 : plus ? renderDistance() + 1 : slider.value());
+        syncControls();
+        return changed;
+    }
+
+    public void cancelInteraction() {
+        focusIndex = -1;
+        pointerReady = false;
+        decrease.cancelInteraction();
+        increase.cancelInteraction();
+        slider.cancelInteraction();
+    }
+
+    private void focus(int index) {
+        focusIndex = index;
+        decrease.setFocused(index == 0);
+        slider.setFocused(index == 1);
+        increase.setFocused(index == 2);
+    }
+
+    private void syncControls() {
+        slider.setValue(settings.renderDistance());
+        decrease.setEnabled(canDecrease());
+        increase.setEnabled(canIncrease());
+    }
+
+    public Button decreaseButton() {
+        return decrease;
+    }
+
+    public Button increaseButton() {
+        return increase;
+    }
+
+    public Slider slider() {
+        return slider;
     }
 
     public int renderDistance() {
@@ -64,9 +134,5 @@ public final class SettingsPanel {
 
     public boolean canIncrease() {
         return settings.renderDistance() < GameSettings.MAX_RENDER_DISTANCE;
-    }
-
-    private static boolean inside(double x, double y, int left, int top, int width, int height) {
-        return x >= left && x <= left + width && y >= top && y <= top + height;
     }
 }

@@ -24,11 +24,22 @@ class SettingsPanelViewTest {
         assertEquals(SettingsPanel.PANEL_X, data.get(0));
         assertEquals(SettingsPanel.PANEL_Y, data.get(1));
         int knobOffset = 3 * 48;
-        int knobX = SettingsPanel.SLIDER_X + (int) (SettingsPanel.SLIDER_WIDTH * panel.sliderFraction());
+        int knobX = SettingsPanel.SLIDER_X
+                + (int) (SettingsPanel.SLIDER_WIDTH * panel.slider().fraction());
         assertEquals(knobX - 6, data.get(knobOffset));
-        assertEquals(distance == GameSettings.MIN_RENDER_DISTANCE ? .07f : .15f, data.get(4 * 48 + 2));
-        assertEquals(distance == GameSettings.MAX_RENDER_DISTANCE ? .07f : .15f, data.get(5 * 48 + 2));
+        assertEquals(
+                distance == GameSettings.MIN_RENDER_DISTANCE ? .07f : .15f,
+                rectangleRed(data, panel.decreaseButton().bounds()));
+        assertEquals(
+                distance == GameSettings.MAX_RENDER_DISTANCE ? .07f : .15f,
+                rectangleRed(data, panel.increaseButton().bounds()));
         assertEquals(distance, panel.renderDistance());
         assertTrue(panel.open());
+    }
+
+    private static float rectangleRed(FloatBuffer data, UiBounds bounds) {
+        for (int offset = 0; offset < data.position(); offset += 48)
+            if (data.get(offset) == bounds.x() && data.get(offset + 1) == bounds.y()) return data.get(offset + 2);
+        throw new AssertionError("Missing control background");
     }
 }

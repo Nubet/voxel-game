@@ -4,12 +4,16 @@ import static org.lwjgl.glfw.GLFW.*;
 
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerInputBuffer;
+import com.norbertfila.ui.UiKey;
+import java.util.ArrayDeque;
 import org.lwjgl.glfw.GLFWKeyCallback;
 import org.lwjgl.glfw.GLFWScrollCallback;
 
 public final class Input implements AutoCloseable {
+    private static final int MAX_UI_KEYS = 64;
     private final long window;
     private final PlayerInputBuffer playerInput = new PlayerInputBuffer();
+    private final ArrayDeque<UiKey> uiKeys = new ArrayDeque<>();
     private GLFWKeyCallback keyCallback;
     private GLFWScrollCallback scrollCallback;
     private boolean focused;
@@ -36,8 +40,8 @@ public final class Input implements AutoCloseable {
     public Input(long window) {
         if (window == 0) throw new IllegalArgumentException("Input requires a window");
         this.window = window;
-        keyCallback =
-                GLFWKeyCallback.create((handle, key, scanCode, action, mods) -> keyEvent(key, action, glfwGetTime()));
+        keyCallback = GLFWKeyCallback.create(
+                (handle, key, scanCode, action, mods) -> keyEvent(key, action, mods, glfwGetTime()));
         glfwSetKeyCallback(window, keyCallback);
         scrollCallback = GLFWScrollCallback.create((handle, xOffset, yOffset) -> scrollDeltaY += yOffset);
         glfwSetScrollCallback(window, scrollCallback);
@@ -47,8 +51,22 @@ public final class Input implements AutoCloseable {
         window = 0;
     }
 
-    void keyEvent(int key, int action, double timeSeconds) {
+    void keyEvent(int key, int action, int mods, double timeSeconds) {
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
+        if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
+        UiKey uiKey = switch (key) {
+            case GLFW_KEY_TAB ->
+                action == GLFW_PRESS ? ((mods & GLFW_MOD_SHIFT) != 0 ? UiKey.PREVIOUS : UiKey.NEXT) : null;
+            case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER, GLFW_KEY_SPACE -> action == GLFW_PRESS ? UiKey.ACTIVATE : null;
+            case GLFW_KEY_LEFT, GLFW_KEY_DOWN -> UiKey.DECREASE;
+            case GLFW_KEY_RIGHT, GLFW_KEY_UP -> UiKey.INCREASE;
+            default -> null;
+        };
+        if (uiKey != null && uiKeys.size() < MAX_UI_KEYS) uiKeys.addLast(uiKey);
+    }
+
+    public UiKey pollUiKey() {
+        return uiKeys.pollFirst();
     }
 
     void scrollEvent(double yOffset) {
@@ -109,6 +127,7 @@ public final class Input implements AutoCloseable {
                 slots,
                 focused && isPressed(GLFW_KEY_X));
         if (!focused) {
+            uiKeys.clear();
             clearPlayerInput();
             resetMouseTracking();
         }

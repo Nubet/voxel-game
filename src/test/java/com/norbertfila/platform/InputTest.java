@@ -5,9 +5,41 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.lwjgl.glfw.GLFW.*;
 
+import com.norbertfila.ui.UiKey;
 import org.junit.jupiter.api.Test;
 
 class InputTest {
+    @Test
+    void uiKeysRetainOrderAndTapsButDoNotRepeatButtonActivation() {
+        Input input = new Input();
+        input.keyEvent(GLFW_KEY_TAB, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_TAB, GLFW_RELEASE, 0, 2);
+        input.keyEvent(GLFW_KEY_ENTER, GLFW_PRESS, 0, 3);
+        input.keyEvent(GLFW_KEY_ENTER, GLFW_REPEAT, 0, 4);
+        input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, 0, 5);
+        input.keyEvent(GLFW_KEY_SPACE, GLFW_REPEAT, 0, 6);
+        input.keyEvent(GLFW_KEY_TAB, GLFW_PRESS, GLFW_MOD_SHIFT, 7);
+        input.keyEvent(GLFW_KEY_LEFT, GLFW_PRESS, 0, 8);
+        input.keyEvent(GLFW_KEY_LEFT, GLFW_REPEAT, 0, 9);
+        assertEquals(UiKey.NEXT, input.pollUiKey());
+        assertEquals(UiKey.ACTIVATE, input.pollUiKey());
+        assertEquals(UiKey.ACTIVATE, input.pollUiKey());
+        assertEquals(UiKey.PREVIOUS, input.pollUiKey());
+        assertEquals(UiKey.DECREASE, input.pollUiKey());
+        assertEquals(UiKey.DECREASE, input.pollUiKey());
+        assertEquals(null, input.pollUiKey());
+        assertTrue(input.nextPlayerTick().jumpPressed());
+    }
+
+    @Test
+    void uiKeyBacklogIsBounded() {
+        Input input = new Input();
+        for (int i = 0; i < 1000; i++) input.keyEvent(GLFW_KEY_RIGHT, GLFW_REPEAT, 0, i);
+        int count = 0;
+        while (input.pollUiKey() != null) count++;
+        assertEquals(64, count);
+    }
+
     @Test
     void mouseButtonsTriggerOncePerPressAndRemainIndependent() {
         Input input = new Input();
@@ -80,10 +112,10 @@ class InputTest {
     @Test
     void callbackRetainsTapReleasedBeforePollingAndIgnoresKeyRepeat() {
         try (Input input = new Input()) {
-            input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, .001);
-            input.keyEvent(GLFW_KEY_SPACE, GLFW_REPEAT, .002);
-            input.keyEvent(GLFW_KEY_SPACE, GLFW_RELEASE, .003);
-            input.keyEvent(GLFW_KEY_W, GLFW_PRESS, .004);
+            input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, 0, .001);
+            input.keyEvent(GLFW_KEY_SPACE, GLFW_REPEAT, 0, .002);
+            input.keyEvent(GLFW_KEY_SPACE, GLFW_RELEASE, 0, .003);
+            input.keyEvent(GLFW_KEY_W, GLFW_PRESS, 0, .004);
 
             var tick = input.nextPlayerTick();
             assertTrue(tick.jumpPressed());
@@ -96,7 +128,7 @@ class InputTest {
     @Test
     void pauseOrModeChangeDiscardsPendingPlayerEvents() {
         Input input = new Input();
-        input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, 1);
+        input.keyEvent(GLFW_KEY_SPACE, GLFW_PRESS, 0, 1);
 
         input.clearPlayerInput();
 
