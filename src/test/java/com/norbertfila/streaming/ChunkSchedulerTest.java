@@ -107,7 +107,7 @@ class ChunkSchedulerTest {
             assertTrue(scheduler.submit(new ChunkTask(
                     new ChunkPos(99, 0, 0),
                     0,
-                    ChunkPriority.forPosition(new ChunkPos(99, 0, 0), new ChunkPos(0, 0, 0), 0, 0),
+                    ChunkPriority.visual(new ChunkPos(99, 0, 0), new ChunkPos(0, 0, 0)),
                     () -> {
                         release.await();
                         return new MeshData(new float[0]);
@@ -118,7 +118,7 @@ class ChunkSchedulerTest {
                 assertTrue(scheduler.submit(new ChunkTask(
                         position,
                         x,
-                        ChunkPriority.forPosition(position, new ChunkPos(0, 0, 0), 0, 0),
+                        ChunkPriority.visual(position, new ChunkPos(0, 0, 0)),
                         () -> new MeshData(new float[0]))));
             }
             release.countDown();
@@ -129,11 +129,72 @@ class ChunkSchedulerTest {
     }
 
     @Test
-    void directionBonusPrefersChunkAheadAtEqualDistance() {
-        ChunkPriority ahead = ChunkPriority.forPosition(new ChunkPos(2, 0, 0), new ChunkPos(0, 0, 0), 1, 0);
-        ChunkPriority behind = ChunkPriority.forPosition(new ChunkPos(-2, 0, 0), new ChunkPos(0, 0, 0), 1, 0);
+    void collisionThenEditThenVisualRegardlessOfDistanceAndAge() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        ChunkPos center = new ChunkPos(0, 0, 0);
+        try (ChunkScheduler<String> scheduler = new ChunkScheduler<>(1, 4, 5)) {
+            blockWorker(scheduler, release);
+            submit(scheduler, new ChunkPos(1, 0, 0), ChunkPriority.visual(new ChunkPos(1, 0, 0), center), "visual");
+            submit(scheduler, new ChunkPos(9, 0, 0), ChunkPriority.edit(new ChunkPos(9, 0, 0), center), "edit");
+            submit(scheduler, new ChunkPos(30, 0, 0), ChunkPriority.collision(), "collision");
+            release.countDown();
+            assertEquals("blocker", waitForOutcome(scheduler).result());
+            assertEquals("collision", waitForOutcome(scheduler).result());
+            assertEquals("edit", waitForOutcome(scheduler).result());
+            assertEquals("visual", waitForOutcome(scheduler).result());
+        }
+    }
 
-        assertTrue(ahead.score() < behind.score());
+    @Test
+    void queuedFarTaskIsNotStarvedByNewerNearTasks() {
+        ChunkPos center = new ChunkPos(0, 0, 0);
+        ChunkPriority far = ChunkPriority.visual(new ChunkPos(16, 0, 0), center);
+        ChunkPriority near = ChunkPriority.visual(center, center);
+        long farOrder = 10;
+        assertTrue(ChunkPriority.compare(far, farOrder, near, farOrder + 1) > 0);
+        long overtaken = farOrder + 256 / ChunkPriority.AGE_STEP + 1;
+        assertTrue(ChunkPriority.compare(far, farOrder, near, overtaken) < 0);
+    }
+
+    @Test
+    void equalPrioritiesRunInSubmissionOrder() {
+        ChunkPriority priority = ChunkPriority.edit(new ChunkPos(2, 0, 0), new ChunkPos(0, 0, 0));
+        assertTrue(ChunkPriority.compare(priority, 3, priority, 4) < 0);
+        assertTrue(ChunkPriority.compare(priority, 4, priority, 3) > 0);
+    }
+
+    @Test
+    void promotedQueuedTaskRunsBeforeEarlierVisualWork() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        ChunkPos center = new ChunkPos(0, 0, 0);
+        try (ChunkScheduler<String> scheduler = new ChunkScheduler<>(1, 4, 5)) {
+            blockWorker(scheduler, release);
+            submit(scheduler, new ChunkPos(1, 0, 0), ChunkPriority.visual(new ChunkPos(1, 0, 0), center), "near");
+            ChunkPos needed = new ChunkPos(7, 0, 0);
+            submit(scheduler, needed, ChunkPriority.visual(needed, center), "needed");
+            assertTrue(scheduler.promote(needed, ChunkPriority.collision()));
+            assertFalse(scheduler.promote(needed, ChunkPriority.visual(needed, center)));
+            assertFalse(scheduler.promote(new ChunkPos(50, 0, 0), ChunkPriority.collision()));
+            assertEquals(2, scheduler.queuedTasks());
+            release.countDown();
+            waitForOutcome(scheduler);
+            assertEquals("needed", waitForOutcome(scheduler).result());
+            assertEquals("near", waitForOutcome(scheduler).result());
+            waitFor(() -> scheduler.metadataEntries() == 0 && scheduler.outstandingJobs() == 0);
+        }
+    }
+
+    private static void blockWorker(ChunkScheduler<String> scheduler, CountDownLatch release) throws Exception {
+        assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(-9, 0, 0), 0, -1, () -> {
+            release.await();
+            return "blocker";
+        })));
+        waitForActiveTask(scheduler);
+    }
+
+    private static void submit(
+            ChunkScheduler<String> scheduler, ChunkPos position, ChunkPriority priority, String value) {
+        assertTrue(scheduler.submitLatest(new ChunkTask<>(position, 0, position.x(), priority, () -> value)));
     }
 
     @Test
@@ -339,8 +400,8 @@ class ChunkSchedulerTest {
             assertTrue(scheduler.submit(
                     new ChunkTask<>(new ChunkPos(10, 0, 0), 0, 1, ChunkPriority.unprioritized(), () -> 1)));
             ChunkPos edited = new ChunkPos(1, 0, 0);
-            assertTrue(scheduler.submit(new ChunkTask<>(
-                    edited, 1, 2, ChunkPriority.forPosition(edited, new ChunkPos(0, 0, 0), 0, 0), () -> 2)));
+            assertTrue(scheduler.submit(
+                    new ChunkTask<>(edited, 1, 2, ChunkPriority.edit(edited, new ChunkPos(0, 0, 0)), () -> 2)));
             release.countDown();
             waitForOutcome(scheduler);
             assertEquals(edited, waitForOutcome(scheduler).position());
@@ -361,7 +422,9 @@ class ChunkSchedulerTest {
 
     private static void waitForActiveTask(ChunkScheduler scheduler) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
-        while (scheduler.activeTasks() == 0 && System.nanoTime() < deadline) Thread.sleep(1);
+        // Idle prestarted workers can briefly report as active, so also wait for the queue to empty.
+        while ((scheduler.activeTasks() == 0 || scheduler.queuedTasks() > 0) && System.nanoTime() < deadline)
+            Thread.sleep(1);
         assertEquals(1, scheduler.activeTasks());
     }
 }

@@ -12,7 +12,6 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -149,10 +148,10 @@ public final class ChunkManager implements AutoCloseable {
         collisionDemandChanged = false;
         int scheduled = 0;
         for (ChunkPos position : collisionChunks) {
-            if (scheduleGeneration(position, new ChunkPriority(0, 1))) scheduled++;
+            if (scheduleGeneration(position, ChunkPriority.collision())) scheduled++;
         }
         for (ChunkPos position : viewDemand.requested()) {
-            if (scheduleGeneration(position, ChunkPriority.unprioritized())) scheduled++;
+            if (scheduleGeneration(position, ChunkPriority.visual(position, viewDemand.center()))) scheduled++;
         }
 
         List<ChunkPos> evicted = new ArrayList<>();
@@ -341,8 +340,14 @@ public final class ChunkManager implements AutoCloseable {
         if (!next.equals(collisionChunks)) {
             collisionChunks = next;
             collisionDemandChanged = true;
+            // A chunk already queued for display must not wait behind other visual work once the player needs it.
+            for (ChunkPos position : next) {
+                ChunkEntry entry = entries.get(position);
+                if (entry != null && entry.state() == ChunkState.GENERATING)
+                    generationScheduler.promote(position, ChunkPriority.collision());
+            }
         }
-        for (ChunkPos position : required) scheduleGeneration(position, new ChunkPriority(0, 1));
+        for (ChunkPos position : required) scheduleGeneration(position, ChunkPriority.collision());
         return required.stream().allMatch(world::hasChunk);
     }
 
@@ -422,9 +427,7 @@ public final class ChunkManager implements AutoCloseable {
         long token = meshTokenSequence.getAndIncrement();
         meshTokens.put(position, token);
         BlockNeighborhood neighborhood = world.blockNeighborhood(position);
-        ChunkPriority priority = pendingEdits.contains(position)
-                ? ChunkPriority.forPosition(position, viewDemand.center(), 0, 0)
-                : ChunkPriority.unprioritized();
+        ChunkPriority priority = meshPriority(position);
         boolean submitted = meshingScheduler.submitLatest(new ChunkTask<>(
                 position,
                 neighborhood.center().revision(),
@@ -443,15 +446,22 @@ public final class ChunkManager implements AutoCloseable {
         }
     }
 
+    private ChunkPriority meshPriority(ChunkPos position) {
+        ChunkPos center = viewDemand.center();
+        if (pendingEdits.contains(position)) return ChunkPriority.edit(position, center);
+        ChunkEntry entry = entries.get(position);
+        return entry != null && entry.hasMesh()
+                ? ChunkPriority.refresh(position, center)
+                : ChunkPriority.visual(position, center);
+    }
+
     private void requestRemesh(ChunkPos position) {
         if (entries.containsKey(position) && world.hasChunk(position)) pendingRemesh.add(position);
     }
 
     private void processPendingRemeshes() {
         List<ChunkPos> pending = new ArrayList<>(pendingRemesh);
-        pending.sort(Comparator.comparing((ChunkPos position) -> !pendingEdits.contains(position))
-                .thenComparingLong(position -> ChunkPriority.forPosition(position, viewDemand.center(), 0, 0)
-                        .distanceSquared()));
+        pending.sort((left, right) -> ChunkPriority.compare(meshPriority(left), 0, meshPriority(right), 0));
         for (ChunkPos position : pending) {
             if (!meshingScheduler.hasCapacity()) break;
             processPendingRemesh(position);

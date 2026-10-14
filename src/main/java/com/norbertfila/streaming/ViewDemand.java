@@ -2,6 +2,7 @@ package com.norbertfila.streaming;
 
 import com.norbertfila.world.ChunkPos;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -52,6 +53,7 @@ public final class ViewDemand {
                 }
             }
         }
+        next.sort(Comparator.comparingLong(position -> ChunkPriority.distanceSquared(position, newCenter)));
         requested = List.copyOf(next);
         return true;
     }

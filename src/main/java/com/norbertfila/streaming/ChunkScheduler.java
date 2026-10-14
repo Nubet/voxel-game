@@ -60,6 +60,8 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 taskQueueCapacity, (left, right) -> ((PrioritizedTask) left).compareTo((PrioritizedTask) right));
         executor = new ThreadPoolExecutor(
                 workerCount, workerCount, 0L, TimeUnit.MILLISECONDS, tasks, new ThreadPoolExecutor.AbortPolicy());
+        // promote() re-inserts tasks straight into the queue, which only running workers will drain.
+        executor.prestartAllCoreThreads();
         ready = new ArrayBlockingQueue<>(readyQueueCapacity);
         // Reserve one result slot per accepted job so workers never lose an outcome to a full queue
         outstandingLimit = Math.min(workerCount + taskQueueCapacity, readyQueueCapacity);
@@ -117,6 +119,24 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     /** Bookkeeping entries held for queued, running, cancelled and unpolled work. */
     public int metadataEntries() {
         return latest.size() + submitted.size() + cancelled.size() + running.size();
+    }
+
+    /**
+     * Raises the priority of a still-queued task for {@code position}. Running or finished tasks are unaffected.
+     * Returns true when a queued task was re-prioritized.
+     */
+    public boolean promote(ChunkPos position, ChunkPriority priority) {
+        Objects.requireNonNull(position);
+        Objects.requireNonNull(priority);
+        BlockingQueue<Runnable> queue = executor.getQueue();
+        for (Runnable queued : queue.toArray(Runnable[]::new)) {
+            PrioritizedTask task = (PrioritizedTask) queued;
+            if (!task.task.position().equals(position) || !priority.moreUrgentThan(task.task.priority())) continue;
+            if (!queue.remove(task)) return false;
+            queue.add(task.withPriority(priority));
+            return true;
+        }
+        return false;
     }
 
     public int queuedTasks() {
@@ -278,14 +298,31 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     }
 
     private final class PrioritizedTask implements Runnable {
-        private static final double AGE_WEIGHT = 0.001;
         private final ChunkTask<T> task;
         private final long order;
-        private final long submittedAt = System.nanoTime();
+        private final long submittedAt;
 
         private PrioritizedTask(ChunkTask<T> task, long order) {
+            this(task, order, System.nanoTime());
+        }
+
+        private PrioritizedTask(ChunkTask<T> task, long order, long submittedAt) {
             this.task = task;
             this.order = order;
+            this.submittedAt = submittedAt;
+        }
+
+        private PrioritizedTask withPriority(ChunkPriority priority) {
+            return new PrioritizedTask(
+                    new ChunkTask<>(
+                            task.position(),
+                            task.revision(),
+                            task.meshDependencyRevision(),
+                            task.token(),
+                            priority,
+                            task.work()),
+                    order,
+                    submittedAt);
         }
 
         @Override
@@ -302,10 +339,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         }
 
         private int compareTo(PrioritizedTask other) {
-            double left = task.priority().score() - order * AGE_WEIGHT;
-            double right = other.task.priority().score() - other.order * AGE_WEIGHT;
-            int comparison = Double.compare(left, right);
-            return comparison != 0 ? comparison : Long.compare(order, other.order);
+            return ChunkPriority.compare(task.priority(), order, other.task.priority(), other.order);
         }
     }
 
