@@ -194,18 +194,116 @@ class ChunkSchedulerTest {
     }
 
     @Test
-    void latestSubmissionDropsOlderReadyResult() throws Exception {
-        try (ChunkScheduler scheduler = new ChunkScheduler(1, 2, 2)) {
+    void replacingCompletedResultKeepsNewerTaskTrackedUntilPolled() throws Exception {
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 2, 2)) {
             ChunkPos position = new ChunkPos(0, 0, 0);
-            assertTrue(scheduler.submitLatest(
-                    new ChunkTask(position, 1, 10, () -> new MeshData(new float[] {1, 2, 3, 1, 1, 1}))));
-            ChunkTask.Outcome old = waitForOutcome(scheduler);
-            old.discard();
-            assertTrue(scheduler.submitLatest(
-                    new ChunkTask(position, 2, 11, () -> new MeshData(new float[] {2, 3, 4, 1, 1, 1}))));
-            ChunkTask.Outcome latest = waitForOutcome(scheduler);
-            assertTrue(scheduler.isLatest(latest));
-            latest.discard();
+            assertTrue(scheduler.submitLatest(new ChunkTask<>(position, 1, 10, () -> 1)));
+            waitForReady(scheduler, 1);
+            CountDownLatch release = new CountDownLatch(1);
+            assertTrue(scheduler.submitLatest(new ChunkTask<>(position, 2, 11, () -> {
+                release.await();
+                return 2;
+            })));
+            ChunkTask.Outcome<Integer> old = waitForOutcome(scheduler);
+            assertEquals(10, old.token());
+            assertTrue(scheduler.metadataEntries() > 0, "newer task must survive the older outcome being polled");
+            release.countDown();
+            assertEquals(11, waitForOutcome(scheduler).token());
+            waitFor(() -> scheduler.metadataEntries() == 0);
+        }
+    }
+
+    @Test
+    void repeatedReplacementOfOnePositionLeavesNoMetadata() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 4, 5)) {
+            assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(9, 0, 0), 0, 0, () -> {
+                release.await();
+                return 0;
+            })));
+            waitForActiveTask(scheduler);
+            ChunkPos position = new ChunkPos(1, 0, 0);
+            for (int revision = 1; revision <= 50; revision++) {
+                int value = revision;
+                assertTrue(scheduler.submitLatest(new ChunkTask<>(position, revision, revision, () -> value)));
+            }
+            assertEquals(1, scheduler.queuedTasks());
+            release.countDown();
+            assertEquals(0, waitForOutcome(scheduler).result());
+            assertEquals(50, waitForOutcome(scheduler).result());
+            waitFor(() -> scheduler.metadataEntries() == 0);
+        }
+    }
+
+    @Test
+    void cancellingRunningTaskReleasesItsPermitAndMetadata() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 1, 2)) {
+            ChunkPos position = new ChunkPos(3, 0, 0);
+            assertTrue(scheduler.submitLatest(new ChunkTask<>(position, 1, 1, () -> {
+                started.countDown();
+                release.await();
+                return 1;
+            })));
+            assertTrue(started.await(1, TimeUnit.SECONDS));
+            scheduler.cancel(position, 1, 1);
+            release.countDown();
+            waitFor(() -> scheduler.outstandingJobs() == 0);
+            assertNull(scheduler.pollReady());
+            waitFor(() -> scheduler.metadataEntries() == 0);
+        }
+    }
+
+    @Test
+    void travelThroughManyPositionsKeepsMetadataBoundedByInFlightWork() throws Exception {
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(2, 8, 10)) {
+            int submitted = 0, polled = 0;
+            while (polled < 5_000) {
+                while (submitted < 5_000 && scheduler.hasCapacity()) {
+                    int x = submitted;
+                    assertTrue(scheduler.submitLatest(new ChunkTask<>(new ChunkPos(x, 0, 0), 0, x, () -> x)));
+                    submitted++;
+                }
+                assertTrue(scheduler.metadataEntries() <= 3 * 10);
+                if (scheduler.pollReady() != null) polled++;
+                else Thread.onSpinWait();
+            }
+            waitFor(() -> scheduler.metadataEntries() == 0);
+        }
+    }
+
+    @Test
+    void cancelledOutsideRadiusThenResubmittedPositionCompletes() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 2, 3)) {
+            assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(0, 0, 0), 0, 0, () -> {
+                release.await();
+                return 0;
+            })));
+            waitForActiveTask(scheduler);
+            ChunkPos far = new ChunkPos(40, 0, 0);
+            assertTrue(scheduler.submitLatest(new ChunkTask<>(far, 0, 1, () -> 1)));
+            assertEquals(
+                    1,
+                    scheduler.cancelOutside(new ChunkPos(0, 0, 0), 4, true, java.util.Set.of(new ChunkPos(0, 0, 0))));
+            assertTrue(scheduler.submitLatest(new ChunkTask<>(far, 0, 2, () -> 2)));
+            release.countDown();
+            assertEquals(0, waitForOutcome(scheduler).result());
+            assertEquals(2, waitForOutcome(scheduler).result());
+            waitFor(() -> scheduler.metadataEntries() == 0);
+        }
+    }
+
+    private static void waitForReady(ChunkScheduler<?> scheduler, int completed) throws InterruptedException {
+        waitFor(() -> scheduler.completedJobs() >= completed);
+    }
+
+    private static void waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!condition.getAsBoolean()) {
+            assertTrue(System.nanoTime() < deadline, "condition not reached");
+            Thread.sleep(1);
         }
     }
 

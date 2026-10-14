@@ -443,6 +443,7 @@ public final class GameBenchmark {
                     .put("genLatencyAvgMs", latency(s0.generationLatency(), s1.generationLatency()))
                     .put("visibleLatencyAvgMs", latency(s0.visibleLatency(), s1.visibleLatency()))
                     .put("discardedResults", s1.discardedResults() - s0.discardedResults())
+                    .put("schedulerMetadata", s1.schedulerMetadata())
                     .put("residentMax", residentMax)
                     .put("visibleAvg", frames == 0 ? 0.0 : (double) visibleSum / frames)
                     .put("drawsAvg", frames == 0 ? 0.0 : (double) drawSum / frames)
