@@ -217,7 +217,7 @@ public final class FluidRuntimeBenchmark {
                 }
                 if (frame.ready()) runtime.activate();
                 var eye = frame.interpolatedEye(frameStarted);
-                camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
+                camera.setPosition(eye.x(), eye.y(), eye.z());
                 visibility.update(
                         frame.waterContact().eyesSubmerged(),
                         frame.waterContact().available(),
@@ -226,8 +226,13 @@ public final class FluidRuntimeBenchmark {
                 glViewport(0, 0, 1280, 720);
                 glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                var vp = camera.viewProjection(1280, 720);
-                renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
+                renderer.render(
+                        camera.relativeViewProjection(1280, 720),
+                        Frustum.from(camera.viewProjection(1280, 720)),
+                        camera.x(),
+                        camera.y(),
+                        camera.z(),
+                        visibility.amount());
                 check(glGetError() == GL_NO_ERROR, "GL error");
                 window.swapBuffers();
                 var metrics = frame.metrics();

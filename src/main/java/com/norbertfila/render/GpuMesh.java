@@ -1,70 +1,49 @@
 package com.norbertfila.render;
 
-import static org.lwjgl.opengl.GL46C.glDeleteBuffers;
-import static org.lwjgl.opengl.GL46C.glDeleteVertexArrays;
+import com.norbertfila.meshing.QuadMesh;
+import com.norbertfila.meshing.QuadRanges;
+import java.util.Objects;
 
-import com.norbertfila.meshing.MeshData;
-import com.norbertfila.meshing.MeshFormat;
-import com.norbertfila.meshing.MeshRanges;
-
+/** One uploaded quad buffer owned by the GL thread. Closing it deletes the buffer exactly once. */
 public final class GpuMesh implements AutoCloseable {
     interface Deleter {
-        void delete(int vao, int vbo);
+        void delete(int buffer);
     }
 
-    private final int vao;
-    private final int vbo;
-    private final MeshFormat format;
-    private final MeshRanges ranges;
+    private final int buffer;
+    private final QuadMesh.Format format;
+    private final QuadRanges ranges;
+    private final long bytes;
     private final Deleter deleter;
     private boolean closed;
 
-    GpuMesh(int vao, int vbo, int vertexCount) {
-        this(vao, vbo, legacyFormat(vertexCount), new MeshRanges(vertexCount, 0, 0), (array, buffer) -> {
-            glDeleteBuffers(buffer);
-            glDeleteVertexArrays(array);
-        });
+    GpuMesh(int buffer, QuadMesh mesh, Deleter deleter) {
+        this(buffer, mesh.format(), mesh.ranges(), mesh.bytes(), deleter);
     }
 
-    GpuMesh(int vao, int vbo, int vertexCount, Deleter deleter) {
-        this(vao, vbo, legacyFormat(vertexCount), new MeshRanges(vertexCount, 0, 0), deleter);
+    GpuMesh(int buffer, QuadMesh.Format format, QuadRanges ranges, long bytes, Deleter deleter) {
+        this.buffer = buffer;
+        this.format = Objects.requireNonNull(format);
+        this.ranges = Objects.requireNonNull(ranges);
+        if (bytes < 0) throw new IllegalArgumentException("Mesh size must not be negative");
+        this.bytes = bytes;
+        this.deleter = Objects.requireNonNull(deleter);
     }
 
-    private GpuMesh(int vao, int vbo, MeshFormat format, MeshRanges ranges, Deleter deleter) {
-        this.vao = vao;
-        this.vbo = vbo;
-        this.format = format;
-        this.ranges = ranges;
-        this.deleter = deleter;
+    int buffer() {
+        return buffer;
     }
 
-    GpuMesh(int vao, int vbo, MeshData mesh, Deleter deleter) {
-        this(vao, vbo, mesh.format(), mesh.ranges(), deleter);
-    }
-
-    int vao() {
-        return vao;
-    }
-
-    int vertexCount() {
-        return format.vertexCount();
-    }
-
-    private static MeshFormat legacyFormat(int vertexCount) {
-        return new MeshFormat(
-                1,
-                MeshData.VERTEX_STRIDE,
-                vertexCount,
-                new MeshFormat.Bounds(0, 0, 0, 0, 0, 0),
-                MeshFormat.Topology.TRIANGLES);
-    }
-
-    MeshFormat format() {
+    QuadMesh.Format format() {
         return format;
     }
 
-    MeshRanges ranges() {
+    QuadRanges ranges() {
         return ranges;
+    }
+
+    long bytes() {
+        return bytes;
     }
 
     boolean closed() {
@@ -75,6 +54,6 @@ public final class GpuMesh implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        deleter.delete(vao, vbo);
+        deleter.delete(buffer);
     }
 }

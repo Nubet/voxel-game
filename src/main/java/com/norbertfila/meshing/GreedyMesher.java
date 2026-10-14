@@ -14,8 +14,6 @@ import com.norbertfila.world.RenderLayer;
  * mesh allocates only its final vertex array.
  */
 public final class GreedyMesher implements ChunkMesher {
-    static final int COLOR_STRIDE = MeshData.VERTEX_STRIDE;
-    static final int TEXTURED_STRIDE = MeshFormat.TEXTURED_VERTEX_STRIDE;
 
     private static final int S = Chunk.SIZE;
     private static final int P = S + 2;
@@ -23,18 +21,13 @@ public final class GreedyMesher implements ChunkMesher {
     private static final int[] U_SIGN = {1, -1, -1, 1, -1, 1};
     private static final int[] V_AXIS = {1, 1, 0, 0, 1, 1};
     private static final int[] NORMAL_AXIS = {0, 0, 1, 1, 2, 2};
-    private static final int[] TRIANGLE = VisibleFaceMesher.TRIANGLE_INDICES;
-    private static final int[][] CROSS_PLANES = {{0, 0, 1, 1}, {1, 0, 0, 1}};
-    private static final int[] CROSS_INDICES = {0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0};
-    private static final float[] SHADE = {.77f, .77f, 1.0f, .56f, .86f, .86f};
     private static final int[] NEIGHBOR_STEP = {1, -1, P * P, -P * P, P, -P};
 
     private static final boolean[] CUBE = new boolean[256];
     private static final boolean[] CROSS = new boolean[256];
     private static final boolean[] OCCLUDES = new boolean[256];
     private static final int[] LAYER = new int[256];
-    private static final float[][] TEXTURE = new float[256][6];
-    private static final float[][][] COLOR = new float[256][6][];
+    private static final int[][] TEXTURE = new int[256][6];
 
     static {
         for (int id = 0; id < 256; id++) {
@@ -47,47 +40,45 @@ public final class GreedyMesher implements ChunkMesher {
             LAYER[id] = definition.renderLayer().ordinal();
             for (int face = 0; face < 6; face++) {
                 TEXTURE[id][face] = definition.textureLayer(face);
-                COLOR[id][face] = VisibleFaceMesher.color(block, face);
             }
         }
     }
 
     private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
 
+    /** Single-buffer colored mesh in emission order, kept for tools and tests that work with explicit vertices. */
     @Override
     public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
-        Scratch scratch = build(snapshot, neighborhood, cx, cy, cz, COLOR_STRIDE, false);
-        return new MeshData(scratch.concatenate());
+        Scratch scratch = build(snapshot, neighborhood, false, true);
+        return new MeshData(QuadCodec.decodeColored(scratch.quads(), cx, cy, cz));
     }
 
+    /** Textured mesh including water cubes, expanded to explicit vertices for tools and tests. */
     public MeshData meshTextured(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
-        Scratch scratch = build(snapshot, neighborhood, cx, cy, cz, TEXTURED_STRIDE, false);
-        return MeshData.textured(scratch.concatenate(), scratch.ranges(TEXTURED_STRIDE));
+        QuadMesh quads = build(snapshot, neighborhood, false, false).quads();
+        QuadRanges ranges = quads.ranges();
+        int perQuad = QuadMesh.VERTICES_PER_QUAD;
+        return MeshData.textured(
+                QuadCodec.decodeTextured(quads, cx, cy, cz),
+                new MeshRanges(ranges.opaque() * perQuad, ranges.cutout() * perQuad, ranges.translucent() * perQuad));
     }
 
-    /** Textured opaque and cutout geometry without water faces, which {@link WaterMesher} builds separately. */
-    static MeshData meshSolids(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
-        Scratch scratch = build(snapshot, neighborhood, cx, cy, cz, TEXTURED_STRIDE, true);
-        return MeshData.textured(scratch.concatenate(), scratch.ranges(TEXTURED_STRIDE));
+    /** Opaque and cutout quads without water faces, which {@link WaterMesher} builds separately. */
+    static QuadMesh meshSolids(ChunkSnapshot snapshot, BlockNeighborhood neighborhood) {
+        return build(snapshot, neighborhood, true, false).quads();
     }
 
     private static Scratch build(
-            ChunkSnapshot snapshot,
-            BlockNeighborhood neighborhood,
-            int cx,
-            int cy,
-            int cz,
-            int stride,
-            boolean excludeWater) {
+            ChunkSnapshot snapshot, BlockNeighborhood neighborhood, boolean excludeWater, boolean singleLayer) {
         Scratch scratch = SCRATCH.get();
-        scratch.reset(stride);
+        scratch.reset(singleLayer);
         scratch.load(snapshot, neighborhood);
-        for (int face = 0; face < 6; face++) meshFace(scratch, cx, cy, cz, face, excludeWater);
-        appendCrossPlants(scratch, cx, cy, cz);
+        for (int face = 0; face < 6; face++) meshFace(scratch, face, excludeWater);
+        appendCrossPlants(scratch);
         return scratch;
     }
 
-    private static void meshFace(Scratch scratch, int cx, int cy, int cz, int face, boolean excludeWater) {
+    private static void meshFace(Scratch scratch, int face, boolean excludeWater) {
         byte[] grid = scratch.grid;
         byte[] mask = scratch.mask;
         int[] cell = scratch.cell;
@@ -118,7 +109,7 @@ public final class GreedyMesher implements ChunkMesher {
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) mask[row * S + column] = BlockId.AIR;
                     cell(face, depth, u, v, cell);
-                    emitQuad(scratch, face, block, width, height, cx, cy, cz);
+                    emitQuad(scratch, face, block, width, height);
                 }
         }
     }
@@ -138,85 +129,44 @@ public final class GreedyMesher implements ChunkMesher {
         return true;
     }
 
-    private static void emitQuad(Scratch scratch, int face, byte block, int width, int height, int cx, int cy, int cz) {
+    private static void emitQuad(Scratch scratch, int face, byte block, int width, int height) {
         int id = Byte.toUnsignedInt(block);
-        FloatList out = scratch.layer(scratch.stride == COLOR_STRIDE ? 0 : LAYER[id]);
-        int[][] corners = scratch.corners;
+        IntList out = scratch.layer(LAYER[id]);
         int[] cell = scratch.cell;
-        int[][] faceCorners = VisibleFaceMesher.FACES[face];
-        int uAxis = U_AXIS[face], vAxis = V_AXIS[face];
-        for (int axis = 0; axis < 3; axis++) {
-            int base = cell[axis] + faceCorners[0][axis];
-            int uStep = (faceCorners[3][axis] - faceCorners[0][axis]) * width;
-            int vStep = (faceCorners[1][axis] - faceCorners[0][axis]) * height;
-            corners[0][axis] = base;
-            corners[1][axis] = base + vStep;
-            corners[2][axis] = base + vStep + uStep;
-            corners[3][axis] = base + uStep;
-        }
-        float shade = SHADE[face];
-        for (int index : TRIANGLE) {
-            int[] corner = corners[index];
-            out.add(cx * Chunk.SIZE + corner[0]);
-            out.add(cy * Chunk.SIZE + corner[1]);
-            out.add(cz * Chunk.SIZE + corner[2]);
-            if (scratch.stride == COLOR_STRIDE) {
-                float[] color = COLOR[id][face];
-                out.add(color[0] * shade);
-                out.add(color[1] * shade);
-                out.add(color[2] * shade);
-                continue;
-            }
-            out.add((corner[uAxis] - corners[0][uAxis]) * U_SIGN[face]);
-            out.add(corner[vAxis] - corners[0][vAxis]);
-            out.add(TEXTURE[id][face]);
-            out.add(shade);
-        }
+        int[] corner = VisibleFaceMesher.FACES[face][0];
+        out.add(QuadCodec.solidPosition(
+                cell[0] + corner[0], cell[1] + corner[1], cell[2] + corner[2], face, width, height, false));
+        out.add(QuadCodec.solidMaterial(TEXTURE[id][face], id));
     }
 
-    private static void appendCrossPlants(Scratch scratch, int cx, int cy, int cz) {
-        FloatList out = scratch.layer(scratch.stride == COLOR_STRIDE ? 0 : RenderLayer.CUTOUT.ordinal());
+    private static void appendCrossPlants(Scratch scratch) {
+        IntList out = scratch.layer(RenderLayer.CUTOUT.ordinal());
         byte[] grid = scratch.grid;
         for (int y = 0; y < S; y++)
             for (int z = 0; z < S; z++)
                 for (int x = 0; x < S; x++) {
-                    byte block = grid[padded(x, y, z)];
-                    int id = Byte.toUnsignedInt(block);
+                    int id = Byte.toUnsignedInt(grid[padded(x, y, z)]);
                     if (!CROSS[id]) continue;
-                    for (int[] plane : CROSS_PLANES)
-                        for (int corner : CROSS_INDICES) {
-                            boolean right = corner >= 2;
-                            int top = corner == 1 || corner == 2 ? 1 : 0;
-                            out.add((float) ((long) cx * Chunk.SIZE + x + plane[right ? 2 : 0]));
-                            out.add((float) ((long) cy * Chunk.SIZE + y + top));
-                            out.add((float) ((long) cz * Chunk.SIZE + z + plane[right ? 3 : 1]));
-                            if (scratch.stride == COLOR_STRIDE) {
-                                float[] color = COLOR[id][2];
-                                out.add(color[0]);
-                                out.add(color[1]);
-                                out.add(color[2]);
-                                continue;
-                            }
-                            out.add(right ? 1 : 0);
-                            out.add(1 - top);
-                            out.add(TEXTURE[id][0]);
-                            out.add(1);
+                    int material = QuadCodec.solidMaterial(TEXTURE[id][0], id);
+                    for (int plane : new int[] {QuadCodec.CROSS_PLANE_A, QuadCodec.CROSS_PLANE_B})
+                        for (boolean back : new boolean[] {false, true}) {
+                            out.add(QuadCodec.solidPosition(x, y, z, plane, 1, 1, back));
+                            out.add(material);
                         }
                 }
     }
 
-    /** Per-thread working memory. Nothing in it escapes a meshing call except the arrays built by the caller. */
+    /** Per-thread working memory. Nothing in it escapes a meshing call except the arrays built from it. */
     static final class Scratch {
         private final byte[] grid = new byte[P * P * P];
         private final byte[] mask = new byte[S * S];
         private final int[] cell = new int[3];
-        private final int[][] corners = new int[4][3];
-        private final FloatList[] layers = {new FloatList(), new FloatList(), new FloatList()};
-        private int stride;
+        private final IntList[] layers = {new IntList(), new IntList(), new IntList()};
+        private boolean singleLayer;
 
-        private void reset(int stride) {
-            this.stride = stride;
-            for (FloatList layer : layers) layer.clear();
+        private void reset(boolean singleLayer) {
+            this.singleLayer = singleLayer;
+            for (IntList layer : layers) layer.clear();
         }
 
         private void load(ChunkSnapshot center, BlockNeighborhood neighborhood) {
@@ -234,22 +184,23 @@ public final class GreedyMesher implements ChunkMesher {
                 }
         }
 
-        FloatList layer(int layer) {
-            return layers[layer];
+        /** Single-layer meshes keep every quad in emission order, as the legacy colored format expects. */
+        private IntList layer(int layer) {
+            return layers[singleLayer ? 0 : layer];
         }
 
-        float[] concatenate() {
-            float[] vertices = new float[layers[0].size() + layers[1].size() + layers[2].size()];
+        private QuadMesh quads() {
+            int[] records = new int[layers[0].size() + layers[1].size() + layers[2].size()];
             int offset = 0;
-            for (FloatList layer : layers) {
-                layer.copyTo(vertices, offset);
+            for (IntList layer : layers) {
+                layer.copyTo(records, offset);
                 offset += layer.size();
             }
-            return vertices;
-        }
-
-        MeshRanges ranges(int stride) {
-            return new MeshRanges(layers[0].size() / stride, layers[1].size() / stride, layers[2].size() / stride);
+            int ints = QuadMesh.Format.SOLID.ints();
+            return new QuadMesh(
+                    QuadMesh.Format.SOLID,
+                    records,
+                    new QuadRanges(layers[0].size() / ints, layers[1].size() / ints, layers[2].size() / ints));
         }
     }
 }

@@ -4,9 +4,8 @@ import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.BlockNeighborhood;
 import com.norbertfila.meshing.ChunkMesh;
-import com.norbertfila.meshing.ChunkMesher;
-import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.meshing.LayeredMesher;
+import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
@@ -147,11 +146,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand) {
-        this(world, generator, new GreedyMesher(), viewDemand);
-    }
-
-    public ChunkManager(World world, WorldGenerator generator, ChunkMesher mesher, ViewDemand viewDemand) {
-        this(world, generator, (LayeredMesher) mesher, viewDemand);
+        this(world, generator, new WaterMesher(), viewDemand);
     }
 
     public ChunkManager(World world, WorldGenerator generator, LayeredMesher mesher, ViewDemand viewDemand) {
@@ -159,7 +154,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand, int unloadRadius) {
-        this(world, generator, new GreedyMesher(), viewDemand, unloadRadius);
+        this(world, generator, new WaterMesher(), viewDemand, unloadRadius);
     }
 
     public ChunkManager(

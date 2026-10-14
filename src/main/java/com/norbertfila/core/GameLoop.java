@@ -308,7 +308,7 @@ public final class GameLoop {
                     residencyRevision = state.residency().revision();
                 }
                 var eye = state.interpolatedEye(System.nanoTime());
-                camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
+                camera.setPosition(eye.x(), eye.y(), eye.z());
             }
             if (driver != null) driver.update(runtime, state, camera);
             profiler.mark(Segment.RECONCILE);
@@ -343,8 +343,14 @@ public final class GameLoop {
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            var vp = camera.viewProjection(width[0], height[0]);
-            var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
+            var frustum = Frustum.from(camera.viewProjection(width[0], height[0]));
+            var stats = renderer.render(
+                    camera.relativeViewProjection(width[0], height[0]),
+                    frustum,
+                    camera.x(),
+                    camera.y(),
+                    camera.z(),
+                    visibility.amount());
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);

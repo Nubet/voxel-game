@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.WaterTestScene;
-import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.*;
@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 
 class WaterStreamingTest {
     private static final ChunkPos CENTER = new ChunkPos(-1, 1, -1);
-    private final GreedyMesher mesher = new GreedyMesher();
+    private final WaterMesher mesher = new WaterMesher();
 
     @Test
     void diagonalStateChangeRejectsPendingWaterSurfaceUploadAndProducesFreshGeometry() throws Exception {
@@ -78,7 +78,7 @@ class WaterStreamingTest {
         long[] tick = {0};
         Thread owner = Thread.currentThread();
         List<Boolean> centerEvents = new ArrayList<>();
-        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher, demand)) {
             manager.setChunkLifecycleListener(position -> {
                 assertSame(owner, Thread.currentThread());
                 if (position.equals(CENTER)) centerEvents.add(world.hasChunk(position));
@@ -105,7 +105,7 @@ class WaterStreamingTest {
         World world = new World();
         ViewDemand demand = new ViewDemand(0, 1, 1, ViewDemand.Shape.SQUARE);
         Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
-        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher, demand)) {
             settle(manager, demand, CENTER, uploaded);
             BlockPos position = new BlockPos(-2, 17, -6);
             assertEquals(WaterState.SOURCE, world.getWaterState(position).orElseThrow());
@@ -143,7 +143,7 @@ class WaterStreamingTest {
         World world = new World();
         ViewDemand demand = new ViewDemand(1, 0, 1, ViewDemand.Shape.SQUARE);
         Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
-        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher, demand)) {
             settle(manager, demand, CENTER, uploaded);
             ChunkPos horizontal = new ChunkPos(0, 1, -1);
             ChunkPos vertical = new ChunkPos(-1, 0, -1);
@@ -168,11 +168,11 @@ class WaterStreamingTest {
                     horizontalBefore.dataRevision(), uploaded.get(horizontal).dataRevision());
             assertEquals(verticalBefore.dataRevision(), uploaded.get(vertical).dataRevision());
             assertFalse(Arrays.equals(
-                    horizontalBefore.mesh().solid().vertices(),
-                    uploaded.get(horizontal).mesh().solid().vertices()));
+                    horizontalBefore.mesh().water().records(),
+                    uploaded.get(horizontal).mesh().water().records()));
             assertFalse(Arrays.equals(
-                    verticalBefore.mesh().solid().vertices(),
-                    uploaded.get(vertical).mesh().solid().vertices()));
+                    verticalBefore.mesh().water().records(),
+                    uploaded.get(vertical).mesh().water().records()));
             var edited = uploaded.get(CENTER).mesh();
 
             settle(manager, demand, new ChunkPos(10, 1, -1), uploaded);
@@ -181,8 +181,11 @@ class WaterStreamingTest {
             assertEquals(BlockId.AIR, world.getBlock(removed).orElseThrow());
             assertEquals(BlockId.STONE, world.getBlock(stone).orElseThrow());
             assertArrayEquals(
-                    edited.solid().vertices(),
-                    uploaded.get(CENTER).mesh().solid().vertices());
+                    edited.solid().records(),
+                    uploaded.get(CENTER).mesh().solid().records());
+            assertArrayEquals(
+                    edited.water().records(),
+                    uploaded.get(CENTER).mesh().water().records());
             assertEquals(
                     edited.solid().ranges(), uploaded.get(CENTER).mesh().solid().ranges());
             assertFalse(manager.markUploaded(ownBefore));
@@ -194,7 +197,7 @@ class WaterStreamingTest {
         World world = new World();
         ViewDemand demand = new ViewDemand(0, 1, 1, ViewDemand.Shape.SQUARE);
         Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
-        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher::meshTextured, demand)) {
+        try (ChunkManager manager = new ChunkManager(world, new WaterTestScene(), mesher, demand)) {
             settle(manager, demand, CENTER, uploaded);
             WorldEdit edit = new WorldEdit(world, 8);
             BlockPos position = new BlockPos(-2, 17, -6);
@@ -228,7 +231,7 @@ class WaterStreamingTest {
         try (ChunkManager manager = new ChunkManager(
                 world,
                 new WaterTestScene(),
-                (snapshot, neighborhood, x, y, z) -> {
+                (snapshot, neighborhood, x, y, z, parts) -> {
                     assertNotSame(owner, Thread.currentThread());
                     if (blockNext.getAndSet(false)) {
                         oldSnapshot.set(snapshot);
@@ -241,7 +244,7 @@ class WaterStreamingTest {
                             throw new AssertionError(e);
                         }
                     }
-                    return mesher.meshTextured(snapshot, neighborhood, x, y, z);
+                    return mesher.mesh(snapshot, neighborhood, x, y, z, parts);
                 },
                 demand)) {
             settle(manager, demand, CENTER, uploaded);
@@ -285,9 +288,10 @@ class WaterStreamingTest {
                     break;
                 }
                 var n = manager.world().blockNeighborhood(position);
-                var expected = mesher.meshTextured(n.center(), n, position.x(), position.y(), position.z());
-                assertArrayEquals(expected.vertices(), result.mesh().solid().vertices());
-                assertEquals(expected.ranges(), result.mesh().solid().ranges());
+                var expected = mesher.mesh(n.center(), n, position.x(), position.y(), position.z(), ChunkMesh.ALL);
+                assertArrayEquals(
+                        expected.solid().records(), result.mesh().solid().records());
+                assertEquals(expected.solid().ranges(), result.mesh().solid().ranges());
             }
             if (complete) return;
             Thread.sleep(1);

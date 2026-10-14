@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
-import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.player.PlayerInput;
@@ -31,7 +31,7 @@ class GameSessionTest {
         var b = create(catalog, 2, -42);
         try (var io = new WorldIo()) {
             var demand = new ViewDemand(0, -1, 1, ViewDemand.Shape.SQUARE);
-            var session = new GameSession(io, Flat::new, new GreedyMesher(), demand);
+            var session = new GameSession(io, Flat::new, new WaterMesher(), demand);
             session.open(catalog, a.identity().id());
             assertThrows(
                     IllegalStateException.class,
@@ -282,7 +282,7 @@ class GameSessionTest {
     }
 
     private static GameSession session(WorldIo io) {
-        return new GameSession(io, Flat::new, new GreedyMesher(), new ViewDemand(0, -1, 1, ViewDemand.Shape.SQUARE));
+        return new GameSession(io, Flat::new, new WaterMesher(), new ViewDemand(0, -1, 1, ViewDemand.Shape.SQUARE));
     }
 
     private static WorldMetadata create(WorldCatalog catalog, long id, long seed) throws Exception {

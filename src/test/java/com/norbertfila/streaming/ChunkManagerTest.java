@@ -12,7 +12,8 @@ import com.norbertfila.generation.TerrainConfig;
 import com.norbertfila.generation.TerrainGenerator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.generation.WorldGenerator;
-import com.norbertfila.meshing.GreedyMesher;
+import com.norbertfila.meshing.ChunkMesh;
+import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -75,8 +76,8 @@ class ChunkManagerTest {
             assertFalse(world.isSolid(removed));
             assertTrue(world.isSolid(placed));
             assertArrayEquals(
-                    editedMesh.mesh().solid().vertices(),
-                    reloadedMesh.mesh().solid().vertices());
+                    editedMesh.mesh().solid().records(),
+                    reloadedMesh.mesh().solid().records());
             assertEquals(2, reloadedMesh.dataRevision());
             assertEquals(reloaded.revision(), reloadedMesh.dataRevision());
             assertTrue(reloadedMesh.token() != editedMesh.token());
@@ -127,7 +128,7 @@ class ChunkManagerTest {
             assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
             manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(15, 1, 1), BlockId.STONE));
             var beforeNeighbor = awaitMesh(manager).meshes().get(0);
-            assertEquals(6, beforeNeighbor.mesh().solid().faceCount());
+            assertEquals(6, beforeNeighbor.mesh().solid().quadCount());
             Chunk neighbor = new Chunk();
             neighbor.set(0, 1, 1, BlockId.STONE);
             world.putChunk(new ChunkPos(1, 0, 0), neighbor);
@@ -137,14 +138,14 @@ class ChunkManagerTest {
             var hiddenFace = awaitMesh(manager).meshes().get(0);
             assertEquals(beforeNeighbor.dataRevision(), hiddenFace.dataRevision());
             assertTrue(hiddenFace.meshDependencyRevision() > beforeNeighbor.meshDependencyRevision());
-            assertEquals(5, hiddenFace.mesh().solid().faceCount());
+            assertEquals(5, hiddenFace.mesh().solid().quadCount());
 
             new WorldEdit(world, 8).setBlock(new BlockPos(16, 1, 1), BlockId.AIR);
             assertFalse(manager.isCurrentMesh(hiddenFace));
             assertTrue(manager.rejectUpload(hiddenFace));
             var restoredFace = awaitMesh(manager).meshes().get(0);
             assertEquals(hiddenFace.dataRevision(), restoredFace.dataRevision());
-            assertEquals(6, restoredFace.mesh().solid().faceCount());
+            assertEquals(6, restoredFace.mesh().solid().quadCount());
             assertTrue(manager.markUploaded(restoredFace));
         }
     }
@@ -175,11 +176,11 @@ class ChunkManagerTest {
         AtomicInteger calls = new AtomicInteger();
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        GreedyMesher mesher = new GreedyMesher();
+        WaterMesher mesher = new WaterMesher();
         try (ChunkManager manager = new ChunkManager(
                 world,
                 emptyGenerator(),
-                (snapshot, neighborhood, x, y, z) -> {
+                (snapshot, neighborhood, x, y, z, parts) -> {
                     if (calls.incrementAndGet() == 1) {
                         started.countDown();
                         try {
@@ -190,7 +191,7 @@ class ChunkManagerTest {
                             throw new AssertionError(interrupted);
                         }
                     }
-                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                    return mesher.mesh(snapshot, neighborhood, x, y, z, parts);
                 },
                 new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
             manager.update(new ChunkPos(0, 0, 0));
@@ -217,14 +218,14 @@ class ChunkManagerTest {
         World world = new World();
         AtomicInteger calls = new AtomicInteger();
         Thread owner = Thread.currentThread();
-        GreedyMesher mesher = new GreedyMesher();
+        WaterMesher mesher = new WaterMesher();
         try (ChunkManager manager = new ChunkManager(
                 world,
                 emptyGenerator(),
-                (snapshot, neighborhood, x, y, z) -> {
+                (snapshot, neighborhood, x, y, z, parts) -> {
                     assertFalse(Thread.currentThread() == owner);
                     calls.incrementAndGet();
-                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                    return mesher.mesh(snapshot, neighborhood, x, y, z, parts);
                 },
                 new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
             ChunkPos center = new ChunkPos(0, 0, 0);
@@ -241,8 +242,10 @@ class ChunkManagerTest {
             var result = awaitMesh(manager).meshes().get(0);
             var neighborhood = world.blockNeighborhood(center);
             assertArrayEquals(
-                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
-                    result.mesh().solid().vertices());
+                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0, ChunkMesh.ALL)
+                            .solid()
+                            .records(),
+                    result.mesh().solid().records());
             assertEquals(initialCalls + 1, calls.get());
             assertEquals(10_000, world.getChunk(center).revision());
             assertTrue(manager.markUploaded(result));
@@ -262,11 +265,11 @@ class ChunkManagerTest {
         AtomicReference<com.norbertfila.world.ChunkSnapshot> blockedSnapshot = new AtomicReference<>();
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        GreedyMesher mesher = new GreedyMesher();
+        WaterMesher mesher = new WaterMesher();
         try (ChunkManager manager = new ChunkManager(
                 world,
                 emptyGenerator(),
-                (snapshot, neighborhood, x, y, z) -> {
+                (snapshot, neighborhood, x, y, z, parts) -> {
                     calls.incrementAndGet();
                     if (blockNext.getAndSet(false)) {
                         blockedSnapshot.set(snapshot);
@@ -279,7 +282,7 @@ class ChunkManagerTest {
                             throw new AssertionError(interrupted);
                         }
                     }
-                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                    return mesher.mesh(snapshot, neighborhood, x, y, z, parts);
                 },
                 new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
             ChunkPos center = new ChunkPos(0, 0, 0);
@@ -304,8 +307,10 @@ class ChunkManagerTest {
             var result = awaitMesh(manager).meshes().get(0);
             var neighborhood = world.blockNeighborhood(center);
             assertArrayEquals(
-                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
-                    result.mesh().solid().vertices());
+                    mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0, ChunkMesh.ALL)
+                            .solid()
+                            .records(),
+                    result.mesh().solid().records());
             assertEquals(3, calls.get());
             assertTrue(manager.markUploaded(result));
         } finally {
@@ -317,13 +322,13 @@ class ChunkManagerTest {
     void queuesOnlyResidentChunksForACornerEdit() {
         World world = new World();
         AtomicInteger calls = new AtomicInteger();
-        GreedyMesher mesher = new GreedyMesher();
+        WaterMesher mesher = new WaterMesher();
         try (ChunkManager manager = new ChunkManager(
                 world,
                 emptyGenerator(),
-                (snapshot, neighborhood, x, y, z) -> {
+                (snapshot, neighborhood, x, y, z, parts) -> {
                     calls.incrementAndGet();
-                    return mesher.mesh(snapshot, neighborhood, x, y, z);
+                    return mesher.mesh(snapshot, neighborhood, x, y, z, parts);
                 },
                 new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
             ChunkPos center = new ChunkPos(0, 0, 0);
@@ -335,7 +340,7 @@ class ChunkManagerTest {
             var result = awaitMesh(manager).meshes();
             assertEquals(1, result.size());
             assertEquals(center, result.get(0).position());
-            assertEquals(6, result.get(0).mesh().solid().faceCount());
+            assertEquals(6, result.get(0).mesh().solid().quadCount());
             assertEquals(2, calls.get());
             assertEquals(1, world.residentCount());
         }
@@ -371,14 +376,20 @@ class ChunkManagerTest {
                 var spawn = new com.norbertfila.player.SpawnResolver(new HillsGenerator()).resolve(0, 0);
                 assertTrue(world.isSolid(new com.norbertfila.world.BlockPos(0, (int) spawn.y() - 1, 0)));
                 assertFalse(world.isSolid(new com.norbertfila.world.BlockPos(0, (int) spawn.y(), 0)));
-                GreedyMesher mesher = new GreedyMesher();
+                WaterMesher mesher = new WaterMesher();
                 for (ChunkPos position : demand.requested()) {
                     var neighborhood = world.blockNeighborhood(position);
-                    var expected =
-                            mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
+                    var expected = mesher.mesh(
+                                    neighborhood.center(),
+                                    neighborhood,
+                                    position.x(),
+                                    position.y(),
+                                    position.z(),
+                                    ChunkMesh.ALL)
+                            .solid();
                     assertArrayEquals(
-                            expected.vertices(),
-                            uploaded.get(position).mesh().solid().vertices(),
+                            expected.records(),
+                            uploaded.get(position).mesh().solid().records(),
                             "Outdated terrain at " + position);
                 }
             }
@@ -642,8 +653,8 @@ class ChunkManagerTest {
                 }
                 Thread.sleep(1);
             }
-            assertEquals(0, meshes.get(center).mesh().vertexCount(), "enclosed stone must have no faces");
-            assertTrue(meshes.get(new ChunkPos(1, 0, 0)).mesh().vertexCount() > 0, "edge stone borders unloaded space");
+            assertEquals(0, meshes.get(center).mesh().quadCount(), "enclosed stone must have no faces");
+            assertTrue(meshes.get(new ChunkPos(1, 0, 0)).mesh().quadCount() > 0, "edge stone borders unloaded space");
 
             manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(16, 8, 8), BlockId.AIR));
             ChunkManager.MeshResult opened = null;
@@ -653,12 +664,12 @@ class ChunkManagerTest {
                 manager.update(center);
                 for (var mesh : manager.processResults().meshes()) {
                     manager.markUploaded(mesh);
-                    if (mesh.position().equals(center) && mesh.mesh().vertexCount() > 0) opened = mesh;
+                    if (mesh.position().equals(center) && mesh.mesh().quadCount() > 0) opened = mesh;
                 }
                 Thread.sleep(1);
             }
             assertEquals(
-                    1, opened.mesh().solid().faceCount(), "only the face toward the removed block becomes visible");
+                    1, opened.mesh().solid().quadCount(), "only the face toward the removed block becomes visible");
         }
     }
 

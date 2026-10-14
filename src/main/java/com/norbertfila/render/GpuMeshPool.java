@@ -89,7 +89,7 @@ public final class GpuMeshPool implements AutoCloseable {
     }
 
     private static long bytes(GpuMesh mesh) {
-        return (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
+        return mesh.bytes();
     }
 
     private record Allocation(GpuMesh mesh, long bytes) {}

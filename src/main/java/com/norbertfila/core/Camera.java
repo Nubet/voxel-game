@@ -8,6 +8,7 @@ import org.joml.Vector3fc;
 public final class Camera {
     private static final float MAX_PITCH = 89f;
     private final Vector3f position = new Vector3f(0, 22, 34);
+    private double x = 0, y = 22, z = 34;
     private final Vector3f forward = new Vector3f();
     private final GameSettings settings;
     private float yaw = -90f, pitch = -25f;
@@ -40,8 +41,23 @@ public final class Camera {
         if (Math.abs(target - currentFov) < .01f) currentFov = target;
     }
 
-    public void setPosition(float x, float y, float z) {
-        position.set(x, y, z);
+    public void setPosition(double x, double y, double z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        position.set((float) x, (float) y, (float) z);
+    }
+
+    public double x() {
+        return x;
+    }
+
+    public double y() {
+        return y;
+    }
+
+    public double z() {
+        return z;
     }
 
     public void restoreLook(float yaw, float pitch) {
@@ -89,5 +105,13 @@ public final class Camera {
         return new Matrix4f()
                 .perspective((float) Math.toRadians(currentFov), (float) width / Math.max(1, height), 0.1f, 800f)
                 .lookAt(position, new Vector3f(position).add(forward), new Vector3f(0, 1, 0));
+    }
+
+    /** View projection with the camera at the origin, for geometry already expressed relative to the camera. */
+    public Matrix4f relativeViewProjection(int width, int height) {
+        getForward();
+        return new Matrix4f()
+                .perspective((float) Math.toRadians(currentFov), (float) width / Math.max(1, height), 0.1f, 800f)
+                .lookAt(new Vector3f(), new Vector3f(forward), new Vector3f(0, 1, 0));
     }
 }
