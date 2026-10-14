@@ -41,6 +41,11 @@ public final class LayerStorage {
         if (layer.get(index) != value) layers[y] = layer.set(index, value);
     }
 
+    public void copyInto(byte[] target) {
+        if (target.length != Chunk.BLOCK_BYTES) throw new IllegalArgumentException("Invalid target size");
+        for (int y = 0; y < Chunk.SIZE; y++) layers[y].copyInto(target, y * LAYER_BLOCKS);
+    }
+
     public byte[] toBlocks() {
         byte[] blocks = new byte[Chunk.BLOCK_BYTES];
         for (int y = 0; y < Chunk.SIZE; y++) {

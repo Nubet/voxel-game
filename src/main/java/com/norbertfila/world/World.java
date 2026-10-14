@@ -2,7 +2,6 @@ package com.norbertfila.world;
 
 import com.norbertfila.lod.WorldChangeOverlay;
 import com.norbertfila.meshing.BlockNeighborhood;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -146,22 +145,25 @@ public final class World {
         return storage.positions();
     }
 
+    /** Snapshots of the chunk and its resident neighbors; snapshots are shared until a chunk's content changes. */
     public BlockNeighborhood blockNeighborhood(ChunkPos position) {
         Objects.requireNonNull(position);
-        ChunkSnapshot center = snapshot(position);
-        if (center == null) {
+        if (!storage.contains(position))
             throw new IllegalArgumentException("Center chunk is not resident: " + position);
-        }
-        var halo = new HashMap<ChunkPos, ChunkSnapshot>();
-        for (ChunkPos neighbor : meshNeighbors(position)) {
-            var data = snapshot(neighbor);
-            if (data != null)
-                halo.put(
-                        new ChunkPos(
-                                neighbor.x() - position.x(), neighbor.y() - position.y(), neighbor.z() - position.z()),
-                        data);
-        }
-        return new BlockNeighborhood(center, halo);
+        ChunkSnapshot[] chunks = new ChunkSnapshot[27];
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++) {
+                    long x = (long) position.x() + dx, y = (long) position.y() + dy, z = (long) position.z() + dz;
+                    if (x < Integer.MIN_VALUE
+                            || x > Integer.MAX_VALUE
+                            || y < Integer.MIN_VALUE
+                            || y > Integer.MAX_VALUE
+                            || z < Integer.MIN_VALUE
+                            || z > Integer.MAX_VALUE) continue;
+                    chunks[BlockNeighborhood.slot(dx, dy, dz)] = snapshot(new ChunkPos((int) x, (int) y, (int) z));
+                }
+        return new BlockNeighborhood(chunks);
     }
 
     private ChunkSnapshot snapshot(ChunkPos position) {
