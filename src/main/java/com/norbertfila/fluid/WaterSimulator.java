@@ -21,7 +21,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class WaterSimulator {
-    private static final TickResult IDLE = new TickResult(0, 0, List.of());
+    private static final TickResult IDLE = new TickResult(0, 0, List.of(), List.of());
     private static final Comparator<ChunkPos> CHUNK_ORDER =
             Comparator.comparingInt(ChunkPos::x).thenComparingInt(ChunkPos::y).thenComparingInt(ChunkPos::z);
     private final World world;
@@ -60,7 +60,7 @@ public final class WaterSimulator {
             scheduler.processDue(tick, ignored -> {});
             return IDLE;
         }
-        Set<ChunkPos> dirty = new TreeSet<>(CHUNK_ORDER);
+        Set<ChunkPos> dirty = new TreeSet<>(CHUNK_ORDER), levelDirty = new TreeSet<>(CHUNK_ORDER);
         int[] changed = {0};
         int processed = scheduler.processDue(tick, position -> {
             Set<ChunkPos> missing = new LinkedHashSet<>();
@@ -75,10 +75,13 @@ public final class WaterSimulator {
             BlockChangeResult result = edits.setBlock(position, block, (byte) next);
             if (!result.changed()) return;
             changed[0]++;
-            dirty.addAll(result.dirtyChunks());
+            boolean levelOnly =
+                    block == BlockId.WATER && result.previous().orElseThrow() == BlockId.toUnsignedInt(BlockId.WATER);
+            (levelOnly ? levelDirty : dirty).addAll(result.dirtyChunks());
             scheduleNeighborhood(position, nextTick, true);
         });
-        return new TickResult(processed, changed[0], List.copyOf(dirty));
+        levelDirty.removeAll(dirty);
+        return new TickResult(processed, changed[0], List.copyOf(dirty), List.copyOf(levelDirty));
     }
 
     public int pendingUpdates() {
@@ -268,11 +271,17 @@ public final class WaterSimulator {
         return Math.addExact(tick, FluidScheduler.WATER_TICK_DELAY);
     }
 
-    public record TickResult(int processedUpdates, int changedBlocks, List<ChunkPos> dirtyChunks) {
+    /**
+     * {@code dirtyChunks} had a block type change and need a full remesh; {@code levelDirtyChunks} only had water
+     * levels change, which affects water surfaces but no solid geometry.
+     */
+    public record TickResult(
+            int processedUpdates, int changedBlocks, List<ChunkPos> dirtyChunks, List<ChunkPos> levelDirtyChunks) {
         public TickResult {
             if (processedUpdates < 0 || changedBlocks < 0 || changedBlocks > processedUpdates)
                 throw new IllegalArgumentException("Invalid fluid update counts");
             dirtyChunks = List.copyOf(dirtyChunks);
+            levelDirtyChunks = List.copyOf(levelDirtyChunks);
         }
     }
 }

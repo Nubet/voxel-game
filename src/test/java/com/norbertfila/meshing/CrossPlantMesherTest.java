@@ -15,22 +15,23 @@ class CrossPlantMesherTest {
             chunk.set(2, 3, 4, id);
             var snapshot = chunk.snapshot();
             var neighborhood = BlockNeighborhood.centerOnly(snapshot);
-            MeshData mesh = new WaterMesher().mesh(snapshot, neighborhood, -1, 0, 1);
+            MeshData mesh = new WaterMesher()
+                    .mesh(snapshot, neighborhood, -1, 0, 1, ChunkMesh.ALL)
+                    .solid();
             assertEquals(new MeshRanges(0, 24, 0), mesh.ranges());
             float[] vertices = mesh.vertices();
-            for (int i = 0; i < vertices.length; i += MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE) {
+            int stride = MeshFormat.TEXTURED_VERTEX_STRIDE;
+            for (int i = 0; i < vertices.length; i += stride) {
                 assertTrue(vertices[i] >= -14 && vertices[i] <= -13);
                 assertTrue(vertices[i + 2] >= 20 && vertices[i + 2] <= 21);
                 assertEquals(1 - (vertices[i + 1] - 3), vertices[i + 4]);
                 assertEquals(BlockRegistry.DEFAULT.definition(id).sideTexture(), vertices[i + 5]);
-                assertEquals(0, vertices[i + 7]);
-                assertEquals(0, vertices[i + 8]);
             }
             for (int plane = 0; plane < 2; plane++) {
-                int a = plane * 12 * 9;
+                int a = plane * 12 * stride;
                 for (int attribute = 0; attribute < 3; attribute++) {
-                    assertEquals(vertices[a + attribute], vertices[a + 8 * 9 + attribute]);
-                    assertEquals(vertices[a + 2 * 9 + attribute], vertices[a + 6 * 9 + attribute]);
+                    assertEquals(vertices[a + attribute], vertices[a + 8 * stride + attribute]);
+                    assertEquals(vertices[a + 2 * stride + attribute], vertices[a + 6 * stride + attribute]);
                 }
             }
             assertThrows(IllegalArgumentException.class, () -> new PackedVertexMesher().mesh(snapshot, neighborhood));
@@ -50,7 +51,9 @@ class CrossPlantMesherTest {
         chunk.set(3, 1, 2, BlockId.DANDELION_WHITE);
         chunk.set(5, 0, 5, BlockId.WATER);
         var snapshot = chunk.snapshot();
-        MeshData mesh = new WaterMesher().mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0);
-        assertEquals(new MeshRanges(36, 48, 36), mesh.ranges());
+        ChunkMesh mesh =
+                new WaterMesher().mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0, ChunkMesh.ALL);
+        assertEquals(new MeshRanges(36, 48, 0), mesh.solid().ranges());
+        assertEquals(new MeshRanges(0, 0, 36), mesh.water().ranges());
     }
 }

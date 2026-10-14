@@ -168,11 +168,11 @@ class WaterStreamingTest {
                     horizontalBefore.dataRevision(), uploaded.get(horizontal).dataRevision());
             assertEquals(verticalBefore.dataRevision(), uploaded.get(vertical).dataRevision());
             assertFalse(Arrays.equals(
-                    horizontalBefore.mesh().vertices(),
-                    uploaded.get(horizontal).mesh().vertices()));
+                    horizontalBefore.mesh().solid().vertices(),
+                    uploaded.get(horizontal).mesh().solid().vertices()));
             assertFalse(Arrays.equals(
-                    verticalBefore.mesh().vertices(),
-                    uploaded.get(vertical).mesh().vertices()));
+                    verticalBefore.mesh().solid().vertices(),
+                    uploaded.get(vertical).mesh().solid().vertices()));
             var edited = uploaded.get(CENTER).mesh();
 
             settle(manager, demand, new ChunkPos(10, 1, -1), uploaded);
@@ -180,8 +180,11 @@ class WaterStreamingTest {
             settle(manager, demand, CENTER, uploaded);
             assertEquals(BlockId.AIR, world.getBlock(removed).orElseThrow());
             assertEquals(BlockId.STONE, world.getBlock(stone).orElseThrow());
-            assertArrayEquals(edited.vertices(), uploaded.get(CENTER).mesh().vertices());
-            assertEquals(edited.ranges(), uploaded.get(CENTER).mesh().ranges());
+            assertArrayEquals(
+                    edited.solid().vertices(),
+                    uploaded.get(CENTER).mesh().solid().vertices());
+            assertEquals(
+                    edited.solid().ranges(), uploaded.get(CENTER).mesh().solid().ranges());
             assertFalse(manager.markUploaded(ownBefore));
         }
     }
@@ -283,8 +286,8 @@ class WaterStreamingTest {
                 }
                 var n = manager.world().blockNeighborhood(position);
                 var expected = mesher.meshTextured(n.center(), n, position.x(), position.y(), position.z());
-                assertArrayEquals(expected.vertices(), result.mesh().vertices());
-                assertEquals(expected.ranges(), result.mesh().ranges());
+                assertArrayEquals(expected.vertices(), result.mesh().solid().vertices());
+                assertEquals(expected.ranges(), result.mesh().solid().ranges());
             }
             if (complete) return;
             Thread.sleep(1);
