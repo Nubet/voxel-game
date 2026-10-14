@@ -68,8 +68,6 @@ public final class UiViewportSmoke {
                     {640, 480, 1280, 720},
                     {180, 100, 180, 100}
                 };
-                UiViewport reference = new UiViewport(640, 360, 640, 360);
-                ByteBuffer referenceHud = null, referencePanel = null;
                 for (int i = 0; i < cases.length; i++) {
                     int[] size = cases[i];
                     UiViewport viewport = new UiViewport(size[0], size[1], size[2], size[3]);
@@ -89,31 +87,37 @@ public final class UiViewportSmoke {
                     clear();
                     render(ui, canvas, screens, hotbar, viewport);
                     ByteBuffer pixels = capture(viewport);
-                    if (i == 0) referenceHud = pixels;
-                    if (i == 1) checkDoubleScaleExceptHotbar(referenceHud, pixels, reference, viewport);
                     int centerX = (int) viewport.width() / 2 * viewport.scale();
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
                     write(output.resolve("inventory-" + i + "-hud.png"), pixels, viewport);
                     screens.open(panel);
+                    screens.layout(viewport);
                     screens.updatePointer(false, false, 0, 0);
-                    double windowX = (SettingsScreen.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
-                    double windowY = (SettingsScreen.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
-                    screens.updatePointer(true, true, viewport.cursorX(windowX), viewport.cursorY(windowY));
+                    var sliderBounds = panel.slider().bounds();
+                    screens.updatePointer(true, true, sliderBounds.x() + .25, sliderBounds.y() + 1);
                     check(panel.renderDistance() == GameSettings.MIN_RENDER_DISTANCE, "Wrong slider value");
                     clear();
                     render(ui, canvas, screens, hotbar, viewport);
                     pixels = capture(viewport);
-                    if (i == 0) referencePanel = pixels;
-                    if (i == 1) checkDoubleScale(referencePanel, pixels, reference, viewport);
                     int s = viewport.scale();
-                    check(rgb(pixels, viewport, 24 * s, 25 * s) != 0, "Panel left edge missing");
-                    check(rgb(pixels, viewport, 24 * s - 1, 25 * s) == 0, "Panel left edge stretched");
-                    int panelRight = SettingsScreen.PANEL_X + SettingsScreen.PANEL_WIDTH;
-                    if (viewport.width() > panelRight) {
-                        check(rgb(pixels, viewport, panelRight * s - 1, 25 * s) != 0, "Panel right edge missing");
-                        check(rgb(pixels, viewport, panelRight * s, 25 * s) == 0, "Panel right edge stretched");
+                    var panelBounds = panel.panelBounds();
+                    check(
+                            rgb(pixels, viewport, panelBounds.x() * s, (panelBounds.y() + 1) * s) != 0,
+                            "Panel left edge missing");
+                    if (panelBounds.x() > 0)
+                        check(
+                                rgb(pixels, viewport, panelBounds.x() * s - 1, (panelBounds.y() + 1) * s) == 0,
+                                "Panel left edge stretched");
+                    int panelRight = panelBounds.x() + panelBounds.width();
+                    if (panelRight < viewport.width()) {
+                        check(
+                                rgb(pixels, viewport, panelRight * s - 1, (panelBounds.y() + 1) * s) != 0,
+                                "Panel right edge missing");
+                        check(
+                                rgb(pixels, viewport, panelRight * s, (panelBounds.y() + 1) * s) == 0,
+                                "Panel right edge stretched");
                     }
                     write(output.resolve("inventory-" + i + "-settings.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
@@ -265,6 +269,7 @@ public final class UiViewportSmoke {
         hotbar.select(Hotbar.SLOTS - 1);
         screens.beginFrame();
         screens.open(screen);
+        screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
         for (int i = 0; i < 9; i++) screens.keyPress(UiKey.NEXT);
         check(screen.backButton().focused(), "Back missing from keyboard navigation");
@@ -272,12 +277,17 @@ public final class UiViewportSmoke {
         render(ui, canvas, screens, hotbar, viewport);
         ByteBuffer pixels = capture(viewport);
         check(
-                (rgb(pixels, viewport, SettingsScreen.BACK_BOUNDS.x() - 1, SettingsScreen.BACK_BOUNDS.y() - 1)
+                (rgb(
+                                        pixels,
+                                        viewport,
+                                        screen.backButton().bounds().x() - 1,
+                                        screen.backButton().bounds().y() - 1)
                                 & 0xffff00)
                         == 0xf5cc00,
                 "Back focus not rendered");
         write(output.resolve("ui05-settings-back-focus.png"), pixels, viewport);
-        double x = SettingsScreen.BACK_BOUNDS.x() + 2, y = SettingsScreen.BACK_BOUNDS.y() + 2;
+        double x = screen.backButton().bounds().x() + 2,
+                y = screen.backButton().bounds().y() + 2;
         screens.updatePointer(true, true, x, y);
         check(screens.isOpen(), "Back activated before release");
         screens.updatePointer(false, false, x, y);
@@ -290,12 +300,13 @@ public final class UiViewportSmoke {
         screens.beginFrame();
         check(!screens.blocksGameplay(), "Gameplay remained blocked after close frame");
         screens.open(screen);
+        screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
-        screens.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
+        var settingsSlider = screen.slider().bounds();
+        screens.updatePointer(true, true, settingsSlider.x(), settingsSlider.y() + 1);
         check(screen.slider().dragging(), "Settings slider did not capture");
         screens.cancelInteraction();
-        screens.updatePointer(
-                true, true, SettingsScreen.SLIDER_X + SettingsScreen.SLIDER_WIDTH, SettingsScreen.SLIDER_Y);
+        screens.updatePointer(true, true, settingsSlider.x() + settingsSlider.width(), settingsSlider.y() + 1);
         check(
                 !screen.slider().dragging() && settings.renderDistance() == GameSettings.MIN_RENDER_DISTANCE,
                 "Cancelled screen reacquired held pointer");
@@ -333,7 +344,6 @@ public final class UiViewportSmoke {
             {640, 480, 1280, 720}
         };
         for (boolean creative : new boolean[] {false, true}) {
-            ByteBuffer reference = null;
             for (int i = 0; i < sizes.length; i++) {
                 int[] size = sizes[i];
                 var viewport = new UiViewport(size[0], size[1], size[2], size[3]);
@@ -385,8 +395,6 @@ public final class UiViewportSmoke {
                             (color & 0xffff00) == (cell == 35 ? 0xf2cc00 : 0x666e00),
                             "Inventory slot border missing " + cell);
                 }
-                if (i == 0) reference = pixels;
-                if (i == 1) checkDoubleScale(reference, pixels, new UiViewport(640, 360, 640, 360), viewport);
                 write(
                         output.resolve("inventory-" + (creative ? "creative-" : "survival-") + i + ".png"),
                         pixels,

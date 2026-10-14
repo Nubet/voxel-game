@@ -83,6 +83,7 @@ public final class GameLoop {
                 UiViewport viewport = minimized
                         ? null
                         : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0], settings.guiScale());
+                if (viewport != null) screens.layout(viewport);
                 boolean inventoryPressed = input.inventoryPressed();
                 if (!minimized && input.focused() && inventoryPressed && !input.settingsPressed()) {
                     if (screens.current() instanceof InventoryScreen) screens.close();

@@ -123,15 +123,15 @@ class SettingsScreenTest {
         assertTrue(canvas.vertexCount() > 54);
         FloatBuffer data = FloatBuffer.allocate(canvas.floatCount());
         canvas.writeTo(data);
-        assertEquals(SettingsScreen.PANEL_X, data.get(0));
-        assertEquals(SettingsScreen.PANEL_Y, data.get(1));
+        assertEquals((640 - SettingsScreen.PANEL_WIDTH) / 2, data.get(0));
+        assertEquals((360 - SettingsScreen.PANEL_HEIGHT) / 2, data.get(1));
         assertEquals(
                 distance == GameSettings.MIN_RENDER_DISTANCE ? .07f : .15f,
                 redAt(data, screen.decreaseButton().bounds()));
         assertEquals(
                 distance == GameSettings.MAX_RENDER_DISTANCE ? .07f : .15f,
                 redAt(data, screen.increaseButton().bounds()));
-        assertEquals(.15f, redAt(data, SettingsScreen.BACK_BOUNDS));
+        assertEquals(.15f, redAt(data, screen.backButton().bounds()));
         assertEquals(distance, settings.renderDistance());
     }
 

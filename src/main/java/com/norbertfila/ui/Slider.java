@@ -4,8 +4,8 @@ import java.util.Objects;
 
 public final class Slider {
     private static final int KNOB_WIDTH = 12;
-    private final UiBounds track;
-    private final UiBounds bounds;
+    private UiBounds track;
+    private UiBounds bounds;
     private int minimum;
     private int maximum;
     private int step;
@@ -68,6 +68,15 @@ public final class Slider {
         if (value < minimum || value > maximum || (value - (long) minimum) % step != 0)
             value = Math.max(minimum, Math.min(maximum, minimum + Math.round((value - minimum) / (float) step) * step));
         dragging = false;
+    }
+
+    public void setPosition(int x, int y) {
+        track = new UiBounds(x, y, track.width(), track.height());
+        bounds = new UiBounds(
+                Math.subtractExact(x, KNOB_WIDTH / 2),
+                Math.subtractExact(y, KNOB_WIDTH / 2),
+                Math.addExact(track.width(), KNOB_WIDTH),
+                Math.addExact(track.height(), KNOB_WIDTH));
     }
 
     public void setFocused(boolean focused) {

@@ -65,6 +65,10 @@ public final class ScreenManager {
         if (current != null) current.render(canvas, viewport);
     }
 
+    public void layout(UiViewport viewport) {
+        if (current != null) current.layout(viewport);
+    }
+
     private void handle(Screen.Action action) {
         if (action == Screen.Action.CLOSE) close();
         else if (action != Screen.Action.NONE) {

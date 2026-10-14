@@ -3,7 +3,7 @@ package com.norbertfila.ui;
 import java.util.Objects;
 
 public final class Button {
-    private final UiBounds bounds;
+    private UiBounds bounds;
     private String label;
     private boolean enabled = true;
     private boolean hovered;
@@ -22,6 +22,10 @@ public final class Button {
 
     public void setLabel(String label) {
         this.label = Objects.requireNonNull(label);
+    }
+
+    public void setPosition(int x, int y) {
+        bounds = new UiBounds(x, y, bounds.width(), bounds.height());
     }
 
     public boolean enabled() {

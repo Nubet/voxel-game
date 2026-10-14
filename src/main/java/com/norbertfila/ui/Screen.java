@@ -29,6 +29,8 @@ public interface Screen {
 
     void render(UiCanvas canvas, UiViewport viewport);
 
+    default void layout(UiViewport viewport) {}
+
     Action updatePointer(boolean down, boolean pressed, double x, double y);
 
     Action keyPress(UiKey key);

@@ -13,6 +13,18 @@ public final class PauseScreen implements Screen {
     private static final BitmapFont FONT = BitmapFont.DEFAULT;
     private final Button resume = new Button(RESUME_BOUNDS, "Resume");
     private boolean pointerReady = true;
+    private int panelX = 160, panelY = 100;
+
+    @Override
+    public void layout(UiViewport viewport) {
+        int nextPanelX = Math.max(0, ((int) Math.ceil(viewport.width()) - 320) / 2);
+        int nextPanelY = Math.max(0, ((int) Math.ceil(viewport.height()) - 160) / 2);
+        boolean moved = panelX != nextPanelX || panelY != nextPanelY;
+        panelX = nextPanelX;
+        panelY = nextPanelY;
+        resume.setPosition(panelX + 100, panelY + 108);
+        if (moved) cancelInteraction();
+    }
 
     @Override
     public Action updatePointer(boolean down, boolean pressed, double x, double y) {
@@ -38,8 +50,9 @@ public final class PauseScreen implements Screen {
 
     @Override
     public void render(UiCanvas canvas, UiViewport viewport) {
-        int width = (int) viewport.width(), height = (int) viewport.height();
-        int x = Math.max(0, (width - 320) / 2), y = Math.max(0, (height - 160) / 2);
+        layout(viewport);
+        int width = (int) Math.ceil(viewport.width()), height = (int) Math.ceil(viewport.height());
+        int x = panelX, y = panelY;
         canvas.rectangle(0, 0, width, height, 0, 0, 0, .55f);
         canvas.rectangle(x, y, 320, 160, .12f, .14f, .17f, 1);
         canvas.textWithShadow(FONT, "Paused", x + 12, y + 16, 1, 1, 1, 1);

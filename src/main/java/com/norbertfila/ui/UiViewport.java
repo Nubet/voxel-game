@@ -1,8 +1,8 @@
 package com.norbertfila.ui;
 
 public record UiViewport(int windowWidth, int windowHeight, int framebufferWidth, int framebufferHeight, int guiScale) {
-    private static final int MIN_GUI_WIDTH = 480;
-    private static final int MIN_GUI_HEIGHT = 270;
+    public static final int MIN_GUI_WIDTH = 320;
+    public static final int MIN_GUI_HEIGHT = 240;
 
     public UiViewport(int windowWidth, int windowHeight, int framebufferWidth, int framebufferHeight) {
         this(windowWidth, windowHeight, framebufferWidth, framebufferHeight, 0);
@@ -15,9 +15,12 @@ public record UiViewport(int windowWidth, int windowHeight, int framebufferWidth
     }
 
     public int scale() {
-        return guiScale == 0
-                ? Math.max(1, Math.min(framebufferWidth / MIN_GUI_WIDTH, framebufferHeight / MIN_GUI_HEIGHT))
-                : guiScale;
+        int maximum = maximumScale();
+        return guiScale == 0 ? maximum : Math.min(guiScale, maximum);
+    }
+
+    public int maximumScale() {
+        return Math.max(1, Math.min(framebufferWidth / MIN_GUI_WIDTH, framebufferHeight / MIN_GUI_HEIGHT));
     }
 
     public double width() {

@@ -12,27 +12,27 @@ import com.norbertfila.ui.UiViewport;
 import java.util.Objects;
 
 public final class SettingsScreen implements Screen {
-    public static final int PANEL_X = 24;
-    public static final int PANEL_Y = 24;
-    public static final int PANEL_WIDTH = 440;
-    public static final int PANEL_HEIGHT = 320;
+    public static final int PANEL_X = 8;
+    public static final int PANEL_Y = 0;
+    public static final int PANEL_WIDTH = 304;
+    public static final int PANEL_HEIGHT = 236;
     public static final int SLIDER_X = 84;
-    public static final int SLIDER_Y = 104;
-    public static final int SLIDER_WIDTH = 200;
-    public static final int SLIDER_HEIGHT = 16;
-    public static final int BUTTON_Y = 102;
+    public static final int SLIDER_Y = 40;
+    public static final int SLIDER_WIDTH = 180;
+    public static final int SLIDER_HEIGHT = 12;
+    public static final int BUTTON_Y = 38;
     public static final int BUTTON_SIZE = 20;
     public static final int MINUS_X = 56;
-    public static final int PLUS_X = 292;
-    public static final UiBounds BACK_BOUNDS = new UiBounds(184, 280, 120, 24);
+    public static final int PLUS_X = 272;
+    public static final UiBounds BACK_BOUNDS = new UiBounds(108, 208, 88, 20);
 
-    public static final int CAMERA_X = 220;
+    public static final int CAMERA_X = 116;
     public static final int CAMERA_WIDTH = 180;
-    public static final int FOV_Y = 128;
-    public static final int ZOOM_FOV_Y = 160;
-    public static final int SENSITIVITY_Y = 192;
-    public static final int ZOOM_SPEED_Y = 224;
-    public static final int GUI_SCALE_Y = 256;
+    public static final int FOV_Y = 72;
+    public static final int ZOOM_FOV_Y = 100;
+    public static final int SENSITIVITY_Y = 128;
+    public static final int ZOOM_SPEED_Y = 156;
+    public static final int GUI_SCALE_Y = 184;
 
     private final GameSettings settings;
     private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
@@ -54,10 +54,12 @@ public final class SettingsScreen implements Screen {
             new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 100, 1, 11);
     private final Slider zoomSpeed =
             new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 30, 1, 12);
-    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, CAMERA_WIDTH, 24), "Auto");
+    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 100, 20), "Auto");
     private final Button back = new Button(BACK_BOUNDS, "Back");
     private int focusIndex = -1;
     private boolean pointerReady = true;
+    private int panelX = PANEL_X;
+    private int panelY = PANEL_Y;
 
     public SettingsScreen(GameSettings settings) {
         this.settings = Objects.requireNonNull(settings);
@@ -166,6 +168,29 @@ public final class SettingsScreen implements Screen {
         zoomSpeed.cancelInteraction();
         guiScale.cancelInteraction();
         back.cancelInteraction();
+    }
+
+    @Override
+    public void layout(UiViewport viewport) {
+        int width = (int) Math.ceil(viewport.width());
+        int height = (int) Math.ceil(viewport.height());
+        int nextPanelX = Math.max(0, (width - PANEL_WIDTH) / 2);
+        int nextPanelY = Math.max(0, (height - PANEL_HEIGHT) / 2);
+        boolean moved = panelX != nextPanelX || panelY != nextPanelY;
+        panelX = nextPanelX;
+        panelY = nextPanelY;
+        int offsetX = panelX - PANEL_X;
+        int offsetY = panelY - PANEL_Y;
+        decrease.setPosition(MINUS_X + offsetX, BUTTON_Y + offsetY);
+        increase.setPosition(PLUS_X + offsetX, BUTTON_Y + offsetY);
+        renderDistance.setPosition(SLIDER_X + offsetX, SLIDER_Y + offsetY);
+        fieldOfView.setPosition(CAMERA_X + offsetX, FOV_Y + offsetY);
+        zoomFieldOfView.setPosition(CAMERA_X + offsetX, ZOOM_FOV_Y + offsetY);
+        mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
+        zoomSpeed.setPosition(CAMERA_X + offsetX, ZOOM_SPEED_Y + offsetY);
+        guiScale.setPosition(CAMERA_X + offsetX, GUI_SCALE_Y + offsetY);
+        back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
+        if (moved) cancelInteraction();
     }
 
     private void applyControls(
@@ -280,6 +305,10 @@ public final class SettingsScreen implements Screen {
         return back;
     }
 
+    public UiBounds panelBounds() {
+        return new UiBounds(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
+    }
+
     public int renderDistance() {
         return settings.renderDistance();
     }
@@ -294,27 +323,43 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public void render(UiCanvas canvas, UiViewport viewport) {
+        layout(viewport);
         syncControls();
-        canvas.rectangle(PANEL_X, PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
+        canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
         BitmapFont font = BitmapFont.DEFAULT;
-        canvas.textWithShadow(font, "Settings", PANEL_X + 12, PANEL_Y + 10, 1, 1, 1, 1);
+        canvas.textWithShadow(font, "Settings", panelX + 12, panelY + 4, 1, 1, 1, 1);
         canvas.textWithShadow(
-                font, "Render distance: " + renderDistance() + " chunks", PANEL_X + 12, PANEL_Y + 44, 1, 1, 1, 1);
-        canvas.textWithShadow(font, "FOV: " + Math.round(settings.fieldOfView()), 36, FOV_Y - 4, 1, 1, 1, 1);
+                font, "Render distance: " + renderDistance() + " chunks", panelX + 12, panelY + 22, 1, 1, 1, 1);
         canvas.textWithShadow(
-                font, "Zoom FOV: " + Math.round(settings.zoomFieldOfView()), 36, ZOOM_FOV_Y - 4, 1, 1, 1, 1);
+                font, "FOV: " + Math.round(settings.fieldOfView()), panelX + 8, panelY + FOV_Y - 4, 1, 1, 1, 1);
         canvas.textWithShadow(
                 font,
-                "Sensitivity: " + String.format(java.util.Locale.ROOT, "%.2f", settings.mouseSensitivity()),
-                36,
-                SENSITIVITY_Y - 4,
+                "Zoom FOV: " + Math.round(settings.zoomFieldOfView()),
+                panelX + 8,
+                panelY + ZOOM_FOV_Y - 4,
                 1,
                 1,
                 1,
                 1);
         canvas.textWithShadow(
-                font, "Zoom speed: " + Math.round(settings.zoomSpeed()), 36, ZOOM_SPEED_Y - 4, 1, 1, 1, 1);
-        canvas.textWithShadow(font, "GUI scale", 36, GUI_SCALE_Y + 5, 1, 1, 1, 1);
+                font,
+                "Sensitivity: " + String.format(java.util.Locale.ROOT, "%.2f", settings.mouseSensitivity()),
+                panelX + 8,
+                panelY + SENSITIVITY_Y - 4,
+                1,
+                1,
+                1,
+                1);
+        canvas.textWithShadow(
+                font,
+                "Zoom speed: " + Math.round(settings.zoomSpeed()),
+                panelX + 8,
+                panelY + ZOOM_SPEED_Y - 4,
+                1,
+                1,
+                1,
+                1);
+        canvas.textWithShadow(font, "GUI scale", panelX + 8, panelY + GUI_SCALE_Y + 3, 1, 1, 1, 1);
         renderDistance.render(canvas);
         fieldOfView.render(canvas);
         zoomFieldOfView.render(canvas);

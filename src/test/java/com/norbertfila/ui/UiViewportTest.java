@@ -8,7 +8,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class UiViewportTest {
     @ParameterizedTest
-    @CsvSource({"180,100,1", "479,270,1", "960,539,1", "960,540,2", "1280,720,2", "1920,1080,4", "3840,2160,8"})
+    @CsvSource({"180,100,1", "479,270,1", "960,539,2", "960,540,2", "1280,720,3", "1920,1080,4", "3840,2160,9"})
     void scaleFitsBothAxesAndNeverDropsBelowOne(int width, int height, int scale) {
         UiViewport viewport = new UiViewport(width, height, width, height);
         assertEquals(scale, viewport.scale());
@@ -36,10 +36,10 @@ class UiViewportTest {
     @Test
     void oddFramebufferDimensionsDoNotStretchIntegerSizedPixels() {
         UiViewport viewport = new UiViewport(1281, 721, 1281, 721);
-        assertEquals(2, viewport.scale());
-        assertEquals(640.5, viewport.width());
-        assertEquals(360.5, viewport.height());
-        assertEquals(200, 100 / viewport.width() * viewport.framebufferWidth());
+        assertEquals(3, viewport.scale());
+        assertEquals(427, viewport.width());
+        assertEquals(721 / 3.0, viewport.height());
+        assertEquals(300, 100 / viewport.width() * viewport.framebufferWidth());
     }
 
     @ParameterizedTest
@@ -73,5 +73,13 @@ class UiViewportTest {
     void rejectsUnsupportedManualGuiScale() {
         assertThrows(IllegalArgumentException.class, () -> new UiViewport(640, 360, 640, 360, -1));
         assertThrows(IllegalArgumentException.class, () -> new UiViewport(640, 360, 640, 360, 5));
+    }
+
+    @Test
+    void clampsManualScaleToTheAvailableLogicalMinimum() {
+        UiViewport viewport = new UiViewport(1280, 720, 1280, 720, 4);
+
+        assertEquals(3, viewport.maximumScale());
+        assertEquals(3, viewport.scale());
     }
 }
