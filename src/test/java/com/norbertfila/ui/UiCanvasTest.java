@@ -58,4 +58,19 @@ class UiCanvasTest {
         canvas.writeTo(second);
         assertEquals(48, second.position());
     }
+
+    @Test
+    void scaledTextKeepsOneQuadPerGlyphAndUsesCompactDimensions() {
+        UiCanvas canvas = new UiCanvas();
+        canvas.textWithShadow(BitmapFont.DEFAULT, "9", 2, 3, .5, 1, 1, 1, 1);
+        FloatBuffer data = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(data);
+        assertEquals(12, canvas.vertexCount());
+        assertEquals(2, data.get(48), 0.001);
+        assertEquals(3, data.get(49), 0.001);
+        assertEquals(6, data.get(56), 0.001);
+        assertEquals(3, data.get(57), 0.001);
+        assertEquals(6, data.get(64), 0.001);
+        assertEquals(10, data.get(65), 0.001);
+    }
 }

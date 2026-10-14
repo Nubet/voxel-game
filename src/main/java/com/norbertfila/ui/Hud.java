@@ -53,7 +53,7 @@ public final class Hud {
             }
             if (size < 18) continue;
             String label = Integer.toString(slot + 1);
-            canvas.textWithShadow(FONT, label, x + (size - FONT.width(label)) / 2, y + size - 15, .94f, .94f, .94f, 1);
+            canvas.textWithShadow(FONT, label, x + 2, y + 2, .5, .94f, .94f, .94f, 1);
         }
     }
 

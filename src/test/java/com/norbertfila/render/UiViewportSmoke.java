@@ -18,6 +18,7 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
+import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
@@ -89,7 +90,7 @@ public final class UiViewportSmoke {
                     render(ui, canvas, screens, hotbar, viewport);
                     ByteBuffer pixels = capture(viewport);
                     if (i == 0) referenceHud = pixels;
-                    if (i == 1) checkDoubleScale(referenceHud, pixels, reference, viewport);
+                    if (i == 1) checkDoubleScaleExceptHotbar(referenceHud, pixels, reference, viewport);
                     int centerX = (int) viewport.width() / 2 * viewport.scale();
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
@@ -302,6 +303,14 @@ public final class UiViewportSmoke {
         screens.beginFrame();
         screens.keyPress(UiKey.ACTIVATE);
         check(!screens.blocksGameplay() && hotbar.selectedSlot() == 8, "Closed screen retained input");
+        PauseScreen pause = new PauseScreen();
+        screens.open(pause);
+        clear();
+        render(ui, canvas, screens, hotbar, viewport);
+        pixels = capture(viewport);
+        check(rgb(pixels, viewport, 160, 100) != 0, "Pause panel missing");
+        screens.keyPress(UiKey.BACK);
+        check(!screens.isOpen() && screens.blocksGameplay(), "Pause close leaked input");
         check(glGetError() == GL_NO_ERROR, "Screen lifecycle GL error");
     }
 
@@ -420,6 +429,17 @@ public final class UiViewportSmoke {
                 check(
                         rgb(scaled, viewport, x, y) == rgb(reference, original, x / 2, y / 2),
                         "Scale 2 differs from exact pixel doubling");
+    }
+
+    private static void checkDoubleScaleExceptHotbar(
+            ByteBuffer reference, ByteBuffer scaled, UiViewport original, UiViewport viewport) {
+        for (int y = 0; y < viewport.framebufferHeight(); y++)
+            for (int x = 0; x < viewport.framebufferWidth(); x++) {
+                if (y >= viewport.framebufferHeight() - 40 * viewport.scale()) continue;
+                check(
+                        rgb(scaled, viewport, x, y) == rgb(reference, original, x / 2, y / 2),
+                        "Scale 2 differs outside compact hotbar");
+            }
     }
 
     private static void checkSlots(ByteBuffer pixels, UiViewport viewport) {

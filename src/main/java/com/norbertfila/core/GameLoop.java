@@ -19,6 +19,7 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
+import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -45,6 +46,7 @@ public final class GameLoop {
         Hud hud = new Hud();
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(settings);
+        PauseScreen pauseScreen = new PauseScreen();
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             long placePressId = 0;
@@ -114,7 +116,10 @@ public final class GameLoop {
                 } else screens.cancelInteraction();
                 UiKey key;
                 while ((key = input.pollUiKey()) != null) {
-                    if (!minimized && input.focused()) screens.keyPress(key);
+                    if (!minimized && input.focused()) {
+                        if (key == UiKey.BACK && !screens.isOpen()) screens.open(pauseScreen);
+                        else screens.keyPress(key);
+                    }
                 }
                 if (previousScreen != screens.current()) {
                     window.setCursorCaptured(!screens.isOpen());
@@ -145,7 +150,7 @@ public final class GameLoop {
                         camera.yaw(),
                         camera.pitch(),
                         blocked,
-                        minimized,
+                        minimized || screens.current() instanceof PauseScreen,
                         settings.renderDistance(),
                         placePressId,
                         !blocked && input.rightMouseDown()));

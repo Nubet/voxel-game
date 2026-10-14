@@ -35,6 +35,46 @@ public final class UiCanvas {
         text(font, text, x, y, r, g, b, a);
     }
 
+    public void textWithShadow(
+            BitmapFont font, String text, int x, int y, double scale, float r, float g, float b, float a) {
+        int shadowOffset = Math.max(1, (int) Math.round(scale));
+        text(font, text, x + shadowOffset, y + shadowOffset, scale, r * .25f, g * .25f, b * .25f, a);
+        text(font, text, x, y, scale, r, g, b, a);
+    }
+
+    public void text(BitmapFont font, String text, int x, int y, double scale, float r, float g, float b, float a) {
+        if (!Double.isFinite(scale) || scale <= 0) throw new IllegalArgumentException("Text scale must be positive");
+        int cursorX = x, cursorY = y;
+        for (int offset = 0; offset < text.length(); ) {
+            int codePoint = text.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            if (codePoint == '\n') {
+                cursorX = x;
+                cursorY += (int) Math.round(BitmapFont.LINE_HEIGHT * scale);
+                continue;
+            }
+            int glyph = font.glyph(codePoint), width = font.glyphWidth(codePoint);
+            if (width > 0) {
+                float u = glyph % 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_WIDTH;
+                float v = glyph / 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_HEIGHT;
+                quad(
+                        cursorX,
+                        cursorY,
+                        Math.max(1, (int) Math.round(width * scale)),
+                        Math.max(1, (int) Math.round(BitmapFont.GLYPH_HEIGHT * scale)),
+                        r,
+                        g,
+                        b,
+                        a,
+                        u,
+                        v,
+                        u + width / (float) BitmapFont.ATLAS_WIDTH,
+                        v + BitmapFont.GLYPH_HEIGHT / (float) BitmapFont.ATLAS_HEIGHT);
+            }
+            cursorX += Math.max(1, (int) Math.round(font.advance(codePoint) * scale));
+        }
+    }
+
     public void text(BitmapFont font, String text, int x, int y, float r, float g, float b, float a) {
         int cursorX = x, cursorY = y;
         for (int offset = 0; offset < text.length(); ) {
