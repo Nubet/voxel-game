@@ -70,6 +70,10 @@ public final class Window implements AutoCloseable {
         glfwGetFramebufferSize(handle, width, height);
     }
 
+    public void windowSize(int[] width, int[] height) {
+        glfwGetWindowSize(handle, width, height);
+    }
+
     public void swapBuffers() {
         glfwSwapBuffers(handle);
     }

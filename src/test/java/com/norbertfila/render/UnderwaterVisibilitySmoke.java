@@ -9,6 +9,7 @@ import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.WaterContact;
+import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.*;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
@@ -172,7 +173,7 @@ public final class UnderwaterVisibilitySmoke {
                 ? renderer.render(vp, Frustum.from(vp), eye)
                 : renderer.render(vp, Frustum.from(vp), eye, visibility.amount());
         check(stats.drawCalls() > 0, "No terrain draws");
-        ui.render(new SettingsPanel(new GameSettings()), new Hotbar(), WIDTH, HEIGHT);
+        ui.render(new SettingsPanel(new GameSettings()), new Hotbar(), new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
         check(glGetError() == GL_NO_ERROR, "Draw GL error");
     }
 

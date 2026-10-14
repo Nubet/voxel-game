@@ -12,6 +12,7 @@ import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
 import java.util.HashMap;
@@ -39,6 +40,7 @@ public final class GameLoop {
             String hardware =
                     System.getProperty("os.name") + " " + System.getProperty("os.arch") + " Java " + Runtime.version();
             int[] width = new int[1], height = new int[1];
+            int[] windowWidth = new int[1], windowHeight = new int[1];
             while (!window.shouldClose()) {
                 window.pollEvents();
                 double now = window.time(), delta = clampDelta(now - previous);
@@ -51,10 +53,16 @@ public final class GameLoop {
                     input.resetMouseTracking();
                 }
                 window.framebufferSize(width, height);
-                boolean minimized = width[0] <= 0 || height[0] <= 0;
+                window.windowSize(windowWidth, windowHeight);
+                boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
+                UiViewport viewport =
+                        minimized ? null : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0]);
                 boolean blocked = minimized || settingsPanel.open() || !input.focused();
-                if (settingsPanel.update(
-                        input.leftMouseDown(), input.leftMousePressed(), input.cursorX(), input.cursorY()))
+                if (!minimized
+                        && input.focused()
+                        && settingsPanel.update(
+                                input.leftMouseDown(), input.leftMousePressed(),
+                                viewport.cursorX(input.cursorX()), viewport.cursorY(input.cursorY())))
                     window.setTitle("Voxel Engine | Render distance: " + settingsPanel.renderDistance());
                 blocked = minimized || settingsPanel.open() || !input.focused();
                 int slotPressed = input.hotbarSlotPressed();
@@ -161,7 +169,7 @@ public final class GameLoop {
                 var vp = camera.viewProjection(width[0], height[0]);
                 var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
                 metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
-                uiRenderer.render(settingsPanel, hotbar, width[0], height[0]);
+                uiRenderer.render(settingsPanel, hotbar, viewport);
                 window.swapBuffers();
                 metrics.recordFrame(delta);
                 metrics.reportIfDue(now, width[0], height[0], hardware);

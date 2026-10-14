@@ -4,6 +4,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.core.SettingsPanel;
+import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.BlockId;
 import java.io.IOException;
 import java.io.InputStream;
@@ -244,15 +245,17 @@ public final class UiRenderer implements AutoCloseable {
         return offset;
     }
 
-    public void render(SettingsPanel panel, Hotbar hotbar, int width, int height) {
-        int count = panel.open() ? panelVertices(vertices, panel) : hudVertices(vertices, hotbar, width, height);
+    public void render(SettingsPanel panel, Hotbar hotbar, UiViewport viewport) {
+        int count = panel.open()
+                ? panelVertices(vertices, panel)
+                : hudVertices(vertices, hotbar, (int) viewport.width(), (int) viewport.height());
 
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glUseProgram(program);
-        glUniform2f(viewportUniform, width, height);
+        glUniform2f(viewportUniform, (float) viewport.width(), (float) viewport.height());
         glBindVertexArray(vao);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer buffer = stack.mallocFloat(count);

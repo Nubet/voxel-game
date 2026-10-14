@@ -4,10 +4,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.core.Hotbar;
+import com.norbertfila.ui.UiViewport;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class UiRendererTest {
+    @ParameterizedTest
+    @CsvSource({"640,360", "1280,720", "1920,1080", "1281,721", "180,100"})
+    void scaledHudKeepsEverySlotInsideFramebuffer(int width, int height) {
+        UiViewport viewport = new UiViewport(width, height, width, height);
+        float[] vertices = new float[36 * (Hotbar.SLOTS * 11 + 4)];
+        int count = UiRenderer.hudVertices(vertices, new Hotbar(), (int) viewport.width(), (int) viewport.height());
+        int slots = 0;
+        for (int offset = 0; offset < count; offset += 6) {
+            assertTrue(vertices[offset] * viewport.scale() >= 0 && vertices[offset] * viewport.scale() <= width);
+            assertTrue(
+                    vertices[offset + 1] * viewport.scale() >= 0 && vertices[offset + 1] * viewport.scale() <= height);
+        }
+        for (int offset = 0; offset < count; offset += 36) {
+            float r = vertices[offset + 2], g = vertices[offset + 3], b = vertices[offset + 4];
+            if ((r == .96f && g == .8f && b == .3f) || (r == .25f && g == .29f && b == .35f)) slots++;
+        }
+        assertEquals(Hotbar.SLOTS, slots);
+    }
+
     @ParameterizedTest
     @CsvSource({"1280,720", "640,360", "180,100"})
     void hudHasCenteredCrosshairAllSlotsAndOneMovableSelection(int width, int height) {
