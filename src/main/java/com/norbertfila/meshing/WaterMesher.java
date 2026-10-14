@@ -4,20 +4,11 @@ import com.norbertfila.fluid.WaterSurface;
 import com.norbertfila.world.*;
 
 public final class WaterMesher implements ChunkMesher {
-    private final GreedyMesher solids = new GreedyMesher();
-
     @Override
     public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
-        MeshData solid = solids.meshTexturedSolids(snapshot, neighborhood, cx, cy, cz);
-        VisibleFaceMesher.Floats out = new VisibleFaceMesher.Floats(1024);
-        float[] vertices = solid.vertices();
-        for (int i = 0; i < vertices.length; i += MeshFormat.TEXTURED_VERTEX_STRIDE) {
-            for (int attribute = 0; attribute < MeshFormat.TEXTURED_VERTEX_STRIDE; attribute++)
-                out.add(vertices[i + attribute]);
-            out.add(0);
-            out.add(0);
-        }
-        int waterStart = out.size() / MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE;
+        GreedyMesher.Scratch scratch =
+                GreedyMesher.meshSolids(snapshot, neighborhood, cx, cy, cz, GreedyMesher.FLOW_STRIDE);
+        FloatList out = scratch.layer(RenderLayer.TRANSLUCENT.ordinal());
         for (int y = 0; y < Chunk.SIZE; y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
@@ -41,6 +32,8 @@ public final class WaterMesher implements ChunkMesher {
                                                 && heights.h11() == 1
                                                 && heights.h01() == 1)) continue;
                         float shade = face == 2 ? 1 : face == 3 ? .56f : face < 2 ? .77f : .86f;
+                        float texture =
+                                BlockRegistry.DEFAULT.definition(BlockId.WATER).textureLayer(face);
                         for (int index : VisibleFaceMesher.TRIANGLE_INDICES) {
                             int[] corner = VisibleFaceMesher.FACES[face][index];
                             float h = corner[1] == 0 ? 0 : heights.at(corner[0], corner[2]);
@@ -54,22 +47,14 @@ public final class WaterMesher implements ChunkMesher {
                                 out.add(face < 2 ? corner[2] : corner[0]);
                                 out.add(h);
                             }
-                            out.add(BlockRegistry.DEFAULT
-                                    .definition(BlockId.WATER)
-                                    .textureLayer(face));
+                            out.add(texture);
                             out.add(shade);
                             out.add(face == 2 ? flowX : 0);
                             out.add(face == 2 ? flowZ : snapshot.waterState(x, y, z) == WaterState.FALLING ? -1 : 0);
                         }
                     }
                 }
-        float[] data = out.toArray();
-        return new MeshData(
-                MeshFormat.flowTextured(data),
-                data,
-                new MeshRanges(
-                        solid.ranges().opaqueVertices(),
-                        solid.ranges().cutoutVertices(),
-                        data.length / MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE - waterStart));
+        float[] data = scratch.concatenate();
+        return new MeshData(MeshFormat.flowTextured(data), data, scratch.ranges(GreedyMesher.FLOW_STRIDE));
     }
 }
