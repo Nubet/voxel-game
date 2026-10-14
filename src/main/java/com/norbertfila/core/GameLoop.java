@@ -3,11 +3,14 @@ package com.norbertfila.core;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.diagnostics.FrameProfiler;
+import com.norbertfila.diagnostics.FrameProfiler.Segment;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.Frustum;
+import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
@@ -38,6 +41,16 @@ public final class GameLoop {
         QUIT
     }
 
+    /** Scripted replacement for player look and movement, used by the game benchmark. */
+    interface FrameDriver {
+        /** Positions the camera and issues world commands for the current frame. */
+        void update(WorldRuntime runtime, WorldRuntime.Frame state, Camera camera);
+
+        /** Observes a completed frame; returns true when the session should end. */
+        boolean frameCompleted(
+                WorldRuntime runtime, WorldRuntime.Frame state, TerrainRenderer.RenderStats stats, int uploadQueue);
+    }
+
     public Exit run(
             Window window,
             Input input,
@@ -47,6 +60,62 @@ public final class GameLoop {
             FrameMetrics metrics,
             GameSession session,
             GameSettings settings) {
+        return run(
+                window,
+                input,
+                camera,
+                renderer,
+                uiRenderer,
+                metrics,
+                session,
+                settings,
+                null,
+                FrameProfiler.disabled());
+    }
+
+    Exit run(
+            Window window,
+            Input input,
+            Camera camera,
+            TerrainRenderer renderer,
+            UiRenderer uiRenderer,
+            FrameMetrics metrics,
+            GameSession session,
+            GameSettings settings,
+            FrameDriver driver,
+            FrameProfiler profiler) {
+        try (GpuFrameTimer gpuTimer =
+                profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null) {
+            return run(
+                    window,
+                    input,
+                    camera,
+                    renderer,
+                    uiRenderer,
+                    metrics,
+                    session,
+                    settings,
+                    driver,
+                    profiler,
+                    gpuTimer);
+        }
+    }
+
+    private Exit run(
+            Window window,
+            Input input,
+            Camera camera,
+            TerrainRenderer renderer,
+            UiRenderer uiRenderer,
+            FrameMetrics metrics,
+            GameSession session,
+            GameSettings settings,
+            FrameDriver driver,
+            FrameProfiler profiler,
+            GpuFrameTimer gpuTimer) {
+        FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
+        GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
+        long frameStarted = System.nanoTime();
         WorldRuntime runtime = session.runtime();
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
@@ -70,6 +139,7 @@ public final class GameLoop {
         int[] width = new int[1], height = new int[1];
         int[] windowWidth = new int[1], windowHeight = new int[1];
         while (!window.shouldClose() && !Thread.currentThread().isInterrupted()) {
+            profiler.beginFrame();
             screens.beginFrame();
             Screen previousScreen = screens.current();
             int previousDistance = settings.renderDistance();
@@ -216,6 +286,7 @@ public final class GameLoop {
                 if (!sleepWhileIdle()) return Exit.QUIT;
                 continue;
             }
+            profiler.mark(Segment.INPUT);
             WorldRuntime.SessionMesh mesh;
             while ((mesh = runtime.pollMesh()) != null) {
                 var replaced = pending.put(mesh.mesh().position(), mesh);
@@ -234,6 +305,8 @@ public final class GameLoop {
                 var eye = state.interpolatedEye(System.nanoTime());
                 camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
             }
+            if (driver != null) driver.update(runtime, state, camera);
+            profiler.mark(Segment.RECONCILE);
             var uploads = renderer.processUploads(4L * 1024 * 1024, 2_000_000, result -> {
                 var current = runtime.frame();
                 return current != null && current.isCurrent(result);
@@ -255,25 +328,40 @@ public final class GameLoop {
             }
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             metrics.recordResidentChunks(residents.size());
+            profiler.mark(Segment.UPLOAD);
             if (state != null)
                 visibility.update(
                         state.waterContact().eyesSubmerged(),
                         state.waterContact().available(),
                         delta);
+            if (gpuTimer != null) gpuTimer.beginFrame(gpuListener);
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             var vp = camera.viewProjection(width[0], height[0]);
             var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
+            if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
+            profiler.mark(Segment.RENDER);
             canvas.clear();
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
             else hud.render(canvas, hotbar, viewport);
             uiRenderer.render(canvas, viewport);
+            if (gpuTimer != null) {
+                gpuTimer.stamp();
+                gpuTimer.endFrame();
+            }
+            profiler.mark(Segment.UI);
             window.swapBuffers();
+            profiler.mark(Segment.SWAP);
+            long frameEnded = System.nanoTime();
+            profiler.endFrame(frameEnded - frameStarted);
+            frameStarted = frameEnded;
             metrics.recordFrame(delta);
             metrics.reportIfDue(now, width[0], height[0], hardware);
+            if (driver != null && driver.frameCompleted(runtime, state, stats, uploads.queueDepth()))
+                return Exit.BACK_TO_MENU;
         }
         return Exit.QUIT;
     }

@@ -23,6 +23,7 @@ import java.util.logging.Logger;
 public final class ChunkScheduler<T> implements AutoCloseable {
     private final java.util.concurrent.atomic.LongAdder workNanos = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.LongAdder completedJobs = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder queueWaitNanos = new java.util.concurrent.atomic.LongAdder();
 
     public long workNanos() {
         return workNanos.sum();
@@ -30,6 +31,11 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     public long completedJobs() {
         return completedJobs.sum();
+    }
+
+    /** Total time started tasks spent queued before a worker picked them up. */
+    public long queueWaitNanos() {
+        return queueWaitNanos.sum();
     }
 
     private static final Logger LOG = Logger.getLogger(ChunkScheduler.class.getName());
@@ -275,6 +281,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         private static final double AGE_WEIGHT = 0.001;
         private final ChunkTask<T> task;
         private final long order;
+        private final long submittedAt = System.nanoTime();
 
         private PrioritizedTask(ChunkTask<T> task, long order) {
             this.task = task;
@@ -283,6 +290,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
         @Override
         public void run() {
+            queueWaitNanos.add(System.nanoTime() - submittedAt);
             TaskKey key = TaskKey.of(task);
             running.add(key);
             try {

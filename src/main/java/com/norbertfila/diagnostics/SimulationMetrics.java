@@ -22,4 +22,6 @@ public record SimulationMetrics(
         int queuedActions,
         long oldestAckNanos,
         boolean movementWaiting,
-        long estimatedChunkBytes) {}
+        long estimatedChunkBytes,
+        long streamingNanos,
+        long publishNanos) {}

@@ -183,7 +183,7 @@ public final class WorldRuntime implements AutoCloseable {
             Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
             Map<Long, Long> issuedAt = new HashMap<>();
             WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
-            long[] estimatedChunkBytes = {0};
+            long[] estimatedChunkBytes = {0}, publishNanos = {0};
             BlockInteraction interaction =
                     new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
             try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand)) {
@@ -233,6 +233,7 @@ public final class WorldRuntime implements AutoCloseable {
                             collisionDemand.addAll(player.requiredCollisionChunks(
                                     world, input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
                             long predictionNanos = System.nanoTime() - predictionStarted;
+                            long streamingStarted = System.nanoTime();
                             chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
                             chunks.update(center);
                             // Upload backpressure must not prevent collision-data admission.
@@ -241,6 +242,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     Math.min(CAPACITY - outstanding.size(), meshes.remainingCapacity()));
                             List<ChunkManager.MeshResult> ready =
                                     chunks.processResults(4, meshBudget).meshes();
+                            long streamingNanos = System.nanoTime() - streamingStarted;
                             if (!ready.isEmpty()) viewReady[0] = true;
                             if (!poseReady[0]
                                     && viewReady[0]
@@ -260,6 +262,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 if ((state.blocked() || state.paused())
                                         && !(action instanceof ResetInput)
                                         && !(action instanceof InventoryAction)
+                                        && !(action instanceof Command)
                                         && !(action instanceof SelectSlot)) continue;
                                 switch (action) {
                                     case ResetInput ignored -> {
@@ -279,6 +282,13 @@ public final class WorldRuntime implements AutoCloseable {
                                         }
                                     }
                                     case SelectSlot selected -> inventory.select(selected.slot());
+                                    case Teleport teleport ->
+                                        player.restore(
+                                                new PlayerState.Position(teleport.x(), teleport.y(), teleport.z()),
+                                                PlayerController.Mode.SPECTATOR,
+                                                false);
+                                    case Fill fill ->
+                                        chunks.requestRemesh(interaction.fill(fill.min(), fill.max(), fill.block()));
                                     case InventoryAction command -> {
                                         inventoryInput = true;
                                         if (command instanceof ReturnCarried) inventory.returnCarried();
@@ -383,7 +393,10 @@ public final class WorldRuntime implements AutoCloseable {
                                     actions.size(),
                                     oldestAck,
                                     movementWaiting,
-                                    estimatedChunkBytes[0]);
+                                    estimatedChunkBytes[0],
+                                    streamingNanos,
+                                    publishNanos[0]);
+                            long publishStarted = System.nanoTime();
                             frame.set(new Frame(
                                     sessionId,
                                     poseReady[0],
@@ -404,6 +417,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     water.pendingUpdates(),
                                     metrics,
                                     inventory.snapshot()));
+                            publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -462,6 +476,11 @@ public final class WorldRuntime implements AutoCloseable {
 
     public long sessionId() {
         return sessionId;
+    }
+
+    /** The world-owner thread, for per-thread diagnostics such as allocation sampling. */
+    public long threadId() {
+        return thread.threadId();
     }
 
     public ChunkPos initialView() {
@@ -613,7 +632,35 @@ public final class WorldRuntime implements AutoCloseable {
         }
     }
 
-    public sealed interface Action permits Jump, NextMode, Edit, ResetInput, SelectSlot, InventoryAction {}
+    public sealed interface Action permits Jump, NextMode, Edit, ResetInput, SelectSlot, InventoryAction, Command {}
+
+    /** Scripted world commands; accepted even while gameplay input is blocked. */
+    public sealed interface Command extends Action permits Teleport, Fill {}
+
+    /** Moves the player to a position in spectator mode. */
+    public record Teleport(double x, double y, double z) implements Command {
+        public Teleport {
+            if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
+                throw new IllegalArgumentException("Invalid teleport target");
+        }
+    }
+
+    /** Sets every loaded block in an inclusive box. */
+    public record Fill(BlockPos min, BlockPos max, byte block) implements Command {
+        public static final long MAX_BLOCKS = 1 << 16;
+
+        public Fill {
+            Objects.requireNonNull(min);
+            Objects.requireNonNull(max);
+            long volume =
+                    ((long) max.x() - min.x() + 1) * ((long) max.y() - min.y() + 1) * ((long) max.z() - min.z() + 1);
+            if (!BlockId.isValid(block)
+                    || max.x() < min.x()
+                    || max.y() < min.y()
+                    || max.z() < min.z()
+                    || volume > MAX_BLOCKS) throw new IllegalArgumentException("Invalid fill");
+        }
+    }
 
     public record SelectSlot(int slot) implements Action {
         public SelectSlot {

@@ -51,6 +51,7 @@ public final class ChunkManager implements AutoCloseable {
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
     private long acceptedRemeshes;
     private long generatedResults, meshResults, discardedResults;
+    private final Latency generationLatency = new Latency(), visibleLatency = new Latency();
 
     public Metrics metrics() {
         return new Metrics(
@@ -68,7 +69,11 @@ public final class ChunkManager implements AutoCloseable {
                 meshingScheduler.completedJobs(),
                 generatedResults,
                 meshResults,
-                discardedResults);
+                discardedResults,
+                generationScheduler.queueWaitNanos(),
+                meshingScheduler.queueWaitNanos(),
+                generationLatency.snapshot(),
+                visibleLatency.snapshot());
     }
 
     public record Metrics(
@@ -86,7 +91,28 @@ public final class ChunkManager implements AutoCloseable {
             long meshCompleted,
             long generatedResults,
             long meshResults,
-            long discardedResults) {}
+            long discardedResults,
+            long generationWaitNanos,
+            long meshWaitNanos,
+            LatencyTotals generationLatency,
+            LatencyTotals visibleLatency) {}
+
+    /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
+    public record LatencyTotals(long count, long totalNanos, long maxNanos) {}
+
+    private static final class Latency {
+        private long count, total, max;
+
+        void record(long nanos) {
+            count++;
+            total += nanos;
+            max = Math.max(max, nanos);
+        }
+
+        LatencyTotals snapshot() {
+            return new LatencyTotals(count, total, max);
+        }
+    }
 
     public void setChunkLifecycleListener(Consumer<ChunkPos> listener) {
         chunkLifecycleListener = Objects.requireNonNull(listener);
@@ -193,6 +219,7 @@ public final class ChunkManager implements AutoCloseable {
             world.putChunk(outcome.position(), chunk);
             chunkLifecycleListener.accept(outcome.position());
             entry.generated(chunk.revision());
+            generationLatency.record(System.nanoTime() - entry.requestedAt());
             requestRemesh(outcome.position());
             for (ChunkPos neighbor : neighbors(outcome.position())) {
                 if (world.hasChunk(neighbor)) requestRemesh(neighbor);
@@ -267,6 +294,7 @@ public final class ChunkManager implements AutoCloseable {
         if (!isCurrentMesh(result)) return false;
         ChunkEntry entry = entries.get(result.position());
         if (!entry.uploaded(result.meshRevision())) return false;
+        if (entry.firstUpload()) visibleLatency.record(System.nanoTime() - entry.requestedAt());
         processPendingRemesh(result.position());
         return true;
     }

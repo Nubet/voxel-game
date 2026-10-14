@@ -39,3 +39,17 @@ spotless {
         palantirJavaFormat("2.102.0")
     }
 }
+
+tasks.register<JavaExec>("benchmarkGame") {
+    group = "verification"
+    description = "Runs the scripted production-game benchmark (-Pscenes, -Prd, -Plabel)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.norbertfila.Main")
+    jvmArgs("-Xmx4g")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+    systemProperty("voxel.benchmark", findProperty("scenes") ?: "all")
+    systemProperty("voxel.benchmark.rd", findProperty("rd") ?: "8")
+    systemProperty("voxel.benchmark.label", findProperty("label") ?: "unlabeled")
+    systemProperty("voxel.benchmark.gpuTimers", findProperty("gpuTimers") ?: "true")
+    findProperty("seconds")?.let { systemProperty("voxel.benchmark.seconds", it) }
+}

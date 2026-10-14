@@ -7,12 +7,16 @@ import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.BlockRegistry;
+import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.PlantRules;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldEdit;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public final class BlockInteraction {
@@ -121,6 +125,22 @@ public final class BlockInteraction {
                         position.y() + 1.0,
                         position.z() + 1.0))) return Optional.empty();
         return Optional.of(setBlock(position, blockId));
+    }
+
+    /** Sets every loaded block in the inclusive box; returns the chunks whose meshes became dirty. */
+    public List<ChunkPos> fill(BlockPos min, BlockPos max, byte blockId) {
+        Objects.requireNonNull(min);
+        Objects.requireNonNull(max);
+        if (!BlockId.isValid(blockId))
+            throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
+        Set<ChunkPos> dirty = new LinkedHashSet<>();
+        for (int y = min.y(); y <= max.y(); y++)
+            for (int z = min.z(); z <= max.z(); z++)
+                for (int x = min.x(); x <= max.x(); x++) {
+                    var result = setBlock(new BlockPos(x, y, z), blockId);
+                    if (result.changed()) dirty.addAll(result.dirtyChunks());
+                }
+        return List.copyOf(dirty);
     }
 
     private BlockChangeResult setBlock(BlockPos position, byte value) {

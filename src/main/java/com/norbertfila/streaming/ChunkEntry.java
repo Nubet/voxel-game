@@ -5,6 +5,8 @@ import java.util.Objects;
 
 public final class ChunkEntry {
     private final ChunkPos position;
+    private final long requestedAt = System.nanoTime();
+    private boolean everUploaded;
     private ChunkState state = ChunkState.REQUESTED;
     private long chunkRevision = -1;
     private long meshRevision = -1;
@@ -17,6 +19,10 @@ public final class ChunkEntry {
 
     public ChunkPos position() {
         return position;
+    }
+
+    public long requestedAt() {
+        return requestedAt;
     }
 
     public ChunkState state() {
@@ -73,6 +79,13 @@ public final class ChunkEntry {
         if (revision != meshRevision || state != ChunkState.READY_CPU) return false;
         transitionTo(ChunkState.RESIDENT_GPU);
         gpuResident = true;
+        return true;
+    }
+
+    /** Returns true exactly once, for the first successful upload of this residency. */
+    public boolean firstUpload() {
+        if (!gpuResident || everUploaded) return false;
+        everUploaded = true;
         return true;
     }
 
