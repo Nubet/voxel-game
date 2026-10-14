@@ -575,6 +575,37 @@ class ChunkManagerTest {
         }
     }
 
+    @Test
+    void residencySnapshotIsReusedUntilAChunkLoadsOrUnloads() throws Exception {
+        World world = new World();
+        ChunkPos origin = new ChunkPos(0, 0, 0);
+        try (ChunkManager manager =
+                new ChunkManager(world, new HillsGenerator(), new ViewDemand(0, 0, 0, ViewDemand.Shape.SQUARE))) {
+            assertEquals(ChunkManager.Residency.EMPTY, manager.residency());
+            manager.update(origin);
+            manager.awaitGeneration(Duration.ofSeconds(5));
+            var loaded = manager.residency();
+            assertEquals(Set.of(origin), loaded.tokens().keySet());
+            manager.update(origin);
+            manager.processResults();
+            assertTrue(loaded == manager.residency(), "unchanged residency must not be rebuilt");
+
+            manager.update(new ChunkPos(5, 0, 0));
+            var away = manager.residency();
+            assertTrue(away.revision() > loaded.revision());
+            assertFalse(away.tokens().containsKey(origin));
+            manager.awaitGeneration(Duration.ofSeconds(5));
+
+            manager.update(origin);
+            manager.awaitGeneration(Duration.ofSeconds(5));
+            var reloaded = manager.residency();
+            assertTrue(reloaded.revision() > away.revision());
+            assertTrue(
+                    !reloaded.tokens().get(origin).equals(loaded.tokens().get(origin)),
+                    "a reload must carry a new token so stale removals cannot hit it");
+        }
+    }
+
     private static ChunkManager.ProcessResult awaitMesh(ChunkManager manager) {
         long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
         int generated = 0;

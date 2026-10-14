@@ -306,7 +306,7 @@ class WorldRuntimeTest {
     void lateSuccessfulUploadIsRejectedAfterEditAndFreshMeshCanBeAcknowledged() throws Exception {
         try (WorldRuntime runtime = start(new Flat(), directory.resolve("edit.vxl"))) {
             runtime.controls(controls(false, false));
-            var old = awaitMesh(runtime, new ChunkPos(0, 0, 0));
+            var old = awaitSettledMesh(runtime, new ChunkPos(0, 0, 0));
             assertTrue(runtime.frame().isCurrent(old));
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, -90)));
             await(runtime, f -> !f.isCurrent(old));
@@ -551,6 +551,19 @@ class WorldRuntimeTest {
             Thread.sleep(2);
         } while (System.nanoTime() < deadline);
         throw new AssertionError("Runtime did not publish expected state");
+    }
+
+    /** Waits for a mesh that stays current after neighbors finish loading, skipping provisional meshes. */
+    private static WorldRuntime.SessionMesh awaitSettledMesh(WorldRuntime runtime, ChunkPos position) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            var mesh = awaitMesh(runtime, position);
+            long published = runtime.frame().tick();
+            await(runtime, f -> f.tick() >= published + 10);
+            if (runtime.frame().isCurrent(mesh)) return mesh;
+            runtime.acknowledge(mesh, false);
+        }
+        throw new AssertionError("Runtime did not settle a mesh for " + position);
     }
 
     private static WorldRuntime.SessionMesh awaitMesh(WorldRuntime runtime, ChunkPos position) throws Exception {

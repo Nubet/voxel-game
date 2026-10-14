@@ -56,6 +56,8 @@ public final class ChunkManager implements AutoCloseable {
     private boolean backlogUnsorted, backlogSeeded;
     private final Set<ChunkPos> releasedCollisionChunks = new HashSet<>();
     private ChunkPos evictionCenter;
+    private long residencyRevision;
+    private Residency residency = Residency.EMPTY;
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
@@ -232,7 +234,10 @@ public final class ChunkManager implements AutoCloseable {
             pendingRemesh.remove(position);
             pendingEdits.remove(position);
             generationBacklog.remove(position);
-            if (world.removeChunk(position) != null) chunkLifecycleListener.accept(position);
+            if (world.removeChunk(position) != null) {
+                residencyRevision++;
+                chunkLifecycleListener.accept(position);
+            }
             evicted.add(position);
         }
         for (ChunkPos position : evicted) {
@@ -291,6 +296,7 @@ public final class ChunkManager implements AutoCloseable {
             ChunkData data = outcome.result();
             Chunk chunk = Chunk.fromBlocks(data.blocks());
             world.putChunk(outcome.position(), chunk);
+            residencyRevision++;
             chunkLifecycleListener.accept(outcome.position());
             entry.generated(chunk.revision());
             generationLatency.record(System.nanoTime() - entry.requestedAt());
@@ -479,12 +485,28 @@ public final class ChunkManager implements AutoCloseable {
         requestRemesh(change.dirtyChunks());
     }
 
-    public Map<ChunkPos, Long> residentTokens() {
-        Map<ChunkPos, Long> tokens = new HashMap<>();
-        entries.forEach((position, entry) -> {
-            if (world.hasChunk(position)) tokens.put(position, entry.generationToken());
-        });
-        return Map.copyOf(tokens);
+    /** The resident chunks and their generation tokens; the same instance is returned until residency changes. */
+    public Residency residency() {
+        if (residency.revision() != residencyRevision) {
+            Map<ChunkPos, Long> tokens = new HashMap<>();
+            entries.forEach((position, entry) -> {
+                if (world.hasChunk(position)) tokens.put(position, entry.generationToken());
+            });
+            residency = new Residency(residencyRevision, Map.copyOf(tokens));
+        }
+        return residency;
+    }
+
+    /**
+     * Immutable residency snapshot. The revision changes whenever a chunk is loaded or evicted, and a reload of the
+     * same position gets a new token, so a consumer that saw an older snapshot can tell the incarnations apart.
+     */
+    public record Residency(long revision, Map<ChunkPos, Long> tokens) {
+        public static final Residency EMPTY = new Residency(0, Map.of());
+
+        public Residency {
+            tokens = Map.copyOf(tokens);
+        }
     }
 
     public void requestRemesh(List<ChunkPos> dirtyChunks) {

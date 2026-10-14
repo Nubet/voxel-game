@@ -413,7 +413,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     contact,
                                     player.flying(),
                                     state.paused(),
-                                    chunks.residentTokens(),
+                                    chunks.residency(),
                                     Map.copyOf(valid),
                                     water.pendingUpdates(),
                                     metrics,
@@ -720,15 +720,19 @@ public final class WorldRuntime implements AutoCloseable {
             WaterContact.Result waterContact,
             boolean flying,
             boolean paused,
-            Map<ChunkPos, Long> residents,
+            ChunkManager.Residency residency,
             Map<Long, ChunkManager.MeshResult> validUploads,
             int pendingWater,
             SimulationMetrics metrics,
             InventorySnapshot inventory) {
         public Frame {
-            residents = Map.copyOf(residents);
+            Objects.requireNonNull(residency);
             validUploads = Map.copyOf(validUploads);
             Objects.requireNonNull(inventory);
+        }
+
+        public Map<ChunkPos, Long> residents() {
+            return residency.tokens();
         }
 
         public boolean isCurrent(ChunkManager.MeshResult mesh) {

@@ -119,6 +119,7 @@ public final class GameLoop {
         WorldRuntime runtime = session.runtime();
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
+        long residencyRevision = 0;
         Map<ChunkPos, WorldRuntime.SessionMesh> pending = new HashMap<>();
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
@@ -295,13 +296,17 @@ public final class GameLoop {
             }
             state = runtime.frame();
             if (state != null) {
-                for (var entry : residents.entrySet()) {
-                    if (entry.getValue().equals(state.residents().get(entry.getKey()))) continue;
-                    var removed = pending.remove(entry.getKey());
-                    if (removed != null) runtime.acknowledge(removed, false);
-                    renderer.remove(entry.getKey());
+                if (state.residency().revision() != residencyRevision) {
+                    var current = state.residents();
+                    for (var entry : residents.entrySet()) {
+                        if (entry.getValue().equals(current.get(entry.getKey()))) continue;
+                        var removed = pending.remove(entry.getKey());
+                        if (removed != null) runtime.acknowledge(removed, false);
+                        renderer.remove(entry.getKey());
+                    }
+                    residents = current;
+                    residencyRevision = state.residency().revision();
                 }
-                residents = state.residents();
                 var eye = state.interpolatedEye(System.nanoTime());
                 camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
             }
