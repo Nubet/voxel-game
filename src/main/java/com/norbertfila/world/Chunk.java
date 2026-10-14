@@ -8,6 +8,7 @@ public final class Chunk {
     private byte[] waterData;
     private int flowingBlocks;
     private int waterBlocks;
+    private ChunkSnapshot snapshot;
     private long revision;
     private long meshDependencyRevision;
 
@@ -73,8 +74,15 @@ public final class Chunk {
         invalidateMesh();
     }
 
+    /** Returns a snapshot that shares its arrays with every other snapshot taken at the same content revision. */
     public ChunkSnapshot snapshot() {
-        return new ChunkSnapshot(data.toBlocks(), waterData, revision, meshDependencyRevision);
+        if (snapshot == null || snapshot.revision() != revision) {
+            byte[] blocks = new byte[BLOCK_BYTES];
+            data.copyInto(blocks);
+            snapshot = ChunkSnapshot.owning(
+                    blocks, waterData == null ? null : waterData.clone(), revision, meshDependencyRevision);
+        }
+        return snapshot.withMeshDependencyRevision(meshDependencyRevision);
     }
 
     public ChunkData.Kind storageKind() {

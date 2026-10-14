@@ -15,6 +15,9 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
 
     byte[] toBlocks();
 
+    /** Writes all values to {@code target} starting at {@code offset}. */
+    void copyInto(byte[] target, int offset);
+
     Kind kind();
 
     long estimatedBytes();
@@ -70,6 +73,11 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
         }
 
         @Override
+        public void copyInto(byte[] target, int offset) {
+            java.util.Arrays.fill(target, offset, offset + length, BlockId.AIR);
+        }
+
+        @Override
         public Kind kind() {
             return Kind.EMPTY;
         }
@@ -117,6 +125,11 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
         }
 
         @Override
+        public void copyInto(byte[] target, int offset) {
+            java.util.Arrays.fill(target, offset, offset + length, value);
+        }
+
+        @Override
         public Kind kind() {
             return Kind.UNIFORM;
         }
@@ -158,6 +171,11 @@ public sealed interface ChunkData permits ChunkData.Empty, ChunkData.Uniform, Ch
         @Override
         public byte[] toBlocks() {
             return blocks.clone();
+        }
+
+        @Override
+        public void copyInto(byte[] target, int offset) {
+            System.arraycopy(blocks, 0, target, offset, blocks.length);
         }
 
         @Override

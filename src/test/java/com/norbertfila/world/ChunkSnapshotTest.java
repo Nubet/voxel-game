@@ -1,6 +1,8 @@
 package com.norbertfila.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +18,26 @@ class ChunkSnapshotTest {
 
         assertEquals(BlockId.STONE, snapshot.get(1, 2, 3));
         assertEquals(initialRevision + 1, chunk.snapshot().revision());
+    }
+
+    @Test
+    void snapshotsOfUnchangedContentAreShared() {
+        World world = new World();
+        Chunk chunk = Chunk.fromBlocks(new byte[Chunk.BLOCK_BYTES]);
+        chunk.set(4, 5, 6, BlockId.WATER, WaterState.flowing(2));
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        ChunkSnapshot first = chunk.snapshot();
+        assertSame(first, chunk.snapshot());
+
+        world.putChunk(new ChunkPos(1, 0, 0), new Chunk());
+        ChunkSnapshot afterNeighbor = chunk.snapshot();
+        assertEquals(first.revision(), afterNeighbor.revision());
+        assertTrue(afterNeighbor.meshDependencyRevision() > first.meshDependencyRevision());
+        assertEquals(WaterState.flowing(2), afterNeighbor.waterState(4, 5, 6));
+
+        chunk.set(4, 5, 6, BlockId.WATER, WaterState.flowing(3));
+        assertEquals(WaterState.flowing(2), first.waterState(4, 5, 6));
+        assertEquals(WaterState.flowing(3), chunk.snapshot().waterState(4, 5, 6));
     }
 
     @Test
