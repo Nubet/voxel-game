@@ -75,6 +75,8 @@ public final class WorldEdit {
 
     private void validatePlantsIn(ChunkPos chunkPos, boolean bottomOnly, Set<ChunkPos> dirty) {
         Chunk chunk = world.getChunk(chunkPos);
+        int uniform = chunk.uniformBlock();
+        if (uniform >= 0 && !PlantRules.isPlant((byte) uniform)) return;
         for (int y = 0; y < (bottomOnly ? 1 : Chunk.SIZE); y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {

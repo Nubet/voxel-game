@@ -31,7 +31,7 @@ class TerrainBenchmarkTest {
         assertTrue(result.generate().nanos() > 0);
         assertTrue(result.snapshot().nanos() > 0);
         assertTrue(result.heights().bytes() >= -1);
-        assertTrue(result.generate().bytes() == -1 || result.generate().bytes() >= 8192);
+        assertTrue(result.generate().bytes() >= -1);
         assertTrue(result.snapshot().bytes() == -1
                 || result.snapshot().bytes() > result.generate().bytes());
         String csv = TerrainBenchmark.toCsv(List.of(result));

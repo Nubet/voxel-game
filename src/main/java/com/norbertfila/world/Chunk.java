@@ -7,17 +7,35 @@ public final class Chunk {
     // Zero metadata means source for WATER and no fluid for every other block.
     private byte[] waterData;
     private int flowingBlocks;
+    private int waterBlocks;
     private long revision;
     private long meshDependencyRevision;
 
     public Chunk() {}
 
     public static Chunk fromBlocks(byte[] source) {
-        return new Chunk(LayerStorage.fromBlocks(source));
+        Chunk chunk = new Chunk(LayerStorage.fromBlocks(source));
+        for (byte block : source) if (block == BlockId.WATER) chunk.waterBlocks++;
+        return chunk;
+    }
+
+    public static Chunk uniform(byte block) {
+        Chunk chunk = new Chunk(LayerStorage.uniform(block));
+        if (block == BlockId.WATER) chunk.waterBlocks = BLOCK_BYTES;
+        return chunk;
     }
 
     private Chunk(LayerStorage data) {
         this.data = data;
+    }
+
+    /** The block filling the whole chunk as an unsigned ID, or -1 when the chunk holds more than one block type. */
+    public int uniformBlock() {
+        return data.uniformBlock();
+    }
+
+    public boolean containsWater() {
+        return waterBlocks > 0;
     }
 
     public byte get(int x, int y, int z) {
@@ -43,6 +61,8 @@ public final class Chunk {
         byte next = value == BlockId.WATER ? waterState : 0;
         if (data.get(x, y, z) == value && previous == next) return;
         if (next != 0 && waterData == null) waterData = new byte[BLOCK_BYTES];
+        byte old = data.get(x, y, z);
+        waterBlocks += (value == BlockId.WATER ? 1 : 0) - (old == BlockId.WATER ? 1 : 0);
         data.set(x, y, z, value);
         if (waterData != null) {
             flowingBlocks += (next != 0 ? 1 : 0) - (previous != 0 ? 1 : 0);

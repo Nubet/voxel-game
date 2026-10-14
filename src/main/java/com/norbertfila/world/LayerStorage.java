@@ -10,6 +10,12 @@ public final class LayerStorage {
         Arrays.fill(layers, ChunkData.empty(LAYER_BLOCKS));
     }
 
+    public static LayerStorage uniform(byte value) {
+        LayerStorage storage = new LayerStorage();
+        if (value != BlockId.AIR) Arrays.fill(storage.layers, new ChunkData.Uniform(value, LAYER_BLOCKS));
+        return storage;
+    }
+
     public static LayerStorage fromBlocks(byte[] source) {
         if (source.length != Chunk.BLOCK_BYTES)
             throw new IllegalArgumentException("Invalid chunk data size: " + source.length);
@@ -47,6 +53,16 @@ public final class LayerStorage {
         long bytes = 0;
         for (ChunkData layer : layers) bytes += layer.estimatedBytes();
         return bytes;
+    }
+
+    /** The single block filling every layer, or -1 when the layers differ. */
+    public int uniformBlock() {
+        ChunkData first = layers[0];
+        if (first.kind() == ChunkData.Kind.DENSE) return -1;
+        byte value = first.get(0);
+        for (int y = 1; y < Chunk.SIZE; y++)
+            if (layers[y].kind() == ChunkData.Kind.DENSE || layers[y].get(0) != value) return -1;
+        return Byte.toUnsignedInt(value);
     }
 
     public ChunkData.Kind kind() {

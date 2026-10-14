@@ -606,6 +606,59 @@ class ChunkManagerTest {
         }
     }
 
+    @Test
+    void enclosedUniformStoneMeshesEmptyButExposedStoneGetsFaces() throws Exception {
+        World world = new World();
+        WorldGenerator stone = new WorldGenerator() {
+            @Override
+            public long seed() {
+                return 0;
+            }
+
+            @Override
+            public int generatorVersion() {
+                return 1;
+            }
+
+            @Override
+            public ChunkData generate(ChunkPos position) {
+                return ChunkData.uniform(position, BlockId.STONE);
+            }
+        };
+        ChunkPos center = new ChunkPos(0, 0, 0);
+        try (ChunkManager manager = new ChunkManager(world, stone, new ViewDemand(1, -1, 1, ViewDemand.Shape.SQUARE))) {
+            var meshes = new java.util.HashMap<ChunkPos, ChunkManager.MeshResult>();
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (meshes.size() < 27
+                    || manager.metrics().meshOutstanding() > 0
+                    || manager.metrics().pendingRemesh() > 0) {
+                assertTrue(System.nanoTime() < deadline, "Stone block did not settle");
+                manager.update(center);
+                for (var mesh : manager.processResults().meshes()) {
+                    assertTrue(manager.markUploaded(mesh));
+                    meshes.put(mesh.position(), mesh);
+                }
+                Thread.sleep(1);
+            }
+            assertEquals(0, meshes.get(center).mesh().vertexCount(), "enclosed stone must have no faces");
+            assertTrue(meshes.get(new ChunkPos(1, 0, 0)).mesh().vertexCount() > 0, "edge stone borders unloaded space");
+
+            manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(16, 8, 8), BlockId.AIR));
+            ChunkManager.MeshResult opened = null;
+            deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (opened == null) {
+                assertTrue(System.nanoTime() < deadline, "Edited neighbor was not remeshed");
+                manager.update(center);
+                for (var mesh : manager.processResults().meshes()) {
+                    manager.markUploaded(mesh);
+                    if (mesh.position().equals(center) && mesh.mesh().vertexCount() > 0) opened = mesh;
+                }
+                Thread.sleep(1);
+            }
+            assertEquals(1, opened.mesh().faceCount(), "only the face toward the removed block becomes visible");
+        }
+    }
+
     private static ChunkManager.ProcessResult awaitMesh(ChunkManager manager) {
         long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
         int generated = 0;
