@@ -82,6 +82,10 @@ public final class ChunkEntry {
         return true;
     }
 
+    public boolean hasMesh() {
+        return gpuResident;
+    }
+
     /** Returns true exactly once, for the first successful upload of this residency. */
     public boolean firstUpload() {
         if (!gpuResident || everUploaded) return false;

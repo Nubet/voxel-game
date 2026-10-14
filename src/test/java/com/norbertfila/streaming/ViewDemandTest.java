@@ -14,13 +14,28 @@ class ViewDemandTest {
 
         assertTrue(demand.update(new ChunkPos(-1, 0, -2)));
         assertEquals(3, demand.requested().size());
-        assertEquals(new ChunkPos(-1, -1, -2), demand.requested().get(0));
+        assertEquals(new ChunkPos(-1, 0, -2), demand.requested().get(0));
         assertFalse(demand.update(new ChunkPos(-1, 0, -2)));
 
         demand.configure(1, -1, 1, ViewDemand.Shape.SQUARE);
         assertTrue(demand.update(new ChunkPos(-1, 0, -2)));
         assertEquals(27, demand.requested().size());
-        assertEquals(new ChunkPos(-2, -1, -3), demand.requested().get(0));
+        assertEquals(new ChunkPos(-1, 0, -2), demand.requested().get(0));
+    }
+
+    @Test
+    void requestsNearestSectionsFirst() {
+        ViewDemand demand = new ViewDemand(3, -2, 4, ViewDemand.Shape.SQUARE);
+        ChunkPos center = new ChunkPos(-5, 1, 7);
+        demand.update(center);
+
+        long previous = -1;
+        for (ChunkPos position : demand.requested()) {
+            long distance = ChunkPriority.distanceSquared(position, center);
+            assertTrue(distance >= previous);
+            previous = distance;
+        }
+        assertEquals(center, demand.requested().get(0));
     }
 
     @Test
