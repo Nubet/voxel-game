@@ -135,7 +135,7 @@ public final class InventoryScreen implements Screen {
                     ? (cell < CATALOG.size() ? CATALOG.get(cell) : BlockId.AIR)
                     : inventory.block(slot);
             int count = creative && cell < 27 ? 0 : inventory.count(slot);
-            Hud.item(canvas, box.x(), box.y(), CELL - 2, block, count);
+            ItemIcons.render(canvas, box.x(), box.y(), CELL - 2, block, count);
             if (hover && block != BlockId.AIR)
                 hovered = BlockRegistry.DEFAULT.definition(block).name();
         }
@@ -153,7 +153,7 @@ public final class InventoryScreen implements Screen {
                 && Double.isFinite(pointerY)
                 && pointerX >= 0
                 && pointerY >= 0)
-            Hud.item(
+            ItemIcons.render(
                     canvas,
                     (int) pointerX - 12,
                     (int) pointerY - 12,

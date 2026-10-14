@@ -11,11 +11,9 @@ public final class BitmapFont {
     public static final int GLYPH_HEIGHT = 14;
     public static final int LINE_HEIGHT = 16;
     public static final BitmapFont DEFAULT = loadDefault();
-    private final byte[] pixels;
     private final int[] widths;
 
-    private BitmapFont(byte[] pixels, int[] widths) {
-        this.pixels = pixels;
+    private BitmapFont(int[] widths) {
         this.widths = widths;
     }
 
@@ -34,7 +32,6 @@ public final class BitmapFont {
         if (image == null || image.getWidth() != ATLAS_WIDTH || image.getHeight() != ATLAS_HEIGHT)
             throw new IOException("UI atlas must be a 256x128 image");
         if (image.getRGB(0, 0) != 0xffffffff) throw new IOException("UI atlas is missing the white texel");
-        byte[] pixels = new byte[ATLAS_WIDTH * ATLAS_HEIGHT * 4];
         int[] widths = new int[128];
         for (int y = 0; y < ATLAS_HEIGHT; y++)
             for (int x = 0; x < ATLAS_WIDTH; x++) {
@@ -42,11 +39,6 @@ public final class BitmapFont {
                 int alpha = argb >>> 24;
                 if (alpha != 0 && argb != 0xffffffff)
                     throw new IOException("UI atlas pixels must be white or transparent");
-                int offset = (y * ATLAS_WIDTH + x) * 4;
-                pixels[offset] = (byte) (argb >> 16);
-                pixels[offset + 1] = (byte) (argb >> 8);
-                pixels[offset + 2] = (byte) argb;
-                pixels[offset + 3] = (byte) (argb >>> 24);
                 int character = y / CELL_SIZE * 16 + x / CELL_SIZE;
                 if (alpha != 0) {
                     if (character >= 32 && y % CELL_SIZE >= GLYPH_HEIGHT)
@@ -57,11 +49,7 @@ public final class BitmapFont {
         if (widths[' '] != 0) throw new IOException("Space glyph must be empty");
         for (int character = 33; character <= 126; character++)
             if (widths[character] == 0) throw new IOException("UI atlas is missing glyph " + character);
-        return new BitmapFont(pixels, widths);
-    }
-
-    public byte[] atlasPixels() {
-        return pixels.clone();
+        return new BitmapFont(widths);
     }
 
     public int glyph(int codePoint) {

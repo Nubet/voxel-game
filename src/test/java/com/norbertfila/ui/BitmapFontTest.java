@@ -29,18 +29,18 @@ class BitmapFontTest {
 
     @Test
     void decodedAtlasHasWhiteTexelBinaryAlphaAndDetachedStorage() {
-        BitmapFont font = BitmapFont.DEFAULT;
-        byte[] pixels = font.atlasPixels();
-        assertEquals(BitmapFont.ATLAS_WIDTH * BitmapFont.ATLAS_HEIGHT * 4, pixels.length);
+        byte[] pixels = UiAtlas.defaultAtlas().pixels();
+        assertEquals(UiAtlas.WIDTH * UiAtlas.HEIGHT * 4, pixels.length);
         assertArrayEquals(new byte[] {-1, -1, -1, -1}, java.util.Arrays.copyOf(pixels, 4));
         int transparent = 0;
-        for (int offset = 3; offset < pixels.length; offset += 4) {
+        int fontBytes = BitmapFont.ATLAS_WIDTH * BitmapFont.ATLAS_HEIGHT * 4;
+        for (int offset = 3; offset < fontBytes; offset += 4) {
             assertTrue(pixels[offset] == 0 || pixels[offset] == -1);
             if (pixels[offset] == 0) transparent++;
         }
-        assertTrue(transparent > pixels.length / 8);
+        assertTrue(transparent > fontBytes / 8);
         pixels[3] = 0;
-        assertEquals(-1, font.atlasPixels()[3]);
+        assertEquals(-1, UiAtlas.defaultAtlas().pixels()[3]);
     }
 
     @Test

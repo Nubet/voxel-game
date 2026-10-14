@@ -10,9 +10,11 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Hud;
+import com.norbertfila.ui.ItemIcons;
 import com.norbertfila.ui.Screen;
 import com.norbertfila.ui.ScreenManager;
 import com.norbertfila.ui.Slider;
+import com.norbertfila.ui.UiAtlas;
 import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
@@ -143,6 +145,7 @@ public final class UiViewportSmoke {
                 checkWidgets(ui, canvas, small, output);
                 checkScreens(ui, canvas, texture, output);
                 checkInventory(ui, canvas, texture, output);
+                checkItemSprites(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -154,7 +157,7 @@ public final class UiViewportSmoke {
             check(!glIsTexture(atlas), "Atlas leaked after renderer close");
             check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-INVENTORY-01 GPU smoke PASS");
+        System.out.println("UI-08 GPU smoke PASS");
     }
 
     private static void render(
@@ -182,7 +185,7 @@ public final class UiViewportSmoke {
                 "Atlas magnification must be nearest");
         check(glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL) == 0, "Atlas mipmaps must be disabled");
         ByteBuffer pixels = capture(viewport);
-        byte[] atlas = font.atlasPixels();
+        byte[] atlas = UiAtlas.defaultAtlas().pixels();
         int ink = 0, shadow = 0, background = 0;
         for (int y = 0; y <= BitmapFont.GLYPH_HEIGHT; y++)
             for (int x = 0; x <= font.glyphWidth('F'); x++) {
@@ -431,26 +434,6 @@ public final class UiViewportSmoke {
         return pixels;
     }
 
-    private static void checkDoubleScale(
-            ByteBuffer reference, ByteBuffer scaled, UiViewport original, UiViewport viewport) {
-        for (int y = 0; y < viewport.framebufferHeight(); y++)
-            for (int x = 0; x < viewport.framebufferWidth(); x++)
-                check(
-                        rgb(scaled, viewport, x, y) == rgb(reference, original, x / 2, y / 2),
-                        "Scale 2 differs from exact pixel doubling");
-    }
-
-    private static void checkDoubleScaleExceptHotbar(
-            ByteBuffer reference, ByteBuffer scaled, UiViewport original, UiViewport viewport) {
-        for (int y = 0; y < viewport.framebufferHeight(); y++)
-            for (int x = 0; x < viewport.framebufferWidth(); x++) {
-                if (y >= viewport.framebufferHeight() - 40 * viewport.scale()) continue;
-                check(
-                        rgb(scaled, viewport, x, y) == rgb(reference, original, x / 2, y / 2),
-                        "Scale 2 differs outside compact hotbar");
-            }
-    }
-
     private static void checkSlots(ByteBuffer pixels, UiViewport viewport) {
         int s = viewport.scale();
         int left = ((int) viewport.width() - 182) / 2;
@@ -463,6 +446,86 @@ public final class UiViewportSmoke {
             if (frame == 0xf5cc4c || frame == 0xf5cc4d) selected++;
         }
         check(selected == 1, "Expected one selection, got " + selected);
+    }
+
+    private static void checkItemSprites(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        byte[] atlas = UiAtlas.defaultAtlas().pixels();
+        for (int scale = 1; scale <= 4; scale++) {
+            var viewport = new UiViewport(320, 240, 320 * scale, 240 * scale, scale);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(
+                    GL_TEXTURE_2D,
+                    0,
+                    GL_RGBA8,
+                    viewport.framebufferWidth(),
+                    viewport.framebufferHeight(),
+                    0,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    (ByteBuffer) null);
+            glViewport(0, 0, viewport.framebufferWidth(), viewport.framebufferHeight());
+            clear();
+            canvas.clear();
+            canvas.rectangle(0, 0, 320, 240, 0, 0, 1, 1);
+            for (int id = 1; id <= UiAtlas.LAST_ITEM; id++) {
+                int x = 8 + (id - 1) % 8 * 36;
+                int y = 8 + (id - 1) / 8 * 36;
+                ItemIcons.render(canvas, x, y, 20, (byte) id, 1);
+                ItemIcons.render(canvas, x, y + 110, 20, (byte) id, 64);
+            }
+            ui.render(canvas, viewport);
+            check(glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH) == UiAtlas.WIDTH, "Wrong atlas width");
+            check(glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT) == UiAtlas.HEIGHT, "Wrong atlas height");
+            check(glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S) == GL_CLAMP_TO_EDGE, "Atlas S must clamp");
+            check(glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T) == GL_CLAMP_TO_EDGE, "Atlas T must clamp");
+            ByteBuffer pixels = capture(viewport);
+            for (int id = 1; id <= UiAtlas.LAST_ITEM; id++) {
+                var region = UiAtlas.item((byte) id);
+                int x = 10 + (id - 1) % 8 * 36;
+                int y = 10 + (id - 1) / 8 * 36;
+                for (int py = 0; py < 16 * scale; py++)
+                    for (int px = 0; px < 16 * scale; px++) {
+                        int offset = ((region.y() + py / scale) * UiAtlas.WIDTH + region.x() + px / scale) * 4;
+                        double alpha = Byte.toUnsignedInt(atlas[offset + 3]) / 255.0;
+                        int actual = rgb(pixels, viewport, x * scale + px, y * scale + py);
+                        for (int channel = 0; channel < 3; channel++) {
+                            int source = Byte.toUnsignedInt(atlas[offset + channel]);
+                            int background = channel == 2 ? 255 : 0;
+                            int expected = (int) Math.round(source * alpha + background * (1 - alpha));
+                            int value = actual >> (16 - channel * 8) & 255;
+                            check(
+                                    Math.abs(value - expected) <= 1,
+                                    "Item pixel/alpha/nearest mismatch, id=" + id + " scale=" + scale);
+                        }
+                    }
+            }
+            check(glGetError() == GL_NO_ERROR, "Item atlas GL error");
+            write(output.resolve("ui08-items-scale-" + scale + ".png"), pixels, viewport);
+
+            var inventory = new Inventory();
+            byte[] blocks = {
+                BlockId.GRASS,
+                BlockId.DIRT,
+                BlockId.LOG,
+                BlockId.GLASS,
+                BlockId.WATER,
+                BlockId.SHORT_GRASS,
+                BlockId.FERN,
+                BlockId.DANDELION_YELLOW,
+                BlockId.POPPY
+            };
+            for (int slot = 0; slot < blocks.length; slot++) inventory.creativePick(slot, blocks[slot]);
+            var hotbar = new Hotbar();
+            hotbar.inventory(inventory.snapshot());
+            clear();
+            canvas.clear();
+            new Hud().render(canvas, hotbar, viewport);
+            ui.render(canvas, viewport);
+            checkSlots(capture(viewport), viewport);
+            write(output.resolve("ui08-populated-hud-scale-" + scale + ".png"), capture(viewport), viewport);
+        }
+        System.out.println(
+                "PASS UI-08: 21 icons, per-pixel alpha/orientation/nearest at scales1..4, populated HUD/counts");
     }
 
     private static int rgb(ByteBuffer pixels, UiViewport viewport, int x, int y) {

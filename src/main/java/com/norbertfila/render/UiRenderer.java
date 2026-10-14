@@ -2,7 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
-import com.norbertfila.ui.BitmapFont;
+import com.norbertfila.ui.UiAtlas;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import java.io.IOException;
@@ -21,7 +21,7 @@ public final class UiRenderer implements AutoCloseable {
     private boolean closed;
 
     public UiRenderer() {
-        byte[] pixels = BitmapFont.DEFAULT.atlasPixels();
+        byte[] pixels = UiAtlas.defaultAtlas().pixels();
         int createdProgram = 0, createdVao = 0, createdVbo = 0, createdAtlas = 0;
         int viewportLocation;
         try {
@@ -57,8 +57,8 @@ public final class UiRenderer implements AutoCloseable {
                         GL_TEXTURE_2D,
                         0,
                         GL_RGBA8,
-                        BitmapFont.ATLAS_WIDTH,
-                        BitmapFont.ATLAS_HEIGHT,
+                        UiAtlas.WIDTH,
+                        UiAtlas.HEIGHT,
                         0,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,

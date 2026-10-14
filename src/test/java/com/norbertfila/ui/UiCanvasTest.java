@@ -27,8 +27,8 @@ class UiCanvasTest {
                 assertArrayEquals(
                         new float[] {.1f, .2f, .3f, .4f},
                         java.util.Arrays.copyOfRange(quad, vertex * 8 + 2, vertex * 8 + 6));
-            assertEquals(.5f / BitmapFont.ATLAS_WIDTH, quad[6]);
-            assertEquals(.5f / BitmapFont.ATLAS_HEIGHT, quad[7]);
+            assertEquals(.5f / UiAtlas.WIDTH, quad[6]);
+            assertEquals(.5f / UiAtlas.HEIGHT, quad[7]);
         }
         canvas.clear();
         assertEquals(0, canvas.vertexCount());

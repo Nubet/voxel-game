@@ -26,8 +26,48 @@ public final class UiCanvas {
     }
 
     public void rectangle(int x, int y, int width, int height, float r, float g, float b, float a) {
-        float u = .5f / BitmapFont.ATLAS_WIDTH, v = .5f / BitmapFont.ATLAS_HEIGHT;
+        float u = .5f / UiAtlas.WIDTH, v = .5f / UiAtlas.HEIGHT;
         quad(x, y, width, height, r, g, b, a, u, v, u, v);
+    }
+
+    public void sprite(UiAtlas.Region region, int x, int y, int width, int height) {
+        sprite(region, x, y, width, height, 1, 1, 1);
+    }
+
+    private void sprite(UiAtlas.Region region, int x, int y, int width, int height, float r, float g, float b) {
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Sprite dimensions must be positive");
+        quad(
+                x,
+                y,
+                width,
+                height,
+                r,
+                g,
+                b,
+                1,
+                region.x() / (float) UiAtlas.WIDTH,
+                region.y() / (float) UiAtlas.HEIGHT,
+                (region.x() + region.width()) / (float) UiAtlas.WIDTH,
+                (region.y() + region.height()) / (float) UiAtlas.HEIGHT);
+    }
+
+    public void numberWithShadow(int number, int x, int y) {
+        if (number < 0) throw new IllegalArgumentException("Number must be nonnegative");
+        String digits = Integer.toString(number);
+        for (int pass = 0; pass < 2; pass++) {
+            int offset = pass == 0 ? 1 : 0;
+            float shade = pass == 0 ? .25f : 1;
+            for (int index = 0; index < digits.length(); index++)
+                sprite(
+                        UiAtlas.digit(digits.charAt(index) - '0'),
+                        x + index * 4 + offset,
+                        y + offset,
+                        3,
+                        7,
+                        shade,
+                        shade,
+                        shade);
+        }
     }
 
     public void textWithShadow(BitmapFont font, String text, int x, int y, float r, float g, float b, float a) {
@@ -55,8 +95,8 @@ public final class UiCanvas {
             }
             int glyph = font.glyph(codePoint), width = font.glyphWidth(codePoint);
             if (width > 0) {
-                float u = glyph % 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_WIDTH;
-                float v = glyph / 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_HEIGHT;
+                float u = glyph % 16 * BitmapFont.CELL_SIZE / (float) UiAtlas.WIDTH;
+                float v = glyph / 16 * BitmapFont.CELL_SIZE / (float) UiAtlas.HEIGHT;
                 quad(
                         cursorX,
                         cursorY,
@@ -68,8 +108,8 @@ public final class UiCanvas {
                         a,
                         u,
                         v,
-                        u + width / (float) BitmapFont.ATLAS_WIDTH,
-                        v + BitmapFont.GLYPH_HEIGHT / (float) BitmapFont.ATLAS_HEIGHT);
+                        u + width / (float) UiAtlas.WIDTH,
+                        v + BitmapFont.GLYPH_HEIGHT / (float) UiAtlas.HEIGHT);
             }
             cursorX += Math.max(1, (int) Math.round(font.advance(codePoint) * scale));
         }
@@ -87,8 +127,8 @@ public final class UiCanvas {
             }
             int glyph = font.glyph(codePoint), width = font.glyphWidth(codePoint);
             if (width > 0) {
-                float u = glyph % 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_WIDTH;
-                float v = glyph / 16 * BitmapFont.CELL_SIZE / (float) BitmapFont.ATLAS_HEIGHT;
+                float u = glyph % 16 * BitmapFont.CELL_SIZE / (float) UiAtlas.WIDTH;
+                float v = glyph / 16 * BitmapFont.CELL_SIZE / (float) UiAtlas.HEIGHT;
                 quad(
                         cursorX,
                         cursorY,
@@ -100,8 +140,8 @@ public final class UiCanvas {
                         a,
                         u,
                         v,
-                        u + width / (float) BitmapFont.ATLAS_WIDTH,
-                        v + BitmapFont.GLYPH_HEIGHT / (float) BitmapFont.ATLAS_HEIGHT);
+                        u + width / (float) UiAtlas.WIDTH,
+                        v + BitmapFont.GLYPH_HEIGHT / (float) UiAtlas.HEIGHT);
             }
             cursorX += font.advance(codePoint);
         }

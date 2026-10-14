@@ -19,8 +19,8 @@ class UiTextTest {
         assertEquals(10 + FONT.width("A "), data[48]);
         assertEquals(10, data[96]);
         assertEquals(20 + BitmapFont.LINE_HEIGHT, data[97]);
-        assertEquals('A' % 16 * 16 / (float) BitmapFont.ATLAS_WIDTH, data[6]);
-        assertEquals('A' / 16 * 16 / (float) BitmapFont.ATLAS_HEIGHT, data[7]);
+        assertEquals('A' % 16 * 16 / (float) UiAtlas.WIDTH, data[6]);
+        assertEquals('A' / 16 * 16 / (float) UiAtlas.HEIGHT, data[7]);
         assertEquals(10 + FONT.glyphWidth('A'), data[8]);
         assertEquals(20 + BitmapFont.GLYPH_HEIGHT, data[17]);
     }

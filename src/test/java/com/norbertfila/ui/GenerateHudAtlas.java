@@ -1,0 +1,130 @@
+package com.norbertfila.ui;
+
+import com.norbertfila.world.BlockRegistry;
+import com.norbertfila.world.BlockShape;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import javax.imageio.ImageIO;
+
+public final class GenerateHudAtlas {
+    private static final String[] DIGITS = {
+        "111101101101101101111", "010110010010010010111", "111001001111100100111",
+        "111001001111001001111", "101101101111001001001", "111100100111001001111",
+        "111100100111101101111", "111001001010010010010", "111101101111101101111",
+        "111101101111001001111"
+    };
+
+    public static void main(String[] args) throws IOException {
+        if (args.length != 1) throw new IllegalArgumentException("Expected output PNG path");
+        ImageIO.write(generate(), "png", Path.of(args[0]).toFile());
+    }
+
+    static BufferedImage generate() throws IOException {
+        var atlas = new BufferedImage(UiAtlas.WIDTH, UiAtlas.HEIGHT, BufferedImage.TYPE_INT_ARGB);
+        copy(read("/assets/ui/font.png", 256, 128), atlas, 0, 0);
+        Map<Integer, BufferedImage> textures = new HashMap<>();
+        for (var entry : BlockRegistry.DEFAULT.textureLayers().entrySet()) {
+            if (entry.getValue() != BlockRegistry.FALLBACK_TEXTURE)
+                textures.put(entry.getValue(), read("/assets/textures/blocks/" + entry.getKey() + ".png", 16, 16));
+        }
+        var fallback = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 1; y < 15; y++)
+            for (int x = 1; x < 15; x++) fallback.setRGB(x, y, (x / 4 + y / 4) % 2 == 0 ? 0xffff00ff : 0xff181818);
+        copy(fallback, atlas, 0, UiAtlas.ITEM_Y);
+        for (int id = 1; id <= UiAtlas.LAST_ITEM; id++) {
+            var definition = BlockRegistry.DEFAULT.definition((byte) id);
+            var icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+            if (definition.shape() == BlockShape.CROSS) {
+                copy(textures.get(definition.sideTexture()), icon, 0, 0);
+            } else {
+                face(icon, textures.get(definition.sideTexture()), 1, 4, 7, 4, 0, 8, .78);
+                face(icon, textures.get(definition.sideTexture()), 8, 8, 7, -4, 0, 8, .6);
+                face(icon, textures.get(definition.topTexture()), 8, 0, 7, 4, -7, 4, 1);
+            }
+            var region = UiAtlas.item((byte) id);
+            copy(icon, atlas, region.x(), region.y());
+        }
+        drawHotbar(atlas);
+        var selection = UiAtlas.SELECTION;
+        border(atlas, selection.x(), selection.y(), selection.width(), selection.height(), 0xfff5cc4c);
+        for (int i = 0; i < 4; i++) {
+            atlas.setRGB(selection.x() + i + 1, selection.y() + 1, 0xffffe39a);
+            atlas.setRGB(selection.x() + selection.width() - i - 2, selection.y() + selection.height() - 2, 0xffaa8734);
+        }
+        var cross = UiAtlas.CROSSHAIR;
+        for (int y = 0; y < 15; y++)
+            for (int x = 0; x < 15; x++) {
+                if (Math.abs(x - 7) <= 1 || Math.abs(y - 7) <= 1)
+                    atlas.setRGB(cross.x() + x, cross.y() + y, 0xcc000000);
+                if (x == 7 || y == 7) atlas.setRGB(cross.x() + x, cross.y() + y, 0xffffffff);
+            }
+        for (int digit = 0; digit <= 9; digit++) {
+            var region = UiAtlas.digit(digit);
+            for (int i = 0; i < 21; i++)
+                if (DIGITS[digit].charAt(i) == '1') atlas.setRGB(region.x() + i % 3, region.y() + i / 3, 0xffffffff);
+        }
+        return atlas;
+    }
+
+    private static void drawHotbar(BufferedImage image) {
+        var bar = UiAtlas.HOTBAR;
+        for (int y = 0; y < bar.height(); y++)
+            for (int x = 0; x < bar.width(); x++) image.setRGB(bar.x() + x, bar.y() + y, 0xe6151820);
+        border(image, bar.x(), bar.y(), bar.width(), bar.height(), 0xff232830);
+        for (int slot = 0; slot < 9; slot++) {
+            int x = bar.x() + 1 + slot * 20;
+            border(image, x, bar.y() + 1, 20, 20, 0xff404a59);
+            for (int i = 2; i < 18; i++) {
+                image.setRGB(x + i, bar.y() + 2, 0xff171c24);
+                image.setRGB(x + 1, bar.y() + i + 1, 0xff171c24);
+                image.setRGB(x + i, bar.y() + 19, 0xff59616b);
+            }
+        }
+    }
+
+    private static void face(
+            BufferedImage icon, BufferedImage source, int x, int y, int ax, int ay, int bx, int by, double shade) {
+        double determinant = ax * by - ay * bx;
+        for (int py = 0; py < 16; py++)
+            for (int px = 0; px < 16; px++) {
+                double dx = px + .5 - x, dy = py + .5 - y;
+                double u = (dx * by - dy * bx) / determinant;
+                double v = (ax * dy - ay * dx) / determinant;
+                if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
+                int argb = source.getRGB((int) (u * 16), (int) (v * 16));
+                int r = (int) ((argb >> 16 & 255) * shade);
+                int g = (int) ((argb >> 8 & 255) * shade);
+                int b = (int) ((argb & 255) * shade);
+                icon.setRGB(px, py, argb & 0xff000000 | r << 16 | g << 8 | b);
+            }
+    }
+
+    private static void border(BufferedImage image, int x, int y, int width, int height, int color) {
+        for (int i = 0; i < width; i++) {
+            image.setRGB(x + i, y, color);
+            image.setRGB(x + i, y + height - 1, color);
+        }
+        for (int i = 0; i < height; i++) {
+            image.setRGB(x, y + i, color);
+            image.setRGB(x + width - 1, y + i, color);
+        }
+    }
+
+    private static BufferedImage read(String resource, int width, int height) throws IOException {
+        try (var stream = GenerateHudAtlas.class.getResourceAsStream(resource)) {
+            if (stream == null) throw new IOException("Missing texture: " + resource);
+            var image = ImageIO.read(stream);
+            if (image == null || image.getWidth() != width || image.getHeight() != height)
+                throw new IOException("Unexpected texture dimensions: " + resource);
+            return image;
+        }
+    }
+
+    private static void copy(BufferedImage source, BufferedImage target, int x, int y) {
+        for (int py = 0; py < source.getHeight(); py++)
+            for (int px = 0; px < source.getWidth(); px++) target.setRGB(x + px, y + py, source.getRGB(px, py));
+    }
+}
