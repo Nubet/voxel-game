@@ -4,10 +4,7 @@ import com.norbertfila.core.Hotbar;
 import com.norbertfila.world.BlockId;
 
 public final class Hud {
-    private static final int[] DIGITS = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f};
-    private static final int[][] SEGMENTS = {
-        {0, 0, 6, 1}, {5, 0, 1, 6}, {5, 5, 1, 6}, {0, 10, 6, 1}, {0, 5, 1, 6}, {0, 0, 1, 6}, {0, 5, 6, 1}
-    };
+    private static final BitmapFont FONT = BitmapFont.DEFAULT;
     private static final float[][] BLOCK_COLORS = {
         {0, 0, 0},
         {.28f, .68f, .21f},
@@ -52,18 +49,8 @@ public final class Hud {
                         x + size / 4, y + 5, size / 2, Math.max(1, size - 23), color[0], color[1], color[2], 1);
             }
             if (size < 18) continue;
-            int label = slot + 1;
-            int digits = label < 10 ? 1 : 2;
-            for (int digit = 0; digit < digits; digit++) {
-                int value = digits == 1 ? label : digit == 0 ? label / 10 : label % 10;
-                int digitX = x + (digits == 1 ? 5 : 3 + digit * 7);
-                for (int segment = 0; segment < SEGMENTS.length; segment++) {
-                    if ((DIGITS[value] & (1 << segment)) == 0) continue;
-                    int[] shape = SEGMENTS[segment];
-                    canvas.rectangle(
-                            digitX + shape[0], y + size - 15 + shape[1], shape[2], shape[3], .94f, .94f, .94f, 1);
-                }
-            }
+            String label = Integer.toString(slot + 1);
+            canvas.textWithShadow(FONT, label, x + (size - FONT.width(label)) / 2, y + size - 15, .94f, .94f, .94f, 1);
         }
     }
 }

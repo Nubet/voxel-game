@@ -1,0 +1,10 @@
+Minecraftia Regular by Andrew Tyler.
+Source supplied by the project owner: minecraftia-font/Minecraftia-Regular.ttf
+
+Original accompanying readme:
+The font file in this archive was created by Andrew Tyler www.AndrewTyler.net and font@andrewtyler.net
+Use at 12 or 24 px size with anti-alising off for best results.
+
+GenerateUiAtlas rasterizes printable U+0020..U+007E at 12 px without
+antialiasing into font.png and adds a white texel at (0,0) for rectangles.
+The original TTF is not loaded by the game.

@@ -79,5 +79,16 @@ public final class SettingsPanelView {
                 panel.canIncrease() ? .94f : .3f,
                 panel.canIncrease() ? .96f : .3f,
                 1);
+        BitmapFont font = BitmapFont.DEFAULT;
+        canvas.textWithShadow(font, "Settings", SettingsPanel.PANEL_X + 12, SettingsPanel.PANEL_Y + 10, 1, 1, 1, 1);
+        canvas.textWithShadow(
+                font,
+                "Render distance: " + panel.renderDistance() + " chunks",
+                SettingsPanel.PANEL_X + 12,
+                SettingsPanel.PANEL_Y + 44,
+                1,
+                1,
+                1,
+                1);
     }
 }

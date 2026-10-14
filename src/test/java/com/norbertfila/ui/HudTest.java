@@ -18,12 +18,12 @@ class HudTest {
         float[] vertices = vertices(canvas);
         int count = canvas.floatCount();
         int slots = 0;
-        for (int offset = 0; offset < count; offset += 6) {
+        for (int offset = 0; offset < count; offset += 8) {
             assertTrue(vertices[offset] * viewport.scale() >= 0 && vertices[offset] * viewport.scale() <= width);
             assertTrue(
                     vertices[offset + 1] * viewport.scale() >= 0 && vertices[offset + 1] * viewport.scale() <= height);
         }
-        for (int offset = 0; offset < count; offset += 36) {
+        for (int offset = 0; offset < count; offset += 48) {
             float r = vertices[offset + 2], g = vertices[offset + 3], b = vertices[offset + 4];
             if ((r == .96f && g == .8f && b == .3f) || (r == .25f && g == .29f && b == .35f)) slots++;
         }
@@ -42,12 +42,12 @@ class HudTest {
         float[] vertices = vertices(canvas);
         int count = canvas.floatCount();
         assertTrue(count > 0 && count <= vertices.length);
-        assertEquals(0, count % 36);
+        assertEquals(0, count % 48);
         assertEquals((int) viewport.width() / 2 - 8, vertices[0]);
         assertEquals((int) viewport.height() / 2 - 2, vertices[1]);
         int selected = 0;
         int slots = 0;
-        for (int offset = 0; offset < count; offset += 36) {
+        for (int offset = 0; offset < count; offset += 48) {
             float r = vertices[offset + 2];
             float g = vertices[offset + 3];
             float b = vertices[offset + 4];
@@ -58,7 +58,7 @@ class HudTest {
         }
         assertEquals(1, selected);
         assertEquals(Hotbar.SLOTS, slots);
-        for (int offset = 0; offset < count; offset += 6) {
+        for (int offset = 0; offset < count; offset += 8) {
             assertTrue(vertices[offset] >= 0 && vertices[offset] <= viewport.width());
             assertTrue(vertices[offset + 1] >= 0 && vertices[offset + 1] <= viewport.height());
         }
@@ -67,7 +67,7 @@ class HudTest {
         hud.render(canvas, hotbar, viewport);
         assertEquals(count, canvas.floatCount());
         vertices = vertices(canvas);
-        assertEquals(.96f, vertices[4 * 36 + 2]);
+        assertEquals(.96f, vertices[4 * 48 + 2]);
     }
 
     private static float[] vertices(UiCanvas canvas) {

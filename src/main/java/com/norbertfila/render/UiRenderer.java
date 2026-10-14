@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import java.io.IOException;
@@ -14,34 +15,69 @@ public final class UiRenderer implements AutoCloseable {
     private final int vao;
     private final int vbo;
     private final int program;
+    private final int atlas;
     private final int viewportUniform;
     private FloatBuffer uploadBuffer;
     private boolean closed;
 
     public UiRenderer() {
-        int vertexShader = compile(GL_VERTEX_SHADER, "/shaders/ui.vert");
-        int fragmentShader = compile(GL_FRAGMENT_SHADER, "/shaders/ui.frag");
-        int linkedProgram = glCreateProgram();
-        glAttachShader(linkedProgram, vertexShader);
-        glAttachShader(linkedProgram, fragmentShader);
-        glLinkProgram(linkedProgram);
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        if (glGetProgrami(linkedProgram, GL_LINK_STATUS) == GL_FALSE) {
-            glDeleteProgram(linkedProgram);
-            throw new IllegalStateException("UI shader link failed");
+        byte[] pixels = BitmapFont.DEFAULT.atlasPixels();
+        int createdProgram = 0, createdVao = 0, createdVbo = 0, createdAtlas = 0;
+        int viewportLocation;
+        try {
+            createdProgram = createProgram();
+            viewportLocation = glGetUniformLocation(createdProgram, "uViewport");
+            int atlasLocation = glGetUniformLocation(createdProgram, "uAtlas");
+            if (viewportLocation < 0 || atlasLocation < 0)
+                throw new IllegalStateException("Missing UI shader uniforms");
+            glProgramUniform1i(createdProgram, atlasLocation, 0);
+            createdVao = glGenVertexArrays();
+            createdVbo = glGenBuffers();
+            glBindVertexArray(createdVao);
+            glBindBuffer(GL_ARRAY_BUFFER, createdVbo);
+            glVertexAttribPointer(0, 2, GL_FLOAT, false, UiCanvas.FLOATS_PER_VERTEX * Float.BYTES, 0);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(1, 4, GL_FLOAT, false, UiCanvas.FLOATS_PER_VERTEX * Float.BYTES, 2L * Float.BYTES);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(2, 2, GL_FLOAT, false, UiCanvas.FLOATS_PER_VERTEX * Float.BYTES, 6L * Float.BYTES);
+            glEnableVertexAttribArray(2);
+            glBindVertexArray(0);
+            createdAtlas = glGenTextures();
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, createdAtlas);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+            var upload = MemoryUtil.memAlloc(pixels.length);
+            try {
+                upload.put(pixels).flip();
+                glTexImage2D(
+                        GL_TEXTURE_2D,
+                        0,
+                        GL_RGBA8,
+                        BitmapFont.ATLAS_WIDTH,
+                        BitmapFont.ATLAS_HEIGHT,
+                        0,
+                        GL_RGBA,
+                        GL_UNSIGNED_BYTE,
+                        upload);
+            } finally {
+                MemoryUtil.memFree(upload);
+            }
+        } catch (RuntimeException | Error failure) {
+            glDeleteTextures(createdAtlas);
+            glDeleteBuffers(createdVbo);
+            glDeleteVertexArrays(createdVao);
+            glDeleteProgram(createdProgram);
+            throw failure;
         }
-        program = linkedProgram;
-        viewportUniform = glGetUniformLocation(program, "uViewport");
-        vao = glGenVertexArrays();
-        vbo = glGenBuffers();
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glVertexAttribPointer(0, 2, GL_FLOAT, false, UiCanvas.FLOATS_PER_VERTEX * Float.BYTES, 0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 4, GL_FLOAT, false, UiCanvas.FLOATS_PER_VERTEX * Float.BYTES, 2L * Float.BYTES);
-        glEnableVertexAttribArray(1);
-        glBindVertexArray(0);
+        program = createdProgram;
+        viewportUniform = viewportLocation;
+        vao = createdVao;
+        vbo = createdVbo;
+        atlas = createdAtlas;
     }
 
     public void render(UiCanvas canvas, UiViewport viewport) {
@@ -60,6 +96,8 @@ public final class UiRenderer implements AutoCloseable {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glUseProgram(program);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, atlas);
         glUniform2f(viewportUniform, (float) viewport.width(), (float) viewport.height());
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -72,8 +110,9 @@ public final class UiRenderer implements AutoCloseable {
     }
 
     private static int compile(int type, String resource) {
+        String source = loadSource(resource);
         int shader = glCreateShader(type);
-        glShaderSource(shader, loadSource(resource));
+        glShaderSource(shader, source);
         glCompileShader(shader);
         if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
             String log = glGetShaderInfoLog(shader);
@@ -81,6 +120,27 @@ public final class UiRenderer implements AutoCloseable {
             throw new IllegalStateException("UI shader compilation failed for " + resource + ": " + log);
         }
         return shader;
+    }
+
+    private static int createProgram() {
+        int vertex = 0, fragment = 0, program = 0;
+        try {
+            vertex = compile(GL_VERTEX_SHADER, "/shaders/ui.vert");
+            fragment = compile(GL_FRAGMENT_SHADER, "/shaders/ui.frag");
+            program = glCreateProgram();
+            glAttachShader(program, vertex);
+            glAttachShader(program, fragment);
+            glLinkProgram(program);
+            if (glGetProgrami(program, GL_LINK_STATUS) == GL_FALSE)
+                throw new IllegalStateException("UI shader link failed: " + glGetProgramInfoLog(program));
+            return program;
+        } catch (RuntimeException | Error failure) {
+            glDeleteProgram(program);
+            throw failure;
+        } finally {
+            if (vertex != 0) glDeleteShader(vertex);
+            if (fragment != 0) glDeleteShader(fragment);
+        }
     }
 
     private static String loadSource(String resource) {
@@ -98,6 +158,7 @@ public final class UiRenderer implements AutoCloseable {
         closed = true;
         MemoryUtil.memFree(uploadBuffer);
         uploadBuffer = null;
+        glDeleteTextures(atlas);
         glDeleteBuffers(vbo);
         glDeleteVertexArrays(vao);
         glDeleteProgram(program);

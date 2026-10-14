@@ -7,6 +7,7 @@ import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.core.SettingsPanel;
 import com.norbertfila.platform.Window;
+import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.SettingsPanelView;
 import com.norbertfila.ui.UiCanvas;
@@ -22,9 +23,8 @@ public final class UiViewportSmoke {
     public static void main(String[] args) throws Exception {
         Path output = Path.of(args[0]);
         check(Files.isDirectory(output), "Output directory must exist");
-        Path baseline = args.length > 1 ? Path.of(args[1]) : null;
         UiCanvas canvas = new UiCanvas();
-        try (Window window = new Window(1280, 720, "UI-01 viewport smoke");
+        try (Window window = new Window(1280, 720, "UI-03 viewport and font smoke");
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION) + " OS="
                     + System.getProperty("os.name") + " Java=" + Runtime.version());
@@ -64,6 +64,7 @@ public final class UiViewportSmoke {
                 for (int i = 0; i < cases.length; i++) {
                     int[] size = cases[i];
                     UiViewport viewport = new UiViewport(size[0], size[1], size[2], size[3]);
+                    glBindTexture(GL_TEXTURE_2D, texture);
                     glTexImage2D(
                             GL_TEXTURE_2D, 0, GL_RGBA8, size[2], size[3], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer)
                                     null);
@@ -84,8 +85,7 @@ public final class UiViewportSmoke {
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
-                    if (baseline != null) checkBaseline(baseline.resolve("ui01-" + i + "-hud.png"), pixels, viewport);
-                    write(output.resolve("ui02-" + i + "-hud.png"), pixels, viewport);
+                    write(output.resolve("ui03-" + i + "-hud.png"), pixels, viewport);
                     panel.toggle();
                     double windowX = (SettingsPanel.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
                     double windowY = (SettingsPanel.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
@@ -105,8 +105,7 @@ public final class UiViewportSmoke {
                         check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
                         check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
                     }
-                    if (baseline != null) checkBaseline(baseline.resolve("ui01-" + i + "-panel.png"), pixels, viewport);
-                    write(output.resolve("ui02-" + i + "-panel.png"), pixels, viewport);
+                    write(output.resolve("ui03-" + i + "-panel.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
@@ -126,13 +125,19 @@ public final class UiViewportSmoke {
                 ui.render(canvas, small);
                 check(rgb(capture(small), small, 1, 1) == 0x0000ff, "Reused canvas drew stale vertices");
                 check(glGetError() == GL_NO_ERROR, "Canvas growth/reuse GL error");
+                checkFont(ui, canvas, small, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
                 glDeleteFramebuffers(framebuffer);
             }
+            int atlas = glGetInteger(GL_TEXTURE_BINDING_2D);
+            check(atlas != 0, "Missing atlas binding");
+            ui.close();
+            check(!glIsTexture(atlas), "Atlas leaked after renderer close");
+            check(glGetError() == GL_NO_ERROR, "Renderer cleanup error");
         }
-        System.out.println("UI-02 GPU smoke PASS; baseline comparison=" + (baseline != null));
+        System.out.println("UI-03 GPU smoke PASS");
     }
 
     private static void render(
@@ -143,16 +148,47 @@ public final class UiViewportSmoke {
         ui.render(canvas, viewport);
     }
 
-    private static void checkBaseline(Path path, ByteBuffer pixels, UiViewport viewport) throws Exception {
-        BufferedImage baseline = ImageIO.read(path.toFile());
+    private static void checkFont(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output) throws Exception {
+        BitmapFont font = BitmapFont.DEFAULT;
+        canvas.clear();
+        canvas.rectangle(0, 0, 180, 100, 0, 0, 1, 1);
+        canvas.textWithShadow(font, "F", 8, 8, 1, 1, 1, 1);
+        canvas.textWithShadow(font, "F10: Aa? 16", 8, 32, 1, 1, 1, 1);
+        canvas.text(font, "Snowman: \u2603", 8, 56, 1, 1, 1, 1);
+        clear();
+        ui.render(canvas, viewport);
         check(
-                baseline.getWidth() == viewport.framebufferWidth()
-                        && baseline.getHeight() == viewport.framebufferHeight(),
-                "Baseline dimensions differ");
-        for (int y = 0; y < baseline.getHeight(); y++)
-            for (int x = 0; x < baseline.getWidth(); x++)
-                if ((baseline.getRGB(x, y) & 0xffffff) != rgb(pixels, viewport, x, y))
-                    throw new AssertionError("UI-01 baseline differs: " + path + " at " + x + "," + y);
+                glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER) == GL_NEAREST,
+                "Atlas minification must be nearest");
+        check(
+                glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER) == GL_NEAREST,
+                "Atlas magnification must be nearest");
+        check(glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL) == 0, "Atlas mipmaps must be disabled");
+        ByteBuffer pixels = capture(viewport);
+        byte[] atlas = font.atlasPixels();
+        int ink = 0, shadow = 0, background = 0;
+        for (int y = 0; y <= BitmapFont.GLYPH_HEIGHT; y++)
+            for (int x = 0; x <= font.glyphWidth('F'); x++) {
+                boolean foreground = opaque(atlas, font, 'F', x, y);
+                boolean shaded = opaque(atlas, font, 'F', x - 1, y - 1);
+                int expected = foreground ? 0xffffff : shaded ? 0x404040 : 0x0000ff;
+                check(
+                        rgb(pixels, viewport, 8 + x, 8 + y) == expected,
+                        "Font alpha, orientation or shadow differs from atlas");
+                if (foreground) ink++;
+                else if (shaded) shadow++;
+                else background++;
+            }
+        check(ink > 0 && shadow > 0 && background > 0, "Incomplete font pixel checks");
+        check(glGetError() == GL_NO_ERROR, "Font render GL error");
+        write(output.resolve("ui03-font.png"), pixels, viewport);
+    }
+
+    private static boolean opaque(byte[] atlas, BitmapFont font, int character, int x, int y) {
+        if (x < 0 || y < 0 || x >= font.glyphWidth(character) || y >= BitmapFont.GLYPH_HEIGHT) return false;
+        int atlasX = character % 16 * BitmapFont.CELL_SIZE + x;
+        int atlasY = character / 16 * BitmapFont.CELL_SIZE + y;
+        return atlas[(atlasY * BitmapFont.ATLAS_WIDTH + atlasX) * 4 + 3] != 0;
     }
 
     private static void clear() {
