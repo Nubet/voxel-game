@@ -43,7 +43,7 @@ public final class VegetationSmoke {
                 var pos = new ChunkPos(x, 0, z);
                 baseline.putChunk(pos, Chunk.fromBlocks(blocks));
                 long started = System.nanoTime();
-                vegetation.generate(x * 16, 0, z * 16, blocks, columns);
+                vegetation.generate(x * 16, 0, z * 16, blocks, TerrainColumn.of(columns, java.util.List.of()));
                 decorationNanos += System.nanoTime() - started;
                 for (byte block : blocks) if (PlantRules.isPlant(block)) plants++;
                 decorated.putChunk(pos, Chunk.fromBlocks(blocks));

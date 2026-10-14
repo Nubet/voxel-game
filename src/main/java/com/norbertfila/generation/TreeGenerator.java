@@ -4,6 +4,8 @@ import static com.norbertfila.generation.GenerationHash.hash;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
+import java.util.ArrayList;
+import java.util.List;
 
 final class TreeGenerator {
     private static final int CELL_SIZE = 6;
@@ -26,22 +28,34 @@ final class TreeGenerator {
     }
 
     void generate(int originX, int originY, int originZ, byte[] blocks) {
+        place(trees(originX, originZ), originX, originY, originZ, blocks);
+    }
+
+    /** Trees whose trunk or crown can reach the column at the given origin, in the order they must be placed. */
+    List<Tree> trees(int originX, int originZ) {
         long firstCellX = Math.floorDiv((long) originX - MAX_CROWN_RADIUS - CELL_SIZE + 1, CELL_SIZE);
         long lastCellX = Math.floorDiv((long) originX + Chunk.SIZE - 1 + MAX_CROWN_RADIUS, CELL_SIZE);
         long firstCellZ = Math.floorDiv((long) originZ - MAX_CROWN_RADIUS - CELL_SIZE + 1, CELL_SIZE);
         long lastCellZ = Math.floorDiv((long) originZ + Chunk.SIZE - 1 + MAX_CROWN_RADIUS, CELL_SIZE);
-
+        List<Tree> trees = new ArrayList<>();
         for (long cellZ = firstCellZ; cellZ <= lastCellZ; cellZ++)
             for (long cellX = firstCellX; cellX <= lastCellX; cellX++) {
-                Tree tree = acceptedTree(cellX, cellZ);
-                if (tree != null && suitable(tree)) {
-                    placeTrunk(tree, originX, originY, originZ, blocks);
-                    placeCrown(tree, originX, originY, originZ, blocks);
-                }
+                Candidate candidate = acceptedTree(cellX, cellZ);
+                if (candidate != null && suitable(candidate.tree.x, candidate.tree.z, candidate.terrain))
+                    trees.add(candidate.tree);
             }
+        return List.copyOf(trees);
     }
 
-    private Tree acceptedTree(long cellX, long cellZ) {
+    // Order matters because logs overwrite leaves of trees placed earlier, while leaves only fill air.
+    static void place(List<Tree> trees, int originX, int originY, int originZ, byte[] blocks) {
+        for (Tree tree : trees) {
+            placeTrunk(tree, originX, originY, originZ, blocks);
+            placeCrown(tree, originX, originY, originZ, blocks);
+        }
+    }
+
+    private Candidate acceptedTree(long cellX, long cellZ) {
         long candidateX = treeX(cellX, cellZ), candidateZ = treeZ(cellX, cellZ);
         if (!selected(cellX, cellZ, candidateX, candidateZ)) return null;
         int x = (int) candidateX, z = (int) candidateZ;
@@ -63,13 +77,14 @@ final class TreeGenerator {
             }
         long shapeSeed = hash(seed ^ SHAPE_SALT, cellX, cellZ);
         TerrainSummary sample = terrain.sample(x, z);
-        return new Tree(
-                x,
-                z,
-                sample.surfaceHeight() + 1,
-                4 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4),
-                2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2),
-                shapeSeed,
+        return new Candidate(
+                new Tree(
+                        x,
+                        z,
+                        sample.surfaceHeight() + 1,
+                        4 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4),
+                        2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2),
+                        shapeSeed),
                 sample);
     }
 
@@ -91,10 +106,6 @@ final class TreeGenerator {
     private long treeZ(long cellX, long cellZ) {
         long positionSeed = hash(seed ^ POSITION_SALT, cellX, cellZ);
         return cellZ * CELL_SIZE + Long.remainderUnsigned(hash(positionSeed, cellZ, cellX), CELL_SIZE);
-    }
-
-    private boolean suitable(Tree tree) {
-        return suitable(tree.x, tree.z, tree.terrain);
     }
 
     private boolean suitableCandidate(long x, long z) {
@@ -144,6 +155,7 @@ final class TreeGenerator {
             blocks[index] = block;
     }
 
-    private record Tree(
-            int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TerrainSummary terrain) {}
+    record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed) {}
+
+    private record Candidate(Tree tree, TerrainSummary terrain) {}
 }

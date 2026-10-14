@@ -35,6 +35,18 @@ public record TerrainSummary(
     }
 
     public byte materialAt(int worldY) {
+        return materialAt(
+                worldY, surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, bedrockHeight, waterLevel);
+    }
+
+    static byte materialAt(
+            int worldY,
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel) {
         if (bedrockHeight != NO_BEDROCK) {
             if (worldY < bedrockHeight) return BlockId.AIR;
             if (worldY == bedrockHeight) return BlockId.BEDROCK;
