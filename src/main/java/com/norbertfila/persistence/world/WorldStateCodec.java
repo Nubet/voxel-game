@@ -117,7 +117,8 @@ public final class WorldStateCodec {
     private static Header readHeader(DataInputStream input, long fileBytes) throws IOException {
         if (fileBytes > MAX_FILE_BYTES) throw new IOException("World state exceeds size limit");
         if (input.readInt() != MAGIC) throw new IOException("Invalid world state magic");
-        if (input.readInt() != FORMAT_VERSION) throw new IOException("Unsupported world state format");
+        if (input.readInt() != FORMAT_VERSION)
+            throw new UnsupportedWorldFormatException("Unsupported world state format");
         UUID id = new UUID(input.readLong(), input.readLong());
         long seed = input.readLong();
         int length = input.readUnsignedByte();
