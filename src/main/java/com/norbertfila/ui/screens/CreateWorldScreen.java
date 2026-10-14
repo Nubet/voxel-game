@@ -48,6 +48,12 @@ public final class CreateWorldScreen implements Screen {
         return back;
     }
 
+    public void resumeEditing() {
+        submitted = false;
+        sync();
+        cancelInteraction();
+    }
+
     public String validationMessage() {
         if (name.text().strip().isEmpty()) return "Podaj nazwę świata";
         try {

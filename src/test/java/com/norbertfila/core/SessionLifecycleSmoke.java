@@ -57,6 +57,7 @@ public final class SessionLifecycleSmoke {
                 ui.render(canvas, viewport);
                 screens.keyPress(UiKey.ACTIVATE);
                 check(screens.pollAction() == Screen.Action.PLAY, "Menu did not request Play");
+                long started = System.nanoTime();
                 session.open(catalog, selected);
                 loop.awaitLoad(window, input, ui, settings, session);
                 check(session.runtime() != null, "World load failed: " + session.failure());
@@ -103,8 +104,14 @@ public final class SessionLifecycleSmoke {
                             }
                             var eye = frame.interpolatedEye(System.nanoTime());
                             camera.setPosition((float) eye.x(), (float) eye.y(), (float) eye.z());
-                            if (frame.ready() && uploadedView && session.state() == GameSession.State.LOADING)
-                                session.activate();
+                            if (frame.ready() && uploadedView && session.state() == GameSession.State.LOADING) {
+                                check(session.activate(), "Ready session did not activate");
+                                System.out.printf(
+                                        java.util.Locale.ROOT,
+                                        "READY cycle=%d firstViewMs=%.3f%n",
+                                        cycle,
+                                        (System.nanoTime() - started) / 1e6);
+                            }
                         }
                         glViewport(0, 0, 960, 540);
                         glClearColor(.45f, .65f, .85f, 1);

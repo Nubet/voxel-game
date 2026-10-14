@@ -20,7 +20,6 @@ import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.screens.InventoryScreen;
-import com.norbertfila.ui.screens.MainMenuScreen;
 import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SaveErrorScreen;
 import com.norbertfila.ui.screens.SessionStatusScreen;
@@ -279,8 +278,7 @@ public final class GameLoop {
         return Exit.QUIT;
     }
 
-    public Screen.Action runMenu(
-            Window window, Input input, UiRenderer renderer, GameSettings settings, MainMenuScreen menu) {
+    public Screen.Action runMenu(Window window, Input input, UiRenderer renderer, GameSettings settings, Screen menu) {
         return runScreen(window, input, renderer, settings, menu, null, null);
     }
 
@@ -307,6 +305,7 @@ public final class GameLoop {
     }
 
     public void awaitStop(Window window, Input input, UiRenderer renderer, GameSettings settings, GameSession session) {
+        if (session.state() == GameSession.State.MENU) return;
         runScreen(
                 window,
                 input,
@@ -334,8 +333,9 @@ public final class GameLoop {
         boolean interrupted = Thread.interrupted();
         boolean saveError = false;
         try {
-            if (interrupted && stopping == null && session == null) return Screen.Action.QUIT;
-            if (interrupted && stopping == null && session != null) session.cancelLoading();
+            if (interrupted && stopping == null && session == null) screens.requestClose();
+            if (interrupted && stopping == null && session != null && session.state() == GameSession.State.LOADING)
+                session.cancelLoading();
             while (true) {
                 if (session != null) {
                     session.poll();
@@ -353,7 +353,7 @@ public final class GameLoop {
                     screens.open(saveError ? new SaveErrorScreen() : new SessionStatusScreen("Saving world..."));
                     input.discardTransientInput();
                 }
-                if (stopping == null && session == null && window.shouldClose()) return Screen.Action.QUIT;
+                if (stopping == null && session == null && window.shouldClose()) screens.requestClose();
                 screens.beginFrame();
                 window.pollEvents();
                 input.update();
@@ -366,7 +366,7 @@ public final class GameLoop {
                 UiViewport viewport =
                         drawable ? new UiViewport(ww[0], wh[0], width[0], height[0], settings.guiScale()) : null;
                 if (drawable) screens.layout(viewport);
-                if (drawable && input.focused()) {
+                if (drawable && input.focused() && (stopping != null || !window.shouldClose())) {
                     screens.updatePointer(new Screen.Pointer(
                             input.leftMouseDown(),
                             input.leftMousePressed(),
@@ -380,7 +380,7 @@ public final class GameLoop {
                 } else screens.cancelInteraction();
                 UiEvent event;
                 while ((event = input.pollUiEvent()) != null)
-                    if (drawable && input.focused()) {
+                    if (drawable && input.focused() && (stopping != null || !window.shouldClose())) {
                         if (session != null
                                 && stopping == null
                                 && event instanceof UiEvent.Key(var key)
@@ -409,7 +409,7 @@ public final class GameLoop {
                     window.swapBuffers();
                 }
                 if (!sleepWhileIdle()) {
-                    if (stopping == null && session == null) return Screen.Action.QUIT;
+                    if (stopping == null && session == null) screens.requestClose();
                     if (session != null && stopping == null && session.state() == GameSession.State.LOADING)
                         session.cancelLoading();
                     interrupted |= Thread.interrupted();

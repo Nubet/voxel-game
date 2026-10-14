@@ -10,6 +10,11 @@ public final class ScreenManager {
 
     public void beginFrame() {
         inputConsumed = current != null;
+        if (current != null) handle(current.update());
+    }
+
+    public void requestClose() {
+        if (current != null) handle(current.requestClose());
     }
 
     public void open(Screen screen) {

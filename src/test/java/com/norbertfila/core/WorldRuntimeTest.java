@@ -466,13 +466,17 @@ class WorldRuntimeTest {
                     runtime,
                     frame -> frame.inventory().count(36) == 0
                             && frame.inventory().count(0) == 64);
+            long unblockedAt = runtime.frame().tick();
             runtime.controls(controls(false, false));
+            await(runtime, frame -> frame.tick() > unblockedAt + 1);
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
             await(runtime, frame -> frame.mode() == PlayerController.Mode.CREATIVE && !frame.modePending());
             runtime.controls(controls(true, false));
             assertTrue(runtime.offer(new WorldRuntime.PickCreative(1, BlockId.BEDROCK)));
             await(runtime, frame -> frame.inventory().count(1) == 64);
+            long resumedAt = runtime.frame().tick();
             runtime.controls(controls(false, false));
+            await(runtime, frame -> frame.tick() > resumedAt + 1);
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
             var spectator = await(runtime, frame -> frame.mode() == PlayerController.Mode.SPECTATOR);
             runtime.controls(controls(true, false));

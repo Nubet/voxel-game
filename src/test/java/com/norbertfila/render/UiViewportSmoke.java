@@ -28,6 +28,7 @@ import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SaveErrorScreen;
 import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
+import com.norbertfila.ui.screens.WorldErrorScreen;
 import com.norbertfila.ui.screens.WorldSelectionScreen;
 import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
@@ -544,7 +545,16 @@ public final class UiViewportSmoke {
                     screens.pollAction() instanceof Screen.Action.OpenWorld request
                             && request.id().equals(selection.selectedId().orElseThrow()),
                     "HiDPI Play click missed");
-            check(glGetError() == GL_NO_ERROR, "WORLD-04 GL error");
+            screens.open(new WorldErrorScreen("Błąd sesji świata", "Payload integrity check failed"));
+            screens.layout(viewport);
+            clear();
+            canvas.clear();
+            screens.render(canvas, viewport);
+            ui.render(canvas, viewport);
+            write(output.resolve("world05-error-" + index + ".png"), capture(viewport), viewport);
+            screens.keyPress(UiKey.BACK);
+            check(!screens.isOpen() && screens.blocksGameplay(), "World error Back did not close safely");
+            check(glGetError() == GL_NO_ERROR, "WORLD-04/05 GL error");
         }
         System.out.println(
                 "PASS WORLD-04: 18 Polish glyph pixel checks, Unicode form/long seed/one-shot Create, 1000 visible-only rows and HiDPI Play in 10 viewport/scale cases");

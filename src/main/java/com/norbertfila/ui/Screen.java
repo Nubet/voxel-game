@@ -74,6 +74,14 @@ public interface Screen {
 
     default void layout(UiViewport viewport) {}
 
+    default Action update() {
+        return Action.NONE;
+    }
+
+    default Action requestClose() {
+        return Action.QUIT;
+    }
+
     Action updatePointer(boolean down, boolean pressed, double x, double y);
 
     Action keyPress(UiKey key);
