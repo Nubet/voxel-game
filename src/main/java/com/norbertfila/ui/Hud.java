@@ -37,8 +37,8 @@ public final class Hud {
         canvas.rectangle(centerX - 2, centerY - 8, 4, 16, 0, 0, 0, .8f);
         canvas.rectangle(centerX - 7, centerY - 1, 14, 2, 1, 1, 1, 1);
         canvas.rectangle(centerX - 1, centerY - 7, 2, 14, 1, 1, 1, 1);
-        int gap = Math.min(4, width / (Hotbar.SLOTS * 16));
-        int size = Math.max(1, Math.min(48, (width - 2 * gap) / Hotbar.SLOTS - gap));
+        int gap = Math.min(2, width / (Hotbar.SLOTS * 24));
+        int size = Math.max(1, Math.min(20, (width - 2 * gap) / Hotbar.SLOTS - gap));
         int startX = (width - Hotbar.SLOTS * size - (Hotbar.SLOTS - 1) * gap) / 2;
         int y = Math.max(0, height - size - 16);
         for (int slot = 0; slot < Hotbar.SLOTS; slot++) {
