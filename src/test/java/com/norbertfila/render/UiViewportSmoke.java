@@ -7,6 +7,9 @@ import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.core.SettingsPanel;
 import com.norbertfila.platform.Window;
+import com.norbertfila.ui.Hud;
+import com.norbertfila.ui.SettingsPanelView;
+import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
@@ -19,6 +22,8 @@ public final class UiViewportSmoke {
     public static void main(String[] args) throws Exception {
         Path output = Path.of(args[0]);
         check(Files.isDirectory(output), "Output directory must exist");
+        Path baseline = args.length > 1 ? Path.of(args[1]) : null;
+        UiCanvas canvas = new UiCanvas();
         try (Window window = new Window(1280, 720, "UI-01 viewport smoke");
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION) + " OS="
@@ -33,7 +38,7 @@ public final class UiViewportSmoke {
                 UiViewport viewport = new UiViewport(ww[0], wh[0], fw[0], fh[0]);
                 glViewport(0, 0, fw[0], fh[0]);
                 clear();
-                ui.render(new SettingsPanel(new GameSettings()), new Hotbar(), viewport);
+                render(ui, canvas, new SettingsPanel(new GameSettings()), new Hotbar(), viewport);
                 check(glGetError() == GL_NO_ERROR, "Window resize render error");
                 window.swapBuffers();
             }
@@ -71,7 +76,7 @@ public final class UiViewportSmoke {
                     Hotbar hotbar = new Hotbar();
                     hotbar.select(Hotbar.SLOTS - 1);
                     clear();
-                    ui.render(panel, hotbar, viewport);
+                    render(ui, canvas, panel, hotbar, viewport);
                     ByteBuffer pixels = capture(viewport);
                     if (i == 0) referenceHud = pixels;
                     if (i == 1) checkDoubleScale(referenceHud, pixels, reference, viewport);
@@ -79,7 +84,8 @@ public final class UiViewportSmoke {
                     int centerY = (int) viewport.height() / 2 * viewport.scale();
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
-                    write(output.resolve("ui01-" + i + "-hud.png"), pixels, viewport);
+                    if (baseline != null) checkBaseline(baseline.resolve("ui01-" + i + "-hud.png"), pixels, viewport);
+                    write(output.resolve("ui02-" + i + "-hud.png"), pixels, viewport);
                     panel.toggle();
                     double windowX = (SettingsPanel.SLIDER_X + .25) * viewport.scale() * size[0] / size[2];
                     double windowY = (SettingsPanel.SLIDER_Y + 1) * viewport.scale() * size[1] / size[3];
@@ -88,7 +94,7 @@ public final class UiViewportSmoke {
                             "Slider missed");
                     check(panel.renderDistance() == GameSettings.MIN_RENDER_DISTANCE, "Wrong slider value");
                     clear();
-                    ui.render(panel, hotbar, viewport);
+                    render(ui, canvas, panel, hotbar, viewport);
                     pixels = capture(viewport);
                     if (i == 0) referencePanel = pixels;
                     if (i == 1) checkDoubleScale(referencePanel, pixels, reference, viewport);
@@ -99,18 +105,54 @@ public final class UiViewportSmoke {
                         check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
                         check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
                     }
-                    write(output.resolve("ui01-" + i + "-panel.png"), pixels, viewport);
+                    if (baseline != null) checkBaseline(baseline.resolve("ui01-" + i + "-panel.png"), pixels, viewport);
+                    write(output.resolve("ui02-" + i + "-panel.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
                 }
+                UiViewport small = new UiViewport(180, 100, 180, 100);
+                canvas.clear();
+                for (int i = 0; i < 3000; i++) canvas.rectangle(0, 0, 8, 8, 1, 0, 0, 1);
+                canvas.rectangle(0, 0, 8, 8, 0, 1, 0, 1);
+                clear();
+                ui.render(canvas, small);
+                check(rgb(capture(small), small, 1, 1) == 0x00ff00, "Large canvas lost painter order");
+                canvas.clear();
+                clear();
+                ui.render(canvas, small);
+                check(rgb(capture(small), small, 1, 1) == 0, "Empty canvas drew stale vertices");
+                canvas.rectangle(0, 0, 8, 8, 0, 0, 1, 1);
+                ui.render(canvas, small);
+                check(rgb(capture(small), small, 1, 1) == 0x0000ff, "Reused canvas drew stale vertices");
+                check(glGetError() == GL_NO_ERROR, "Canvas growth/reuse GL error");
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
                 glDeleteFramebuffers(framebuffer);
             }
         }
-        System.out.println("UI-01 GPU smoke PASS");
+        System.out.println("UI-02 GPU smoke PASS; baseline comparison=" + (baseline != null));
+    }
+
+    private static void render(
+            UiRenderer ui, UiCanvas canvas, SettingsPanel panel, Hotbar hotbar, UiViewport viewport) {
+        canvas.clear();
+        if (panel.open()) new SettingsPanelView().render(canvas, panel);
+        else new Hud().render(canvas, hotbar, viewport);
+        ui.render(canvas, viewport);
+    }
+
+    private static void checkBaseline(Path path, ByteBuffer pixels, UiViewport viewport) throws Exception {
+        BufferedImage baseline = ImageIO.read(path.toFile());
+        check(
+                baseline.getWidth() == viewport.framebufferWidth()
+                        && baseline.getHeight() == viewport.framebufferHeight(),
+                "Baseline dimensions differ");
+        for (int y = 0; y < baseline.getHeight(); y++)
+            for (int x = 0; x < baseline.getWidth(); x++)
+                if ((baseline.getRGB(x, y) & 0xffffff) != rgb(pixels, viewport, x, y))
+                    throw new AssertionError("UI-01 baseline differs: " + path + " at " + x + "," + y);
     }
 
     private static void clear() {

@@ -12,6 +12,9 @@ import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.ui.Hud;
+import com.norbertfila.ui.SettingsPanelView;
+import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -34,6 +37,9 @@ public final class GameLoop {
         Map<ChunkPos, Long> residents = Map.of();
         Map<ChunkPos, ChunkManager.MeshResult> pending = new HashMap<>();
         UnderwaterVisibility visibility = new UnderwaterVisibility();
+        UiCanvas canvas = new UiCanvas();
+        Hud hud = new Hud();
+        SettingsPanelView panelView = new SettingsPanelView();
         try (Input input = new Input(window.handle())) {
             Hotbar hotbar = new Hotbar();
             long placePressId = 0;
@@ -169,7 +175,10 @@ public final class GameLoop {
                 var vp = camera.viewProjection(width[0], height[0]);
                 var stats = renderer.render(vp, Frustum.from(vp), camera.position(), visibility.amount());
                 metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
-                uiRenderer.render(settingsPanel, hotbar, viewport);
+                canvas.clear();
+                if (settingsPanel.open()) panelView.render(canvas, settingsPanel);
+                else hud.render(canvas, hotbar, viewport);
+                uiRenderer.render(canvas, viewport);
                 window.swapBuffers();
                 metrics.recordFrame(delta);
                 metrics.reportIfDue(now, width[0], height[0], hardware);

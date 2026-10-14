@@ -9,6 +9,8 @@ import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.WaterContact;
+import com.norbertfila.ui.Hud;
+import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.*;
 import java.awt.image.BufferedImage;
@@ -22,6 +24,13 @@ import org.lwjgl.BufferUtils;
 
 public final class UnderwaterVisibilitySmoke {
     private static final int WIDTH = 960, HEIGHT = 540;
+    private static final UiCanvas HUD = createHud();
+
+    private static UiCanvas createHud() {
+        UiCanvas canvas = new UiCanvas();
+        new Hud().render(canvas, new Hotbar(), new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
+        return canvas;
+    }
 
     public static void main(String[] args) throws Exception {
         Path output = Path.of(args[0]);
@@ -173,7 +182,7 @@ public final class UnderwaterVisibilitySmoke {
                 ? renderer.render(vp, Frustum.from(vp), eye)
                 : renderer.render(vp, Frustum.from(vp), eye, visibility.amount());
         check(stats.drawCalls() > 0, "No terrain draws");
-        ui.render(new SettingsPanel(new GameSettings()), new Hotbar(), new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
+        ui.render(HUD, new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
         check(glGetError() == GL_NO_ERROR, "Draw GL error");
     }
 

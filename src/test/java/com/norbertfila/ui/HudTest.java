@@ -1,20 +1,22 @@
-package com.norbertfila.render;
+package com.norbertfila.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.core.Hotbar;
-import com.norbertfila.ui.UiViewport;
+import java.nio.FloatBuffer;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-class UiRendererTest {
+class HudTest {
     @ParameterizedTest
     @CsvSource({"640,360", "1280,720", "1920,1080", "1281,721", "180,100"})
     void scaledHudKeepsEverySlotInsideFramebuffer(int width, int height) {
         UiViewport viewport = new UiViewport(width, height, width, height);
-        float[] vertices = new float[36 * (Hotbar.SLOTS * 11 + 4)];
-        int count = UiRenderer.hudVertices(vertices, new Hotbar(), (int) viewport.width(), (int) viewport.height());
+        UiCanvas canvas = new UiCanvas();
+        new Hud().render(canvas, new Hotbar(), viewport);
+        float[] vertices = vertices(canvas);
+        int count = canvas.floatCount();
         int slots = 0;
         for (int offset = 0; offset < count; offset += 6) {
             assertTrue(vertices[offset] * viewport.scale() >= 0 && vertices[offset] * viewport.scale() <= width);
@@ -31,14 +33,18 @@ class UiRendererTest {
     @ParameterizedTest
     @CsvSource({"1280,720", "640,360", "180,100"})
     void hudHasCenteredCrosshairAllSlotsAndOneMovableSelection(int width, int height) {
-        float[] vertices = new float[36 * (Hotbar.SLOTS * 11 + 4)];
+        UiCanvas canvas = new UiCanvas();
+        Hud hud = new Hud();
+        UiViewport viewport = new UiViewport(width, height, width, height);
         Hotbar hotbar = new Hotbar();
         hotbar.select(Hotbar.SLOTS - 1);
-        int count = UiRenderer.hudVertices(vertices, hotbar, width, height);
+        hud.render(canvas, hotbar, viewport);
+        float[] vertices = vertices(canvas);
+        int count = canvas.floatCount();
         assertTrue(count > 0 && count <= vertices.length);
         assertEquals(0, count % 36);
-        assertEquals(width / 2 - 8, vertices[0]);
-        assertEquals(height / 2 - 2, vertices[1]);
+        assertEquals((int) viewport.width() / 2 - 8, vertices[0]);
+        assertEquals((int) viewport.height() / 2 - 2, vertices[1]);
         int selected = 0;
         int slots = 0;
         for (int offset = 0; offset < count; offset += 36) {
@@ -53,11 +59,20 @@ class UiRendererTest {
         assertEquals(1, selected);
         assertEquals(Hotbar.SLOTS, slots);
         for (int offset = 0; offset < count; offset += 6) {
-            assertTrue(vertices[offset] >= 0 && vertices[offset] <= width);
-            assertTrue(vertices[offset + 1] >= 0 && vertices[offset + 1] <= height);
+            assertTrue(vertices[offset] >= 0 && vertices[offset] <= viewport.width());
+            assertTrue(vertices[offset + 1] >= 0 && vertices[offset + 1] <= viewport.height());
         }
         hotbar.select(0);
-        assertEquals(count, UiRenderer.hudVertices(vertices, hotbar, width, height));
+        canvas.clear();
+        hud.render(canvas, hotbar, viewport);
+        assertEquals(count, canvas.floatCount());
+        vertices = vertices(canvas);
         assertEquals(.96f, vertices[4 * 36 + 2]);
+    }
+
+    private static float[] vertices(UiCanvas canvas) {
+        FloatBuffer target = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(target);
+        return target.array();
     }
 }
