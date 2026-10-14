@@ -7,8 +7,11 @@ import com.norbertfila.meshing.ChunkMesher;
 import com.norbertfila.meshing.GreedyMesher;
 import com.norbertfila.meshing.MeshData;
 import com.norbertfila.world.BlockChangeResult;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.ChunkSnapshot;
 import com.norbertfila.world.World;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -20,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -32,6 +36,9 @@ public final class ChunkManager implements AutoCloseable {
     private static final int READY_QUEUE_CAPACITY = 64;
     public static final int RESULTS_PER_UPDATE = 32;
     private static final long GENERATION_INTAKE_NANOS = 2_000_000;
+    private static final int[][] FACE_OFFSETS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    private static final ChunkSnapshot EMPTY_SECTION = new ChunkSnapshot(new byte[Chunk.BLOCK_BYTES], 0);
+    private static final BlockNeighborhood EMPTY_NEIGHBORHOOD = BlockNeighborhood.centerOnly(EMPTY_SECTION);
 
     private final World world;
     private final WorldGenerator generator;
@@ -62,7 +69,7 @@ public final class ChunkManager implements AutoCloseable {
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
     private long acceptedRemeshes;
-    private long generatedResults, meshResults, discardedResults;
+    private long generatedResults, meshResults, discardedResults, skippedMeshInputs;
     private final Latency generationLatency = new Latency(), visibleLatency = new Latency();
 
     public Metrics metrics() {
@@ -86,7 +93,8 @@ public final class ChunkManager implements AutoCloseable {
                 meshingScheduler.queueWaitNanos(),
                 generationLatency.snapshot(),
                 visibleLatency.snapshot(),
-                generationScheduler.metadataEntries() + meshingScheduler.metadataEntries());
+                generationScheduler.metadataEntries() + meshingScheduler.metadataEntries(),
+                skippedMeshInputs);
     }
 
     public record Metrics(
@@ -109,7 +117,8 @@ public final class ChunkManager implements AutoCloseable {
             long meshWaitNanos,
             LatencyTotals generationLatency,
             LatencyTotals visibleLatency,
-            int schedulerMetadata) {}
+            int schedulerMetadata,
+            long skippedMeshInputs) {}
 
     /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
     public record LatencyTotals(long count, long totalNanos, long maxNanos) {}
@@ -294,7 +303,7 @@ public final class ChunkManager implements AutoCloseable {
                 continue;
             }
             ChunkData data = outcome.result();
-            Chunk chunk = Chunk.fromBlocks(data.blocks());
+            Chunk chunk = data.toChunk();
             world.putChunk(outcome.position(), chunk);
             residencyRevision++;
             chunkLifecycleListener.accept(outcome.position());
@@ -529,15 +538,17 @@ public final class ChunkManager implements AutoCloseable {
         pendingRemesh.remove(position);
         long token = meshTokenSequence.getAndIncrement();
         meshTokens.put(position, token);
-        BlockNeighborhood neighborhood = world.blockNeighborhood(position);
         ChunkPriority priority = meshPriority(position);
-        boolean submitted = meshingScheduler.submitLatest(new ChunkTask<>(
-                position,
-                neighborhood.center().revision(),
-                neighborhood.center().meshDependencyRevision(),
-                token,
-                priority,
-                () -> mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z())));
+        Callable<MeshData> work;
+        if (producesNoFaces(position, chunk)) {
+            work = () -> mesher.mesh(EMPTY_SECTION, EMPTY_NEIGHBORHOOD, position.x(), position.y(), position.z());
+            skippedMeshInputs++;
+        } else {
+            BlockNeighborhood neighborhood = world.blockNeighborhood(position);
+            work = () -> mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
+        }
+        boolean submitted = meshingScheduler.submitLatest(
+                new ChunkTask<>(position, chunk.revision(), chunk.meshDependencyRevision(), token, priority, work));
         if (!submitted) {
             meshTokens.remove(position);
             entry.meshFailed();
@@ -547,6 +558,25 @@ public final class ChunkManager implements AutoCloseable {
             pendingEdits.remove(position);
             acceptedRemeshes++;
         }
+    }
+
+    /**
+     * True when the section's mesh is certainly empty: it is all air, or one opaque block enclosed on all six sides by
+     * resident sections of opaque blocks. Missing neighbors do not qualify because the mesher draws provisional faces
+     * toward them.
+     */
+    private boolean producesNoFaces(ChunkPos position, Chunk chunk) {
+        int block = chunk.uniformBlock();
+        if (block == Byte.toUnsignedInt(BlockId.AIR)) return true;
+        if (block < 0 || !BlockRegistry.DEFAULT.occludesFullFace((byte) block)) return false;
+        for (int[] offset : FACE_OFFSETS) {
+            Chunk neighbor = world.getChunk(
+                    new ChunkPos(position.x() + offset[0], position.y() + offset[1], position.z() + offset[2]));
+            if (neighbor == null) return false;
+            int neighborBlock = neighbor.uniformBlock();
+            if (neighborBlock < 0 || !BlockRegistry.DEFAULT.occludesFullFace((byte) neighborBlock)) return false;
+        }
+        return true;
     }
 
     private ChunkPriority meshPriority(ChunkPos position) {

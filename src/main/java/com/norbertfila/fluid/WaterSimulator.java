@@ -121,22 +121,44 @@ public final class WaterSimulator {
         }
         // Include the edge halo: support changes can affect a donor across two chunk axes.
         int halo = extended ? 5 : 1;
+        // Scan in global y, z, x order because same-tick fluid updates run in scheduling order. Chunks without water
+        // are looked up once, so the scan costs almost nothing away from lakes.
+        Chunk[] sources = new Chunk[27];
+        boolean anyWater = false;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++) {
+                    long cx = (long) chunk.x() + dx, cy = (long) chunk.y() + dy, cz = (long) chunk.z() + dz;
+                    if (cx < Integer.MIN_VALUE
+                            || cx > Integer.MAX_VALUE
+                            || cy < Integer.MIN_VALUE
+                            || cy > Integer.MAX_VALUE
+                            || cz < Integer.MIN_VALUE
+                            || cz > Integer.MAX_VALUE) continue;
+                    Chunk source = world.getChunk(new ChunkPos((int) cx, (int) cy, (int) cz));
+                    if (source != null && source.containsWater()) {
+                        sources[(dy + 1) * 9 + (dz + 1) * 3 + dx + 1] = source;
+                        anyWater = true;
+                    }
+                }
+        if (!anyWater) return;
         for (int y = -1; y <= Chunk.SIZE; y++) {
             for (int z = -halo; z < Chunk.SIZE + halo; z++) {
                 for (int x = -halo; x < Chunk.SIZE + halo; x++) {
+                    int dx = Math.floorDiv(x, Chunk.SIZE),
+                            dy = Math.floorDiv(y, Chunk.SIZE),
+                            dz = Math.floorDiv(z, Chunk.SIZE);
+                    Chunk source = sources[(dy + 1) * 9 + (dz + 1) * 3 + dx + 1];
+                    if (source == null
+                            || source.get(
+                                            Math.floorMod(x, Chunk.SIZE),
+                                            Math.floorMod(y, Chunk.SIZE),
+                                            Math.floorMod(z, Chunk.SIZE))
+                                    != BlockId.WATER) continue;
                     long wx = (long) chunk.x() * Chunk.SIZE + x;
                     long wy = (long) chunk.y() * Chunk.SIZE + y;
                     long wz = (long) chunk.z() * Chunk.SIZE + z;
-                    if (wx < Integer.MIN_VALUE
-                            || wx > Integer.MAX_VALUE
-                            || wy < Integer.MIN_VALUE
-                            || wy > Integer.MAX_VALUE
-                            || wz < Integer.MIN_VALUE
-                            || wz > Integer.MAX_VALUE) continue;
-                    BlockPos position = new BlockPos((int) wx, (int) wy, (int) wz);
-                    if (world.hasChunk(Coordinates.worldToChunk(position))
-                            && world.getBlock(position).orElseThrow() == BlockId.WATER)
-                        scheduleNeighborhood(position, nextTick(tick), false);
+                    scheduleNeighborhood(new BlockPos((int) wx, (int) wy, (int) wz), nextTick(tick), false);
                 }
             }
         }

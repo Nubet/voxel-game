@@ -141,6 +141,8 @@ public final class TerrainGenerator implements TerrainSource {
         int originY = origin(position.y());
         int originZ = origin(position.z());
         TerrainColumn column = columns.get(position.x(), position.z(), () -> column(originX, originZ));
+        int uniform = column.uniformBlock(originY);
+        if (uniform >= 0) return ChunkData.uniform(position, (byte) uniform);
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {

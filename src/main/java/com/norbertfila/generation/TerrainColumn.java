@@ -1,5 +1,6 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import java.util.List;
 import java.util.Objects;
@@ -19,6 +20,8 @@ final class TerrainColumn {
     private final int bedrockHeight;
     private final int waterLevel;
     private final List<TreeGenerator.Tree> trees;
+    private final int minSurface;
+    private final int highestFeature;
 
     private TerrainColumn(
             int[] surfaceHeights,
@@ -35,6 +38,33 @@ final class TerrainColumn {
         this.bedrockHeight = bedrockHeight;
         this.waterLevel = waterLevel;
         this.trees = List.copyOf(trees);
+        int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+        for (int height : surfaceHeights) {
+            min = Math.min(min, height);
+            max = Math.max(max, height);
+        }
+        // Plants sit one block above the surface; tree crowns end two blocks above the trunk.
+        long highest = (long) max + 1;
+        for (TreeGenerator.Tree tree : this.trees)
+            highest = Math.max(highest, (long) tree.baseY() + tree.trunkHeight() + 2);
+        minSurface = min;
+        highestFeature = (int) Math.min(Integer.MAX_VALUE, highest);
+    }
+
+    /**
+     * The single block filling world heights {@code [minY, minY + 15]} of this column, or -1 when the column bounds
+     * cannot prove the section uniform. Uniform sections skip block filling and decoration entirely.
+     */
+    int uniformBlock(int minY) {
+        long maxY = (long) minY + Chunk.SIZE - 1;
+        if (bedrockHeight != TerrainSummary.NO_BEDROCK && maxY < bedrockHeight) return Byte.toUnsignedInt(BlockId.AIR);
+        if ((bedrockHeight == TerrainSummary.NO_BEDROCK || minY > bedrockHeight) && maxY < (long) minSurface - 3)
+            return Byte.toUnsignedInt(deepMaterial);
+        if (minY > highestFeature) {
+            if (minY > waterLevel) return Byte.toUnsignedInt(BlockId.AIR);
+            if (maxY <= waterLevel) return Byte.toUnsignedInt(BlockId.WATER);
+        }
+        return -1;
     }
 
     /**
