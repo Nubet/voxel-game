@@ -57,4 +57,32 @@ class ViewDemandTest {
         assertTrue(demand.update(new ChunkPos(0, 0, 0)));
         assertEquals(75, demand.requested().size());
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ViewDemand.Shape.class)
+    void updateReportsExactlyTheSectionsThatEnteredAndLeft(ViewDemand.Shape shape) {
+        ViewDemand demand = new ViewDemand(3, -1, 2, shape);
+        ChunkPos[] path = {
+            new ChunkPos(0, 0, 0),
+            new ChunkPos(1, 0, 0),
+            new ChunkPos(1, 5, -1),
+            new ChunkPos(-2, 0, -3),
+            new ChunkPos(-40, 0, 17)
+        };
+        java.util.Set<ChunkPos> previous = java.util.Set.of();
+        for (ChunkPos center : path) {
+            assertTrue(demand.update(center));
+            var current = java.util.Set.copyOf(demand.requested());
+            var entered = new java.util.HashSet<>(current);
+            entered.removeAll(previous);
+            var left = new java.util.HashSet<>(previous);
+            left.removeAll(current);
+            assertEquals(entered, java.util.Set.copyOf(demand.added()));
+            assertEquals(left, java.util.Set.copyOf(demand.removed()));
+            assertEquals(current.size(), demand.size());
+            for (ChunkPos position : current) assertTrue(demand.contains(position));
+            for (ChunkPos position : left) assertFalse(demand.contains(position));
+            previous = current;
+        }
+    }
 }

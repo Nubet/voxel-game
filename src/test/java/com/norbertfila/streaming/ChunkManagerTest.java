@@ -538,6 +538,43 @@ class ChunkManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({"SQUARE", "CIRCLE"})
+    void incrementalStreamingMatchesFullDemandAfterMovesAndTeleports(ViewDemand.Shape shape) throws Exception {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(3, -1, 1, shape);
+        ChunkPos[] path = {
+            new ChunkPos(0, 0, 0),
+            new ChunkPos(1, 0, 0),
+            new ChunkPos(1, 1, -1),
+            new ChunkPos(-1, 0, -2),
+            new ChunkPos(-30, 0, 25),
+            new ChunkPos(-29, -1, 25)
+        };
+        try (ChunkManager manager = new ChunkManager(world, new HillsGenerator(), demand)) {
+            for (ChunkPos center : path) {
+                long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                do {
+                    assertTrue(System.nanoTime() < deadline, "Demand not loaded around " + center);
+                    manager.update(center);
+                    manager.processResults().meshes().forEach(manager::markUploaded);
+                    Thread.sleep(1);
+                } while (!demand.requested().stream().allMatch(world::hasChunk));
+                for (ChunkPos resident : world.residentPositions()) {
+                    long dx = resident.x() - center.x(), dz = resident.z() - center.z();
+                    int unload = manager.unloadRadius();
+                    boolean inside = shape == ViewDemand.Shape.SQUARE
+                            ? Math.abs(dx) <= unload && Math.abs(dz) <= unload
+                            : dx * dx + dz * dz <= (long) unload * unload;
+                    assertTrue(inside, resident + " stayed resident around " + center);
+                }
+                var idle = manager.update(center);
+                assertEquals(0, idle.scheduled());
+                assertTrue(idle.evicted().isEmpty());
+            }
+        }
+    }
+
     private static ChunkManager.ProcessResult awaitMesh(ChunkManager manager) {
         long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
         int generated = 0;
