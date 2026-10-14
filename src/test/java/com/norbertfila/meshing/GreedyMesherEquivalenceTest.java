@@ -125,10 +125,30 @@ class GreedyMesherEquivalenceTest {
                 new ReferenceGreedyMesher().meshTextured(center, neighborhood, x, y, z),
                 new GreedyMesher().meshTextured(center, neighborhood, x, y, z),
                 position);
-        assertMesh(
+        assertSplitWater(
                 new ReferenceWaterMesher().mesh(center, neighborhood, x, y, z),
-                new WaterMesher().mesh(center, neighborhood, x, y, z),
+                new WaterMesher().mesh(center, neighborhood, x, y, z, ChunkMesh.ALL),
                 position);
+    }
+
+    /** The old combined mesh held solids padded to the water layout followed by water; parts must match it. */
+    private static void assertSplitWater(MeshData combined, ChunkMesh split, ChunkPos position) {
+        int flow = MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE, textured = MeshFormat.TEXTURED_VERTEX_STRIDE;
+        var ranges = combined.ranges();
+        int solidVertices = ranges.opaqueVertices() + ranges.cutoutVertices();
+        float[] all = combined.vertices();
+        float[] solid = new float[solidVertices * textured];
+        for (int vertex = 0; vertex < solidVertices; vertex++)
+            System.arraycopy(all, vertex * flow, solid, vertex * textured, textured);
+        float[] water = java.util.Arrays.copyOfRange(all, solidVertices * flow, all.length);
+        assertEquals(
+                new MeshRanges(ranges.opaqueVertices(), ranges.cutoutVertices(), 0),
+                split.solid().ranges());
+        assertArrayEquals(solid, split.solid().vertices(), "solids at " + position);
+        assertEquals(
+                new MeshRanges(0, 0, ranges.translucentVertices()),
+                split.water().ranges());
+        assertArrayEquals(water, split.water().vertices(), "water at " + position);
     }
 
     private static void assertMesh(MeshData expected, MeshData actual, ChunkPos position) {

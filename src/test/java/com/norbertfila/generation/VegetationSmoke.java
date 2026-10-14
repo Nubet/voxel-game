@@ -4,6 +4,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.meshing.*;
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
 import com.norbertfila.world.*;
@@ -92,8 +93,8 @@ public final class VegetationSmoke {
             for (int i = 0; i < positions.size(); i++) {
                 var p = positions.get(i);
                 var n = neighborhoods.get(i);
-                MeshData mesh = MESHER.mesh(n.center(), n, p.x(), p.y(), p.z());
-                batchBytes += mesh.vertices().length * Float.BYTES;
+                ChunkMesh mesh = MESHER.mesh(n.center(), n, p.x(), p.y(), p.z(), ChunkMesh.ALL);
+                batchBytes += mesh.bytes();
                 sink = mesh.vertexCount();
             }
             if (round >= 0) batches[round] = System.nanoTime() - started;
@@ -144,7 +145,7 @@ public final class VegetationSmoke {
     private static void upload(TerrainRenderer renderer, World world) {
         for (var p : world.residentPositions()) {
             var n = world.blockNeighborhood(p);
-            renderer.upload(p, MESHER.mesh(n.center(), n, p.x(), p.y(), p.z()));
+            renderer.upload(p, MESHER.mesh(n.center(), n, p.x(), p.y(), p.z(), ChunkMesh.ALL));
         }
     }
 

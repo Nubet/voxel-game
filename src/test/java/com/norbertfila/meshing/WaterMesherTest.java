@@ -91,16 +91,17 @@ class WaterMesherTest {
         world.setBlock(new BlockPos(8, 7, 8), BlockId.STONE, 64);
         world.setBlock(new BlockPos(7, 8, 8), BlockId.STONE, 64);
         world.setBlock(new BlockPos(10, 8, 8), BlockId.LEAVES, 64);
-        var result = mesh(world, new ChunkPos(0, 0, 0));
-        assertTrue(result.ranges().opaqueVertices() > 0);
-        assertTrue(result.ranges().cutoutVertices() > 0);
-        assertEquals(24, result.ranges().translucentVertices());
-        result.ranges().validate(result.format());
-        float[] vertices = result.vertices();
-        for (int i = 0; i < (result.ranges().opaqueVertices() + result.ranges().cutoutVertices()) * 9; i += 9) {
-            assertEquals(0, vertices[i + 7]);
-            assertEquals(0, vertices[i + 8]);
-        }
+        var n = world.blockNeighborhood(new ChunkPos(0, 0, 0));
+        var result = new WaterMesher().mesh(n.center(), n, 0, 0, 0, ChunkMesh.ALL);
+        assertTrue(result.solid().ranges().opaqueVertices() > 0);
+        assertTrue(result.solid().ranges().cutoutVertices() > 0);
+        assertEquals(0, result.solid().ranges().translucentVertices());
+        assertEquals(MeshFormat.TEXTURED_VERSION, result.solid().format().version());
+        assertEquals(new MeshRanges(0, 0, 24), result.water().ranges());
+        assertEquals(MeshFormat.FLOW_TEXTURED_VERSION, result.water().format().version());
+        var waterOnly = new WaterMesher().mesh(n.center(), n, 0, 0, 0, ChunkMesh.WATER);
+        assertEquals(null, waterOnly.solid());
+        assertArrayEquals(result.water().vertices(), waterOnly.water().vertices());
     }
 
     @Test
@@ -140,6 +141,8 @@ class WaterMesherTest {
 
     private static MeshData mesh(World world, ChunkPos position) {
         var n = world.blockNeighborhood(position);
-        return new WaterMesher().mesh(n.center(), n, position.x(), position.y(), position.z());
+        return new WaterMesher()
+                .mesh(n.center(), n, position.x(), position.y(), position.z(), ChunkMesh.WATER)
+                .water();
     }
 }

@@ -5,7 +5,7 @@ import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.interaction.BlockInteraction;
-import com.norbertfila.meshing.ChunkMesher;
+import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.*;
@@ -56,11 +56,11 @@ public final class WorldRuntime implements AutoCloseable {
     private volatile ChunkPos initialView;
     private CompletableFuture<WorldSnapshot> startup;
 
-    public WorldRuntime(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path savePath) {
+    public WorldRuntime(TerrainSource generator, LayeredMesher mesher, ViewDemand demand, Path savePath) {
         this(generator, mesher, demand, savePath, ownedIo(generator, mesher, demand, savePath));
     }
 
-    private static WorldIo ownedIo(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path path) {
+    private static WorldIo ownedIo(TerrainSource generator, LayeredMesher mesher, ViewDemand demand, Path path) {
         Objects.requireNonNull(generator);
         Objects.requireNonNull(mesher);
         Objects.requireNonNull(demand);
@@ -68,13 +68,13 @@ public final class WorldRuntime implements AutoCloseable {
         return new WorldIo();
     }
 
-    private WorldRuntime(TerrainSource generator, ChunkMesher mesher, ViewDemand demand, Path savePath, WorldIo io) {
+    private WorldRuntime(TerrainSource generator, LayeredMesher mesher, ViewDemand demand, Path savePath, WorldIo io) {
         this(generator, mesher, demand, savePath, io, true, io.read(savePath));
     }
 
     public WorldRuntime(
             TerrainSource generator,
-            ChunkMesher mesher,
+            LayeredMesher mesher,
             ViewDemand demand,
             Path savePath,
             WorldIo io,
@@ -84,7 +84,7 @@ public final class WorldRuntime implements AutoCloseable {
 
     private WorldRuntime(
             TerrainSource generator,
-            ChunkMesher mesher,
+            LayeredMesher mesher,
             ViewDemand demand,
             Path savePath,
             WorldIo io,
@@ -138,7 +138,7 @@ public final class WorldRuntime implements AutoCloseable {
         if (failure != null) throw new IllegalStateException("World runtime failed", failure);
     }
 
-    private void run(TerrainSource generator, ChunkMesher mesher, ViewDemand demand) {
+    private void run(TerrainSource generator, LayeredMesher mesher, ViewDemand demand) {
         try {
             var saved = startup.get();
             startup = null;
@@ -329,8 +329,10 @@ public final class WorldRuntime implements AutoCloseable {
                                 waterNanos = System.nanoTime() - waterStarted;
                                 processed = waterResult.processedUpdates();
                                 changed = waterResult.changedBlocks();
-                                dirty = waterResult.dirtyChunks().size();
+                                dirty = waterResult.dirtyChunks().size()
+                                        + waterResult.levelDirtyChunks().size();
                                 chunks.requestRemesh(waterResult.dirtyChunks());
+                                chunks.requestWaterRemesh(waterResult.levelDirtyChunks());
                                 long playerStarted = System.nanoTime();
                                 if (!state.blocked()
                                         && player

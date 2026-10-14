@@ -1,7 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.generation.TerrainSource;
-import com.norbertfila.meshing.ChunkMesher;
+import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.world.WorldCatalog;
 import com.norbertfila.persistence.world.WorldIo;
 import com.norbertfila.streaming.ViewDemand;
@@ -23,14 +23,14 @@ public final class GameSession {
 
     private final WorldIo io;
     private final LongFunction<TerrainSource> generators;
-    private final ChunkMesher mesher;
+    private final LayeredMesher mesher;
     private final ViewDemand demand;
     private CompletableFuture<WorldCatalog.Loaded> loading;
     private WorldRuntime runtime;
     private State state = State.MENU;
     private Throwable failure;
 
-    public GameSession(WorldIo io, LongFunction<TerrainSource> generators, ChunkMesher mesher, ViewDemand demand) {
+    public GameSession(WorldIo io, LongFunction<TerrainSource> generators, LayeredMesher mesher, ViewDemand demand) {
         this.io = Objects.requireNonNull(io);
         this.generators = Objects.requireNonNull(generators);
         this.mesher = Objects.requireNonNull(mesher);

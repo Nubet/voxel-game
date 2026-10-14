@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.MeshData;
 import com.norbertfila.meshing.MeshFormat;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
@@ -27,7 +28,12 @@ import org.lwjgl.system.MemoryStack;
 public final class TerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
-    private final GpuMeshPool meshPool;
+    private final GpuMemoryBudget memoryBudget;
+    // Solid and water parts of a chunk are separate GPU meshes so either can be replaced alone.
+    private final GpuMeshPool solidMeshes;
+    private final GpuMeshPool waterMeshes;
+    private final GpuMeshPool[] pools;
+    private final List<GpuMesh> visibleMeshes = new ArrayList<>();
     private final UploadQueue uploads = new UploadQueue();
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
@@ -62,7 +68,10 @@ public final class TerrainRenderer implements AutoCloseable {
     private TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
         this.blockTextures = blockTextures;
         regionIndex = new RegionIndex(regionEdge);
-        meshPool = new GpuMeshPool(new GpuMemoryBudget(gpuBudgetBytes));
+        memoryBudget = new GpuMemoryBudget(gpuBudgetBytes);
+        solidMeshes = new GpuMeshPool(memoryBudget);
+        waterMeshes = new GpuMeshPool(memoryBudget);
+        pools = new GpuMeshPool[] {solidMeshes, waterMeshes};
         int vertex = 0;
         int fragment = 0;
         int linkedProgram = 0;
@@ -145,9 +154,16 @@ public final class TerrainRenderer implements AutoCloseable {
         }
     }
 
-    public void upload(ChunkPos position, MeshData mesh) {
+    public void upload(ChunkPos position, ChunkMesh mesh) {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
+        if (mesh.solid() != null) upload(solidMeshes, position, mesh.solid());
+        if (mesh.water() != null) upload(waterMeshes, position, mesh.water());
+        if (solidMeshes.get(position) != null || waterMeshes.get(position) != null) regionIndex.add(position);
+        else regionIndex.remove(position);
+    }
+
+    private void upload(GpuMeshPool pool, ChunkPos position, MeshData mesh) {
         int version = mesh.format().version();
         if (version != MeshFormat.POSITION_COLOR_VERSION
                 && version != MeshFormat.TEXTURED_VERSION
@@ -156,9 +172,8 @@ public final class TerrainRenderer implements AutoCloseable {
         if (version != MeshFormat.POSITION_COLOR_VERSION && blockTextures == null)
             throw new IllegalStateException("Textured meshes require a block texture array");
         if (mesh.vertexCount() == 0) {
-            meshPool.remove(position);
-            regionIndex.remove(position);
-            meshPool.drainDeletions(1);
+            pool.remove(position);
+            pool.drainDeletions(1);
             return;
         }
         int vao = glGenVertexArrays(), vbo = glGenBuffers();
@@ -182,12 +197,11 @@ public final class TerrainRenderer implements AutoCloseable {
                 glEnableVertexAttribArray(2);
             }
             glBindVertexArray(0);
-            meshPool.put(position, new GpuMesh(vao, vbo, mesh, (array, buffer) -> {
+            pool.put(position, new GpuMesh(vao, vbo, mesh, (array, buffer) -> {
                 glDeleteBuffers(buffer);
                 glDeleteVertexArrays(array);
             }));
-            meshPool.drainDeletions(1);
-            regionIndex.add(position);
+            pool.drainDeletions(1);
         } catch (RuntimeException | Error failure) {
             glDeleteBuffers(vbo);
             glDeleteVertexArrays(vao);
@@ -244,9 +258,11 @@ public final class TerrainRenderer implements AutoCloseable {
 
     public void remove(ChunkPos position) {
         uploads.remove(Objects.requireNonNull(position));
-        meshPool.remove(Objects.requireNonNull(position));
+        solidMeshes.remove(Objects.requireNonNull(position));
+        waterMeshes.remove(position);
         regionIndex.remove(position);
-        meshPool.drainDeletions(1);
+        solidMeshes.drainDeletions(1);
+        waterMeshes.drainDeletions(1);
     }
 
     public RenderStats render(Matrix4f viewProjection, Frustum frustum, Vector3fc cameraPosition) {
@@ -274,10 +290,17 @@ public final class TerrainRenderer implements AutoCloseable {
             glUniformMatrix4fv(matrixUniform, false, mat);
         }
         RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
+        visibleMeshes.clear();
         List<ChunkPos> water = new ArrayList<>();
         for (ChunkPos position : culling.visible()) {
-            GpuMesh mesh = meshPool.get(position);
-            if (mesh != null && mesh.ranges().translucentVertices() > 0) water.add(position);
+            int translucent = 0;
+            for (GpuMeshPool pool : pools) {
+                GpuMesh mesh = pool.get(position);
+                if (mesh == null) continue;
+                visibleMeshes.add(mesh);
+                translucent += mesh.ranges().translucentVertices();
+            }
+            if (translucent > 0) water.add(position);
         }
         // shortcut: chunk-center ordering approximates transparency; sort faces or use OIT when overlap artifacts
         // require it.
@@ -285,14 +308,20 @@ public final class TerrainRenderer implements AutoCloseable {
         int draws;
         try {
             restoreTerrainState();
-            draws = drawLayer(culling.visible(), RenderLayer.OPAQUE);
-            draws += drawLayer(culling.visible(), RenderLayer.CUTOUT);
+            draws = drawLayer(visibleMeshes, RenderLayer.OPAQUE);
+            draws += drawLayer(visibleMeshes, RenderLayer.CUTOUT);
             if (!water.isEmpty()) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
-                draws += drawLayer(water, RenderLayer.TRANSLUCENT);
+                visibleMeshes.clear();
+                for (ChunkPos position : water)
+                    for (GpuMeshPool pool : pools) {
+                        GpuMesh mesh = pool.get(position);
+                        if (mesh != null) visibleMeshes.add(mesh);
+                    }
+                draws += drawLayer(visibleMeshes, RenderLayer.TRANSLUCENT);
             }
         } finally {
             restoreTerrainState();
@@ -300,16 +329,14 @@ public final class TerrainRenderer implements AutoCloseable {
             glBindVertexArray(0);
         }
         int visible = culling.visible().size();
-        return new RenderStats(visible, meshPool.size() - visible, draws);
+        return new RenderStats(visible, regionIndex.size() - visible, draws);
     }
 
-    private int drawLayer(List<ChunkPos> positions, RenderLayer layer) {
+    private int drawLayer(List<GpuMesh> meshes, RenderLayer layer) {
         glUniform1i(renderLayerUniform, layer.ordinal());
         int texturedMode = -1;
         int draws = 0;
-        for (ChunkPos position : positions) {
-            GpuMesh mesh = meshPool.get(position);
-            if (mesh == null) continue;
+        for (GpuMesh mesh : meshes) {
             int count = mesh.ranges().vertexCount(layer);
             if (count == 0) continue;
             int nextMode = mesh.format().version() != MeshFormat.POSITION_COLOR_VERSION ? 1 : 0;
@@ -361,7 +388,7 @@ public final class TerrainRenderer implements AutoCloseable {
         List<IndirectTerrainRenderer.Batch> batches =
                 new ArrayList<>(culling.visible().size());
         for (ChunkPos position : culling.visible()) {
-            GpuMesh mesh = meshPool.get(position);
+            GpuMesh mesh = solidMeshes.get(position);
             if (mesh != null) batches.add(new IndirectTerrainRenderer.Batch(position, mesh.ranges(), layer));
         }
         return indirectRenderer.build(batches, frustum);
@@ -371,7 +398,8 @@ public final class TerrainRenderer implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        meshPool.close();
+        solidMeshes.close();
+        waterMeshes.close();
         glDeleteProgram(program);
     }
 
@@ -387,7 +415,7 @@ public final class TerrainRenderer implements AutoCloseable {
     public record RenderStats(int visible, int culled, int drawCalls) {}
 
     public MemoryStats memoryStats() {
-        var budget = meshPool.budget();
+        var budget = memoryBudget;
         return new MemoryStats(
                 budget.allocatedBytes(), budget.peakBytes(), budget.uploadedBytes(), budget.deletedBytes());
     }

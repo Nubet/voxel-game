@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.MeshData;
 import com.norbertfila.meshing.MeshFormat;
 import com.norbertfila.meshing.MeshRanges;
@@ -25,11 +26,11 @@ class UploadQueueTest {
 
         queue.enqueue(request);
         MeshData dry = MeshData.textured(new float[6 * MeshFormat.TEXTURED_VERTEX_STRIDE], new MeshRanges(6, 0, 0));
-        MeshResult replacement = new MeshResult(request.position(), dry, 2, 3, 4, 5);
+        MeshResult replacement = new MeshResult(request.position(), ChunkMesh.single(dry), 2, 3, 4, 5);
         queue.enqueue(replacement);
         assertEquals(1, queue.size());
         assertSame(replacement, queue.poll(expectedBytes, false, current -> true));
-        assertEquals(new MeshRanges(6, 0, 0), replacement.mesh().ranges());
+        assertEquals(new MeshRanges(6, 0, 0), replacement.mesh().solid().ranges());
         assertEquals(5, replacement.token());
     }
 
@@ -37,8 +38,9 @@ class UploadQueueTest {
     void dropsStaleOversizedResultsBeforeCheckingTheByteBudget() {
         UploadQueue queue = new UploadQueue();
         MeshData large = new MeshData(new float[MeshData.VERTEX_STRIDE * MeshData.VERTICES_PER_FACE * 2]);
-        MeshResult stale = new MeshResult(new ChunkPos(0, 0, 0), large, 1, 2, 0, 3);
-        MeshResult current = new MeshResult(new ChunkPos(1, 0, 0), new MeshData(new float[0]), 4, 5, 1, 6);
+        MeshResult stale = new MeshResult(new ChunkPos(0, 0, 0), ChunkMesh.single(large), 1, 2, 0, 3);
+        MeshResult current =
+                new MeshResult(new ChunkPos(1, 0, 0), ChunkMesh.single(new MeshData(new float[0])), 4, 5, 1, 6);
         queue.enqueue(stale);
         queue.enqueue(current);
         var discarded = new java.util.ArrayList<MeshResult>();
@@ -66,7 +68,7 @@ class UploadQueueTest {
         queue.enqueue(result(new ChunkPos(1, 0, 0), small));
 
         MeshResult first = queue.poll(smallBytes(small), true, mesh -> true);
-        assertEquals(large, first.mesh());
+        assertEquals(large, first.mesh().solid());
         assertNull(queue.poll(0, false, mesh -> true));
         assertEquals(1, queue.size());
     }
@@ -98,7 +100,9 @@ class UploadQueueTest {
         queue.enqueue(result(position, replacement));
 
         assertEquals(1, queue.size());
-        assertEquals(replacement, queue.poll(Long.MAX_VALUE, true, mesh -> true).mesh());
+        assertEquals(
+                replacement,
+                queue.poll(Long.MAX_VALUE, true, mesh -> true).mesh().solid());
         queue.enqueue(result(position, first));
         assertEquals(position, queue.remove(position).position());
         assertEquals(0, queue.size());
@@ -109,6 +113,6 @@ class UploadQueueTest {
     }
 
     private static MeshResult result(ChunkPos position, MeshData mesh) {
-        return new MeshResult(position, mesh, 0, 0, 0, 0);
+        return new MeshResult(position, ChunkMesh.single(mesh), 0, 0, 0, 0);
     }
 }

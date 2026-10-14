@@ -3,9 +3,10 @@ package com.norbertfila.streaming;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.BlockNeighborhood;
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.ChunkMesher;
 import com.norbertfila.meshing.GreedyMesher;
-import com.norbertfila.meshing.MeshData;
+import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
@@ -42,16 +43,18 @@ public final class ChunkManager implements AutoCloseable {
 
     private final World world;
     private final WorldGenerator generator;
-    private final ChunkMesher mesher;
+    private final LayeredMesher mesher;
     private final ViewDemand viewDemand;
     private int hysteresisRadius;
     private final ChunkScheduler<ChunkData> generationScheduler =
             new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
-    private final ChunkScheduler<MeshData> meshingScheduler =
+    private final ChunkScheduler<ChunkMesh> meshingScheduler =
             new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
     private final Map<ChunkPos, ChunkEntry> entries = new HashMap<>();
     private final Map<ChunkPos, Long> meshTokens = new HashMap<>();
-    private final Set<ChunkPos> pendingRemesh = new HashSet<>();
+    // Mesh parts (ChunkMesh.SOLID, ChunkMesh.WATER) still to rebuild per chunk, and the parts of the task in flight.
+    private final Map<ChunkPos, Integer> pendingRemesh = new HashMap<>();
+    private final Map<ChunkPos, Integer> meshingParts = new HashMap<>();
     private final Set<ChunkPos> pendingEdits = new HashSet<>();
     private Set<ChunkPos> collisionChunks = Set.of();
     private boolean collisionDemandChanged;
@@ -69,7 +72,7 @@ public final class ChunkManager implements AutoCloseable {
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
     private long acceptedRemeshes;
-    private long generatedResults, meshResults, discardedResults, skippedMeshInputs;
+    private long generatedResults, meshResults, discardedResults, skippedMeshInputs, waterOnlyMeshes;
     private final Latency generationLatency = new Latency(), visibleLatency = new Latency();
 
     public Metrics metrics() {
@@ -94,7 +97,8 @@ public final class ChunkManager implements AutoCloseable {
                 generationLatency.snapshot(),
                 visibleLatency.snapshot(),
                 generationScheduler.metadataEntries() + meshingScheduler.metadataEntries(),
-                skippedMeshInputs);
+                skippedMeshInputs,
+                waterOnlyMeshes);
     }
 
     public record Metrics(
@@ -118,7 +122,8 @@ public final class ChunkManager implements AutoCloseable {
             LatencyTotals generationLatency,
             LatencyTotals visibleLatency,
             int schedulerMetadata,
-            long skippedMeshInputs) {}
+            long skippedMeshInputs,
+            long waterOnlyMeshes) {}
 
     /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
     public record LatencyTotals(long count, long totalNanos, long maxNanos) {}
@@ -146,6 +151,10 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ChunkManager(World world, WorldGenerator generator, ChunkMesher mesher, ViewDemand viewDemand) {
+        this(world, generator, (LayeredMesher) mesher, viewDemand);
+    }
+
+    public ChunkManager(World world, WorldGenerator generator, LayeredMesher mesher, ViewDemand viewDemand) {
         this(world, generator, mesher, viewDemand, viewDemand.horizontalRadius() + 1);
     }
 
@@ -154,7 +163,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ChunkManager(
-            World world, WorldGenerator generator, ChunkMesher mesher, ViewDemand viewDemand, int unloadRadius) {
+            World world, WorldGenerator generator, LayeredMesher mesher, ViewDemand viewDemand, int unloadRadius) {
         this.world = Objects.requireNonNull(world);
         this.generator = Objects.requireNonNull(generator);
         this.mesher = Objects.requireNonNull(mesher);
@@ -240,6 +249,7 @@ public final class ChunkManager implements AutoCloseable {
             if (!entries.containsKey(position) || withinHysteresis(position, center)) continue;
             entries.remove(position);
             meshTokens.remove(position);
+            meshingParts.remove(position);
             pendingRemesh.remove(position);
             pendingEdits.remove(position);
             generationBacklog.remove(position);
@@ -318,7 +328,7 @@ public final class ChunkManager implements AutoCloseable {
 
         List<MeshResult> meshes = new ArrayList<>();
         for (int index = 0; index < meshBudget; index++) {
-            ChunkTask.Outcome<MeshData> outcome = meshingScheduler.pollReady();
+            ChunkTask.Outcome<ChunkMesh> outcome = meshingScheduler.pollReady();
             if (outcome == null) break;
             ChunkEntry entry = entries.get(outcome.position());
             Long expectedToken = meshTokens.get(outcome.position());
@@ -344,12 +354,13 @@ public final class ChunkManager implements AutoCloseable {
                                         + outcome.revision() + " token=" + outcome.token(),
                                 outcome.failure());
                     entry.meshFailed();
-                    requestRemesh(outcome.position());
+                    retryMeshParts(outcome.position());
                 }
                 outcome.discard();
                 discarded++;
                 continue;
             }
+            if (outcome.result().parts() == ChunkMesh.WATER) waterOnlyMeshes++;
             meshes.add(new MeshResult(
                     outcome.position(),
                     outcome.result(),
@@ -383,6 +394,7 @@ public final class ChunkManager implements AutoCloseable {
         if (!isCurrentMesh(result)) return false;
         ChunkEntry entry = entries.get(result.position());
         if (!entry.uploaded(result.meshRevision())) return false;
+        meshingParts.remove(result.position());
         if (entry.firstUpload()) visibleLatency.record(System.nanoTime() - entry.requestedAt());
         processPendingRemesh(result.position());
         return true;
@@ -392,7 +404,7 @@ public final class ChunkManager implements AutoCloseable {
         if (!matchesPendingUpload(result)) return false;
         ChunkEntry entry = entries.get(result.position());
         if (!entry.meshFailed()) return false;
-        requestRemesh(result.position());
+        retryMeshParts(result.position());
         processPendingRemesh(result.position());
         return true;
     }
@@ -519,9 +531,18 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public void requestRemesh(List<ChunkPos> dirtyChunks) {
+        requestRemesh(dirtyChunks, ChunkMesh.ALL);
+    }
+
+    /** Rebuilds only water surfaces, for changes that alter water levels but not block types. */
+    public void requestWaterRemesh(List<ChunkPos> dirtyChunks) {
+        requestRemesh(dirtyChunks, ChunkMesh.WATER);
+    }
+
+    private void requestRemesh(List<ChunkPos> dirtyChunks, int parts) {
         for (ChunkPos position : dirtyChunks) {
             if (!entries.containsKey(position) || !world.hasChunk(position)) continue;
-            pendingRemesh.add(position);
+            pendingRemesh.merge(position, parts, (left, right) -> left | right);
             pendingEdits.add(position);
         }
     }
@@ -531,28 +552,30 @@ public final class ChunkManager implements AutoCloseable {
         Chunk chunk = world.getChunk(position);
         if (entry == null || chunk == null) return;
         if (!meshingScheduler.hasCapacity()) return;
-        if (!entry.beginMeshing(chunk.revision())) {
-            requestRemesh(position);
-            return;
-        }
-        pendingRemesh.remove(position);
+        ChunkPriority priority = meshPriority(position);
+        if (!entry.beginMeshing(chunk.revision())) return;
+        // A chunk without any uploaded mesh needs every part, whatever change triggered the request.
+        Integer pending = pendingRemesh.remove(position);
+        int parts = entry.hasMesh() && pending != null ? pending : ChunkMesh.ALL;
+        meshingParts.put(position, parts);
         long token = meshTokenSequence.getAndIncrement();
         meshTokens.put(position, token);
-        ChunkPriority priority = meshPriority(position);
-        Callable<MeshData> work;
+        Callable<ChunkMesh> work;
         if (producesNoFaces(position, chunk)) {
-            work = () -> mesher.mesh(EMPTY_SECTION, EMPTY_NEIGHBORHOOD, position.x(), position.y(), position.z());
+            work = () ->
+                    mesher.mesh(EMPTY_SECTION, EMPTY_NEIGHBORHOOD, position.x(), position.y(), position.z(), parts);
             skippedMeshInputs++;
         } else {
             BlockNeighborhood neighborhood = world.blockNeighborhood(position);
-            work = () -> mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
+            work = () ->
+                    mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z(), parts);
         }
         boolean submitted = meshingScheduler.submitLatest(
                 new ChunkTask<>(position, chunk.revision(), chunk.meshDependencyRevision(), token, priority, work));
         if (!submitted) {
             meshTokens.remove(position);
             entry.meshFailed();
-            requestRemesh(position);
+            retryMeshParts(position);
             LOG.warning("Meshing task rejected position=" + position + " revision=" + chunk.revision());
         } else {
             pendingEdits.remove(position);
@@ -589,12 +612,20 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private void requestRemesh(ChunkPos position) {
-        if (entries.containsKey(position) && world.hasChunk(position)) pendingRemesh.add(position);
+        if (entries.containsKey(position) && world.hasChunk(position))
+            pendingRemesh.merge(position, ChunkMesh.ALL, (left, right) -> left | right);
+    }
+
+    /** Re-queues the parts of a task whose result was discarded, so they are not lost. */
+    private void retryMeshParts(ChunkPos position) {
+        Integer parts = meshingParts.remove(position);
+        if (entries.containsKey(position) && world.hasChunk(position))
+            pendingRemesh.merge(position, parts == null ? ChunkMesh.ALL : parts, (left, right) -> left | right);
     }
 
     private void processPendingRemeshes() {
         if (pendingRemesh.isEmpty() || !meshingScheduler.hasCapacity()) return;
-        ChunkPos[] pending = pendingRemesh.toArray(ChunkPos[]::new);
+        ChunkPos[] pending = pendingRemesh.keySet().toArray(ChunkPos[]::new);
         // Category, distance and array index packed into one long give the scheduling order with a primitive sort.
         long[] keys = new long[pending.length];
         for (int index = 0; index < pending.length; index++) {
@@ -610,7 +641,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private void processPendingRemesh(ChunkPos position) {
-        if (!pendingRemesh.contains(position)) return;
+        if (!pendingRemesh.containsKey(position)) return;
         ChunkEntry entry = entries.get(position);
         Chunk chunk = world.getChunk(position);
         if (entry == null || chunk == null) {
@@ -650,7 +681,7 @@ public final class ChunkManager implements AutoCloseable {
 
     public record MeshResult(
             ChunkPos position,
-            MeshData mesh,
+            ChunkMesh mesh,
             long dataRevision,
             long meshDependencyRevision,
             long meshRevision,
@@ -661,7 +692,7 @@ public final class ChunkManager implements AutoCloseable {
         }
 
         public long bytes() {
-            return (long) mesh.vertexCount() * mesh.format().stride() * Float.BYTES;
+            return mesh.bytes();
         }
     }
 }

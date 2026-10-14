@@ -16,7 +16,6 @@ import com.norbertfila.world.RenderLayer;
 public final class GreedyMesher implements ChunkMesher {
     static final int COLOR_STRIDE = MeshData.VERTEX_STRIDE;
     static final int TEXTURED_STRIDE = MeshFormat.TEXTURED_VERTEX_STRIDE;
-    static final int FLOW_STRIDE = MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE;
 
     private static final int S = Chunk.SIZE;
     private static final int P = S + 2;
@@ -66,13 +65,10 @@ public final class GreedyMesher implements ChunkMesher {
         return MeshData.textured(scratch.concatenate(), scratch.ranges(TEXTURED_STRIDE));
     }
 
-    /**
-     * Meshes cube and cross-plant geometry, leaving water to the caller, into the calling thread's scratch. The
-     * returned layers stay valid until the next meshing call on this thread.
-     */
-    static Scratch meshSolids(
-            ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz, int stride) {
-        return build(snapshot, neighborhood, cx, cy, cz, stride, true);
+    /** Textured opaque and cutout geometry without water faces, which {@link WaterMesher} builds separately. */
+    static MeshData meshSolids(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
+        Scratch scratch = build(snapshot, neighborhood, cx, cy, cz, TEXTURED_STRIDE, true);
+        return MeshData.textured(scratch.concatenate(), scratch.ranges(TEXTURED_STRIDE));
     }
 
     private static Scratch build(
@@ -175,10 +171,6 @@ public final class GreedyMesher implements ChunkMesher {
             out.add(corner[vAxis] - corners[0][vAxis]);
             out.add(TEXTURE[id][face]);
             out.add(shade);
-            if (scratch.stride == FLOW_STRIDE) {
-                out.add(0);
-                out.add(0);
-            }
         }
     }
 
@@ -209,10 +201,6 @@ public final class GreedyMesher implements ChunkMesher {
                             out.add(1 - top);
                             out.add(TEXTURE[id][0]);
                             out.add(1);
-                            if (scratch.stride == FLOW_STRIDE) {
-                                out.add(0);
-                                out.add(0);
-                            }
                         }
                 }
     }
@@ -248,10 +236,6 @@ public final class GreedyMesher implements ChunkMesher {
 
         FloatList layer(int layer) {
             return layers[layer];
-        }
-
-        int stride() {
-            return stride;
         }
 
         float[] concatenate() {

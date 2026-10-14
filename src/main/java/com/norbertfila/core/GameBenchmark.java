@@ -445,6 +445,7 @@ public final class GameBenchmark {
                     .put("discardedResults", s1.discardedResults() - s0.discardedResults())
                     .put("schedulerMetadata", s1.schedulerMetadata())
                     .put("skippedMeshInputsPerS", (s1.skippedMeshInputs() - s0.skippedMeshInputs()) / seconds)
+                    .put("waterOnlyMeshesPerS", (s1.waterOnlyMeshes() - s0.waterOnlyMeshes()) / seconds)
                     .put("residentMax", residentMax)
                     .put("visibleAvg", frames == 0 ? 0.0 : (double) visibleSum / frames)
                     .put("drawsAvg", frames == 0 ? 0.0 : (double) drawSum / frames)

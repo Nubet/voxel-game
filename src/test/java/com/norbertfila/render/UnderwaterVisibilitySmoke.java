@@ -4,6 +4,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.core.*;
+import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.MeshData;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
@@ -66,7 +67,7 @@ public final class UnderwaterVisibilitySmoke {
                 }
                 renderer.upload(
                         new ChunkPos(Math.floorDiv((int) Math.floor(x[i]), 16), 0, Math.floorDiv((int) -depths[i], 16)),
-                        new MeshData(vertices));
+                        ChunkMesh.single(new MeshData(vertices)));
             }
             var dry = new UnderwaterVisibility();
             var wet = new UnderwaterVisibility();
@@ -143,7 +144,7 @@ public final class UnderwaterVisibilitySmoke {
             var mesher = new WaterMesher();
             for (var p : world.residentPositions()) {
                 var n = world.blockNeighborhood(p);
-                renderer.upload(p, mesher.mesh(n.center(), n, p.x(), p.y(), p.z()));
+                renderer.upload(p, mesher.mesh(n.center(), n, p.x(), p.y(), p.z(), ChunkMesh.ALL));
             }
             long allocated = renderer.memoryStats().allocated();
             var eye = new Vector3f(.5f, 2.62f, 4.5f);

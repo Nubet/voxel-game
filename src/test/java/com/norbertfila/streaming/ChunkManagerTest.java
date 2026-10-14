@@ -74,7 +74,9 @@ class ChunkManagerTest {
             assertEquals(BlockId.STONE, reloaded.get(localPlaced.x(), localPlaced.y(), localPlaced.z()));
             assertFalse(world.isSolid(removed));
             assertTrue(world.isSolid(placed));
-            assertArrayEquals(editedMesh.mesh().vertices(), reloadedMesh.mesh().vertices());
+            assertArrayEquals(
+                    editedMesh.mesh().solid().vertices(),
+                    reloadedMesh.mesh().solid().vertices());
             assertEquals(2, reloadedMesh.dataRevision());
             assertEquals(reloaded.revision(), reloadedMesh.dataRevision());
             assertTrue(reloadedMesh.token() != editedMesh.token());
@@ -125,7 +127,7 @@ class ChunkManagerTest {
             assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
             manager.requestRemesh(new WorldEdit(world, 8).setBlock(new BlockPos(15, 1, 1), BlockId.STONE));
             var beforeNeighbor = awaitMesh(manager).meshes().get(0);
-            assertEquals(6, beforeNeighbor.mesh().faceCount());
+            assertEquals(6, beforeNeighbor.mesh().solid().faceCount());
             Chunk neighbor = new Chunk();
             neighbor.set(0, 1, 1, BlockId.STONE);
             world.putChunk(new ChunkPos(1, 0, 0), neighbor);
@@ -135,14 +137,14 @@ class ChunkManagerTest {
             var hiddenFace = awaitMesh(manager).meshes().get(0);
             assertEquals(beforeNeighbor.dataRevision(), hiddenFace.dataRevision());
             assertTrue(hiddenFace.meshDependencyRevision() > beforeNeighbor.meshDependencyRevision());
-            assertEquals(5, hiddenFace.mesh().faceCount());
+            assertEquals(5, hiddenFace.mesh().solid().faceCount());
 
             new WorldEdit(world, 8).setBlock(new BlockPos(16, 1, 1), BlockId.AIR);
             assertFalse(manager.isCurrentMesh(hiddenFace));
             assertTrue(manager.rejectUpload(hiddenFace));
             var restoredFace = awaitMesh(manager).meshes().get(0);
             assertEquals(hiddenFace.dataRevision(), restoredFace.dataRevision());
-            assertEquals(6, restoredFace.mesh().faceCount());
+            assertEquals(6, restoredFace.mesh().solid().faceCount());
             assertTrue(manager.markUploaded(restoredFace));
         }
     }
@@ -240,7 +242,7 @@ class ChunkManagerTest {
             var neighborhood = world.blockNeighborhood(center);
             assertArrayEquals(
                     mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
-                    result.mesh().vertices());
+                    result.mesh().solid().vertices());
             assertEquals(initialCalls + 1, calls.get());
             assertEquals(10_000, world.getChunk(center).revision());
             assertTrue(manager.markUploaded(result));
@@ -303,7 +305,7 @@ class ChunkManagerTest {
             var neighborhood = world.blockNeighborhood(center);
             assertArrayEquals(
                     mesher.mesh(neighborhood.center(), neighborhood, 0, 0, 0).vertices(),
-                    result.mesh().vertices());
+                    result.mesh().solid().vertices());
             assertEquals(3, calls.get());
             assertTrue(manager.markUploaded(result));
         } finally {
@@ -333,7 +335,7 @@ class ChunkManagerTest {
             var result = awaitMesh(manager).meshes();
             assertEquals(1, result.size());
             assertEquals(center, result.get(0).position());
-            assertEquals(6, result.get(0).mesh().faceCount());
+            assertEquals(6, result.get(0).mesh().solid().faceCount());
             assertEquals(2, calls.get());
             assertEquals(1, world.residentCount());
         }
@@ -376,7 +378,7 @@ class ChunkManagerTest {
                             mesher.mesh(neighborhood.center(), neighborhood, position.x(), position.y(), position.z());
                     assertArrayEquals(
                             expected.vertices(),
-                            uploaded.get(position).mesh().vertices(),
+                            uploaded.get(position).mesh().solid().vertices(),
                             "Outdated terrain at " + position);
                 }
             }
@@ -655,7 +657,8 @@ class ChunkManagerTest {
                 }
                 Thread.sleep(1);
             }
-            assertEquals(1, opened.mesh().faceCount(), "only the face toward the removed block becomes visible");
+            assertEquals(
+                    1, opened.mesh().solid().faceCount(), "only the face toward the removed block becomes visible");
         }
     }
 

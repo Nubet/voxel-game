@@ -3,12 +3,22 @@ package com.norbertfila.meshing;
 import com.norbertfila.fluid.WaterSurface;
 import com.norbertfila.world.*;
 
-public final class WaterMesher implements ChunkMesher {
+/** Production mesher: textured solids from {@link GreedyMesher} and sloped, flowing water surfaces. */
+public final class WaterMesher implements LayeredMesher {
+    private static final ThreadLocal<FloatList> WATER_VERTICES = ThreadLocal.withInitial(FloatList::new);
+
     @Override
-    public MeshData mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
-        GreedyMesher.Scratch scratch =
-                GreedyMesher.meshSolids(snapshot, neighborhood, cx, cy, cz, GreedyMesher.FLOW_STRIDE);
-        FloatList out = scratch.layer(RenderLayer.TRANSLUCENT.ordinal());
+    public ChunkMesh mesh(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz, int parts) {
+        ChunkMesh.checkParts(parts);
+        MeshData solid =
+                (parts & ChunkMesh.SOLID) == 0 ? null : GreedyMesher.meshSolids(snapshot, neighborhood, cx, cy, cz);
+        MeshData water = (parts & ChunkMesh.WATER) == 0 ? null : meshWater(snapshot, neighborhood, cx, cy, cz);
+        return new ChunkMesh(solid, water);
+    }
+
+    private static MeshData meshWater(ChunkSnapshot snapshot, BlockNeighborhood neighborhood, int cx, int cy, int cz) {
+        FloatList out = WATER_VERTICES.get();
+        out.clear();
         for (int y = 0; y < Chunk.SIZE; y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
@@ -54,7 +64,11 @@ public final class WaterMesher implements ChunkMesher {
                         }
                     }
                 }
-        float[] data = scratch.concatenate();
-        return new MeshData(MeshFormat.flowTextured(data), data, scratch.ranges(GreedyMesher.FLOW_STRIDE));
+        float[] data = new float[out.size()];
+        out.copyTo(data, 0);
+        return new MeshData(
+                MeshFormat.flowTextured(data),
+                data,
+                new MeshRanges(0, 0, data.length / MeshFormat.FLOW_TEXTURED_VERTEX_STRIDE));
     }
 }
