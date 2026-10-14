@@ -80,7 +80,7 @@ class SettingsScreenTest {
         settings.setRenderDistance(GameSettings.MAX_RENDER_DISTANCE);
         screen.keyPress(UiKey.PREVIOUS);
         screen.keyPress(UiKey.PREVIOUS);
-        assertTrue(screen.slider().focused());
+        assertTrue(screen.zoomSpeedSlider().focused());
     }
 
     @Test
@@ -133,6 +133,26 @@ class SettingsScreenTest {
                 redAt(data, screen.increaseButton().bounds()));
         assertEquals(.15f, redAt(data, SettingsScreen.BACK_BOUNDS));
         assertEquals(distance, settings.renderDistance());
+    }
+
+    @Test
+    void cameraControlsUpdateSettingsWithoutReplacingTheScreen() {
+        GameSettings settings = new GameSettings();
+        SettingsScreen screen = new SettingsScreen(settings);
+
+        screen.updatePointer(true, true, SettingsScreen.CAMERA_X + SettingsScreen.CAMERA_WIDTH, SettingsScreen.FOV_Y);
+        screen.updatePointer(false, false, SettingsScreen.CAMERA_X + SettingsScreen.CAMERA_WIDTH, SettingsScreen.FOV_Y);
+        assertEquals(GameSettings.MAX_FIELD_OF_VIEW, settings.fieldOfView());
+
+        screen.updatePointer(
+                true, true, SettingsScreen.CAMERA_X + SettingsScreen.CAMERA_WIDTH, SettingsScreen.ZOOM_FOV_Y);
+        screen.updatePointer(
+                false, false, SettingsScreen.CAMERA_X + SettingsScreen.CAMERA_WIDTH, SettingsScreen.ZOOM_FOV_Y);
+        assertEquals(settings.fieldOfView(), settings.zoomFieldOfView());
+
+        screen.updatePointer(true, true, SettingsScreen.CAMERA_X, SettingsScreen.GUI_SCALE_Y + 1);
+        screen.updatePointer(false, false, SettingsScreen.CAMERA_X, SettingsScreen.GUI_SCALE_Y + 1);
+        assertEquals(1, settings.guiScale());
     }
 
     private static boolean update(SettingsScreen screen, boolean down, boolean press, double x, double y) {

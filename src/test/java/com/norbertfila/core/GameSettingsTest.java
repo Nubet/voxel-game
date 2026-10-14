@@ -50,4 +50,17 @@ class GameSettingsTest {
         assertThrows(IllegalArgumentException.class, () -> settings.setMouseSensitivity(0));
         assertThrows(IllegalArgumentException.class, () -> settings.setZoomSpeed(Float.NaN));
     }
+
+    @Test
+    void validatesAndChangesGuiScale() {
+        GameSettings settings = new GameSettings();
+
+        assertEquals(GameSettings.GUI_SCALE_AUTO, settings.guiScale());
+        assertTrue(settings.setGuiScale(4));
+        assertEquals(4, settings.guiScale());
+        assertTrue(settings.setGuiScale(GameSettings.GUI_SCALE_AUTO));
+        assertFalse(settings.setGuiScale(GameSettings.GUI_SCALE_AUTO));
+        assertThrows(IllegalArgumentException.class, () -> settings.setGuiScale(-1));
+        assertThrows(IllegalArgumentException.class, () -> settings.setGuiScale(5));
+    }
 }

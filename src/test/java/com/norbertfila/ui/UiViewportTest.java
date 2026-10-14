@@ -58,4 +58,20 @@ class UiViewportTest {
             assertThrows(IllegalArgumentException.class, () -> viewport.cursorY(value));
         }
     }
+
+    @ParameterizedTest
+    @CsvSource({"1,1", "2,2", "3,3", "4,4"})
+    void honorsManualGuiScale(int requested, int expected) {
+        UiViewport viewport = new UiViewport(1280, 720, 1920, 1080, requested);
+
+        assertEquals(expected, viewport.scale());
+        assertEquals(1920 / (double) expected, viewport.width());
+        assertEquals(1080 / (double) expected, viewport.height());
+    }
+
+    @Test
+    void rejectsUnsupportedManualGuiScale() {
+        assertThrows(IllegalArgumentException.class, () -> new UiViewport(640, 360, 640, 360, -1));
+        assertThrows(IllegalArgumentException.class, () -> new UiViewport(640, 360, 640, 360, 5));
+    }
 }

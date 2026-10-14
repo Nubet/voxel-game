@@ -6,9 +6,9 @@ public final class Slider {
     private static final int KNOB_WIDTH = 12;
     private final UiBounds track;
     private final UiBounds bounds;
-    private final int minimum;
-    private final int maximum;
-    private final int step;
+    private int minimum;
+    private int maximum;
+    private int step;
     private int value;
     private boolean focused;
     private boolean hovered;
@@ -57,6 +57,17 @@ public final class Slider {
         if (value < minimum || value > maximum || (value - (long) minimum) % step != 0)
             throw new IllegalArgumentException("Value does not lie on slider steps");
         this.value = value;
+    }
+
+    public void setRange(int minimum, int maximum, int step) {
+        if (minimum >= maximum || step <= 0 || ((long) maximum - minimum) % step != 0)
+            throw new IllegalArgumentException("Invalid slider range or step");
+        this.minimum = minimum;
+        this.maximum = maximum;
+        this.step = step;
+        if (value < minimum || value > maximum || (value - (long) minimum) % step != 0)
+            value = Math.max(minimum, Math.min(maximum, minimum + Math.round((value - minimum) / (float) step) * step));
+        dragging = false;
     }
 
     public void setFocused(boolean focused) {

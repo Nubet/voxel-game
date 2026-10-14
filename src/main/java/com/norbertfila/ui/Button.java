@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public final class Button {
     private final UiBounds bounds;
-    private final String label;
+    private String label;
     private boolean enabled = true;
     private boolean hovered;
     private boolean focused;
@@ -18,6 +18,10 @@ public final class Button {
 
     public UiBounds bounds() {
         return bounds;
+    }
+
+    public void setLabel(String label) {
+        this.label = Objects.requireNonNull(label);
     }
 
     public boolean enabled() {

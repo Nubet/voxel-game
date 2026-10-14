@@ -10,12 +10,16 @@ public final class GameSettings {
     public static final float DEFAULT_ZOOM_SPEED = 12f;
     public static final int MIN_RENDER_DISTANCE = 2;
     public static final int MAX_RENDER_DISTANCE = 16;
+    public static final int GUI_SCALE_AUTO = 0;
+    public static final int MIN_GUI_SCALE = 1;
+    public static final int MAX_GUI_SCALE = 4;
 
     private int renderDistance = 4;
     private float fieldOfView = DEFAULT_FIELD_OF_VIEW;
     private float zoomFieldOfView = DEFAULT_ZOOM_FIELD_OF_VIEW;
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private float zoomSpeed = DEFAULT_ZOOM_SPEED;
+    private int guiScale = GUI_SCALE_AUTO;
 
     public int renderDistance() {
         return renderDistance;
@@ -77,6 +81,18 @@ public final class GameSettings {
         if (!Float.isFinite(value) || value <= 0) throw new IllegalArgumentException("Zoom speed must be positive");
         if (zoomSpeed == value) return false;
         zoomSpeed = value;
+        return true;
+    }
+
+    public int guiScale() {
+        return guiScale;
+    }
+
+    public boolean setGuiScale(int value) {
+        if (value != GUI_SCALE_AUTO && (value < MIN_GUI_SCALE || value > MAX_GUI_SCALE))
+            throw new IllegalArgumentException("GUI scale must be Auto or between 1 and 4");
+        if (guiScale == value) return false;
+        guiScale = value;
         return true;
     }
 

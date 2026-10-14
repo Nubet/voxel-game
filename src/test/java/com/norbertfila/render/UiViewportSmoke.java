@@ -110,9 +110,10 @@ public final class UiViewportSmoke {
                     int s = viewport.scale();
                     check(rgb(pixels, viewport, 24 * s, 25 * s) != 0, "Panel left edge missing");
                     check(rgb(pixels, viewport, 24 * s - 1, 25 * s) == 0, "Panel left edge stretched");
-                    if (viewport.width() > 344) {
-                        check(rgb(pixels, viewport, 344 * s - 1, 25 * s) != 0, "Panel right edge missing");
-                        check(rgb(pixels, viewport, 344 * s, 25 * s) == 0, "Panel right edge stretched");
+                    int panelRight = SettingsScreen.PANEL_X + SettingsScreen.PANEL_WIDTH;
+                    if (viewport.width() > panelRight) {
+                        check(rgb(pixels, viewport, panelRight * s - 1, 25 * s) != 0, "Panel right edge missing");
+                        check(rgb(pixels, viewport, panelRight * s, 25 * s) == 0, "Panel right edge stretched");
                     }
                     write(output.resolve("inventory-" + i + "-settings.png"), pixels, viewport);
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
@@ -265,7 +266,7 @@ public final class UiViewportSmoke {
         screens.beginFrame();
         screens.open(screen);
         screens.updatePointer(false, false, 0, 0);
-        screens.keyPress(UiKey.PREVIOUS);
+        for (int i = 0; i < 9; i++) screens.keyPress(UiKey.NEXT);
         check(screen.backButton().focused(), "Back missing from keyboard navigation");
         clear();
         render(ui, canvas, screens, hotbar, viewport);

@@ -80,8 +80,9 @@ public final class GameLoop {
                 window.framebufferSize(width, height);
                 window.windowSize(windowWidth, windowHeight);
                 boolean minimized = width[0] <= 0 || height[0] <= 0 || windowWidth[0] <= 0 || windowHeight[0] <= 0;
-                UiViewport viewport =
-                        minimized ? null : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0]);
+                UiViewport viewport = minimized
+                        ? null
+                        : new UiViewport(windowWidth[0], windowHeight[0], width[0], height[0], settings.guiScale());
                 boolean inventoryPressed = input.inventoryPressed();
                 if (!minimized && input.focused() && inventoryPressed && !input.settingsPressed()) {
                     if (screens.current() instanceof InventoryScreen) screens.close();
