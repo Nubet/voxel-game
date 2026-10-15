@@ -103,8 +103,7 @@ public final class UnderwaterVisibilitySmoke {
         glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         var relative = projection(new Vector3f(), new Vector3f(target).sub(eye));
-        var stats = renderer.render(
-                relative, Frustum.from(projection(eye, target)), eye.x, eye.y, eye.z, visibility.amount());
+        var stats = renderer.render(relative, eye.x, eye.y, eye.z, visibility.amount());
         check(stats.drawCalls() > 0, "No terrain draws");
         ui.render(HUD, new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT));
         check(glGetError() == GL_NO_ERROR, "Draw GL error");

@@ -228,7 +228,6 @@ public final class FluidRuntimeBenchmark {
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 renderer.render(
                         camera.relativeViewProjection(1280, 720),
-                        Frustum.from(camera.viewProjection(1280, 720)),
                         camera.x(),
                         camera.y(),
                         camera.z(),

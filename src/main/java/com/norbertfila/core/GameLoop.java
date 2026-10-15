@@ -9,7 +9,6 @@ import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
-import com.norbertfila.render.Frustum;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
@@ -343,10 +342,8 @@ public final class GameLoop {
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            var frustum = Frustum.from(camera.viewProjection(width[0], height[0]));
             var stats = renderer.render(
                     camera.relativeViewProjection(width[0], height[0]),
-                    frustum,
                     camera.x(),
                     camera.y(),
                     camera.z(),

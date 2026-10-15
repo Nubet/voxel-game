@@ -41,6 +41,10 @@ public final class TerrainRenderer implements AutoCloseable {
     // Solid and water parts of a chunk are separate GPU meshes so either can be replaced alone.
     private final GpuMeshPool solidMeshes;
     private final GpuMeshPool waterMeshes;
+    private final Frustum frustum = new Frustum();
+    private final BackToFront waterOrder = new BackToFront();
+    private final List<ChunkPos> visibleChunks = new ArrayList<>();
+    private long cullNanos;
     private final List<ChunkPos> visibleSolids = new ArrayList<>();
     private final List<ChunkPos> visibleWater = new ArrayList<>();
     private final UploadQueue uploads = new UploadQueue();
@@ -185,30 +189,30 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     /**
-     * Draws visible terrain. {@code viewProjection} must place the camera at the origin; {@code frustum} is built from
-     * the absolute view projection and only selects chunks.
+     * Draws visible terrain. {@code viewProjection} must place the camera at the origin; culling and drawing both
+     * work relative to the camera position.
      */
     public RenderStats render(
-            Matrix4f viewProjection,
-            Frustum frustum,
-            double cameraX,
-            double cameraY,
-            double cameraZ,
-            float underwater) {
+            Matrix4f viewProjection, double cameraX, double cameraY, double cameraZ, float underwater) {
         if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ))
             throw new IllegalArgumentException("Camera position must be finite");
         if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
             throw new IllegalArgumentException("Underwater visibility must be in [0, 1]");
-        RegionCuller.Result culling = regionCuller.cull(frustum, regionIndex);
+        long cullStarted = System.nanoTime();
+        frustum.set(viewProjection);
+        visibleChunks.clear();
+        regionCuller.cull(frustum, regionIndex, cameraX, cameraY, cameraZ, visibleChunks);
         visibleSolids.clear();
         visibleWater.clear();
-        for (ChunkPos position : culling.visible()) {
+        for (ChunkPos position : visibleChunks) {
             if (solidMeshes.get(position) != null) visibleSolids.add(position);
             if (waterMeshes.get(position) != null) visibleWater.add(position);
         }
         // Chunk-center ordering approximates back-to-front blending; overlapping water inside one chunk can still sort
         // incorrectly.
-        visibleWater.sort(backToFront(cameraX, cameraY, cameraZ));
+        waterOrder.camera(cameraX, cameraY, cameraZ);
+        visibleWater.sort(waterOrder);
+        cullNanos = System.nanoTime() - cullStarted;
         commands.clear();
         addGroupedByBuffer(RenderLayer.OPAQUE, solidMeshes, visibleSolids);
         addGroupedByBuffer(RenderLayer.CUTOUT, solidMeshes, visibleSolids);
@@ -241,8 +245,8 @@ public final class TerrainRenderer implements AutoCloseable {
             glBindVertexArray(0);
             endFrame();
         }
-        int visible = culling.visible().size();
-        return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws());
+        int visible = visibleChunks.size();
+        return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws(), cullNanos);
     }
 
     /** Opaque and cutout order does not matter for blending, so draws are grouped to make one run per arena. */
@@ -338,11 +342,29 @@ public final class TerrainRenderer implements AutoCloseable {
     static Comparator<ChunkPos> backToFront(double cameraX, double cameraY, double cameraZ) {
         if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ))
             throw new IllegalArgumentException("Camera position must be finite");
-        return Comparator.<ChunkPos>comparingDouble(position -> distanceSquared(position, cameraX, cameraY, cameraZ))
-                .reversed()
-                .thenComparingInt(ChunkPos::x)
-                .thenComparingInt(ChunkPos::y)
-                .thenComparingInt(ChunkPos::z);
+        BackToFront order = new BackToFront();
+        order.camera(cameraX, cameraY, cameraZ);
+        return order;
+    }
+
+    /** Farthest chunk centers first, ties broken by coordinates; reused every frame to avoid allocation. */
+    private static final class BackToFront implements Comparator<ChunkPos> {
+        private double x, y, z;
+
+        void camera(double x, double y, double z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        @Override
+        public int compare(ChunkPos left, ChunkPos right) {
+            int distance = Double.compare(distanceSquared(right, x, y, z), distanceSquared(left, x, y, z));
+            if (distance != 0) return distance;
+            if (left.x() != right.x()) return Integer.compare(left.x(), right.x());
+            if (left.y() != right.y()) return Integer.compare(left.y(), right.y());
+            return Integer.compare(left.z(), right.z());
+        }
     }
 
     private static double distanceSquared(ChunkPos position, double x, double y, double z) {
@@ -380,7 +402,7 @@ public final class TerrainRenderer implements AutoCloseable {
             List<MeshResult> discarded) {}
 
     /** {@code drawCalls} counts GL calls issued; {@code draws} counts mesh ranges drawn, the same on both paths. */
-    public record RenderStats(int visible, int culled, int drawCalls, int draws) {}
+    public record RenderStats(int visible, int culled, int drawCalls, int draws, long cullNanos) {}
 
     public MemoryStats memoryStats() {
         return new MemoryStats(
