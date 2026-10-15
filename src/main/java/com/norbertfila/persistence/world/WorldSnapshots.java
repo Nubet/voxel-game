@@ -1,7 +1,6 @@
 package com.norbertfila.persistence.world;
 
 import com.norbertfila.fluid.FluidSnapshot;
-import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.world.*;
 import java.time.Instant;
@@ -17,24 +16,14 @@ public final class WorldSnapshots {
             FluidSnapshot fluids,
             InventorySnapshot inventory,
             SavedPlayerState player) {
-        var grouped = new TreeMap<ChunkPos, List<ChunkDelta.BlockChange>>(Comparator.comparingInt(ChunkPos::x)
-                .thenComparingInt(ChunkPos::y)
-                .thenComparingInt(ChunkPos::z));
-        for (var change : world.changes().changes()) {
-            var chunk = Coordinates.worldToChunk(change.position());
-            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
-                    .add(new ChunkDelta.BlockChange(change.position(), change.value(), change.waterState()));
-        }
-        var deltas = grouped.entrySet().stream()
-                .map(e -> new ChunkDelta(e.getKey(), e.getValue()))
-                .toList();
+        var deltas = world.changes().deltas();
         return new WorldSnapshot(identity, sequence, Instant.now(), deltas, fluids, inventory, Optional.of(player));
     }
 
     public static void restore(World world, WorldSnapshot snapshot, int farTileSize) {
         if (farTileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
         for (var delta : snapshot.deltas())
-            for (var change : delta.changes())
-                world.setBlock(change.position(), change.value(), change.waterState(), farTileSize);
+            for (int index = 0; index < delta.size(); index++)
+                world.setBlock(delta.blockPosition(index), delta.value(index), delta.waterState(index), farTileSize);
     }
 }

@@ -23,7 +23,8 @@ import java.util.zip.CheckedOutputStream;
 
 public final class WorldStateCodec {
     private static final int MAGIC = 0x56585731;
-    private static final int FORMAT_VERSION = 1;
+    // Version 2 stores block changes as one packed int each; version 1 files are reported as unsupported.
+    private static final int FORMAT_VERSION = 2;
     private static final long MAX_FILE_BYTES = 64L * 1024 * 1024;
     private static final int FIXED_HEADER_BYTES = 65;
     private static final int PLAYER_BYTES = 34;
@@ -146,7 +147,7 @@ public final class WorldStateCodec {
 
     private static long payloadBytes(WorldSnapshot snapshot) {
         long bytes = MIN_PAYLOAD_BYTES + (snapshot.player().isPresent() ? PLAYER_BYTES : 0);
-        for (var delta : snapshot.deltas()) bytes += 16L + 14L * delta.changes().size();
+        for (var delta : snapshot.deltas()) bytes += 16L + 4L * delta.size();
         for (var update : snapshot.fluids().updates())
             bytes += 24L + 12L * update.missingChunks().size();
         return bytes;
@@ -156,12 +157,8 @@ public final class WorldStateCodec {
         output.writeInt(snapshot.deltas().size());
         for (var delta : snapshot.deltas()) {
             writeChunk(output, delta.position());
-            output.writeInt(delta.changes().size());
-            for (var change : delta.changes()) {
-                writeBlock(output, change.position());
-                output.writeByte(change.value());
-                output.writeByte(change.waterState());
-            }
+            output.writeInt(delta.size());
+            for (int index = 0; index < delta.size(); index++) output.writeInt(delta.entry(index));
         }
         output.writeLong(snapshot.fluids().tick());
         output.writeInt(snapshot.fluids().updates().size());
@@ -201,10 +198,9 @@ public final class WorldStateCodec {
             ChunkPos position = readChunk(input);
             int changeCount = count(input, Chunk.BLOCK_BYTES);
             if (changeCount == 0) throw new IOException("Empty chunk delta");
-            var changes = new ArrayList<ChunkDelta.BlockChange>();
-            for (int c = 0; c < changeCount; c++)
-                changes.add(new ChunkDelta.BlockChange(readBlock(input), input.readByte(), input.readByte()));
-            deltas.add(new ChunkDelta(position, changes));
+            int[] entries = new int[changeCount];
+            for (int c = 0; c < changeCount; c++) entries[c] = input.readInt();
+            deltas.add(ChunkDelta.packed(position, entries));
         }
         long tick = input.readLong();
         int updateCount = count(input, Math.min(FluidSnapshot.MAX_UPDATES, (int) (header.payloadBytes() / 24)));
