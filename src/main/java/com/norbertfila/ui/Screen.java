@@ -11,6 +11,7 @@ public interface Screen {
                 CLOSE = Simple.CLOSE,
                 PLAY = Simple.PLAY,
                 QUIT = Simple.QUIT,
+                OPTIONS = Simple.OPTIONS,
                 BACK_TO_MENU = Simple.BACK_TO_MENU,
                 RETRY_SAVE = Simple.RETRY_SAVE,
                 DISCARD_CHANGES = Simple.DISCARD_CHANGES;
@@ -20,6 +21,7 @@ public interface Screen {
             CLOSE,
             PLAY,
             QUIT,
+            OPTIONS,
             BACK_TO_MENU,
             RETRY_SAVE,
             DISCARD_CHANGES

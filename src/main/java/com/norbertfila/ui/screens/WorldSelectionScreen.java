@@ -1,5 +1,6 @@
 package com.norbertfila.ui.screens;
 
+import com.norbertfila.i18n.*;
 import com.norbertfila.persistence.world.WorldEntry;
 import com.norbertfila.ui.*;
 import java.time.ZoneOffset;
@@ -7,13 +8,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public final class WorldSelectionScreen implements Screen {
+    private final Translations translations;
     public static final int ROW_HEIGHT = 36;
     private static final DateTimeFormatter DATE =
             DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm", Locale.ROOT).withZone(ZoneOffset.UTC);
     private final List<WorldEntry> entries;
-    private final Button play = new Button(new UiBounds(0, 0, 88, 20), "Graj");
-    private final Button create = new Button(new UiBounds(0, 0, 88, 20), "Utwórz");
-    private final Button back = new Button(new UiBounds(0, 0, 88, 20), "Wstecz");
+    private final Button play = new Button(new UiBounds(0, 0, 88, 20), "");
+    private final Button create = new Button(new UiBounds(0, 0, 88, 20), "");
+    private final Button back = new Button(new UiBounds(0, 0, 88, 20), "");
     private UiBounds list = new UiBounds(8, 36, 288, 144);
     private int first, selected, focus, armed = -1;
     private UUID lastClick;
@@ -21,6 +23,11 @@ public final class WorldSelectionScreen implements Screen {
     private boolean pointerReady, dragging, submitted;
 
     public WorldSelectionScreen(List<WorldEntry> entries) {
+        this(entries, new Translations(Language.ENGLISH));
+    }
+
+    public WorldSelectionScreen(List<WorldEntry> entries, Translations translations) {
+        this.translations = Objects.requireNonNull(translations);
         this.entries = entries.stream()
                 .sorted(Comparator.comparing(WorldEntry::lastSavedAt).reversed().thenComparing(WorldEntry::id))
                 .toList();
@@ -233,9 +240,13 @@ public final class WorldSelectionScreen implements Screen {
     public void render(UiCanvas canvas, UiViewport viewport) {
         layout(viewport);
         var font = BitmapFont.DEFAULT;
-        canvas.textWithShadow(font, "Wybierz świat", list.x(), list.y() - 22, 1, 1, 1, 1);
+        play.setLabel(translations.text("action.play"));
+        create.setLabel(translations.text("action.create"));
+        back.setLabel(translations.text("action.back"));
+        canvas.textWithShadow(font, translations.text("world.select"), list.x(), list.y() - 22, 1, 1, 1, 1);
         canvas.rectangle(list.x(), list.y(), list.width(), list.height(), .04f, .05f, .07f, 1);
-        if (entries.isEmpty()) canvas.text(font, "Brak światów", list.x() + 8, list.y() + 8, .7f, .75f, .8f, 1);
+        if (entries.isEmpty())
+            canvas.text(font, translations.text("world.empty"), list.x() + 8, list.y() + 8, .7f, .75f, .8f, 1);
         for (int row = 0; row < visibleRows() && first + row < entries.size(); row++) {
             int index = first + row, y = list.y() + row * ROW_HEIGHT;
             var entry = entries.get(index);
@@ -246,10 +257,10 @@ public final class WorldSelectionScreen implements Screen {
             String detail = ready
                     ? DATE.format(entry.lastSavedAt()) + " UTC"
                     : switch (entry.status()) {
-                        case INCOMPLETE -> "Niekompletny zapis";
-                        case CORRUPTED -> "Uszkodzony zapis";
-                        case UNSUPPORTED_VERSION -> "Nieobsługiwana wersja";
-                        case UNREADABLE -> "Błąd odczytu";
+                        case INCOMPLETE -> translations.text("world.incomplete");
+                        case CORRUPTED -> translations.text("world.corrupted");
+                        case UNSUPPORTED_VERSION -> translations.text("world.unsupported");
+                        case UNREADABLE -> translations.text("world.unreadable");
                         case READY -> throw new AssertionError();
                     };
             canvas.text(

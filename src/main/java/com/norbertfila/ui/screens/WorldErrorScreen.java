@@ -1,14 +1,21 @@
 package com.norbertfila.ui.screens;
 
+import com.norbertfila.i18n.*;
 import com.norbertfila.ui.*;
 import java.util.Objects;
 
 public final class WorldErrorScreen implements Screen {
+    private final Translations translations;
     private final String title, detail;
-    private final Button back = new Button(new UiBounds(60, 160, 200, 24), "Wstecz");
+    private final Button back = new Button(new UiBounds(60, 160, 200, 24), "");
     private boolean pointerReady;
 
     public WorldErrorScreen(String title, String detail) {
+        this(title, detail, new Translations(Language.ENGLISH));
+    }
+
+    public WorldErrorScreen(String title, String detail, Translations translations) {
+        this.translations = Objects.requireNonNull(translations);
         this.title = Objects.requireNonNull(title);
         this.detail = Objects.requireNonNull(detail);
         cancelInteraction();
@@ -57,6 +64,7 @@ public final class WorldErrorScreen implements Screen {
                 .85f,
                 .9f,
                 1);
+        back.setLabel(translations.text("action.back"));
         back.render(canvas, font);
     }
 }

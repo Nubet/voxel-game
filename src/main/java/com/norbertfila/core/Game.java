@@ -3,7 +3,9 @@ package com.norbertfila.core;
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
+import com.norbertfila.i18n.Translations;
 import com.norbertfila.meshing.WaterMesher;
+import com.norbertfila.persistence.LanguagePreferences;
 import com.norbertfila.persistence.world.WorldCatalog;
 import com.norbertfila.persistence.world.WorldIo;
 import com.norbertfila.platform.Input;
@@ -22,19 +24,20 @@ public final class Game {
     private static final Logger LOG = Logger.getLogger(Game.class.getName());
 
     public void run() {
+        var languagePreferences = new LanguagePreferences();
+        var settings = new GameSettings(new Translations(languagePreferences.load()));
         try (Window window = new Window(1280, 720, "Voxel Engine");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
                 WorldIo io = new WorldIo();
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
-            var settings = new GameSettings();
             var loop = new GameLoop();
             TerrainConfig config = TerrainConfig.defaults();
             int version = new TerrainGenerator(0, config).generatorVersion();
             var catalog =
                     new WorldCatalog(Path.of(System.getProperty("voxel.worlds", "saves/worlds")), "default", version);
-            var menu = new WorldMenu(io, catalog, "default", version);
+            var menu = new WorldMenu(io, catalog, "default", version, settings);
             var session = new GameSession(
                     io, seed -> new TerrainGenerator(seed, config), new WaterMesher(), terrainDemand(config));
             while (!window.shouldClose()) {
@@ -53,6 +56,8 @@ public final class Game {
                 }
                 if (!window.shouldClose()) menu.sessionEnded(problem);
             }
+        } finally {
+            languagePreferences.save(settings.translations().language());
         }
     }
 

@@ -1,6 +1,8 @@
 package com.norbertfila.ui.screens;
 
 import com.norbertfila.core.GameSettings;
+import com.norbertfila.i18n.Language;
+import com.norbertfila.i18n.Translations;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Screen;
@@ -15,7 +17,7 @@ public final class SettingsScreen implements Screen {
     public static final int PANEL_X = 8;
     public static final int PANEL_Y = 0;
     public static final int PANEL_WIDTH = 304;
-    public static final int PANEL_HEIGHT = 264;
+    public static final int PANEL_HEIGHT = 240;
     public static final int SLIDER_X = 84;
     public static final int SLIDER_Y = 40;
     public static final int SLIDER_WIDTH = 180;
@@ -24,18 +26,21 @@ public final class SettingsScreen implements Screen {
     public static final int BUTTON_SIZE = 20;
     public static final int MINUS_X = 56;
     public static final int PLUS_X = 272;
-    public static final UiBounds BACK_BOUNDS = new UiBounds(108, 236, 88, 20);
+    public static final UiBounds BACK_BOUNDS = new UiBounds(220, 208, 76, 20);
 
-    public static final int CAMERA_X = 116;
-    public static final int CAMERA_WIDTH = 180;
-    public static final int SIMULATION_Y = 72;
-    public static final int FOV_Y = 100;
-    public static final int ZOOM_FOV_Y = 128;
-    public static final int SENSITIVITY_Y = 156;
-    public static final int ZOOM_SPEED_Y = 184;
-    public static final int GUI_SCALE_Y = 212;
+    public static final int CAMERA_X = 144;
+    public static final int CAMERA_WIDTH = 152;
+    public static final int SIMULATION_Y = 64;
+    public static final int FOV_Y = 88;
+    public static final int ZOOM_FOV_Y = 112;
+    public static final int SENSITIVITY_Y = 136;
+    public static final int ZOOM_SPEED_Y = 160;
+    public static final int GUI_SCALE_Y = 184;
+    public static final int LANGUAGE_Y = 208;
 
     private final GameSettings settings;
+    private final Translations translations;
+    private final Button language = new Button(new UiBounds(CAMERA_X, LANGUAGE_Y, 72, 20), "");
     private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
     private final Button increase = new Button(new UiBounds(PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "+");
     private final Slider renderDistance;
@@ -61,8 +66,8 @@ public final class SettingsScreen implements Screen {
             new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 100, 1, 11);
     private final Slider zoomSpeed =
             new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 30, 1, 12);
-    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 100, 20), "Auto");
-    private final Button back = new Button(BACK_BOUNDS, "Back");
+    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 100, 20), "");
+    private final Button back = new Button(BACK_BOUNDS, "");
     private int focusIndex = -1;
     private boolean pointerReady = true;
     private int panelX = PANEL_X;
@@ -70,6 +75,7 @@ public final class SettingsScreen implements Screen {
 
     public SettingsScreen(GameSettings settings) {
         this.settings = Objects.requireNonNull(settings);
+        translations = settings.translations();
         renderDistance = new Slider(
                 new UiBounds(SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT),
                 GameSettings.MIN_RENDER_DISTANCE,
@@ -94,6 +100,7 @@ public final class SettingsScreen implements Screen {
         boolean sensitivityChanged = mouseSensitivity.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean zoomSpeedChanged = zoomSpeed.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean scaleChanged = guiScale.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        if (language.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleLanguage();
         boolean close = back.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         if (scaleChanged) cycleGuiScale();
         applyControls(
@@ -166,7 +173,10 @@ public final class SettingsScreen implements Screen {
                     changed = true;
                 }
             }
-            case 9 -> close = back.keyPress(key);
+            case 9 -> {
+                if (language.keyPress(key)) cycleLanguage();
+            }
+            case 10 -> close = back.keyPress(key);
             default -> {}
         }
         if (changed)
@@ -195,6 +205,7 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.cancelInteraction();
         zoomSpeed.cancelInteraction();
         guiScale.cancelInteraction();
+        language.cancelInteraction();
         back.cancelInteraction();
     }
 
@@ -218,6 +229,7 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
         zoomSpeed.setPosition(CAMERA_X + offsetX, ZOOM_SPEED_Y + offsetY);
         guiScale.setPosition(CAMERA_X + offsetX, GUI_SCALE_Y + offsetY);
+        language.setPosition(CAMERA_X + offsetX, LANGUAGE_Y + offsetY);
         back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
         if (moved) cancelInteraction();
     }
@@ -255,6 +267,8 @@ public final class SettingsScreen implements Screen {
         decrease.setEnabled(canDecrease());
         increase.setEnabled(canIncrease());
         guiScale.setLabel(guiScaleLabel());
+        language.setLabel(translations.language().displayName());
+        back.setLabel(translations.text("action.back"));
     }
 
     private void focusAt(double x, double y) {
@@ -267,13 +281,14 @@ public final class SettingsScreen implements Screen {
         else if (mouseSensitivity.bounds().contains(x, y)) focus(6);
         else if (zoomSpeed.bounds().contains(x, y)) focus(7);
         else if (guiScale.bounds().contains(x, y)) focus(8);
-        else if (back.bounds().contains(x, y)) focus(9);
+        else if (language.bounds().contains(x, y)) focus(9);
+        else if (back.bounds().contains(x, y)) focus(10);
         else focus(-1);
     }
 
     private void focusNext(int direction) {
         int next = focusIndex;
-        do next = Math.floorMod(next + direction, 10);
+        do next = Math.floorMod(next + direction, 11);
         while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
         focus(next);
     }
@@ -289,7 +304,8 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.setFocused(index == 6);
         zoomSpeed.setFocused(index == 7);
         guiScale.setFocused(index == 8);
-        back.setFocused(index == 9);
+        language.setFocused(index == 9);
+        back.setFocused(index == 10);
     }
 
     private void cycleGuiScale() {
@@ -301,7 +317,19 @@ public final class SettingsScreen implements Screen {
     }
 
     private String guiScaleLabel() {
-        return settings.guiScale() == GameSettings.GUI_SCALE_AUTO ? "Auto" : settings.guiScale() + "x";
+        return settings.guiScale() == GameSettings.GUI_SCALE_AUTO
+                ? translations.text("settings.auto")
+                : settings.guiScale() + "x";
+    }
+
+    private void cycleLanguage() {
+        Language[] languages = Language.values();
+        translations.setLanguage(languages[(translations.language().ordinal() + 1) % languages.length]);
+        syncControls();
+    }
+
+    public Button languageButton() {
+        return language;
     }
 
     public Slider slider() {
@@ -366,12 +394,19 @@ public final class SettingsScreen implements Screen {
         syncControls();
         canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
         BitmapFont font = BitmapFont.DEFAULT;
-        canvas.textWithShadow(font, "Settings", panelX + 12, panelY + 4, 1, 1, 1, 1);
-        canvas.textWithShadow(
-                font, "Render distance: " + renderDistance() + " chunks", panelX + 12, panelY + 22, 1, 1, 1, 1);
+        canvas.textWithShadow(font, translations.text("settings.title"), panelX + 12, panelY + 4, 1, 1, 1, 1);
         canvas.textWithShadow(
                 font,
-                "Simulation: " + settings.simulationDistance(),
+                translations.text("settings.renderDistance", renderDistance()),
+                panelX + 12,
+                panelY + 22,
+                1,
+                1,
+                1,
+                1);
+        canvas.textWithShadow(
+                font,
+                translations.text("settings.simulation", settings.simulationDistance()),
                 panelX + 8,
                 panelY + SIMULATION_Y - 4,
                 1,
@@ -379,10 +414,17 @@ public final class SettingsScreen implements Screen {
                 1,
                 1);
         canvas.textWithShadow(
-                font, "FOV: " + Math.round(settings.fieldOfView()), panelX + 8, panelY + FOV_Y - 4, 1, 1, 1, 1);
+                font,
+                translations.text("settings.fov", Math.round(settings.fieldOfView())),
+                panelX + 8,
+                panelY + FOV_Y - 4,
+                1,
+                1,
+                1,
+                1);
         canvas.textWithShadow(
                 font,
-                "Zoom FOV: " + Math.round(settings.zoomFieldOfView()),
+                translations.text("settings.zoomFov", Math.round(settings.zoomFieldOfView())),
                 panelX + 8,
                 panelY + ZOOM_FOV_Y - 4,
                 1,
@@ -391,7 +433,7 @@ public final class SettingsScreen implements Screen {
                 1);
         canvas.textWithShadow(
                 font,
-                "Sensitivity: " + String.format(java.util.Locale.ROOT, "%.2f", settings.mouseSensitivity()),
+                translations.text("settings.sensitivity", settings.mouseSensitivity()),
                 panelX + 8,
                 panelY + SENSITIVITY_Y - 4,
                 1,
@@ -400,14 +442,17 @@ public final class SettingsScreen implements Screen {
                 1);
         canvas.textWithShadow(
                 font,
-                "Zoom speed: " + Math.round(settings.zoomSpeed()),
+                translations.text("settings.zoomSpeed", Math.round(settings.zoomSpeed())),
                 panelX + 8,
                 panelY + ZOOM_SPEED_Y - 4,
                 1,
                 1,
                 1,
                 1);
-        canvas.textWithShadow(font, "GUI scale", panelX + 8, panelY + GUI_SCALE_Y + 3, 1, 1, 1, 1);
+        canvas.textWithShadow(
+                font, translations.text("settings.guiScale"), panelX + 8, panelY + GUI_SCALE_Y + 3, 1, 1, 1, 1);
+        canvas.textWithShadow(
+                font, translations.text("settings.language"), panelX + 8, panelY + LANGUAGE_Y + 3, 1, 1, 1, 1);
         renderDistance.render(canvas);
         simulationDistance.render(canvas);
         fieldOfView.render(canvas);
@@ -417,6 +462,7 @@ public final class SettingsScreen implements Screen {
         decrease.render(canvas, font);
         increase.render(canvas, font);
         guiScale.render(canvas, font);
+        language.render(canvas, font);
         back.render(canvas, font);
     }
 }

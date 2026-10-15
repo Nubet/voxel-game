@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
+import com.norbertfila.i18n.Language;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.ui.BitmapFont;
@@ -156,6 +157,7 @@ public final class UiViewportSmoke {
                 checkItemSprites(ui, canvas, texture, output);
                 checkSessionScreens(ui, canvas, texture, output);
                 checkWorldScreens(ui, canvas, texture, output);
+                checkLanguages(ui, canvas, texture, output);
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteTextures(texture);
@@ -284,7 +286,7 @@ public final class UiViewportSmoke {
         screens.open(screen);
         screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
-        for (int i = 0; i < 10; i++) screens.keyPress(UiKey.NEXT);
+        for (int i = 0; i < 11; i++) screens.keyPress(UiKey.NEXT);
         check(screen.backButton().focused(), "Back missing from keyboard navigation");
         clear();
         render(ui, canvas, screens, hotbar, viewport);
@@ -558,6 +560,40 @@ public final class UiViewportSmoke {
         }
         System.out.println(
                 "PASS WORLD-04: 18 Polish glyph pixel checks, Unicode form/long seed/one-shot Create, 1000 visible-only rows and HiDPI Play in 10 viewport/scale cases");
+    }
+
+    private static void checkLanguages(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {
+        for (int[] size : new int[][] {{320, 240}, {1280, 720}, {1920, 1080}}) {
+            var viewport = new UiViewport(size[0], size[1], size[0], size[1]);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size[0], size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            glViewport(0, 0, size[0], size[1]);
+            var settings = new GameSettings();
+            var screen = new SettingsScreen(settings);
+            var screens = new ScreenManager();
+            screens.open(screen);
+            screens.layout(viewport);
+            var box = screen.languageButton().bounds();
+            var back = screen.backButton().bounds();
+            check(back.y() + back.height() <= viewport.height(), "Settings Back clipped");
+            check(box.y() + box.height() <= viewport.height(), "Language button clipped");
+            ByteBuffer previous = null;
+            for (Language language : Language.values()) {
+                check(settings.translations().language() == language, "Language cycle order");
+                clear();
+                render(ui, canvas, screens, new Hotbar(), viewport);
+                ByteBuffer pixels = capture(viewport);
+                check(previous == null || !previous.equals(pixels), "Language did not change rendered pixels");
+                write(output.resolve("i18n-settings-" + language.code() + "-" + size[0] + ".png"), pixels, viewport);
+                previous = pixels;
+                screens.updatePointer(false, false, 0, 0);
+                screens.updatePointer(true, true, box.x() + 1, box.y() + 1);
+                screens.updatePointer(false, false, box.x() + 1, box.y() + 1);
+            }
+            check(settings.translations().language() == Language.ENGLISH, "Language cycle did not wrap");
+            check(glGetError() == GL_NO_ERROR, "Language screen GL error");
+        }
+        System.out.println("PASS i18n: live EN/PL switching and unclipped controls at min/720p/1080p");
     }
 
     private static void checkSessionScreens(UiRenderer ui, UiCanvas canvas, int texture, Path output) throws Exception {

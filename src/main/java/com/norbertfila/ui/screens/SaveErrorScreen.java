@@ -1,13 +1,21 @@
 package com.norbertfila.ui.screens;
 
+import com.norbertfila.i18n.*;
 import com.norbertfila.ui.*;
+import java.util.Objects;
 
 public final class SaveErrorScreen implements Screen {
-    private final Button retry = new Button(new UiBounds(60, 100, 200, 24), "Retry save");
-    private final Button discard = new Button(new UiBounds(60, 132, 200, 24), "Discard changes");
+    private final Translations translations;
+    private final Button retry = new Button(new UiBounds(60, 100, 200, 24), "");
+    private final Button discard = new Button(new UiBounds(60, 132, 200, 24), "");
     private boolean pointerReady;
 
     public SaveErrorScreen() {
+        this(new Translations(Language.ENGLISH));
+    }
+
+    public SaveErrorScreen(Translations translations) {
+        this.translations = Objects.requireNonNull(translations);
         retry.setFocused(true);
     }
 
@@ -58,7 +66,7 @@ public final class SaveErrorScreen implements Screen {
         layout(viewport);
         canvas.textWithShadow(
                 BitmapFont.DEFAULT,
-                "World save failed",
+                translations.text("save.failed"),
                 retry.bounds().x(),
                 retry.bounds().y() - 30,
                 1,
@@ -66,6 +74,8 @@ public final class SaveErrorScreen implements Screen {
                 .5f,
                 .5f,
                 1);
+        retry.setLabel(translations.text("save.retry"));
+        discard.setLabel(translations.text("save.discard"));
         retry.render(canvas, BitmapFont.DEFAULT);
         discard.render(canvas, BitmapFont.DEFAULT);
     }

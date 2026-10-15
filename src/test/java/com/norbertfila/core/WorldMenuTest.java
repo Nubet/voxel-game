@@ -18,6 +18,32 @@ class WorldMenuTest {
     Path directory;
 
     @Test
+    void optionsShareLanguageWithTheGameAndReturnToMainMenu() {
+        var settings = new GameSettings();
+        try (var io = new WorldIo()) {
+            var menu = new WorldMenu(
+                    io, new WorldCatalog(directory.resolve("worlds"), "default", 11), "default", 11, settings);
+            key(menu, UiKey.NEXT);
+            key(menu, UiKey.NEXT);
+            key(menu, UiKey.ACTIVATE);
+            assertEquals(WorldMenu.State.SETTINGS, menu.state());
+            var screen = assertInstanceOf(SettingsScreen.class, menu.screen());
+            var box = screen.languageButton().bounds();
+            menu.update();
+            menu.updatePointer(false, false, 0, 0);
+            menu.updatePointer(true, true, box.x() + 1, box.y() + 1);
+            menu.updatePointer(false, false, box.x() + 1, box.y() + 1);
+            assertEquals(
+                    com.norbertfila.i18n.Language.POLISH,
+                    settings.translations().language());
+            key(menu, UiKey.BACK);
+            assertEquals(WorldMenu.State.MAIN, menu.state());
+            assertInstanceOf(MainMenuScreen.class, menu.screen());
+            assertFalse(Files.exists(directory.resolve("worlds")));
+        }
+    }
+
+    @Test
     void createSelectFailureBackAndRestartRetainWorldAndTypedIdentity() throws Exception {
         var catalog = new WorldCatalog(directory.resolve("worlds"), "default", 11);
         try (var io = new WorldIo()) {

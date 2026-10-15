@@ -1,19 +1,26 @@
 package com.norbertfila.ui.screens;
 
+import com.norbertfila.i18n.*;
 import com.norbertfila.ui.*;
 import java.util.Objects;
 import java.util.OptionalLong;
 
 public final class CreateWorldScreen implements Screen {
+    private final Translations translations;
     private static final int WIDTH = 304, HEIGHT = 224;
     private final TextField name = new TextField(new UiBounds(12, 48, 280, 22), 64);
     private final TextField seed = new TextField(new UiBounds(12, 100, 280, 22), 20);
-    private final Button create = new Button(new UiBounds(12, 192, 132, 20), "Utwórz");
-    private final Button back = new Button(new UiBounds(160, 192, 132, 20), "Anuluj");
+    private final Button create = new Button(new UiBounds(12, 192, 132, 20), "");
+    private final Button back = new Button(new UiBounds(160, 192, 132, 20), "");
     private int x, y, focus;
     private boolean pointerReady, submitted;
 
     public CreateWorldScreen() {
+        this(new Translations(Language.ENGLISH));
+    }
+
+    public CreateWorldScreen(Translations translations) {
+        this.translations = Objects.requireNonNull(translations);
         focus(0);
         sync();
     }
@@ -55,11 +62,11 @@ public final class CreateWorldScreen implements Screen {
     }
 
     public String validationMessage() {
-        if (name.text().strip().isEmpty()) return "Podaj nazwę świata";
+        if (name.text().strip().isEmpty()) return translations.text("world.nameRequired");
         try {
             parsedSeed();
         } catch (NumberFormatException invalid) {
-            return "Seed musi być liczbą long";
+            return translations.text("world.invalidSeed");
         }
         return "";
     }
@@ -157,13 +164,15 @@ public final class CreateWorldScreen implements Screen {
         sync();
         canvas.rectangle(x, y, WIDTH, HEIGHT, .06f, .08f, .11f, 1);
         var font = BitmapFont.DEFAULT;
-        canvas.textWithShadow(font, "Nowy świat", x + 12, y + 8, 1, 1, 1, 1);
-        canvas.text(font, "Nazwa świata (1-64)", x + 12, y + 30, .8f, .85f, .9f, 1);
-        canvas.text(font, "Seed (opcjonalny)", x + 12, y + 82, .8f, .85f, .9f, 1);
+        canvas.textWithShadow(font, translations.text("world.new"), x + 12, y + 8, 1, 1, 1, 1);
+        canvas.text(font, translations.text("world.name"), x + 12, y + 30, .8f, .85f, .9f, 1);
+        canvas.text(font, translations.text("world.seed"), x + 12, y + 82, .8f, .85f, .9f, 1);
         name.render(canvas);
         seed.render(canvas);
-        canvas.text(font, "Tryb: Survival", x + 12, y + 134, .8f, .85f, .9f, 1);
+        canvas.text(font, translations.text("world.mode"), x + 12, y + 134, .8f, .85f, .9f, 1);
         canvas.text(font, font.ellipsize(validationMessage(), 280), x + 12, y + 160, 1, .55f, .4f, 1);
+        create.setLabel(translations.text("action.create"));
+        back.setLabel(translations.text("action.cancel"));
         create.render(canvas, font);
         back.render(canvas, font);
     }

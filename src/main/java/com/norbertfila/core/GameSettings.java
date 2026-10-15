@@ -1,6 +1,24 @@
 package com.norbertfila.core;
 
+import com.norbertfila.i18n.Language;
+import com.norbertfila.i18n.Translations;
+import java.util.Objects;
+
 public final class GameSettings {
+    private final Translations translations;
+
+    public GameSettings() {
+        this(new Translations(Language.ENGLISH));
+    }
+
+    public GameSettings(Translations translations) {
+        this.translations = Objects.requireNonNull(translations);
+    }
+
+    public Translations translations() {
+        return translations;
+    }
+
     public static final float MIN_FIELD_OF_VIEW = 30f;
     public static final float MAX_FIELD_OF_VIEW = 110f;
     public static final float MIN_ZOOM_FIELD_OF_VIEW = 5f;

@@ -131,10 +131,11 @@ public final class GameLoop {
         Hud hud = new Hud();
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(settings);
-        PauseScreen pauseScreen = new PauseScreen();
+        PauseScreen pauseScreen = new PauseScreen(settings.translations());
+        boolean settingsFromPause = false;
         input.discardTransientInput();
         window.setCursorCaptured(false);
-        var loading = new SessionStatusScreen("Loading world...");
+        var loading = new SessionStatusScreen(settings.translations().text("status.loading"));
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
         long placePressId = 0;
@@ -183,7 +184,8 @@ public final class GameLoop {
                         && state != null
                         && !state.modePending()
                         && state.mode() != PlayerController.Mode.SPECTATOR)
-                    screens.open(new InventoryScreen(state.mode() == PlayerController.Mode.CREATIVE));
+                    screens.open(new InventoryScreen(
+                            state.mode() == PlayerController.Mode.CREATIVE, settings.translations()));
             }
             if (screens.current() instanceof InventoryScreen inventoryScreen && state != null) {
                 if (state.modePending()
@@ -218,6 +220,10 @@ public final class GameLoop {
                         else screens.input(event);
                     } else screens.input(event);
                 }
+            }
+            if (settingsFromPause && previousScreen == settingsScreen && !screens.isOpen()) {
+                screens.open(pauseScreen);
+                settingsFromPause = false;
             }
             if (previousScreen != screens.current()) {
                 window.setCursorCaptured(!screens.isOpen());
@@ -254,7 +260,9 @@ public final class GameLoop {
                         camera.yaw(),
                         camera.pitch(),
                         blocked,
-                        minimized || screens.current() instanceof PauseScreen,
+                        minimized
+                                || screens.current() instanceof PauseScreen
+                                || screens.current() instanceof SettingsScreen,
                         settings.renderDistance(),
                         placePressId,
                         !blocked && input.rightMouseDown(),
@@ -265,6 +273,10 @@ public final class GameLoop {
             Screen.Action uiAction;
             while ((uiAction = screens.pollAction()) != null) {
                 if (uiAction == Screen.Action.BACK_TO_MENU) return Exit.BACK_TO_MENU;
+                if (uiAction == Screen.Action.OPTIONS) {
+                    settingsFromPause = screens.current() == pauseScreen;
+                    screens.open(settingsScreen);
+                }
                 switch (uiAction) {
                     case Screen.Action.SlotClick click ->
                         submit(runtime, new WorldRuntime.ClickSlot(click.slot(), click.right(), click.quickMove()));
@@ -422,11 +434,25 @@ public final class GameLoop {
     public void awaitStop(
             Window window, Input input, UiRenderer renderer, GameSettings settings, WorldRuntime runtime) {
         runtime.requestStop();
-        runScreen(window, input, renderer, settings, new SessionStatusScreen("Saving world..."), runtime, null);
+        runScreen(
+                window,
+                input,
+                renderer,
+                settings,
+                new SessionStatusScreen(settings.translations().text("status.saving")),
+                runtime,
+                null);
     }
 
     public void awaitLoad(Window window, Input input, UiRenderer renderer, GameSettings settings, GameSession session) {
-        runScreen(window, input, renderer, settings, new SessionStatusScreen("Loading world..."), null, session);
+        runScreen(
+                window,
+                input,
+                renderer,
+                settings,
+                new SessionStatusScreen(settings.translations().text("status.loading")),
+                null,
+                session);
     }
 
     public void awaitStop(Window window, Input input, UiRenderer renderer, GameSettings settings, GameSession session) {
@@ -436,7 +462,7 @@ public final class GameLoop {
                 input,
                 renderer,
                 settings,
-                new SessionStatusScreen("Saving world..."),
+                new SessionStatusScreen(settings.translations().text("status.saving")),
                 session.runtime(),
                 session);
     }
@@ -475,7 +501,11 @@ public final class GameLoop {
                 if (stopping != null && stopping.isStopped()) return Screen.Action.NONE;
                 if (stopping != null && (stopping.state() == WorldRuntime.State.SAVE_ERROR) != saveError) {
                     saveError = stopping.state() == WorldRuntime.State.SAVE_ERROR;
-                    screens.open(saveError ? new SaveErrorScreen() : new SessionStatusScreen("Saving world..."));
+                    screens.open(
+                            saveError
+                                    ? new SaveErrorScreen(settings.translations())
+                                    : new SessionStatusScreen(
+                                            settings.translations().text("status.saving")));
                     input.discardTransientInput();
                 }
                 if (stopping == null && session == null && window.shouldClose()) screens.requestClose();

@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import com.norbertfila.i18n.Translations;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.ui.*;
 import com.norbertfila.ui.screens.*;
@@ -16,6 +17,7 @@ import java.util.logging.Logger;
 public final class WorldMenu implements Screen {
     public enum State {
         MAIN,
+        SETTINGS,
         SCANNING,
         SELECTING,
         FORM,
@@ -30,8 +32,10 @@ public final class WorldMenu implements Screen {
     private final WorldCatalog catalog;
     private final String generatorId;
     private final int generatorVersion;
+    private final GameSettings settings;
+    private final Translations translations;
     private State state = State.MAIN;
-    private Screen screen = new MainMenuScreen(false);
+    private Screen screen;
     private CreateWorldScreen form;
     private CompletableFuture<List<WorldEntry>> listing;
     private CompletableFuture<WorldEntry> creating;
@@ -40,6 +44,14 @@ public final class WorldMenu implements Screen {
     private State errorReturn;
 
     public WorldMenu(WorldIo io, WorldCatalog catalog, String generatorId, int generatorVersion) {
+        this(io, catalog, generatorId, generatorVersion, new GameSettings());
+    }
+
+    public WorldMenu(
+            WorldIo io, WorldCatalog catalog, String generatorId, int generatorVersion, GameSettings settings) {
+        this.settings = Objects.requireNonNull(settings);
+        translations = settings.translations();
+        screen = new MainMenuScreen(false, translations);
         this.io = Objects.requireNonNull(io);
         this.catalog = Objects.requireNonNull(catalog);
         this.generatorId = Objects.requireNonNull(generatorId);
@@ -65,7 +77,7 @@ public final class WorldMenu implements Screen {
     private void scan() {
         cancelledScan = false;
         listing = io.list(catalog);
-        show(State.SCANNING, new SessionStatusScreen("Odczytywanie światów..."));
+        show(State.SCANNING, new SessionStatusScreen(translations.text("status.scanning")));
     }
 
     private void error(String title, Throwable failure, State back) {
@@ -76,7 +88,8 @@ public final class WorldMenu implements Screen {
                 new WorldErrorScreen(
                         title,
                         Objects.toString(
-                                failure.getMessage(), failure.getClass().getSimpleName())));
+                                failure.getMessage(), failure.getClass().getSimpleName()),
+                        translations));
     }
 
     @Override
@@ -87,11 +100,12 @@ public final class WorldMenu implements Screen {
             listing = null;
             try {
                 var entries = completed.join();
-                if (!closing && !cancelledScan) show(State.SELECTING, new WorldSelectionScreen(entries));
+                if (!closing && !cancelledScan) show(State.SELECTING, new WorldSelectionScreen(entries, translations));
             } catch (CompletionException failure) {
-                if (!closing && !cancelledScan) error("Błąd listy światów", failure.getCause(), State.MAIN);
+                if (!closing && !cancelledScan)
+                    error(translations.text("world.listFailed"), failure.getCause(), State.MAIN);
             }
-            if (cancelledScan && !closing) show(State.MAIN, new MainMenuScreen(false));
+            if (cancelledScan && !closing) show(State.MAIN, new MainMenuScreen(false, translations));
         }
         if (creating != null && creating.isDone()) {
             var completed = creating;
@@ -101,7 +115,7 @@ public final class WorldMenu implements Screen {
                 form = null;
                 if (!closing) scan();
             } catch (CompletionException failure) {
-                if (!closing) error("Nie utworzono świata", failure.getCause(), State.FORM);
+                if (!closing) error(translations.text("world.createFailed"), failure.getCause(), State.FORM);
                 else LOG.log(Level.WARNING, "World creation failed during shutdown", failure.getCause());
             }
         }
@@ -114,7 +128,7 @@ public final class WorldMenu implements Screen {
         if (state != State.OPENING) throw new IllegalStateException("No selected session");
         selected = null;
         if (failure == null) scan();
-        else error("Błąd sesji świata", failure, State.SELECTING);
+        else error(translations.text("world.sessionFailed"), failure, State.SELECTING);
     }
 
     private void handle(Action action) {
@@ -125,7 +139,7 @@ public final class WorldMenu implements Screen {
         }
         if (action == Action.CLOSE) {
             switch (state) {
-                case SELECTING -> show(State.MAIN, new MainMenuScreen(false));
+                case SELECTING, SETTINGS -> show(State.MAIN, new MainMenuScreen(false, translations));
                 case FORM -> {
                     form = null;
                     scan();
@@ -135,13 +149,14 @@ public final class WorldMenu implements Screen {
                         form.resumeEditing();
                         show(State.FORM, form);
                     } else if (errorReturn == State.SELECTING) scan();
-                    else show(State.MAIN, new MainMenuScreen(false));
+                    else show(State.MAIN, new MainMenuScreen(false, translations));
                 }
                 default -> {}
             }
-        } else if (state == State.MAIN && action == Action.PLAY) scan();
+        } else if (state == State.MAIN && action == Action.OPTIONS) show(State.SETTINGS, new SettingsScreen(settings));
+        else if (state == State.MAIN && action == Action.PLAY) scan();
         else if (state == State.SELECTING && action instanceof Action.ShowCreateWorld) {
-            form = new CreateWorldScreen();
+            form = new CreateWorldScreen(translations);
             show(State.FORM, form);
         } else if (state == State.FORM && action instanceof Action.CreateWorld request) {
             long seed =
@@ -151,10 +166,10 @@ public final class WorldMenu implements Screen {
                     request.name(),
                     Instant.now());
             creating = io.create(catalog, metadata);
-            show(State.CREATING, new SessionStatusScreen("Tworzenie świata..."));
+            show(State.CREATING, new SessionStatusScreen(translations.text("status.creating")));
         } else if (state == State.SELECTING && action instanceof Action.OpenWorld request) {
             selected = request.id();
-            show(State.OPENING, new SessionStatusScreen("Otwieranie świata..."));
+            show(State.OPENING, new SessionStatusScreen(translations.text("status.opening")));
         }
     }
 
@@ -170,7 +185,7 @@ public final class WorldMenu implements Screen {
         if (changed || closing) return Action.NONE;
         if (state == State.SCANNING && key == UiKey.BACK) {
             cancelledScan = true;
-            show(State.SCANNING, new SessionStatusScreen("Anulowanie..."));
+            show(State.SCANNING, new SessionStatusScreen(translations.text("status.cancelling")));
         } else handle(screen.keyPress(key));
         return Action.NONE;
     }
