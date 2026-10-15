@@ -19,8 +19,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Far terrain around the camera, owned by the world thread. It picks the tiles outside the near chunk area and their
- * sample step by distance, builds them on low-priority workers and publishes an immutable {@link Residency}.
+ * Far terrain around the camera, owned by the world thread. It picks the tiles within the far radius and their sample
+ * step by distance, builds them on low-priority workers and publishes an immutable {@link Residency}. The renderer
+ * hides far terrain wherever near terrain already draws a whole chunk column.
  *
  * <p>A result is accepted only when it still matches the request for its tile and the tile's edits have not changed
  * since the request; otherwise it is dropped and the tile is requested again. A published tile stays until its
@@ -47,11 +48,9 @@ public final class FarTerrainStreamer implements AutoCloseable {
     // Tiles to build, nearest first; entries may be outdated and are checked when taken.
     private final ArrayDeque<FarTilePos> queue = new ArrayDeque<>();
     private long nextToken;
-    private int cameraTileX = Integer.MIN_VALUE, cameraTileZ, nearMinX, nearMinZ, nearMaxX, nearMaxZ, farRadius;
+    private int cameraTileX = Integer.MIN_VALUE, cameraTileZ, farRadius;
     private int cameraX, cameraZ;
-    // Tile range [min, max) entirely inside the near area.
-    private int coveredMinX, coveredMaxX, coveredMinZ, coveredMaxZ;
-    private Residency residency = new Residency(0, Map.of(), 0, 0, 0, 0);
+    private Residency residency = new Residency(0, Map.of());
     private boolean changed;
     private long builtNanos;
     private int builtTiles;
@@ -70,51 +69,18 @@ public final class FarTerrainStreamer implements AutoCloseable {
     }
 
     /**
-     * Plans tiles around the camera. The near area is the square of chunk columns {@code nearCenter +- nearRadius}
-     * the chunk streamer covers; tiles entirely inside it are not needed. A {@code farRadiusChunks} not larger than
-     * the near radius turns far terrain off.
+     * Plans tiles around the camera, also under the near chunk area, where they fill columns near terrain does not
+     * draw yet. A {@code farRadiusChunks} not larger than {@code nearRadiusChunks} turns far terrain off.
      */
-    public void update(
-            double cameraBlockX,
-            double cameraBlockZ,
-            int nearCenterX,
-            int nearCenterZ,
-            int nearRadiusChunks,
-            int farRadiusChunks) {
+    public void update(double cameraBlockX, double cameraBlockZ, int nearRadiusChunks, int farRadiusChunks) {
         int x = (int) Math.floor(cameraBlockX), z = (int) Math.floor(cameraBlockZ);
         int tileX = Math.floorDiv(x, FarTerrainTile.SIZE), tileZ = Math.floorDiv(z, FarTerrainTile.SIZE);
-        int minX = (nearCenterX - nearRadiusChunks) * Chunk.SIZE,
-                maxX = (nearCenterX + nearRadiusChunks + 1) * Chunk.SIZE;
-        int minZ = (nearCenterZ - nearRadiusChunks) * Chunk.SIZE,
-                maxZ = (nearCenterZ + nearRadiusChunks + 1) * Chunk.SIZE;
         int radius = farRadiusChunks > nearRadiusChunks ? farRadiusChunks * Chunk.SIZE : 0;
         cameraX = x;
         cameraZ = z;
-        if (minX != nearMinX || maxX != nearMaxX || minZ != nearMinZ || maxZ != nearMaxZ) {
-            nearMinX = minX;
-            nearMaxX = maxX;
-            nearMinZ = minZ;
-            nearMaxZ = maxZ;
-            changed = true;
-        }
-        // Tiles lying entirely inside the near area; the near center moves every chunk, this range far less often.
-        int coveredMinX = Math.ceilDiv(minX, FarTerrainTile.SIZE),
-                coveredMaxX = Math.floorDiv(maxX, FarTerrainTile.SIZE);
-        int coveredMinZ = Math.ceilDiv(minZ, FarTerrainTile.SIZE),
-                coveredMaxZ = Math.floorDiv(maxZ, FarTerrainTile.SIZE);
-        if (tileX == cameraTileX
-                && tileZ == cameraTileZ
-                && coveredMinX == this.coveredMinX
-                && coveredMaxX == this.coveredMaxX
-                && coveredMinZ == this.coveredMinZ
-                && coveredMaxZ == this.coveredMaxZ
-                && radius == farRadius) return;
+        if (tileX == cameraTileX && tileZ == cameraTileZ && radius == farRadius) return;
         cameraTileX = tileX;
         cameraTileZ = tileZ;
-        this.coveredMinX = coveredMinX;
-        this.coveredMaxX = coveredMaxX;
-        this.coveredMinZ = coveredMinZ;
-        this.coveredMaxZ = coveredMaxZ;
         farRadius = radius;
         plan();
     }
@@ -127,8 +93,6 @@ public final class FarTerrainStreamer implements AutoCloseable {
         for (int dz = -tiles; dz <= tiles; dz++)
             for (int dx = -tiles; dx <= tiles; dx++) {
                 int tileX = cameraTileX + dx, tileZ = cameraTileZ + dz;
-                if (tileX >= coveredMinX && tileX < coveredMaxX && tileZ >= coveredMinZ && tileZ < coveredMaxZ)
-                    continue;
                 long distance = distance(tileX, tileZ);
                 if (distance > farRadius) continue;
                 FarTilePos key = new FarTilePos(tileX, tileZ);
@@ -204,8 +168,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
             submit(key, desired.get(key));
         }
         if (changed) {
-            residency = new Residency(
-                    residency.revision() + 1, Map.copyOf(resident), nearMinX, nearMinZ, nearMaxX, nearMaxZ);
+            residency = new Residency(residency.revision() + 1, Map.copyOf(resident));
             changed = false;
         }
     }
@@ -241,17 +204,8 @@ public final class FarTerrainStreamer implements AutoCloseable {
         workers.shutdownNow();
     }
 
-    /**
-     * Published far tiles by position and the near area in world blocks, {@code [nearMinX, nearMaxX) x [nearMinZ,
-     * nearMaxZ)}, where far terrain must not be drawn. The revision changes whenever either does.
-     */
-    public record Residency(
-            long revision,
-            Map<FarTilePos, FarTileMesh> tiles,
-            int nearMinX,
-            int nearMinZ,
-            int nearMaxX,
-            int nearMaxZ) {}
+    /** Published far tiles by position; the revision changes whenever the map does. */
+    public record Residency(long revision, Map<FarTilePos, FarTileMesh> tiles) {}
 
     public record Metrics(int desired, int resident, int inFlight, int queued, int built, long buildNanos) {}
 

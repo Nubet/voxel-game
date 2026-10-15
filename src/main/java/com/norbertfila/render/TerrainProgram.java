@@ -19,7 +19,8 @@ final class TerrainProgram implements AutoCloseable {
     private final int renderLayer;
     private final int waterTime;
     private final int waterFog;
-    private final int nearClip;
+    private final int coverageOrigin;
+    private final int coverageSize;
 
     TerrainProgram(String vertexShader) {
         int vertex = 0, fragment = 0, linked = 0;
@@ -38,7 +39,8 @@ final class TerrainProgram implements AutoCloseable {
             renderLayer = uniform(linked, "uRenderLayer");
             waterTime = uniform(linked, "uWaterTime");
             waterFog = uniform(linked, "uWaterFog");
-            nearClip = uniform(linked, "uNearClip");
+            coverageOrigin = uniform(linked, "uCoverageOrigin");
+            coverageSize = uniform(linked, "uCoverageSize");
             int sampler = uniform(linked, "uBlockTextures");
             int fogRange = uniform(linked, "uWaterFogRange");
             glUseProgram(linked);
@@ -72,16 +74,20 @@ final class TerrainProgram implements AutoCloseable {
                 UnderwaterVisibility.FOG_GREEN,
                 UnderwaterVisibility.FOG_BLUE,
                 underwater);
-        glUniform4f(nearClip, 1, 1, 0, 0);
+        glUniform1i(coverageSize, 0);
     }
 
     void renderLayer(RenderLayer layer) {
         glUniform1i(renderLayer, layer.ordinal());
     }
 
-    /** Discards fragments whose camera-relative x and z lie strictly inside the given rectangle. */
-    void nearClip(float minX, float minZ, float maxX, float maxZ) {
-        glUniform4f(nearClip, minX, minZ, maxX, maxZ);
+    /**
+     * Discards fragments in chunk columns whose bit is set in the coverage buffer bound at binding 2; {@code originX}
+     * and {@code originZ} locate the first column relative to the camera.
+     */
+    void coverage(float originX, float originZ, int size) {
+        glUniform2f(coverageOrigin, originX, originZ);
+        glUniform1i(coverageSize, size);
     }
 
     private static int uniform(int program, String name) {

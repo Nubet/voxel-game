@@ -57,6 +57,7 @@ class CrossPlantMesherTest {
         ChunkMesh mesh =
                 new WaterMesher().mesh(snapshot, BlockNeighborhood.centerOnly(snapshot), 0, 0, 0, ChunkMesh.ALL);
         assertEquals(new QuadRanges(6, 8, 0), mesh.solid().ranges());
-        assertEquals(new QuadRanges(0, 0, 6), mesh.water().ranges());
+        // The bottom face borders an unloaded chunk and is left to far terrain.
+        assertEquals(new QuadRanges(0, 0, 5), mesh.water().ranges());
     }
 }

@@ -1,7 +1,6 @@
 package com.norbertfila.lod;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.ChunkData;
@@ -18,14 +17,13 @@ class FarTerrainStreamerTest {
     private final WorldChangeOverlay overlay = new WorldChangeOverlay();
 
     @Test
-    void publishesEveryPlannedTileOutsideTheNearArea() throws Exception {
+    void publishesEveryTileWithinTheFarRadiusIncludingUnderNearTerrain() throws Exception {
         try (var streamer = new FarTerrainStreamer(new FlatSource(), overlay, 2)) {
-            streamer.update(8, 8, 0, 0, 4, 40);
+            streamer.update(8, 8, 4, 40);
             settle(streamer);
 
             var tiles = streamer.residency().tiles();
-            assertFalse(tiles.containsKey(new FarTilePos(0, 0)), "inside the near area");
-            assertFalse(tiles.containsKey(new FarTilePos(-1, -1)));
+            assertEquals(1, tiles.get(new FarTilePos(0, 0)).sampleStep(), "fills near columns until they load");
             assertTrue(tiles.containsKey(new FarTilePos(1, 0)));
             assertEquals(1, tiles.get(new FarTilePos(1, 0)).sampleStep());
             assertEquals(2, tiles.get(new FarTilePos(-8, 0)).sampleStep(), "about 490 blocks away");
@@ -34,15 +32,13 @@ class FarTerrainStreamerTest {
                 double dx = (mesh.tileX() + .5) * 64 - 8, dz = (mesh.tileZ() + .5) * 64 - 8;
                 assertTrue(Math.hypot(dx, dz) <= 40 * 16 + 1);
             }
-            assertEquals(-64, streamer.residency().nearMinX());
-            assertEquals(80, streamer.residency().nearMaxX());
         }
     }
 
     @Test
     void editsRebuildTheirTileAndStaleResultsAreNotPublished() throws Exception {
         try (var streamer = new FarTerrainStreamer(new FlatSource(), overlay, 2)) {
-            streamer.update(8, 8, 0, 0, 2, 16);
+            streamer.update(8, 8, 2, 16);
             // The edit lands after the tile's build was requested, so the first result is stale.
             streamer.process();
             overlay.set(new BlockPos(100, 90, 100), BlockId.STONE, FarTerrainTile.SIZE);
@@ -59,13 +55,13 @@ class FarTerrainStreamerTest {
     void movingAwayDropsTilesAndKeepsBuildsBounded() throws Exception {
         CountingSource source = new CountingSource();
         try (var streamer = new FarTerrainStreamer(source, overlay, 1)) {
-            streamer.update(8, 8, 0, 0, 2, 16);
+            streamer.update(8, 8, 2, 16);
             streamer.process();
             assertTrue(streamer.metrics().inFlight() <= 8);
             settle(streamer);
             long revision = streamer.residency().revision();
 
-            streamer.update(100_000, 8, 6250, 0, 2, 16);
+            streamer.update(100_000, 8, 2, 16);
             settle(streamer);
 
             assertTrue(streamer.residency().revision() > revision);
@@ -77,7 +73,7 @@ class FarTerrainStreamerTest {
     @Test
     void farDistanceNotAboveTheNearRadiusDisablesFarTerrain() throws Exception {
         try (var streamer = new FarTerrainStreamer(new FlatSource(), overlay, 1)) {
-            streamer.update(8, 8, 0, 0, 8, 8);
+            streamer.update(8, 8, 8, 8);
             settle(streamer);
             assertTrue(streamer.residency().tiles().isEmpty());
         }

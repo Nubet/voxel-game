@@ -39,6 +39,9 @@ public final class WaterMesher implements LayeredMesher {
                     boolean falling = snapshot.waterState(x, y, z) == WaterState.FALLING;
                     for (int face = 0; face < 6; face++) {
                         int[] normal = VisibleFaceMesher.NORMALS[face];
+                        // Unloaded chunks are drawn by far terrain, so a water side there would show as a seam.
+                        if (face != 2 && neighborhood.chunkAt(x + normal[0], y + normal[1], z + normal[2]) == null)
+                            continue;
                         byte neighbor = neighborhood.block(x + normal[0], y + normal[1], z + normal[2]);
                         if (neighbor == BlockId.WATER) continue;
                         if (BlockRegistry.DEFAULT.occludesFullFace(neighbor)

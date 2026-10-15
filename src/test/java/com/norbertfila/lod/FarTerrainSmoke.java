@@ -8,6 +8,7 @@ import com.norbertfila.generation.TerrainGenerator;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.BlockTextureArray;
 import com.norbertfila.render.FarTerrainRenderer;
+import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.BlockRegistry;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
@@ -41,7 +42,7 @@ public final class FarTerrainSmoke {
                 tiles.put(mesh.position(), mesh);
             }
         System.out.printf("tiles=%d buildMs=%.1f%n", tiles.size(), (System.nanoTime() - started) / 1e6);
-        var residency = new FarTerrainStreamer.Residency(1, tiles, 0, 0, 0, 0);
+        var residency = new FarTerrainStreamer.Residency(1, tiles);
         try (Window window = new Window(WIDTH, HEIGHT, "Far terrain smoke");
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures());
@@ -67,7 +68,7 @@ public final class FarTerrainSmoke {
         glViewport(0, 0, WIDTH, HEIGHT);
         glClearColor(.55f, .75f, .95f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        int calls = renderer.render(vp, eye.x, eye.y, eye.z, 0, 0, 0, 0, 0);
+        int calls = renderer.render(vp, eye.x, eye.y, eye.z, 0, ChunkManager.Coverage.EMPTY);
         var pixels = BufferUtils.createByteBuffer(WIDTH * HEIGHT * 4);
         glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         var image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);

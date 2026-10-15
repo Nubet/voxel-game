@@ -7,9 +7,11 @@ import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.lod.FarTileMesh;
 import com.norbertfila.lod.FarTilePos;
 import com.norbertfila.meshing.QuadMesh;
+import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.RenderLayer;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -19,12 +21,16 @@ import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4f;
+import org.lwjgl.system.MemoryUtil;
 
 /**
  * Draws far terrain tiles published by {@link FarTerrainStreamer}. Tiles are uploaded under a per-frame budget, and a
- * tile's previous mesh is drawn until its replacement is on the GPU. Far terrain is drawn before near terrain with
- * its own depth range; the caller clears depth afterwards, which is safe because every far fragment that survives the
- * near-area clip lies behind the near area along its view ray.
+ * tile's previous mesh is drawn until its replacement is on the GPU, and far terrain stays visible in every chunk
+ * column near terrain does not fully draw yet, so loading and unloading near chunks never opens a hole.
+ *
+ * <p>Far terrain is drawn before near terrain with its own depth range and the caller clears depth afterwards. Near
+ * terrain therefore always covers far terrain; while columns are still loading, a near column seen through a far
+ * column that is closer to the camera can show in front of it until that far column is replaced.
  */
 public final class FarTerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(FarTerrainRenderer.class.getName());
@@ -42,6 +48,9 @@ public final class FarTerrainRenderer implements AutoCloseable {
     private final Frustum frustum = new Frustum();
     // Vertex pulling reads no attributes, but the core profile still requires a bound vertex array.
     private final int emptyVertexArray = glGenVertexArrays();
+    private final int coverageBufferId = glGenBuffers();
+    private IntBuffer coverageStaging = MemoryUtil.memAllocInt(64);
+    private ChunkManager.Coverage uploadedCoverage;
     private final Map<FarTilePos, Tile> tiles = new HashMap<>();
     // Published tiles not yet on the GPU, in the order the streamer finished them.
     private final List<FarTileMesh> pending = new ArrayList<>();
@@ -109,8 +118,8 @@ public final class FarTerrainRenderer implements AutoCloseable {
     }
 
     /**
-     * Draws visible tiles with {@code viewProjection}, which must place the camera at the origin. Fragments inside the
-     * near area {@code [nearMinX, nearMaxX) x [nearMinZ, nearMaxZ)} in world blocks are discarded.
+     * Draws visible tiles with {@code viewProjection}, which must place the camera at the origin, except in the chunk
+     * columns {@code coverage} marks as fully drawn by near terrain.
      */
     public int render(
             Matrix4f viewProjection,
@@ -118,15 +127,12 @@ public final class FarTerrainRenderer implements AutoCloseable {
             double cameraY,
             double cameraZ,
             float underwater,
-            int nearMinX,
-            int nearMinZ,
-            int nearMaxX,
-            int nearMaxZ) {
+            ChunkManager.Coverage coverage) {
         frustum.set(viewProjection);
         commands.clear();
         visibleWater.clear();
         for (Tile tile : tiles.values()) {
-            if (tile.slice == null) continue;
+            if (tile.slice == null || tile.covered(coverage)) continue;
             FarTileMesh mesh = tile.source;
             float minX = (float) (mesh.tileX() * (double) FarTerrainTile.SIZE - cameraX);
             float minZ = (float) (mesh.tileZ() * (double) FarTerrainTile.SIZE - cameraZ);
@@ -150,9 +156,11 @@ public final class FarTerrainRenderer implements AutoCloseable {
             indirect.bind(commands);
             TerrainRenderer.restoreTerrainState();
             program.use(viewProjection, underwater, 0, cameraX, cameraY, cameraZ);
-            program.nearClip(
-                    (float) (nearMinX - cameraX), (float) (nearMinZ - cameraZ), (float) (nearMaxX - cameraX), (float)
-                            (nearMaxZ - cameraZ));
+            bindCoverage(coverage);
+            program.coverage(
+                    (float) ((double) coverage.minChunkX() * Chunk.SIZE - cameraX),
+                    (float) ((double) coverage.minChunkZ() * Chunk.SIZE - cameraZ),
+                    coverage.size());
             program.renderLayer(RenderLayer.OPAQUE);
             calls += indirect.submit(commands, SOLID_PASS);
             if (!visibleWater.isEmpty()) {
@@ -166,10 +174,28 @@ public final class FarTerrainRenderer implements AutoCloseable {
         } finally {
             TerrainRenderer.restoreTerrainState();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
             glBindVertexArray(0);
             endFrame();
         }
         return calls;
+    }
+
+    /** Uploads the coverage bits when they changed; a long holds 64 columns, low int first. */
+    private void bindCoverage(ChunkManager.Coverage coverage) {
+        if (coverage != uploadedCoverage) {
+            long[] bits = coverage.bits();
+            int ints = Math.max(1, bits.length * 2);
+            if (coverageStaging.capacity() < ints) coverageStaging = MemoryUtil.memRealloc(coverageStaging, ints * 2);
+            coverageStaging.clear();
+            for (long word : bits) coverageStaging.put((int) word).put((int) (word >>> 32));
+            if (bits.length == 0) coverageStaging.put(0);
+            coverageStaging.flip();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, coverageBufferId);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, coverageStaging, GL_STREAM_DRAW);
+            uploadedCoverage = coverage;
+        }
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, coverageBufferId);
     }
 
     private void add(int pass, Tile tile, RenderLayer layer) {
@@ -232,6 +258,8 @@ public final class FarTerrainRenderer implements AutoCloseable {
         program.close();
         indirect.close();
         glDeleteVertexArrays(emptyVertexArray);
+        glDeleteBuffers(coverageBufferId);
+        MemoryUtil.memFree(coverageStaging);
     }
 
     private final class Tile {
@@ -246,6 +274,23 @@ public final class FarTerrainRenderer implements AutoCloseable {
             this.slice = slice;
             int chunks = FarTerrainTile.SIZE / Chunk.SIZE;
             origin = new ChunkPos(source.tileX() * chunks, 0, source.tileZ() * chunks);
+        }
+
+        // Coverage snapshots are immutable, so the answer holds until a new snapshot arrives.
+        private ChunkManager.Coverage coverageChecked;
+        private boolean covered;
+
+        /** True when near terrain fully draws every chunk column of the tile. */
+        boolean covered(ChunkManager.Coverage coverage) {
+            if (coverage != coverageChecked) {
+                coverageChecked = coverage;
+                covered = true;
+                int chunks = FarTerrainTile.SIZE / Chunk.SIZE;
+                for (int z = 0; z < chunks && covered; z++)
+                    for (int x = 0; x < chunks && covered; x++)
+                        covered = coverage.drawn(origin.x() + x, origin.z() + z);
+            }
+            return covered;
         }
 
         void release() {
