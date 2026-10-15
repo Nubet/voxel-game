@@ -33,6 +33,36 @@ class CaveGenerationTest {
     }
 
     @Test
+    void supportedWorldEdgesRemainDeterministicWithoutCoordinateOverflow() {
+        var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
+        for (int x : new int[] {Integer.MIN_VALUE / 16, Integer.MAX_VALUE / 16})
+            for (int z : new int[] {Integer.MIN_VALUE / 16, Integer.MAX_VALUE / 16}) {
+                var position = new ChunkPos(x, 0, z);
+                assertArrayEquals(
+                        terrain.generate(position).blocks(),
+                        new TerrainGenerator(42, TerrainConfig.defaults())
+                                .generate(position)
+                                .blocks());
+            }
+    }
+
+    @Test
+    void evictedRegionPlansRecomputeWithoutChangingUnseenChunks() {
+        var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
+        terrain.generate(new ChunkPos(0, 0, 0));
+        for (int region = 1; region <= 24; region++) terrain.generate(new ChunkPos(region * 24, 0, region * 24));
+        assertEquals(128, terrain.caveCacheStats().size());
+        long misses = terrain.caveCacheStats().misses();
+        var target = new ChunkPos(1, 0, 0);
+        assertArrayEquals(
+                new TerrainGenerator(42, TerrainConfig.defaults())
+                        .generate(target)
+                        .blocks(),
+                terrain.generate(target).blocks());
+        assertTrue(terrain.caveCacheStats().misses() >= misses + 9);
+    }
+
+    @Test
     void generationOrderAndWorkersDoNotChangeTheWorld() throws Exception {
         List<ChunkPos> positions = List.of(
                 new ChunkPos(-9, 0, -1),

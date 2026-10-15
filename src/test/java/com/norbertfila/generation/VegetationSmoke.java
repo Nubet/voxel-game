@@ -18,7 +18,7 @@ import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
 
 public final class VegetationSmoke {
-    private static final int WIDTH = 960, HEIGHT = 540;
+    static final int WIDTH = 960, HEIGHT = 540;
     private static final WaterMesher MESHER = new WaterMesher();
     private static volatile int sink;
 
@@ -142,7 +142,7 @@ public final class VegetationSmoke {
         }
     }
 
-    private static void upload(TerrainRenderer renderer, World world) {
+    static void upload(TerrainRenderer renderer, World world) {
         for (var p : world.residentPositions()) {
             var n = world.blockNeighborhood(p);
             renderer.upload(p, MESHER.mesh(n.center(), n, p.x(), p.y(), p.z(), ChunkMesh.ALL));
@@ -158,7 +158,7 @@ public final class VegetationSmoke {
         check(glGetError() == GL_NO_ERROR, "Render GL error");
     }
 
-    private static byte[] draw(TerrainRenderer renderer, Matrix4f vp, Vector3f eye) {
+    static byte[] draw(TerrainRenderer renderer, Matrix4f vp, Vector3f eye) {
         render(renderer, vp, eye);
         var pixels = BufferUtils.createByteBuffer(WIDTH * HEIGHT * 4);
         glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
@@ -167,7 +167,7 @@ public final class VegetationSmoke {
         return bytes;
     }
 
-    private static void write(Path file, byte[] pixels) throws Exception {
+    static void write(Path file, byte[] pixels) throws Exception {
         var image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < HEIGHT; y++)
             for (int x = 0; x < WIDTH; x++) {
