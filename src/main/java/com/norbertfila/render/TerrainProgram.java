@@ -1,12 +1,10 @@
 package com.norbertfila.render;
 
+import static com.norbertfila.render.ShaderPrograms.uniform;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.world.RenderLayer;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.FloatBuffer;
-import java.nio.charset.StandardCharsets;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
@@ -23,16 +21,8 @@ final class TerrainProgram implements AutoCloseable {
     private final int coverageSize;
 
     TerrainProgram(String vertexShader) {
-        int vertex = 0, fragment = 0, linked = 0;
+        int linked = ShaderPrograms.create(vertexShader, "/shaders/terrain.frag");
         try {
-            vertex = compile(GL_VERTEX_SHADER, vertexShader);
-            fragment = compile(GL_FRAGMENT_SHADER, "/shaders/terrain.frag");
-            linked = glCreateProgram();
-            glAttachShader(linked, vertex);
-            glAttachShader(linked, fragment);
-            glLinkProgram(linked);
-            if (glGetProgrami(linked, GL_LINK_STATUS) == GL_FALSE)
-                throw new IllegalStateException("Shader program link failed: " + glGetProgramInfoLog(linked));
             viewProjection = uniform(linked, "uVP");
             cameraBlock = uniform(linked, "uCameraBlock");
             cameraFraction = uniform(linked, "uCameraFraction");
@@ -48,11 +38,8 @@ final class TerrainProgram implements AutoCloseable {
             glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
             id = linked;
         } catch (RuntimeException | Error failure) {
-            if (linked != 0) glDeleteProgram(linked);
+            glDeleteProgram(linked);
             throw failure;
-        } finally {
-            if (vertex != 0) glDeleteShader(vertex);
-            if (fragment != 0) glDeleteShader(fragment);
         }
     }
 
@@ -90,41 +77,8 @@ final class TerrainProgram implements AutoCloseable {
         glUniform1i(coverageSize, size);
     }
 
-    private static int uniform(int program, String name) {
-        int location = glGetUniformLocation(program, name);
-        if (location < 0) throw new IllegalStateException("Shader uniform not found: " + name);
-        return location;
-    }
-
     @Override
     public void close() {
         glDeleteProgram(id);
-    }
-
-    private static int compile(int type, String resource) {
-        int shader = glCreateShader(type);
-        try {
-            glShaderSource(shader, loadSource(resource));
-            glCompileShader(shader);
-            if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
-                throw new IllegalStateException(
-                        "Shader compilation failed for " + resource + ": " + glGetShaderInfoLog(shader));
-            }
-            return shader;
-        } catch (RuntimeException | Error failure) {
-            glDeleteShader(shader);
-            throw failure;
-        }
-    }
-
-    private static String loadSource(String resource) {
-        try (InputStream stream = TerrainProgram.class.getResourceAsStream(resource)) {
-            if (stream == null) {
-                throw new IllegalStateException("Shader resource not found: " + resource);
-            }
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException failure) {
-            throw new IllegalStateException("Cannot read shader resource: " + resource, failure);
-        }
     }
 }

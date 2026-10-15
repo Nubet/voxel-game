@@ -9,6 +9,7 @@ import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
@@ -90,7 +91,8 @@ public final class GameLoop {
             FrameDriver driver,
             FrameProfiler profiler) {
         try (GpuFrameTimer gpuTimer =
-                profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null) {
+                        profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null;
+                BlockOutlineRenderer outline = new BlockOutlineRenderer()) {
             return run(
                     window,
                     input,
@@ -102,7 +104,8 @@ public final class GameLoop {
                     settings,
                     driver,
                     profiler,
-                    gpuTimer);
+                    gpuTimer,
+                    outline);
         }
     }
 
@@ -117,7 +120,8 @@ public final class GameLoop {
             GameSettings settings,
             FrameDriver driver,
             FrameProfiler profiler,
-            GpuFrameTimer gpuTimer) {
+            GpuFrameTimer gpuTimer,
+            BlockOutlineRenderer outline) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -378,12 +382,11 @@ public final class GameLoop {
                 glClear(GL_DEPTH_BUFFER_BIT);
             }
             if (gpuTimer != null) gpuTimer.stamp();
-            var stats = renderer.render(
-                    camera.relativeViewProjection(width[0], height[0]),
-                    camera.x(),
-                    camera.y(),
-                    camera.z(),
-                    visibility.amount());
+            var viewProjection = camera.relativeViewProjection(width[0], height[0]);
+            var stats = renderer.render(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            if (!editingBlocked && state.target().isPresent())
+                outline.render(
+                        viewProjection, state.target().orElseThrow().block(), camera.x(), camera.y(), camera.z());
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);
