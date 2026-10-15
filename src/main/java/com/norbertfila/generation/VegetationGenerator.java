@@ -70,6 +70,7 @@ final class VegetationGenerator {
 
     private static boolean suitable(TerrainColumn columns, int column) {
         return PlantRules.supports(columns.surfaceMaterial(column))
+                && columns.surfaceSupported(column)
                 && columns.surfaceHeight(column) >= columns.waterLevel();
     }
 

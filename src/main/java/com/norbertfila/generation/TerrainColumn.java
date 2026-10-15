@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,6 +22,7 @@ final class TerrainColumn {
     private final int waterLevel;
     private final List<TreeGenerator.Tree> trees;
     private final List<CavePlan.Segment> caves;
+    private final BitSet removedSurface;
     private final int minSurface;
     private final int highestFeature;
 
@@ -32,7 +34,8 @@ final class TerrainColumn {
             int bedrockHeight,
             int waterLevel,
             List<TreeGenerator.Tree> trees,
-            List<CavePlan.Segment> caves) {
+            List<CavePlan.Segment> caves,
+            BitSet removedSurface) {
         this.surfaceHeights = surfaceHeights;
         this.surfaceMaterials = surfaceMaterials;
         this.subsurfaceMaterials = subsurfaceMaterials;
@@ -41,6 +44,7 @@ final class TerrainColumn {
         this.waterLevel = waterLevel;
         this.trees = List.copyOf(trees);
         this.caves = List.copyOf(caves);
+        this.removedSurface = (BitSet) removedSurface.clone();
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int height : surfaceHeights) {
             min = Math.min(min, height);
@@ -75,10 +79,14 @@ final class TerrainColumn {
      * must be shared by all summaries, which holds for every summary a {@link TerrainGenerator} produces.
      */
     static TerrainColumn of(TerrainSummary[] summaries, List<TreeGenerator.Tree> trees) {
-        return of(summaries, trees, List.of());
+        return of(summaries, trees, List.of(), new BitSet());
     }
 
-    static TerrainColumn of(TerrainSummary[] summaries, List<TreeGenerator.Tree> trees, List<CavePlan.Segment> caves) {
+    static TerrainColumn of(
+            TerrainSummary[] summaries,
+            List<TreeGenerator.Tree> trees,
+            List<CavePlan.Segment> caves,
+            BitSet removedSurface) {
         if (summaries.length != AREA) throw new IllegalArgumentException("Column needs " + AREA + " summaries");
         TerrainSummary first = Objects.requireNonNull(summaries[0]);
         int[] heights = new int[AREA];
@@ -101,7 +109,8 @@ final class TerrainColumn {
                 first.bedrockHeight(),
                 first.waterLevel(),
                 trees,
-                caves);
+                caves,
+                removedSurface);
     }
 
     int surfaceHeight(int index) {
@@ -124,6 +133,10 @@ final class TerrainColumn {
         return caves;
     }
 
+    boolean surfaceSupported(int index) {
+        return !removedSurface.get(index);
+    }
+
     byte materialAt(int index, int worldY) {
         return TerrainSummary.materialAt(
                 worldY,
@@ -136,6 +149,6 @@ final class TerrainColumn {
     }
 
     long estimatedBytes() {
-        return AREA * (Integer.BYTES + 2L) + trees.size() * 48L + caves.size() * 8L;
+        return AREA * (Integer.BYTES + 2L) + trees.size() * 48L + caves.size() * 8L + removedSurface.size() / 8L;
     }
 }
