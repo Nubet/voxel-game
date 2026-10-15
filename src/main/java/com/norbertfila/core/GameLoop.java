@@ -27,6 +27,7 @@ import com.norbertfila.ui.screens.SaveErrorScreen;
 import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +35,11 @@ import java.util.Optional;
 
 public final class GameLoop {
     private static final double MAX_DELTA_SECONDS = .1;
+    private static final long FAR_UPLOAD_BYTES = 2L * 1024 * 1024;
+    private static final long FAR_UPLOAD_NANOS = 1_000_000;
+    // Far terrain is clipped inside the near area, which is at least two chunks wide, so its near plane can sit far
+    // out for depth precision.
+    private static final float FAR_NEAR_PLANE = 8f;
 
     public enum Exit {
         BACK_TO_MENU,
@@ -251,7 +257,8 @@ public final class GameLoop {
                         minimized || screens.current() instanceof PauseScreen,
                         settings.renderDistance(),
                         placePressId,
-                        !blocked && input.rightMouseDown()));
+                        !blocked && input.rightMouseDown(),
+                        settings.farDistance()));
             if (previousSlot != hotbar.selectedSlot())
                 submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
             Screen.Action uiAction;
@@ -308,6 +315,7 @@ public final class GameLoop {
                 }
                 var eye = state.interpolatedEye(System.nanoTime());
                 camera.setPosition(eye.x(), eye.y(), eye.z());
+                renderer.far().reconcile(state.far(), eye.x(), eye.z());
             }
             if (driver != null) driver.update(runtime, state, camera);
             profiler.mark(Segment.RECONCILE);
@@ -330,6 +338,7 @@ public final class GameLoop {
                 input.discardTransientInput();
                 window.setCursorCaptured(!screens.isOpen());
             }
+            renderer.far().upload(FAR_UPLOAD_BYTES, FAR_UPLOAD_NANOS);
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             metrics.recordResidentChunks(residents.size());
             profiler.mark(Segment.UPLOAD);
@@ -342,6 +351,25 @@ public final class GameLoop {
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (state != null) {
+                var far = state.far();
+                renderer.far()
+                        .render(
+                                camera.relativeViewProjection(
+                                        width[0], height[0], FAR_NEAR_PLANE, farPlane(settings.farDistance())),
+                                camera.x(),
+                                camera.y(),
+                                camera.z(),
+                                visibility.amount(),
+                                far.nearMinX(),
+                                far.nearMinZ(),
+                                far.nearMaxX(),
+                                far.nearMaxZ());
+                // Far fragments that survive the near-area clip lie behind the near area, so near terrain needs no
+                // depth test against them.
+                glClear(GL_DEPTH_BUFFER_BIT);
+            }
+            if (gpuTimer != null) gpuTimer.stamp();
             var stats = renderer.render(
                     camera.relativeViewProjection(width[0], height[0]),
                     camera.x(),
@@ -372,6 +400,11 @@ public final class GameLoop {
                 return Exit.BACK_TO_MENU;
         }
         return Exit.QUIT;
+    }
+
+    /** Far clip plane covering far terrain diagonally across its radius, with margin for tall terrain. */
+    static float farPlane(int farDistanceChunks) {
+        return Math.max(800f, (farDistanceChunks + 4) * Chunk.SIZE * 1.5f);
     }
 
     public Screen.Action runMenu(Window window, Input input, UiRenderer renderer, GameSettings settings, Screen menu) {

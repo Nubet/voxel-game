@@ -11,10 +11,13 @@ uniform sampler2DArray uBlockTextures;
 uniform float uWaterTime;
 uniform vec4 uWaterFog;
 uniform vec2 uWaterFogRange;
+// Far terrain hides inside the near chunk area: camera-relative min x, min z, max x, max z. Empty when min > max.
+uniform vec4 uNearClip;
 
 out vec4 fragColor;
 
 void main() {
+    if (all(greaterThan(vCameraOffset.xz, uNearClip.xy)) && all(lessThan(vCameraOffset.xz, uNearClip.zw))) discard;
     vec2 uv = vUv - (uRenderLayer == 2 ? vFlow * uWaterTime * 0.25 : vec2(0.0));
     vec4 texel = texture(uBlockTextures, vec3(uv, vLayer));
     if (uRenderLayer == 1 && texel.a < 0.5) discard;

@@ -10,11 +10,16 @@ public final class GameSettings {
     public static final float DEFAULT_ZOOM_SPEED = 12f;
     public static final int MIN_RENDER_DISTANCE = 2;
     public static final int MAX_RENDER_DISTANCE = 16;
+    /** Far terrain radius in chunks; 0 or a value not above the render distance turns it off. */
+    public static final int MAX_FAR_DISTANCE = 128;
+
+    public static final int DEFAULT_FAR_DISTANCE = 64;
     public static final int GUI_SCALE_AUTO = 0;
     public static final int MIN_GUI_SCALE = 1;
     public static final int MAX_GUI_SCALE = 4;
 
     private int renderDistance = 4;
+    private int farDistance = DEFAULT_FAR_DISTANCE;
     private float fieldOfView = DEFAULT_FIELD_OF_VIEW;
     private float zoomFieldOfView = DEFAULT_ZOOM_FIELD_OF_VIEW;
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
@@ -32,6 +37,18 @@ public final class GameSettings {
         }
         if (renderDistance == value) return false;
         renderDistance = value;
+        return true;
+    }
+
+    public int farDistance() {
+        return farDistance;
+    }
+
+    public boolean setFarDistance(int value) {
+        if (value < 0 || value > MAX_FAR_DISTANCE)
+            throw new IllegalArgumentException("Far distance must be between 0 and " + MAX_FAR_DISTANCE);
+        if (farDistance == value) return false;
+        farDistance = value;
         return true;
     }
 

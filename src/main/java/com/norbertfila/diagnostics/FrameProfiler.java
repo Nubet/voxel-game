@@ -16,7 +16,9 @@ public final class FrameProfiler {
         SWAP
     }
 
+    /** GPU passes in submission order: far terrain, near terrain, then UI. */
     public enum GpuPass {
+        FAR_TERRAIN,
         TERRAIN,
         UI
     }

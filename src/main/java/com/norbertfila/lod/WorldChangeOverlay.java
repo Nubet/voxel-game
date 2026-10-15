@@ -95,6 +95,7 @@ public final class WorldChangeOverlay {
      * terrain built from an earlier {@link #edits} snapshot of the area is stale.
      */
     public long areaRevision(int minX, int minZ, int size) {
+        if (columns.isEmpty()) return 0;
         long revision = 0;
         int minChunkX = Math.floorDiv(minX, Chunk.SIZE), maxChunkX = Math.floorDiv(minX + size - 1, Chunk.SIZE);
         int minChunkZ = Math.floorDiv(minZ, Chunk.SIZE), maxChunkZ = Math.floorDiv(minZ + size - 1, Chunk.SIZE);
@@ -241,8 +242,6 @@ public final class WorldChangeOverlay {
             return delta;
         }
     }
-
-    public record FarTilePos(int x, int z) {}
 
     public record Change(BlockPos position, byte value, byte waterState) {
         public Change(BlockPos position, byte value) {
