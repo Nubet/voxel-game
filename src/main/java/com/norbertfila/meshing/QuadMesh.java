@@ -23,11 +23,21 @@ import java.util.Objects;
  *   <li>word 2: corner heights h11 (low) and h01 (high).
  *   <li>word 3: surface flow x (low) and z (high) as signed fractions of 32767.
  * </ul>
+ *
+ * <p>Far terrain records ({@link Format#FAR}, three ints), local to a 64 block far tile:
+ *
+ * <ul>
+ *   <li>word 0: bits 0-6 and 7-13 first corner x and z in 0..64; bits 14-16 cube face; bit 17 water surface;
+ *       bits 18-23 width - 1.
+ *   <li>word 1: world y of the first corner.
+ *   <li>word 2: bits 0-15 height - 1; bits 16-31 texture layer.
+ * </ul>
  */
 public record QuadMesh(Format format, int[] records, QuadRanges ranges) {
     public enum Format {
         SOLID(2),
-        WATER(4);
+        WATER(4),
+        FAR(3);
 
         private final int ints;
 

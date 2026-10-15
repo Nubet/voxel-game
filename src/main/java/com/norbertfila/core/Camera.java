@@ -109,9 +109,14 @@ public final class Camera {
 
     /** View projection with the camera at the origin, for geometry already expressed relative to the camera. */
     public Matrix4f relativeViewProjection(int width, int height) {
+        return relativeViewProjection(width, height, 0.1f, 800f);
+    }
+
+    /** Like {@link #relativeViewProjection(int, int)} with explicit clip planes, for far terrain's own depth range. */
+    public Matrix4f relativeViewProjection(int width, int height, float near, float far) {
         getForward();
         return new Matrix4f()
-                .perspective((float) Math.toRadians(currentFov), (float) width / Math.max(1, height), 0.1f, 800f)
+                .perspective((float) Math.toRadians(currentFov), (float) width / Math.max(1, height), near, far)
                 .lookAt(new Vector3f(), new Vector3f(forward), new Vector3f(0, 1, 0));
     }
 }

@@ -1,6 +1,7 @@
 package com.norbertfila.diagnostics;
 
 import com.norbertfila.fluid.WaterSimulator;
+import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.streaming.ChunkManager;
 
@@ -24,4 +25,5 @@ public record SimulationMetrics(
         boolean movementWaiting,
         long estimatedChunkBytes,
         long streamingNanos,
-        long publishNanos) {}
+        long publishNanos,
+        FarTerrainStreamer.Metrics far) {}

@@ -105,6 +105,13 @@ enum BenchmarkScene {
         Pose pose(double t, Site site) {
             return new Pose(site.x() + FLIGHT_SPEED * (FLIGHT_SECONDS - t), site.flightY(), site.z(), 180, -10);
         }
+    },
+    /** High still view over the far terrain. */
+    VISTA(0, 10) {
+        @Override
+        Pose pose(double t, Site site) {
+            return new Pose(site.x(), site.surfaceY() + 70, site.z(), 45, -12);
+        }
     };
 
     static final double FLIGHT_SPEED = 24;

@@ -42,7 +42,7 @@ spotless {
 
 tasks.register<JavaExec>("benchmarkGame") {
     group = "verification"
-    description = "Runs the scripted production-game benchmark (-Pscenes, -Prd, -Plabel)."
+    description = "Runs the scripted production-game benchmark (-Pscenes, -Prd, -Pfar, -Plabel)."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.norbertfila.Main")
     jvmArgs("-Xmx4g")
@@ -53,4 +53,6 @@ tasks.register<JavaExec>("benchmarkGame") {
     systemProperty("voxel.benchmark.gpuTimers", findProperty("gpuTimers") ?: "true")
     findProperty("seconds")?.let { systemProperty("voxel.benchmark.seconds", it) }
     findProperty("directDraw")?.let { systemProperty("voxel.render.directDraw", it) }
+    findProperty("far")?.let { systemProperty("voxel.benchmark.far", it) }
+    findProperty("screenshots")?.let { systemProperty("voxel.benchmark.screenshots", it) }
 }

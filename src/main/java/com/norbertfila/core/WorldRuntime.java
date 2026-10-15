@@ -5,6 +5,8 @@ import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.interaction.BlockInteraction;
+import com.norbertfila.lod.FarTerrainStreamer;
+import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.persistence.world.*;
@@ -33,7 +35,8 @@ public final class WorldRuntime implements AutoCloseable {
 
     private static final AtomicLong SESSION_IDS = new AtomicLong();
     private static final int CAPACITY = 64;
-    private static final int FAR_TILE_SIZE = 64;
+    private static final int FAR_TILE_SIZE = FarTerrainTile.SIZE;
+    private static final int FAR_TERRAIN_WORKERS = 2;
     private static final double COLLISION_LOOKAHEAD_SECONDS = .5;
     private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
     private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
@@ -186,7 +189,8 @@ public final class WorldRuntime implements AutoCloseable {
             long[] estimatedChunkBytes = {0}, publishNanos = {0};
             BlockInteraction interaction =
                     new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
-            try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand)) {
+            try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
+                    FarTerrainStreamer far = new FarTerrainStreamer(generator, world.changes(), FAR_TERRAIN_WORKERS)) {
                 boolean[] viewReady = {false}, poseReady = {false};
                 WorldEdit plantEdits = new WorldEdit(world, FAR_TILE_SIZE);
                 chunks.setChunkLifecycleListener(position -> {
@@ -236,6 +240,16 @@ public final class WorldRuntime implements AutoCloseable {
                             long streamingStarted = System.nanoTime();
                             chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
                             chunks.update(center);
+                            var eye = player.renderEyePosition(1);
+                            far.markEdited(world.changes().drainDirtyTiles());
+                            far.update(
+                                    eye.x(),
+                                    eye.z(),
+                                    center.x(),
+                                    center.z(),
+                                    state.renderDistance(),
+                                    state.farDistance());
+                            far.process();
                             // Upload backpressure must not prevent collision-data admission.
                             int meshBudget = Math.min(
                                     ChunkManager.RESULTS_PER_UPDATE,
@@ -396,7 +410,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     movementWaiting,
                                     estimatedChunkBytes[0],
                                     streamingNanos,
-                                    publishNanos[0]);
+                                    publishNanos[0],
+                                    far.metrics());
                             long publishStarted = System.nanoTime();
                             frame.set(new Frame(
                                     sessionId,
@@ -414,6 +429,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     player.flying(),
                                     state.paused(),
                                     chunks.residency(),
+                                    far.residency(),
                                     Map.copyOf(valid),
                                     water.pendingUpdates(),
                                     metrics,
@@ -613,10 +629,24 @@ public final class WorldRuntime implements AutoCloseable {
             boolean paused,
             int renderDistance,
             long placePressId,
-            boolean placeHeld) {
+            boolean placeHeld,
+            int farDistance) {
         public Controls(
                 PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
             this(input, yaw, pitch, blocked, paused, renderDistance, 0, false);
+        }
+
+        /** Controls without far terrain. */
+        public Controls(
+                PlayerInput input,
+                double yaw,
+                double pitch,
+                boolean blocked,
+                boolean paused,
+                int renderDistance,
+                long placePressId,
+                boolean placeHeld) {
+            this(input, yaw, pitch, blocked, paused, renderDistance, placePressId, placeHeld, 0);
         }
 
         public Controls {
@@ -629,6 +659,8 @@ public final class WorldRuntime implements AutoCloseable {
                     || pitch > 90
                     || renderDistance < 0
                     || renderDistance > GameSettings.MAX_RENDER_DISTANCE
+                    || farDistance < 0
+                    || farDistance > GameSettings.MAX_FAR_DISTANCE
                     || placePressId < 0) throw new IllegalArgumentException("Invalid runtime controls");
         }
     }
@@ -721,12 +753,14 @@ public final class WorldRuntime implements AutoCloseable {
             boolean flying,
             boolean paused,
             ChunkManager.Residency residency,
+            FarTerrainStreamer.Residency far,
             Map<Long, ChunkManager.MeshResult> validUploads,
             int pendingWater,
             SimulationMetrics metrics,
             InventorySnapshot inventory) {
         public Frame {
             Objects.requireNonNull(residency);
+            Objects.requireNonNull(far);
             validUploads = Map.copyOf(validUploads);
             Objects.requireNonNull(inventory);
         }
