@@ -1,6 +1,9 @@
 package com.norbertfila.interaction;
 
-import com.norbertfila.player.Inventory;
+import com.norbertfila.items.BlockDropResolver;
+import com.norbertfila.items.ItemStack;
+import com.norbertfila.items.ItemSystem;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockChangeResult;
@@ -24,6 +27,7 @@ public final class BlockInteraction {
     private final WorldEdit edit;
     private final BlockTargeting targeting;
     private final Consumer<BlockPos> changed;
+    private final BlockDropResolver drops = new BlockDropResolver();
 
     public BlockInteraction(World world, int farTileSize) {
         this(world, farTileSize, ignored -> {});
@@ -55,16 +59,18 @@ public final class BlockInteraction {
             double directionX,
             double directionY,
             double directionZ,
-            Inventory inventory) {
+            ItemSystem items) {
         return targeting
                 .find(mode, originX, originY, originZ, directionX, directionY, directionZ)
                 .filter(hit -> canBreak(mode, hit.blockId()))
-                .filter(hit -> inventory == null || inventory.canAdd((byte) hit.blockId()))
-                .map(hit -> {
+                .flatMap(hit -> {
+                    var stacks = mode == PlayerController.Mode.SURVIVAL
+                            ? drops.getDrops(hit.blockId(), ToolContext.HAND)
+                            : List.<ItemStack>of();
+                    if (items != null && !items.canSpawn(hit.block(), stacks)) return Optional.empty();
                     var result = setBlock(hit.block(), BlockId.AIR);
-                    if (result.changed() && inventory != null && !inventory.add((byte) hit.blockId()))
-                        throw new IllegalStateException("Inventory capacity changed during mining");
-                    return result;
+                    if (result.changed() && items != null) items.spawn(hit.block(), stacks);
+                    return Optional.of(result);
                 });
     }
 

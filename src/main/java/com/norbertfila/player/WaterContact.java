@@ -3,6 +3,7 @@ package com.norbertfila.player;
 import com.norbertfila.fluid.WaterCurrent;
 import com.norbertfila.fluid.WaterSurface;
 import com.norbertfila.world.*;
+import com.norbertfila.world.VoxelCollision;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

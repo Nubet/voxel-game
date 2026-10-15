@@ -1,6 +1,7 @@
 package com.norbertfila.persistence.world;
 
 import com.norbertfila.fluid.FluidSnapshot;
+import com.norbertfila.items.ItemState;
 import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.world.ChunkPos;
@@ -17,13 +18,26 @@ public record WorldSnapshot(
         List<ChunkDelta> deltas,
         FluidSnapshot fluids,
         InventorySnapshot inventory,
-        Optional<SavedPlayerState> player) {
+        Optional<SavedPlayerState> player,
+        ItemState items) {
+    public WorldSnapshot(
+            WorldIdentity identity,
+            long sequence,
+            Instant lastSavedAt,
+            List<ChunkDelta> deltas,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory,
+            Optional<SavedPlayerState> player) {
+        this(identity, sequence, lastSavedAt, deltas, fluids, inventory, player, ItemState.EMPTY);
+    }
+
     public WorldSnapshot {
         Objects.requireNonNull(identity);
         Objects.requireNonNull(lastSavedAt);
         Objects.requireNonNull(fluids);
         Objects.requireNonNull(inventory);
         Objects.requireNonNull(player);
+        Objects.requireNonNull(items);
         if (sequence < 0 || lastSavedAt.isBefore(Instant.EPOCH))
             throw new IllegalArgumentException("Invalid snapshot sequence/timestamp");
         lastSavedAt = Instant.ofEpochMilli(lastSavedAt.toEpochMilli());
@@ -35,7 +49,8 @@ public record WorldSnapshot(
                 && (sequence != 0
                         || !deltas.isEmpty()
                         || !fluids.equals(FluidSnapshot.EMPTY)
-                        || !inventory.equals(InventorySnapshot.EMPTY)))
+                        || !inventory.equals(InventorySnapshot.EMPTY)
+                        || !items.equals(ItemState.EMPTY)))
             throw new IllegalArgumentException("An unstarted world must have an empty initial snapshot");
     }
 

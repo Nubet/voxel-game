@@ -6,6 +6,7 @@ import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.VoxelCollision;
 import com.norbertfila.world.World;
 import org.junit.jupiter.api.Test;
 

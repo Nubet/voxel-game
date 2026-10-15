@@ -3,6 +3,8 @@ package com.norbertfila.persistence.world;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.fluid.FluidSnapshot;
+import com.norbertfila.items.ItemSnapshot;
+import com.norbertfila.items.ItemState;
 import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.InventorySnapshot;
@@ -37,6 +39,49 @@ class WorldStateCodecTest {
     Path directory;
 
     @Test
+    void roundTripPreservesFlyingDormantAndPartiallyPickedUpItemsAndRejectsMalformedEntities() throws Exception {
+        var base = populated();
+        var items = new ItemState(
+                9,
+                List.of(
+                        new ItemSnapshot(3, BlockId.COBBLE, 7, 8.25, 12.5, -8.75, -1, 2.5, .5, 4, 19, false),
+                        new ItemSnapshot(
+                                8, BlockId.DIRT, 64, 30_000_000.125, 1.125, -30_000_000.5, 0, 0, 0, 0, 17999, true)));
+        var snapshot = new WorldSnapshot(
+                base.identity(),
+                base.sequence(),
+                base.lastSavedAt(),
+                base.deltas(),
+                base.fluids(),
+                base.inventory(),
+                base.player(),
+                items);
+        Path file = directory.resolve("items.vxl");
+        WorldStateCodec.write(file, snapshot);
+        assertEquals(snapshot, WorldStateCodec.read(file, IDENTITY));
+        byte[] original = Files.readAllBytes(file);
+        int start = original.length - 4 - 2 * 73;
+        List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
+                bytes -> bytes.putLong(start - 12, 1),
+                bytes -> bytes.putInt(start - 4, 4097),
+                bytes -> bytes.putLong(start + 73, 3),
+                bytes -> bytes.putInt(start + 8, 256),
+                bytes -> bytes.putInt(start + 12, 65),
+                bytes -> bytes.putDouble(start + 16, Double.NaN),
+                bytes -> bytes.putDouble(start + 40, Double.POSITIVE_INFINITY),
+                bytes -> bytes.putInt(start + 64, -1),
+                bytes -> bytes.putInt(start + 68, 18000),
+                bytes -> bytes.put(start + 72, (byte) 2));
+        for (var mutation : mutations) {
+            byte[] bytes = original.clone();
+            mutation.accept(ByteBuffer.wrap(bytes));
+            updatePayloadChecksum(bytes);
+            Files.write(file, bytes);
+            assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
+        }
+    }
+
+    @Test
     void roundTripPreservesDeltasEveryWaterStateDeferredTasksInventoryAndPlayerPrecision() throws Exception {
         var expected = populated();
         Path file = directory.resolve("state.vxl");
@@ -48,7 +93,7 @@ class WorldStateCodecTest {
         assertEquals(SAVED_AT, header.lastSavedAt());
         assertEquals(Files.size(file) - HEADER_BYTES - 4, header.payloadBytes());
         assertEquals(0x56585731, ByteBuffer.wrap(Files.readAllBytes(file)).getInt());
-        assertEquals(2, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(3, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         Path copy = directory.resolve("copy.vxl");
         WorldStateCodec.write(copy, expected);
         assertArrayEquals(Files.readAllBytes(file), Files.readAllBytes(copy));
@@ -62,8 +107,8 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, initial);
         assertEquals(initial, WorldStateCodec.read(file, IDENTITY));
-        assertEquals(92, WorldStateCodec.readHeader(file).payloadBytes());
-        assertEquals(HEADER_BYTES + 92 + 4, Files.size(file));
+        assertEquals(104, WorldStateCodec.readHeader(file).payloadBytes());
+        assertEquals(HEADER_BYTES + 104 + 4, Files.size(file));
         assertTrue(initial.player().isEmpty());
         assertEquals(initial, WorldSnapshot.initial(IDENTITY, SAVED_AT.plusNanos(999_999)));
     }
@@ -96,7 +141,7 @@ class WorldStateCodecTest {
                 case SPECTATOR -> 2;
             };
             var bytes = Files.readAllBytes(file);
-            assertEquals(wireMode, bytes[bytes.length - 6]);
+            assertEquals(wireMode, bytes[bytes.length - 18]);
         }
     }
 
@@ -134,7 +179,7 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, withPlayer(new SavedPlayerState(1, 40, 2, 0, 0, Mode.CREATIVE, true)));
         byte[] original = Files.readAllBytes(file);
-        int player = original.length - 4 - 34;
+        int player = original.length - 4 - 12 - 34;
         int inventory = player - 1 - 75;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putInt(HEADER_BYTES, Integer.MAX_VALUE),
@@ -228,10 +273,13 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, populated());
         byte[] original = Files.readAllBytes(file);
-        for (int[] mutation :
-                List.of(new int[] {0, 0x56584C31}, new int[] {4, 0}, new int[] {4, 1}, new int[] {4, 3}, new int[] {
-                    4, Integer.MAX_VALUE
-                })) {
+        for (int[] mutation : List.of(
+                new int[] {0, 0x56584C31},
+                new int[] {4, 0},
+                new int[] {4, 1},
+                new int[] {4, 2},
+                new int[] {4, 4},
+                new int[] {4, Integer.MAX_VALUE})) {
             byte[] bytes = original.clone();
             ByteBuffer.wrap(bytes).putInt(mutation[0], mutation[1]);
             Files.write(file, bytes);

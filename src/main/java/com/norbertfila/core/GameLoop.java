@@ -13,6 +13,7 @@ import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.GpuFrameTimer;
+import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
@@ -96,7 +97,8 @@ public final class GameLoop {
         try (GpuFrameTimer gpuTimer =
                         profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null;
                 BlockOutlineRenderer outline = new BlockOutlineRenderer();
-                BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures())) {
+                BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
+                ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures())) {
             return run(
                     window,
                     input,
@@ -110,7 +112,8 @@ public final class GameLoop {
                     profiler,
                     gpuTimer,
                     outline,
-                    effects);
+                    effects,
+                    items);
         }
     }
 
@@ -127,7 +130,8 @@ public final class GameLoop {
             FrameProfiler profiler,
             GpuFrameTimer gpuTimer,
             BlockOutlineRenderer outline,
-            BlockEffectsRenderer effects) {
+            BlockEffectsRenderer effects,
+            ItemEntityRenderer items) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -401,6 +405,11 @@ public final class GameLoop {
                                 progress.block().equals(selected.block()) && progress.blockId() == selected.blockId());
             }
             if (state != null) {
+                double itemAlpha = state.paused()
+                        ? 0
+                        : Math.clamp(
+                                (System.nanoTime() - state.publishedAt()) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
+                items.render(viewProjection, state.items(), itemAlpha, camera.x(), camera.y(), camera.z());
                 double effectSeconds = state.tick() * FixedSimulation.TICK_SECONDS;
                 if (!state.paused())
                     effectSeconds += Math.clamp(

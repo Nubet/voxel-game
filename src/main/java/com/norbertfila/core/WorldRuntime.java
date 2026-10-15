@@ -9,6 +9,8 @@ import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.interaction.BlockTargeting;
 import com.norbertfila.interaction.VoxelRaycaster;
+import com.norbertfila.items.ItemRenderState;
+import com.norbertfila.items.ItemSystem;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
@@ -161,6 +163,7 @@ public final class WorldRuntime implements AutoCloseable {
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
             Inventory inventory = new Inventory(saved.inventory());
+            ItemSystem items = new ItemSystem(saved.items());
             if (saved.player().isPresent()) {
                 var restored = saved.player().orElseThrow();
                 player.restore(
@@ -401,7 +404,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
                                 if (breaking.tick(
                                         player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt)) {
-                                    remove(interaction, player, mining, inventory)
+                                    remove(interaction, player, mining, items)
                                             .filter(BlockChangeResult::changed)
                                             .ifPresent(result -> {
                                                 chunks.requestRemesh(result);
@@ -414,10 +417,30 @@ public final class WorldRuntime implements AutoCloseable {
                                             });
                                 }
                             } else breaking.cancel();
+                            if (activated && !state.paused())
+                                items.tick(
+                                        world,
+                                        center,
+                                        Math.min(state.simulationDistance(), state.renderDistance()),
+                                        dt,
+                                        player.mode() == PlayerController.Mode.SURVIVAL && !player.modeChangePending()
+                                                ? ItemSystem.pickupBox(
+                                                        player.state().body())
+                                                : null,
+                                        inventory);
+                            else items.pause();
                             if (activated && !state.paused() && tick[0] % 300 == 0) {
                                 long captureStarted = System.nanoTime();
                                 saves.request(capture(
-                                        identity, ++sequence[0], world, water, tick[0], inventory, player, state));
+                                        identity,
+                                        ++sequence[0],
+                                        world,
+                                        water,
+                                        tick[0],
+                                        inventory,
+                                        player,
+                                        state,
+                                        items));
                                 captureNanos = System.nanoTime() - captureStarted;
                             }
                             saves.poll();
@@ -484,7 +507,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     inventory.snapshot(),
                                     target,
                                     breaking.progress(),
-                                    List.copyOf(brokenBlocks)));
+                                    List.copyOf(brokenBlocks),
+                                    items.renderSnapshot(world)));
                             publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -496,7 +520,15 @@ public final class WorldRuntime implements AutoCloseable {
                 } finally {
                     if (activated)
                         finalSnapshot = capture(
-                                identity, ++sequence[0], world, water, tick[0], inventory, player, controls.get());
+                                identity,
+                                ++sequence[0],
+                                world,
+                                water,
+                                tick[0],
+                                inventory,
+                                player,
+                                controls.get(),
+                                items);
                 }
             }
         } catch (Throwable problem) {
@@ -524,7 +556,8 @@ public final class WorldRuntime implements AutoCloseable {
             long tick,
             Inventory inventory,
             PlayerController player,
-            Controls controls) {
+            Controls controls,
+            ItemSystem items) {
         var position = player.state().position();
         return WorldSnapshots.capture(
                 identity,
@@ -539,7 +572,8 @@ public final class WorldRuntime implements AutoCloseable {
                         (float) controls.yaw(),
                         (float) controls.pitch(),
                         player.mode(),
-                        player.flying()));
+                        player.flying()),
+                items.snapshot());
     }
 
     public long sessionId() {
@@ -634,7 +668,7 @@ public final class WorldRuntime implements AutoCloseable {
     }
 
     static Optional<BlockChangeResult> remove(
-            BlockInteraction interaction, PlayerController player, Edit edit, Inventory inventory) {
+            BlockInteraction interaction, PlayerController player, Edit edit, ItemSystem items) {
         double yaw = Math.toRadians(edit.yaw()), pitch = Math.toRadians(edit.pitch());
         var eye = player.renderEyePosition(1);
         return interaction.remove(
@@ -645,7 +679,7 @@ public final class WorldRuntime implements AutoCloseable {
                 Math.cos(yaw) * Math.cos(pitch),
                 Math.sin(pitch),
                 Math.sin(yaw) * Math.cos(pitch),
-                player.mode() == PlayerController.Mode.SURVIVAL ? inventory : null);
+                items);
     }
 
     static Optional<BlockChangeResult> placeInventory(
@@ -864,7 +898,8 @@ public final class WorldRuntime implements AutoCloseable {
             InventorySnapshot inventory,
             Optional<VoxelRaycaster.Hit> target,
             Optional<BlockBreaking.Progress> breaking,
-            List<BlockBreakEvent> brokenBlocks) {
+            List<BlockBreakEvent> brokenBlocks,
+            List<ItemRenderState> items) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -874,6 +909,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(target);
             Objects.requireNonNull(breaking);
             brokenBlocks = List.copyOf(brokenBlocks);
+            items = List.copyOf(items);
         }
 
         public Map<ChunkPos, Long> residents() {

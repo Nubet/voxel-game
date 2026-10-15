@@ -3,6 +3,7 @@ package com.norbertfila.player;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.world.*;
+import com.norbertfila.world.VoxelCollision;
 import org.junit.jupiter.api.Test;
 
 class PlayerSwimmingTest {

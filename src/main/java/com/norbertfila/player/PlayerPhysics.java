@@ -2,6 +2,7 @@ package com.norbertfila.player;
 
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.VoxelCollision;
 import com.norbertfila.world.World;
 import java.util.List;
 import java.util.Objects;

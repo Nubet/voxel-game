@@ -8,6 +8,23 @@ import org.junit.jupiter.api.Test;
 
 class InventoryTest {
     @Test
+    void bulkInsertFillsExistingStacksBeforeEmptySlotsAndReturnsRemainder() {
+        var inventory = new Inventory();
+        assertEquals(0, inventory.insert(BlockId.DIRT, 63));
+        assertEquals(0, inventory.insert(BlockId.STONE, 64));
+        inventory.click(1, false, false);
+        assertEquals(0, inventory.insert(BlockId.DIRT, 3));
+        assertEquals(64, inventory.snapshot().count(0));
+        assertEquals(2, inventory.snapshot().count(1));
+        assertEquals(64, inventory.snapshot().count(Inventory.CARRIED));
+        assertEquals(2, inventory.insert(BlockId.STONE, 34 * 64 + 2));
+        assertEquals(0, inventory.insert(BlockId.DIRT, 62));
+        assertEquals(1, inventory.insert(BlockId.DIRT, 1));
+        assertThrows(IllegalArgumentException.class, () -> inventory.insert(256 + BlockId.DIRT, 1));
+        assertThrows(IllegalArgumentException.class, () -> inventory.insert(BlockId.DIRT, -1));
+    }
+
+    @Test
     void splitsPlacesMergesAndSwapsWithoutLosingItems() {
         Inventory inventory = new Inventory();
         for (int i = 0; i < 5; i++) assertTrue(inventory.add(BlockId.DIRT));

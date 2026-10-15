@@ -6,6 +6,8 @@ import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.interaction.BlockBreakEvent;
 import com.norbertfila.interaction.BlockBreaking;
+import com.norbertfila.items.ItemRenderState;
+import com.norbertfila.items.ItemSnapshot;
 import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
@@ -54,6 +56,7 @@ public final class BlockOutlineSmoke {
                 occlusion(textures, outline, effects);
                 precision(textures, outline, effects, output);
                 particles(effects, output);
+                items(textures, output);
                 effectCleanup(textures);
                 cleanup();
                 check(glGetError() == GL_NO_ERROR, "Block feedback GL error");
@@ -277,6 +280,87 @@ public final class BlockOutlineSmoke {
         } catch (IllegalStateException expected) {
             check(expected.getMessage().contains("closed"), "Unexpected closed-renderer failure");
         }
+    }
+
+    private static void items(BlockTextureArray textures, Path output) throws Exception {
+        glUseProgram(0);
+        glBindVertexArray(0);
+        var renderer = new ItemEntityRenderer(textures);
+        int program = field(renderer, "program"), vao = field(renderer, "vao");
+        try {
+            byte[] reference = null;
+            for (int origin : new int[] {0, 30_000_000}) {
+                var view = view(new BlockPos(origin, 0, origin), 0, 0, 1);
+                for (int id : new int[] {BlockId.COBBLE, BlockId.POPPY}) {
+                    glDepthMask(true);
+                    glClearColor(.4f, .6f, .8f, 1);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    byte[] before = pixels();
+                    var item = new ItemSnapshot(1, id, 7, origin + .5, .5, origin + .5, 0, 0, 0, 0, 60, true);
+                    var state = new ItemRenderState(item, item.x(), item.y(), item.z(), false);
+                    glDisable(GL_DEPTH_TEST);
+                    glDepthMask(false);
+                    glDepthFunc(GL_GREATER);
+                    glEnable(GL_CULL_FACE);
+                    glDisable(GL_BLEND);
+                    glActiveTexture(GL_TEXTURE3);
+                    check(
+                            renderer.render(view.projection(), List.of(state), 0, view.x(), view.y(), view.z()) == 1,
+                            "Item was culled");
+                    check(differences(before, pixels()) > 20, "Missing item geometry/texture");
+                    check(
+                            !glIsEnabled(GL_DEPTH_TEST)
+                                    && !glGetBoolean(GL_DEPTH_WRITEMASK)
+                                    && glGetInteger(GL_DEPTH_FUNC) == GL_GREATER
+                                    && glIsEnabled(GL_CULL_FACE)
+                                    && !glIsEnabled(GL_BLEND)
+                                    && glGetInteger(GL_ACTIVE_TEXTURE) == GL_TEXTURE3
+                                    && glGetInteger(GL_CURRENT_PROGRAM) == 0
+                                    && glGetInteger(GL_VERTEX_ARRAY_BINDING) == 0,
+                            "Item renderer leaked GL state");
+                    if (id == BlockId.COBBLE) {
+                        if (reference == null) reference = pixels();
+                        else check(Arrays.equals(reference, pixels()), "Item lost camera-relative precision");
+                    }
+                    write(output.resolve("item-" + id + "-" + origin + ".png"), pixels());
+                    check(
+                            renderer.render(view.projection(), List.of(state), 0, view.x() + 100, view.y(), view.z())
+                                    == 0,
+                            "Item range culling failed");
+                    check(
+                            renderer.render(view.projection(), List.of(state), 0, view.x() + 10, view.y(), view.z())
+                                    == 0,
+                            "Item frustum culling failed");
+                    glDepthMask(true);
+                    glDepthFunc(GL_LESS);
+                    glEnable(GL_DEPTH_TEST);
+                    glActiveTexture(GL_TEXTURE0);
+                }
+            }
+            var view = view(new BlockPos(0, 0, 0), 0, 0, 1);
+            try (var terrain = terrain(textures, new BlockPos(0, 0, 1))) {
+                draw(terrain, view);
+                byte[] before = pixels();
+                var item = new ItemSnapshot(1, BlockId.COBBLE, 1, .5, .5, .5, 0, 0, 0, 0, 0, true);
+                renderer.render(
+                        view.projection(),
+                        List.of(new ItemRenderState(item, .5, .5, .5, false)),
+                        0,
+                        view.x(),
+                        view.y(),
+                        view.z());
+                check(Arrays.equals(before, pixels()), "Item shows through terrain");
+            }
+            glUseProgram(0);
+            glBindVertexArray(0);
+        } finally {
+            renderer.close();
+            renderer.close();
+        }
+        check(!glIsProgram(program) && !glIsVertexArray(vao), "Item renderer leaked resources");
+        check(glGetError() == GL_NO_ERROR, "Item renderer GL error");
+        System.out.println(
+                "PASS dropped items: cube/cross textures, culling, occlusion, GL state/cleanup and large coordinates");
     }
 
     private static int differences(byte[] first, byte[] second) {

@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.interaction.BlockInteraction;
+import com.norbertfila.items.ItemSnapshot;
+import com.norbertfila.items.ItemState;
+import com.norbertfila.items.ItemSystem;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.TestWorlds;
 import com.norbertfila.player.Inventory;
@@ -24,6 +27,56 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
+    @Test
+    void restartPreservesPartialPickupDormantEntitiesAndTimersInTheSameWorldSnapshot() throws Exception {
+        Path save = directory.resolve("items-restart.vxl");
+        byte[] blocks = new byte[37];
+        int[] counts = new int[37];
+        java.util.Arrays.fill(blocks, 0, Inventory.SLOTS, BlockId.DIRT);
+        java.util.Arrays.fill(counts, 0, Inventory.SLOTS, 64);
+        counts[0] = 63;
+        var inventory = new com.norbertfila.player.InventorySnapshot(blocks, counts, 0);
+        var base = TestWorlds.capture(42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory);
+        var dormant = new ItemSnapshot(2, BlockId.COBBLE, 4, 160.5, 2, 8.5, 0, -1, 0, 8, 123, false);
+        var items = new ItemState(
+                3,
+                java.util.List.of(new ItemSnapshot(1, BlockId.DIRT, 10, .5, 1.125, .5, 0, 0, 0, 0, 40, true), dormant));
+        TestWorlds.save(
+                save,
+                new com.norbertfila.persistence.world.WorldSnapshot(
+                        base.identity(),
+                        base.sequence(),
+                        base.lastSavedAt(),
+                        base.deltas(),
+                        base.fluids(),
+                        base.inventory(),
+                        base.player(),
+                        items));
+        try (var runtime = start(new Flat(), save)) {
+            var picked = await(
+                    runtime, f -> f.inventory().count(0) == 64 && !f.items().isEmpty());
+            assertEquals(9, picked.items().getFirst().item().count());
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            long published = paused.publishedAt();
+            var later = await(runtime, f -> f.publishedAt() > published + 50_000_000);
+            assertEquals(paused.items(), later.items());
+        }
+        var saved = TestWorlds.load(save);
+        assertEquals(64, saved.inventory().count(0));
+        assertEquals(9, saved.items().entities().getFirst().count());
+        assertEquals(dormant, saved.items().entities().getLast());
+        int age = saved.items().entities().getFirst().ageTicks();
+        try (var runtime = start(new Flat(), save)) {
+            var frame = await(
+                    runtime,
+                    f -> !f.items().isEmpty() && f.items().getFirst().item().ageTicks() > age);
+            assertEquals(9, frame.items().getFirst().item().count());
+            assertEquals(64, frame.inventory().count(0));
+        }
+        assertEquals(dormant, TestWorlds.load(save).items().entities().getLast());
+    }
+
     @TempDir
     Path directory;
 
@@ -82,8 +135,9 @@ class WorldRuntimeTest {
                             && f.target().orElseThrow().blockId() == BlockId.DIRT
                             && f.breaking().isPresent());
             assertTrue(replaced.breaking().orElseThrow().fraction() < .25);
-            var mined = await(runtime, f -> f.inventory().count(0) == 1);
-            assertEquals(BlockId.DIRT, mined.inventory().block(0));
+            var mined = await(runtime, f -> !f.items().isEmpty());
+            assertEquals(BlockId.DIRT, mined.items().getFirst().item().itemId());
+            assertEquals(0, mined.inventory().count(0));
             assertTrue(mined.target().isEmpty());
             assertTrue(mined.breaking().isEmpty());
             assertEquals(1, mined.brokenBlocks().size());
@@ -169,7 +223,7 @@ class WorldRuntimeTest {
     }
 
     @Test
-    void completedSurvivalMiningCannotDestroyABlockWhenInventoryIsFull() throws Exception {
+    void completedSurvivalMiningDropsAnItemWhenInventoryIsFull() throws Exception {
         Path save = directory.resolve("mining-full.vxl");
         World world = new World();
         BlockPos block = new BlockPos(3, 2, 0);
@@ -184,10 +238,14 @@ class WorldRuntimeTest {
             runtime.controls(breakingControls(true, false, false));
             long before = await(runtime, f -> f.breaking().isPresent()).tick();
             var after = await(runtime, f -> f.tick() > before + 65);
-            assertEquals(block, after.target().orElseThrow().block());
+            assertTrue(after.target().isEmpty());
             assertEquals(inventory, after.inventory());
-            assertTrue(after.brokenBlocks().isEmpty());
+            assertEquals(1, after.brokenBlocks().size());
+            assertEquals(BlockId.COBBLE, after.items().getFirst().item().itemId());
         }
+        assertEquals(
+                BlockId.COBBLE,
+                TestWorlds.load(save).items().entities().getFirst().itemId());
     }
 
     private static WorldRuntime.Controls breakingControls(boolean held, boolean blocked, boolean paused) {
@@ -231,7 +289,7 @@ class WorldRuntimeTest {
             var mining = await(runtime, f -> f.breaking().isPresent());
             assertEquals(near, mining.breaking().orElseThrow().block());
             assertEquals(0, mining.inventory().count(0));
-            await(runtime, f -> f.target().isEmpty() && f.inventory().count(0) == 1);
+            await(runtime, f -> f.target().isEmpty() && !f.items().isEmpty());
             runtime.controls(active);
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
             var creative = await(
@@ -619,7 +677,7 @@ class WorldRuntimeTest {
     }
 
     @Test
-    void inventoryPlacementConsumesOnlySuccessfulSurvivalChangesAndMiningCollects() {
+    void inventoryPlacementConsumesOnlySuccessfulSurvivalChangesAndMiningDropsItems() {
         World world = new World();
         Chunk chunk = new Chunk();
         chunk.set(1, 2, 0, BlockId.STONE);
@@ -642,18 +700,24 @@ class WorldRuntimeTest {
         assertTrue(WorldRuntime.placeInventory(interaction, player, active, inventory)
                 .isEmpty());
         var remove = new WorldRuntime.Edit(true, BlockId.AIR, 180, 0);
-        assertTrue(WorldRuntime.remove(interaction, player, remove, inventory)
+        var items = new ItemSystem();
+        assertTrue(WorldRuntime.remove(interaction, player, remove, items)
                 .orElseThrow()
                 .changed());
-        assertEquals(1, inventory.snapshot().count(0));
+        assertEquals(0, inventory.snapshot().count(0));
+        assertEquals(BlockId.DIRT, items.snapshot().entities().getFirst().itemId());
         inventory.creativePick(0, BlockId.DIRT);
         for (int i = 1; i < 9; i++) inventory.creativePick(i, BlockId.DIRT);
         for (int i = 9; i < 36; i++) {
             inventory.click(0, false, true);
             inventory.creativePick(0, BlockId.DIRT);
         }
-        assertTrue(WorldRuntime.remove(interaction, player, remove, inventory).isEmpty());
-        assertEquals(BlockId.STONE, world.getBlock(new BlockPos(1, 2, 0)).orElseThrow());
+        assertTrue(WorldRuntime.remove(interaction, player, remove, items)
+                .orElseThrow()
+                .changed());
+        assertEquals(BlockId.AIR, world.getBlock(new BlockPos(1, 2, 0)).orElseThrow());
+        assertEquals(BlockId.COBBLE, items.snapshot().entities().getLast().itemId());
+        world.setBlock(new BlockPos(1, 2, 0), BlockId.STONE, 8);
         assertTrue(player.setMode(world, PlayerController.Mode.CREATIVE));
         assertTrue(WorldRuntime.placeInventory(interaction, player, active, inventory)
                 .orElseThrow()

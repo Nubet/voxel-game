@@ -8,6 +8,7 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import com.norbertfila.world.VoxelCollision;
 import com.norbertfila.world.World;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

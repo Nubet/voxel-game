@@ -42,23 +42,23 @@ public final class Inventory {
         counts[slot] = MAX_STACK;
     }
 
-    public boolean canAdd(byte block) {
-        if (!BlockId.isValid(block) || block == BlockId.AIR) throw new IllegalArgumentException("Invalid item");
-        for (int i = 0; i < SLOTS; i++)
-            if (counts[i] == 0 || (blocks[i] == block && counts[i] < MAX_STACK)) return true;
-        return false;
+    public boolean add(byte block) {
+        return insert(BlockId.toUnsignedInt(block), 1) == 0;
     }
 
-    public boolean add(byte block) {
-        if (!canAdd(block)) return false;
-        for (int pass = 0; pass < 2; pass++)
-            for (int i = 0; i < SLOTS; i++)
+    public int insert(int itemId, int count) {
+        if (itemId <= 0 || itemId > 255 || !BlockId.isValid((byte) itemId) || count < 0)
+            throw new IllegalArgumentException("Invalid insertion");
+        byte block = (byte) itemId;
+        for (int pass = 0; pass < 2 && count > 0; pass++)
+            for (int i = 0; i < SLOTS && count > 0; i++)
                 if (pass == 0 ? blocks[i] == block && counts[i] < MAX_STACK : counts[i] == 0) {
+                    int move = Math.min(count, MAX_STACK - counts[i]);
                     blocks[i] = block;
-                    counts[i]++;
-                    return true;
+                    counts[i] += move;
+                    count -= move;
                 }
-        throw new IllegalStateException("Inventory capacity changed on owner thread");
+        return count;
     }
 
     public void consumeSelected() {
@@ -97,7 +97,7 @@ public final class Inventory {
     }
 
     public void returnCarried() {
-        // shortcut: overflow stays on the saved cursor until world item drops are supported.
+        // Overflow stays on the persisted cursor so closing a full inventory cannot discard it.
         transfer(CARRIED, 0, SLOTS);
     }
 

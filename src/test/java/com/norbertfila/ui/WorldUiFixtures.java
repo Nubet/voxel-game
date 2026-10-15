@@ -16,7 +16,7 @@ public final class WorldUiFixtures {
         return new WorldEntry(
                 identity.id(),
                 Optional.of(metadata),
-                Optional.of(new WorldStateCodec.Header(identity, 0, Instant.ofEpochSecond(savedAt), 92)),
+                Optional.of(new WorldStateCodec.Header(identity, 0, Instant.ofEpochSecond(savedAt), 104)),
                 status,
                 "");
     }

@@ -1,11 +1,5 @@
-package com.norbertfila.player;
+package com.norbertfila.world;
 
-import com.norbertfila.world.Aabb;
-import com.norbertfila.world.BlockPos;
-import com.norbertfila.world.BlockRegistry;
-import com.norbertfila.world.Chunk;
-import com.norbertfila.world.ChunkPos;
-import com.norbertfila.world.World;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -51,11 +45,11 @@ public final class VoxelCollision {
         return move(world, body, x, y, z, false);
     }
 
-    Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge) {
+    public Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge) {
         return move(world, body, x, y, z, protectEdge, false);
     }
 
-    Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
+    public Result move(World world, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
         Aabb region = requiredRegion(body, x, y, z);
         if (!available(world, region)) return new Result(body, 0, 0, 0, false, false, false, false, false);
         Bounds candidates = bounds(region);
@@ -63,7 +57,8 @@ public final class VoxelCollision {
                 body, x, y, z, protectEdge, allowStep, (box, delta, axis) -> clip(world, box, candidates, delta, axis));
     }
 
-    Result move(List<Aabb> obstacles, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
+    public Result move(
+            List<Aabb> obstacles, Aabb body, double x, double y, double z, boolean protectEdge, boolean allowStep) {
         bounds(requiredRegion(body, x, y, z));
         List<Aabb> shapes = List.copyOf(obstacles);
         return move(body, x, y, z, protectEdge, allowStep, (box, delta, axis) -> {

@@ -1,14 +1,9 @@
-package com.norbertfila.player;
+package com.norbertfila.world;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.norbertfila.world.Aabb;
-import com.norbertfila.world.BlockId;
-import com.norbertfila.world.BlockPos;
-import com.norbertfila.world.Chunk;
-import com.norbertfila.world.ChunkPos;
-import com.norbertfila.world.Coordinates;
-import com.norbertfila.world.World;
+import com.norbertfila.player.PlayerPhysics;
+import com.norbertfila.player.PlayerState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

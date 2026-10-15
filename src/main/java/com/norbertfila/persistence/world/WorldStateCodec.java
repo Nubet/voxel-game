@@ -1,6 +1,8 @@
 package com.norbertfila.persistence.world;
 
 import com.norbertfila.fluid.FluidSnapshot;
+import com.norbertfila.items.ItemSnapshot;
+import com.norbertfila.items.ItemState;
 import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.player.PlayerController.Mode;
@@ -23,12 +25,12 @@ import java.util.zip.CheckedOutputStream;
 
 public final class WorldStateCodec {
     private static final int MAGIC = 0x56585731;
-    // Version 2 stores block changes as one packed int each; version 1 files are reported as unsupported.
-    private static final int FORMAT_VERSION = 2;
+    private static final int FORMAT_VERSION = 3;
+    private static final int ITEM_BYTES = 73;
     private static final long MAX_FILE_BYTES = 64L * 1024 * 1024;
     private static final int FIXED_HEADER_BYTES = 65;
     private static final int PLAYER_BYTES = 34;
-    private static final int MIN_PAYLOAD_BYTES = 92;
+    private static final int MIN_PAYLOAD_BYTES = 104;
 
     private WorldStateCodec() {}
 
@@ -146,7 +148,9 @@ public final class WorldStateCodec {
     }
 
     private static long payloadBytes(WorldSnapshot snapshot) {
-        long bytes = MIN_PAYLOAD_BYTES + (snapshot.player().isPresent() ? PLAYER_BYTES : 0);
+        long bytes = MIN_PAYLOAD_BYTES
+                + (snapshot.player().isPresent() ? PLAYER_BYTES : 0)
+                + (long) ITEM_BYTES * snapshot.items().entities().size();
         for (var delta : snapshot.deltas()) bytes += 16L + 4L * delta.size();
         for (var update : snapshot.fluids().updates())
             bytes += 24L + 12L * update.missingChunks().size();
@@ -188,6 +192,22 @@ public final class WorldStateCodec {
                         case SPECTATOR -> 2;
                     });
             output.writeBoolean(player.flying());
+        }
+        output.writeLong(snapshot.items().nextId());
+        output.writeInt(snapshot.items().entities().size());
+        for (var item : snapshot.items().entities()) {
+            output.writeLong(item.id());
+            output.writeInt(item.itemId());
+            output.writeInt(item.count());
+            output.writeDouble(item.x());
+            output.writeDouble(item.y());
+            output.writeDouble(item.z());
+            output.writeDouble(item.vx());
+            output.writeDouble(item.vy());
+            output.writeDouble(item.vz());
+            output.writeInt(item.pickupDelayTicks());
+            output.writeInt(item.ageTicks());
+            output.writeBoolean(item.onGround());
         }
     }
 
@@ -234,8 +254,26 @@ public final class WorldStateCodec {
             };
             player = Optional.of(new SavedPlayerState(x, y, z, yaw, pitch, mode, readBoolean(input)));
         }
+        long nextId = input.readLong();
+        int itemCount = count(input, Math.min(ItemState.MAX_ENTITIES, (int) (header.payloadBytes() / ITEM_BYTES)));
+        var entities = new ArrayList<ItemSnapshot>();
+        for (int i = 0; i < itemCount; i++)
+            entities.add(new ItemSnapshot(
+                    input.readLong(),
+                    input.readInt(),
+                    input.readInt(),
+                    input.readDouble(),
+                    input.readDouble(),
+                    input.readDouble(),
+                    input.readDouble(),
+                    input.readDouble(),
+                    input.readDouble(),
+                    input.readInt(),
+                    input.readInt(),
+                    readBoolean(input)));
+        var items = new ItemState(nextId, entities);
         return new WorldSnapshot(
-                header.identity(), header.sequence(), header.lastSavedAt(), deltas, fluids, inventory, player);
+                header.identity(), header.sequence(), header.lastSavedAt(), deltas, fluids, inventory, player, items);
     }
 
     private static int count(DataInputStream input, int maximum) throws IOException {

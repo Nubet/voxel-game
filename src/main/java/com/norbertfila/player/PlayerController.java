@@ -2,6 +2,7 @@ package com.norbertfila.player;
 
 import com.norbertfila.player.PlayerState.Position;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.VoxelCollision;
 import com.norbertfila.world.World;
 import java.util.LinkedHashSet;
 import java.util.List;
