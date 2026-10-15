@@ -48,7 +48,7 @@ class WorldStateCodecTest {
         assertEquals(SAVED_AT, header.lastSavedAt());
         assertEquals(Files.size(file) - HEADER_BYTES - 4, header.payloadBytes());
         assertEquals(0x56585731, ByteBuffer.wrap(Files.readAllBytes(file)).getInt());
-        assertEquals(1, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(2, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         Path copy = directory.resolve("copy.vxl");
         WorldStateCodec.write(copy, expected);
         assertArrayEquals(Files.readAllBytes(file), Files.readAllBytes(copy));
@@ -167,16 +167,19 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, populated());
         byte[] original = Files.readAllBytes(file);
-        byte[] badChunk = original.clone();
-        ByteBuffer.wrap(badChunk).putInt(HEADER_BYTES + 4, 100);
-        updatePayloadChecksum(badChunk);
-        Files.write(file, badChunk);
-        assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
+        // Entries are chunk-local, so ownership cannot be violated; malformed entries must still be rejected.
+        for (int badEntry : new int[] {1 << 28, 0xFF, 4095 << 16 | BlockId.STONE}) {
+            byte[] malformed = original.clone();
+            ByteBuffer.wrap(malformed).putInt(HEADER_BYTES + 20, badEntry);
+            updatePayloadChecksum(malformed);
+            Files.write(file, malformed);
+            assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
+        }
 
         int firstChanges = 9;
-        int secondDelta = HEADER_BYTES + 4 + 16 + 14 * firstChanges;
+        int secondDelta = HEADER_BYTES + 4 + 16 + 4 * firstChanges;
         byte[] badFluid = original.clone();
-        int fluidStart = secondDelta + 16 + 14;
+        int fluidStart = secondDelta + 16 + 4;
         ByteBuffer.wrap(badFluid).putLong(fluidStart + 12 + 12, 16);
         updatePayloadChecksum(badFluid);
         Files.write(file, badFluid);
@@ -197,7 +200,7 @@ class WorldStateCodecTest {
         assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
 
         byte[] duplicateBlock = original.clone();
-        System.arraycopy(duplicateBlock, HEADER_BYTES + 20, duplicateBlock, HEADER_BYTES + 20 + 14, 12);
+        System.arraycopy(duplicateBlock, HEADER_BYTES + 20, duplicateBlock, HEADER_BYTES + 20 + 4, 4);
         updatePayloadChecksum(duplicateBlock);
         Files.write(file, duplicateBlock);
         assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
@@ -225,8 +228,10 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, populated());
         byte[] original = Files.readAllBytes(file);
-        for (int[] mutation : List.of(
-                new int[] {0, 0x56584C31}, new int[] {4, 0}, new int[] {4, 2}, new int[] {4, Integer.MAX_VALUE})) {
+        for (int[] mutation :
+                List.of(new int[] {0, 0x56584C31}, new int[] {4, 0}, new int[] {4, 1}, new int[] {4, 3}, new int[] {
+                    4, Integer.MAX_VALUE
+                })) {
             byte[] bytes = original.clone();
             ByteBuffer.wrap(bytes).putInt(mutation[0], mutation[1]);
             Files.write(file, bytes);

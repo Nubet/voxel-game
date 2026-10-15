@@ -144,4 +144,26 @@ class WorldChangeOverlayTest {
         assertEquals(List.of(new WorldChangeOverlay.FarTilePos(-1, -2)), overlay.drainDirtyTiles());
         assertTrue(overlay.dirtyTiles().isEmpty());
     }
+
+    @org.junit.jupiter.api.Test
+    void savesReuseDeltasOfChunksNotEditedSinceTheLastCapture() {
+        var overlay = new WorldChangeOverlay();
+        for (int x = -20; x < 20; x++)
+            overlay.set(new com.norbertfila.world.BlockPos(x, 5, -3), com.norbertfila.world.BlockId.STONE, 8);
+        var first = overlay.deltas();
+        assertEquals(4, first.size());
+        overlay.set(new com.norbertfila.world.BlockPos(2, 5, -3), com.norbertfila.world.BlockId.GLASS, 8);
+        var second = overlay.deltas();
+        org.junit.jupiter.api.Assertions.assertSame(first.get(0), second.get(0));
+        org.junit.jupiter.api.Assertions.assertNotSame(first.get(2), second.get(2));
+        assertEquals(40, overlay.size());
+        overlay.remove(new com.norbertfila.world.BlockPos(2, 5, -3), 8);
+        assertEquals(39, overlay.size());
+        assertEquals(15, overlay.deltas().get(2).size());
+        assertEquals(
+                com.norbertfila.world.BlockId.STONE, overlay.deltas().get(0).value(0));
+        assertEquals(
+                new com.norbertfila.world.BlockPos(-20, 5, -3),
+                overlay.deltas().get(0).blockPosition(0));
+    }
 }
