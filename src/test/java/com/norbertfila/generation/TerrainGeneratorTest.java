@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.lod.AreaEdits;
 import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
@@ -20,8 +21,8 @@ class TerrainGeneratorTest {
         assertEquals(BlockId.AIR, blockAt(generator, -272, height + 1, 240));
         assertEquals(BlockId.STONE, blockAt(generator, -272, height - 3, 240));
         assertEquals(BlockId.STONE, blockAt(generator, -272, height - 4, 240));
-        var tile = new FarTerrainGenerator(generator, 64, 4, 0, 64).generate(-5, 3);
-        assertEquals(height, tile.heightAt(12, 12));
+        var tile = new FarTerrainGenerator(generator).generate(-5, 3, 1, AreaEdits.none(-320, 192, 64));
+        assertEquals(height, tile.heightAt(48, 48));
     }
 
     @Test
@@ -131,10 +132,10 @@ class TerrainGeneratorTest {
                         }
                 }
             }
-        var tile = new FarTerrainGenerator(generator, 64, 4, 0, 64).generate(-1, 0);
-        for (int z = 0; z <= 64; z += 4)
-            for (int x = 0; x <= 64; x += 4)
-                assertEquals(generator.surfaceHeight(-64 + x, z), tile.heightAt(x / 4, z / 4));
+        var tile = new FarTerrainGenerator(generator).generate(-1, 0, 4, AreaEdits.none(-64, 0, 64));
+        for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++)
+                assertEquals(generator.surfaceHeight(-62 + x * 4, z * 4 + 2), tile.heightAt(x, z));
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.lod.AreaEdits;
 import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,8 +63,8 @@ class LandscapeMaterialTest {
         BlockPos local = Coordinates.worldToLocal(position);
         assertEquals(
                 expected, generator.generate(Coordinates.worldToChunk(position)).get(local.x(), local.y(), local.z()));
-        var tile = new FarTerrainGenerator(generator, 16, 4, 0, 64).generate(-1, -1);
-        assertEquals(height, tile.heightAt(0, 0));
-        assertEquals(expected, tile.materialAt(0, 0));
+        var tile = new FarTerrainGenerator(generator).generate(-1, -1, 1, AreaEdits.none(-64, -64, 64));
+        assertEquals(height, tile.heightAt(48, 48));
+        assertEquals(expected, tile.materialAt(48, 48));
     }
 }

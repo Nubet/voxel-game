@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.lod.AreaEdits;
 import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.*;
 import java.util.Arrays;
@@ -48,11 +49,12 @@ class WaterGenerationTest {
     @Test
     void groundAndLodSamplesDoNotBecomeTheWaterSurface() {
         TerrainGenerator generator = flat(15, 17, -1);
-        var tile = new FarTerrainGenerator(generator, 16, 4, 0, 64).generate(-1, -1);
-        for (int z = 0; z < tile.sampleCount(); z++)
-            for (int x = 0; x < tile.sampleCount(); x++) {
+        var tile = new FarTerrainGenerator(generator).generate(-1, -1, 4, AreaEdits.none(-64, -64, 64));
+        for (int z = 0; z < tile.cells(); z++)
+            for (int x = 0; x < tile.cells(); x++) {
                 assertEquals(15, tile.heightAt(x, z));
                 assertEquals(BlockId.SAND, tile.materialAt(x, z));
+                assertEquals(17, tile.waterTopAt(x, z));
             }
         TerrainSummary dry = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
         assertFalse(dry.flooded());
