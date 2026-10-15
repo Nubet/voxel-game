@@ -20,6 +20,7 @@ public final class InventoryScreen implements Screen {
     private int selectedSlot, panelX, panelY, focus;
     private double pointerX = -1, pointerY = -1;
     private boolean pointerReady;
+    private boolean keyboardFocus;
 
     public InventoryScreen(boolean creative) {
         this(creative, new Translations(Language.ENGLISH));
@@ -68,6 +69,7 @@ public final class InventoryScreen implements Screen {
 
     @Override
     public Action updatePointer(Pointer pointer) {
+        if (pointer.x() != pointerX || pointer.y() != pointerY) keyboardFocus = false;
         pointerX = pointer.x();
         pointerY = pointer.y();
         if (!pointer.leftDown() && !pointer.rightDown()) pointerReady = true;
@@ -75,6 +77,7 @@ public final class InventoryScreen implements Screen {
         for (int cell = 0; cell < 36; cell++)
             if (bounds(cell).contains(pointerX, pointerY)) {
                 focus = cell;
+                keyboardFocus = false;
                 return activate(cell, pointer.rightPressed(), pointer.shift());
             }
         return Action.NONE;
@@ -83,7 +86,23 @@ public final class InventoryScreen implements Screen {
     private Action activate(int cell, boolean right, boolean quick) {
         if (creative && cell < 27)
             return cell < CATALOG.size() ? new Action.CreativePick(CATALOG.get(cell), selectedSlot) : Action.NONE;
-        return new Action.SlotClick(cell >= 27 ? cell - 27 : cell + 9, right, quick);
+        return new Action.SlotClick(inventorySlot(cell), right, quick);
+    }
+
+    private static int inventorySlot(int cell) {
+        return cell >= 27 ? cell - 27 : cell + 9;
+    }
+
+    private Action drop(boolean wholeStack) {
+        int cell = keyboardFocus ? focus : -1;
+        if (!keyboardFocus)
+            for (int candidate = 0; candidate < 36; candidate++)
+                if (bounds(candidate).contains(pointerX, pointerY)) {
+                    cell = candidate;
+                    break;
+                }
+        int slot = cell >= 0 && (!creative || cell >= 27) ? inventorySlot(cell) : Inventory.CARRIED;
+        return new Action.DropSlot(slot, wholeStack);
     }
 
     @Override
@@ -91,14 +110,18 @@ public final class InventoryScreen implements Screen {
         return switch (key) {
             case BACK -> Action.CLOSE;
             case NEXT, INCREASE, UP -> {
+                keyboardFocus = true;
                 focus = (focus + 1) % 36;
                 yield Action.NONE;
             }
             case PREVIOUS, DECREASE, DOWN -> {
+                keyboardFocus = true;
                 focus = Math.floorMod(focus - 1, 36);
                 yield Action.NONE;
             }
             case ACTIVATE -> activate(focus, false, false);
+            case DROP_ONE -> drop(false);
+            case DROP_STACK -> drop(true);
             default -> Action.NONE;
         };
     }
@@ -106,6 +129,7 @@ public final class InventoryScreen implements Screen {
     @Override
     public void cancelInteraction() {
         pointerReady = false;
+        keyboardFocus = false;
         pointerX = pointerY = -1;
     }
 
@@ -127,7 +151,7 @@ public final class InventoryScreen implements Screen {
         String hovered = null;
         for (int cell = 0; cell < 36; cell++) {
             var box = bounds(cell);
-            int slot = cell >= 27 ? cell - 27 : cell + 9;
+            int slot = inventorySlot(cell);
             boolean selected = cell >= 27 && slot == selectedSlot;
             boolean hover = box.contains(pointerX, pointerY);
             canvas.rectangle(
@@ -159,6 +183,7 @@ public final class InventoryScreen implements Screen {
                 1,
                 1,
                 1);
+        canvas.textWithShadow(FONT, translations.text("inventory.dropHint"), panelX + 8, panelY + 180, 1, 1, 1, 1);
         if (inventory.count(Inventory.CARRIED) > 0
                 && Double.isFinite(pointerX)
                 && Double.isFinite(pointerY)

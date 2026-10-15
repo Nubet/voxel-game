@@ -6,6 +6,7 @@ import java.util.*;
 
 public final class ItemSystem {
     public static final int PICKUP_DELAY_TICKS = 10;
+    public static final int THROW_PICKUP_DELAY_TICKS = 40;
     public static final int DESPAWN_TICKS = 5 * 60 * 60;
     private static final double GRAVITY = 16;
     private static final double MERGE_RADIUS = .5;
@@ -29,8 +30,7 @@ public final class ItemSystem {
 
     public boolean canSpawn(BlockPos block, List<ItemStack> drops) {
         if (drops.isEmpty()) return true;
-        return drops.size() <= ItemState.MAX_ENTITIES - entities.size()
-                && nextId <= Long.MAX_VALUE - drops.size()
+        return hasCapacity(drops.size())
                 && safeCoordinate(block.x())
                 && safeCoordinate(block.y())
                 && safeCoordinate(block.z());
@@ -39,10 +39,9 @@ public final class ItemSystem {
     public void spawn(BlockPos block, List<ItemStack> drops) {
         if (!canSpawn(block, drops)) throw new IllegalStateException("No room for block drops");
         for (var stack : drops) {
-            long id = nextId++;
-            var random = new SplittableRandom(id ^ block.hashCode());
-            var entity = new ItemEntity(new ItemSnapshot(
-                    id,
+            var random = new SplittableRandom(nextId ^ block.hashCode());
+            add(new ItemSnapshot(
+                    nextId,
                     stack.itemId(),
                     stack.count(),
                     block.x() + .5,
@@ -54,9 +53,25 @@ public final class ItemSystem {
                     PICKUP_DELAY_TICKS,
                     0,
                     false));
-            entities.put(id, entity);
-            index(entity);
         }
+    }
+
+    public boolean trySpawn(
+            ItemStack stack, double x, double y, double z, double vx, double vy, double vz, int pickupDelayTicks) {
+        if (!hasCapacity(1)) return false;
+        add(new ItemSnapshot(nextId, stack.itemId(), stack.count(), x, y, z, vx, vy, vz, pickupDelayTicks, 0, false));
+        return true;
+    }
+
+    private boolean hasCapacity(int count) {
+        return count <= ItemState.MAX_ENTITIES - entities.size() && nextId <= Long.MAX_VALUE - count;
+    }
+
+    private void add(ItemSnapshot state) {
+        var entity = new ItemEntity(state);
+        entities.put(entity.id, entity);
+        index(entity);
+        nextId++;
     }
 
     public void pause() {

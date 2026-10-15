@@ -1,6 +1,8 @@
 package com.norbertfila.player;
 
+import com.norbertfila.items.ItemStack;
 import com.norbertfila.world.BlockId;
+import java.util.Optional;
 
 public final class Inventory {
     public static final int HOTBAR_SLOTS = 9;
@@ -27,6 +29,20 @@ public final class Inventory {
 
     public byte selectedBlock() {
         return blocks[selectedSlot];
+    }
+
+    public Optional<ItemStack> stack(int slot) {
+        checkSourceSlot(slot);
+        return counts[slot] == 0
+                ? Optional.empty()
+                : Optional.of(new ItemStack(BlockId.toUnsignedInt(blocks[slot]), counts[slot]));
+    }
+
+    public void remove(int slot, int count) {
+        checkSourceSlot(slot);
+        if (count <= 0 || count > counts[slot]) throw new IllegalArgumentException("Invalid extraction count");
+        counts[slot] -= count;
+        clearEmpty(slot);
     }
 
     public void select(int slot) {
@@ -63,7 +79,7 @@ public final class Inventory {
 
     public void consumeSelected() {
         if (counts[selectedSlot] == 0) throw new IllegalStateException("Cannot consume empty slot");
-        if (--counts[selectedSlot] == 0) blocks[selectedSlot] = BlockId.AIR;
+        remove(selectedSlot, 1);
     }
 
     public void click(int slot, boolean right, boolean quickMove) {
@@ -120,6 +136,10 @@ public final class Inventory {
 
     private static void checkSlot(int slot) {
         if (slot < 0 || slot >= SLOTS) throw new IllegalArgumentException("Invalid inventory slot");
+    }
+
+    private static void checkSourceSlot(int slot) {
+        if (slot < 0 || slot > CARRIED) throw new IllegalArgumentException("Invalid inventory source slot");
     }
 
     private static void checkHotbar(int slot) {

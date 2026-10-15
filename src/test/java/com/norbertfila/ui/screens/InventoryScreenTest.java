@@ -11,6 +11,38 @@ class InventoryScreenTest {
     private static final UiViewport VIEWPORT = new UiViewport(1280, 720, 1280, 720);
 
     @Test
+    void dropKeysMapStorageAndHotbarSlotsAndNeverTreatTheCreativeCatalogAsAStack() {
+        for (boolean creative : new boolean[] {false, true}) {
+            var screen = new InventoryScreen(creative);
+            screen.update(InventorySnapshot.EMPTY, 8, VIEWPORT);
+            for (int cell = 0; cell < 36; cell++) {
+                var box = screen.bounds(cell);
+                screen.updatePointer(false, false, box.x() + 1, box.y() + 1);
+                int expected = creative && cell < 27 ? Inventory.CARRIED : cell >= 27 ? cell - 27 : cell + 9;
+                assertEquals(new Screen.Action.DropSlot(expected, false), screen.keyPress(UiKey.DROP_ONE));
+                assertEquals(new Screen.Action.DropSlot(expected, true), screen.keyPress(UiKey.DROP_STACK));
+            }
+            screen.updatePointer(false, false, -1, -1);
+            assertEquals(new Screen.Action.DropSlot(Inventory.CARRIED, false), screen.keyPress(UiKey.DROP_ONE));
+        }
+    }
+
+    @Test
+    void dropTargetsKeyboardFocusUntilThePointerMovesAndCancelsStaleTargets() {
+        var screen = new InventoryScreen(false);
+        screen.update(InventorySnapshot.EMPTY, 0, VIEWPORT);
+        var box = screen.bounds(5);
+        screen.updatePointer(false, false, box.x() + 1, box.y() + 1);
+        screen.keyPress(UiKey.NEXT);
+        screen.updatePointer(false, false, box.x() + 1, box.y() + 1);
+        assertEquals(new Screen.Action.DropSlot(10, false), screen.keyPress(UiKey.DROP_ONE));
+        screen.updatePointer(false, false, box.x() + 2, box.y() + 1);
+        assertEquals(new Screen.Action.DropSlot(14, false), screen.keyPress(UiKey.DROP_ONE));
+        screen.cancelInteraction();
+        assertEquals(new Screen.Action.DropSlot(Inventory.CARRIED, false), screen.keyPress(UiKey.DROP_ONE));
+    }
+
+    @Test
     void survivalMapsAllSlotsAndConsumesCloseFrame() {
         var screen = new InventoryScreen(false);
         screen.update(InventorySnapshot.EMPTY, 0, VIEWPORT);

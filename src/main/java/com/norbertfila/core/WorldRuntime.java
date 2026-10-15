@@ -11,6 +11,7 @@ import com.norbertfila.interaction.BlockTargeting;
 import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.items.ItemSystem;
+import com.norbertfila.items.ItemThrower;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
@@ -164,6 +165,7 @@ public final class WorldRuntime implements AutoCloseable {
             PlayerController player = new PlayerController();
             Inventory inventory = new Inventory(saved.inventory());
             ItemSystem items = new ItemSystem(saved.items());
+            ItemThrower thrower = new ItemThrower(world, inventory, items);
             if (saved.player().isPresent()) {
                 var restored = saved.player().orElseThrow();
                 player.restore(
@@ -333,6 +335,23 @@ public final class WorldRuntime implements AutoCloseable {
                                             else if (command instanceof PickCreative pick
                                                     && player.mode() == PlayerController.Mode.CREATIVE)
                                                 inventory.creativePick(pick.slot(), pick.block());
+                                            else if (command instanceof DropItem drop
+                                                    && poseReady[0]
+                                                    && !state.paused()
+                                                    && (drop.fromInventory() || !state.blocked())) {
+                                                int slot = drop.fromInventory()
+                                                                && inventory
+                                                                        .stack(Inventory.CARRIED)
+                                                                        .isPresent()
+                                                        ? Inventory.CARRIED
+                                                        : drop.slot();
+                                                thrower.drop(
+                                                        slot,
+                                                        drop.wholeStack(),
+                                                        player.renderEyePosition(1),
+                                                        drop.yaw(),
+                                                        drop.pitch());
+                                            }
                                         }
                                     }
                                 }
@@ -838,7 +857,20 @@ public final class WorldRuntime implements AutoCloseable {
         }
     }
 
-    public sealed interface InventoryAction extends Action permits ClickSlot, PickCreative, ReturnCarried {}
+    public sealed interface InventoryAction extends Action permits ClickSlot, PickCreative, ReturnCarried, DropItem {}
+
+    public record DropItem(int slot, boolean wholeStack, boolean fromInventory, double yaw, double pitch)
+            implements InventoryAction {
+        public DropItem {
+            if (slot < 0
+                    || slot > Inventory.CARRIED
+                    || (!fromInventory && slot >= Inventory.HOTBAR_SLOTS)
+                    || !Double.isFinite(yaw)
+                    || !Double.isFinite(pitch)
+                    || pitch < -90
+                    || pitch > 90) throw new IllegalArgumentException("Invalid drop command");
+        }
+    }
 
     public record ClickSlot(int slot, boolean right, boolean quickMove) implements InventoryAction {
         public ClickSlot {

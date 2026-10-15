@@ -31,6 +31,8 @@ public interface Screen {
 
         record CreativePick(byte block, int slot) implements Action {}
 
+        record DropSlot(int slot, boolean wholeStack) implements Action {}
+
         record OpenWorld(UUID id) implements Action {
             public OpenWorld {
                 Objects.requireNonNull(id);

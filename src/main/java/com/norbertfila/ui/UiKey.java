@@ -15,5 +15,7 @@ public enum UiKey {
     PAGE_UP,
     PAGE_DOWN,
     BACKSPACE,
-    DELETE
+    DELETE,
+    DROP_ONE,
+    DROP_STACK
 }

@@ -8,6 +8,28 @@ import org.junit.jupiter.api.Test;
 
 class InventoryTest {
     @Test
+    void extractsExactCountsFromStorageHotbarAndCursorWithoutChangingOtherSlots() {
+        var inventory = new Inventory();
+        inventory.insert(BlockId.DIRT, 70);
+        inventory.click(0, false, true);
+        assertEquals(64, inventory.stack(9).orElseThrow().count());
+        inventory.remove(9, 1);
+        assertEquals(63, inventory.stack(9).orElseThrow().count());
+        inventory.click(1, false, false);
+        inventory.remove(Inventory.CARRIED, 6);
+        assertTrue(inventory.stack(Inventory.CARRIED).isEmpty());
+        assertEquals(BlockId.AIR, inventory.snapshot().block(Inventory.CARRIED));
+        inventory.remove(9, 63);
+        assertTrue(inventory.stack(9).isEmpty());
+        assertEquals(BlockId.AIR, inventory.snapshot().block(9));
+        var empty = inventory.snapshot();
+        assertThrows(IllegalArgumentException.class, () -> inventory.remove(9, 1));
+        assertThrows(IllegalArgumentException.class, () -> inventory.remove(0, 0));
+        assertThrows(IllegalArgumentException.class, () -> inventory.stack(37));
+        assertEquals(empty, inventory.snapshot());
+    }
+
+    @Test
     void bulkInsertFillsExistingStacksBeforeEmptySlotsAndReturnsRemainder() {
         var inventory = new Inventory();
         assertEquals(0, inventory.insert(BlockId.DIRT, 63));

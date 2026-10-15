@@ -63,6 +63,8 @@ public final class Input implements AutoCloseable {
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
         if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
         UiKey uiKey = switch (key) {
+            case GLFW_KEY_Q ->
+                action == GLFW_PRESS ? ((mods & GLFW_MOD_CONTROL) != 0 ? UiKey.DROP_STACK : UiKey.DROP_ONE) : null;
             case GLFW_KEY_TAB ->
                 action == GLFW_PRESS ? ((mods & GLFW_MOD_SHIFT) != 0 ? UiKey.PREVIOUS : UiKey.NEXT) : null;
             case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER -> action == GLFW_PRESS ? UiKey.ACTIVATE : null;

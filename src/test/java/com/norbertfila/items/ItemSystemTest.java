@@ -13,6 +13,46 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ItemSystemTest {
+    @Test
+    void mergingAThrownStackKeepsItsLongerPickupDelay() {
+        var items = restored(
+                new ItemSnapshot(1, BlockId.DIRT, 63, 8.5, 1.125, 8.5, 0, 0, 0, 0, 9, true),
+                new ItemSnapshot(2, BlockId.DIRT, 3, 8.5, 1.125, 8.5, 0, 0, 0, 40, 0, true));
+        var world = world();
+        tick(items, world);
+        assertEquals(64, items.snapshot().entities().getFirst().count());
+        assertEquals(39, items.snapshot().entities().getFirst().pickupDelayTicks());
+        var inventory = new Inventory();
+        var pickup = new Aabb(8, 1, 8, 9, 3, 9);
+        for (int i = 0; i < 38; i++) items.tick(world, CENTER, 0, DT, pickup, inventory);
+        assertTrue(inventory.stack(0).isEmpty());
+        assertEquals(
+                66,
+                items.snapshot().entities().stream()
+                        .mapToInt(ItemSnapshot::count)
+                        .sum());
+        items.tick(world, CENTER, 0, DT, pickup, inventory);
+        assertTrue(items.snapshot().entities().isEmpty());
+        assertEquals(64, inventory.stack(0).orElseThrow().count());
+        assertEquals(2, inventory.stack(1).orElseThrow().count());
+    }
+
+    @Test
+    void explicitSpawnSharesIdsWithBlockDropsAndValidatesBeforeMutatingState() {
+        var items = new ItemSystem();
+        var stack = new ItemStack(BlockId.DIRT, 3);
+        var before = items.snapshot();
+        assertThrows(IllegalArgumentException.class, () -> items.trySpawn(stack, Double.NaN, 2, 3, 1, 2, 3, 10));
+        assertEquals(before, items.snapshot());
+        assertTrue(items.trySpawn(stack, 1.25, 2.5, 3.75, 1, 2, 3, 10));
+        items.spawn(new BlockPos(8, 2, 8), List.of(new ItemStack(BlockId.COBBLE, 1)));
+        assertEquals(
+                new ItemSnapshot(1, BlockId.DIRT, 3, 1.25, 2.5, 3.75, 1, 2, 3, 10, 0, false),
+                items.snapshot().entities().getFirst());
+        assertEquals(2, items.snapshot().entities().getLast().id());
+        assertEquals(3, items.snapshot().nextId());
+    }
+
     private static final double DT = 1 / 60d;
     private static final ChunkPos CENTER = new ChunkPos(0, 0, 0);
 

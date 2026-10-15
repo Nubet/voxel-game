@@ -34,6 +34,7 @@ import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -152,6 +153,7 @@ public final class GameLoop {
         var loading = new SessionStatusScreen(settings.translations().text("status.loading"));
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
+        var dropKeys = new ArrayDeque<Boolean>();
         long placePressId = 0;
         boolean inventoryInitialized = false;
         boolean initialViewUploaded = false;
@@ -232,7 +234,10 @@ public final class GameLoop {
                         if (runtime.state() == WorldRuntime.State.LOADING) return Exit.BACK_TO_MENU;
                         if (!screens.isOpen()) screens.open(pauseScreen);
                         else screens.input(event);
-                    } else screens.input(event);
+                    } else if (event instanceof UiEvent.Key(var key)
+                            && (key == UiKey.DROP_ONE || key == UiKey.DROP_STACK)
+                            && !screens.blocksGameplay()) dropKeys.addLast(key == UiKey.DROP_STACK);
+                    else screens.input(event);
                 }
             }
             if (settingsFromPause && previousScreen == settingsScreen && !screens.isOpen()) {
@@ -299,6 +304,13 @@ public final class GameLoop {
                         submit(runtime, new WorldRuntime.ClickSlot(click.slot(), click.right(), click.quickMove()));
                     case Screen.Action.CreativePick pick ->
                         submit(runtime, new WorldRuntime.PickCreative(pick.slot(), pick.block()));
+                    case Screen.Action.DropSlot drop -> {
+                        if (!minimized && input.focused())
+                            submit(
+                                    runtime,
+                                    new WorldRuntime.DropItem(
+                                            drop.slot(), drop.wholeStack(), true, camera.yaw(), camera.pitch()));
+                    }
                     default -> {}
                 }
             }
@@ -317,6 +329,14 @@ public final class GameLoop {
                     || state == null
                     || state.modePending()
                     || state.mode() == PlayerController.Mode.SPECTATOR;
+            while (!dropKeys.isEmpty()) {
+                boolean wholeStack = dropKeys.removeFirst();
+                if (!editingBlocked)
+                    submit(
+                            runtime,
+                            new WorldRuntime.DropItem(
+                                    hotbar.selectedSlot(), wholeStack, false, camera.yaw(), camera.pitch()));
+            }
             editCommand(hotbar, editingBlocked, input.leftMousePressed(), false, -1, 0, camera.yaw(), camera.pitch())
                     .ifPresent(action -> submit(runtime, action));
             if (minimized) {

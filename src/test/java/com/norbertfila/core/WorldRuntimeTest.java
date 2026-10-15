@@ -28,6 +28,182 @@ import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
     @Test
+    void thrownStacksAndTheirRemainingPickupDelaySurviveRestartWithoutDuplication() throws Exception {
+        Path save = directory.resolve("throw-restart.vxl");
+        var inventory = new Inventory();
+        inventory.insert(BlockId.DIRT, 5);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        ItemSnapshot pausedItem;
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(false, false));
+            await(runtime, f -> f.tick() >= 2);
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, true, false, 0, 30)));
+            await(runtime, f -> f.inventory().count(0) == 0 && !f.items().isEmpty());
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            pausedItem = paused.items().getFirst().item();
+            assertEquals(5, pausedItem.count());
+            assertTrue(pausedItem.pickupDelayTicks() > 0 && pausedItem.pickupDelayTicks() < 40);
+        }
+        var saved = TestWorlds.load(save);
+        assertEquals(0, saved.inventory().count(0));
+        assertEquals(java.util.List.of(pausedItem), saved.items().entities());
+        try (var runtime = start(new Flat(), save)) {
+            var restarted = await(
+                    runtime,
+                    f -> !f.items().isEmpty() && f.items().getFirst().item().ageTicks() > pausedItem.ageTicks());
+            var item = restarted.items().getFirst().item();
+            assertEquals(pausedItem.id(), item.id());
+            assertEquals(5, item.count());
+            assertTrue(item.pickupDelayTicks() < pausedItem.pickupDelayTicks());
+            assertTrue(item.x() > pausedItem.x());
+            assertEquals(0, restarted.inventory().count(0));
+        }
+        assertEquals(
+                5,
+                TestWorlds.load(save).items().entities().stream()
+                        .mapToInt(ItemSnapshot::count)
+                        .sum());
+    }
+
+    @Test
+    void throwingWhileSprintingDoesNotInheritThePlayersVelocity() throws Exception {
+        Path save = directory.resolve("throw-sprinting.vxl");
+        var inventory = new Inventory();
+        inventory.add(BlockId.DIRT);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(new WorldRuntime.Controls(
+                    new PlayerInput(true, false, false, false, false, false, true), 0, 0, false, false, 0));
+            await(runtime, f -> f.playerState().velocityX() > 4.5);
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, false, false, 0, 0)));
+            var thrown = await(runtime, f -> !f.items().isEmpty());
+            assertTrue(thrown.playerState().velocityX() > 4.5);
+            double velocity = thrown.items().getFirst().item().vx();
+            assertTrue(velocity > 3 && velocity < 4.2, "Throw inherited sprint velocity: " + velocity);
+        }
+    }
+
+    @Test
+    void dropsOneOrAWholeStackFromTheCommandSlotWithoutCollectingItImmediately() throws Exception {
+        Path save = directory.resolve("drop-hotbar.vxl");
+        var inventory = new Inventory();
+        inventory.insert(BlockId.DIRT, 5);
+        inventory.insert(BlockId.STONE, 3);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(false, false));
+            await(runtime, f -> f.tick() >= 2);
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, false, false, 0, 30)));
+            assertTrue(runtime.offer(new WorldRuntime.SelectSlot(1)));
+            var single = await(
+                    runtime, f -> f.inventory().count(0) == 4 && f.inventory().selectedSlot() == 1);
+            assertEquals(BlockId.DIRT, single.items().getFirst().item().itemId());
+            assertEquals(1, single.items().getFirst().item().count());
+            assertTrue(single.items().getFirst().item().vx() > 0);
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(1, true, false, 0, 30)));
+            var whole = await(runtime, f -> f.inventory().count(1) == 0);
+            assertEquals(
+                    3,
+                    whole.items().stream()
+                            .map(i -> i.item())
+                            .filter(i -> i.itemId() == BlockId.STONE)
+                            .mapToInt(ItemSnapshot::count)
+                            .sum());
+            assertEquals(4, whole.inventory().count(0));
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(1, false, false, 0, 30)));
+            var later = await(runtime, f -> f.tick() > whole.tick() + 3);
+            assertEquals(
+                    4, later.items().stream().mapToInt(i -> i.item().count()).sum());
+        }
+    }
+
+    @Test
+    void inventoryDropsPreferTheAuthoritativeCursorEvenWhenGuiSnapshotPredatesTheClick() throws Exception {
+        Path save = directory.resolve("drop-cursor.vxl");
+        var inventory = new Inventory();
+        inventory.creativePick(0, BlockId.DIRT);
+        inventory.creativePick(1, BlockId.STONE);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            await(runtime, f -> f.tick() >= 2);
+            assertTrue(runtime.offer(new WorldRuntime.ClickSlot(0, true, false)));
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(1, false, true, 0, 30)));
+            var single = await(runtime, f -> f.inventory().count(Inventory.CARRIED) == 31);
+            assertEquals(32, single.inventory().count(0));
+            assertEquals(64, single.inventory().count(1));
+            assertEquals(BlockId.DIRT, single.items().getFirst().item().itemId());
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(1, true, true, 0, 30)));
+            var cursorEmpty = await(runtime, f -> f.inventory().count(Inventory.CARRIED) == 0);
+            assertEquals(64, cursorEmpty.inventory().count(1));
+            assertEquals(
+                    32,
+                    cursorEmpty.items().stream().mapToInt(i -> i.item().count()).sum());
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(1, true, true, 0, 30)));
+            var slotEmpty = await(runtime, f -> f.inventory().count(1) == 0);
+            assertEquals(
+                    96,
+                    slotEmpty.items().stream().mapToInt(i -> i.item().count()).sum());
+            assertEquals(32, slotEmpty.inventory().count(0));
+        }
+    }
+
+    @Test
+    void pauseAndBlockedGameplayRejectDropsWhileCreativeDropsConsumeActualStacks() throws Exception {
+        Path save = directory.resolve("drop-guards.vxl");
+        var inventory = new Inventory();
+        inventory.insert(BlockId.DIRT, 5);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(
+                        42, 1, new World(), com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, true, true, 0, 30)));
+            var ignored = await(runtime, f -> f.publishedAt() > paused.publishedAt() + 50_000_000);
+            assertEquals(5, ignored.inventory().count(0));
+            assertTrue(ignored.items().isEmpty());
+            runtime.controls(controls(true, false));
+            var unpaused = await(runtime, f -> !f.paused());
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, true, false, 0, 30)));
+            var blocked = await(runtime, f -> f.tick() > unpaused.tick() + 3);
+            assertEquals(5, blocked.inventory().count(0));
+            assertTrue(blocked.items().isEmpty());
+            runtime.controls(controls(false, false));
+            await(runtime, f -> f.tick() > blocked.tick() + 1);
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(runtime, f -> f.mode() == PlayerController.Mode.CREATIVE && !f.modePending());
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, false, false, 0, 30)));
+            var creative = await(runtime, f -> f.inventory().count(0) == 4);
+            assertEquals(
+                    1, creative.items().stream().mapToInt(i -> i.item().count()).sum());
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            var spectator = await(runtime, f -> f.mode() == PlayerController.Mode.SPECTATOR && !f.modePending());
+            assertTrue(runtime.offer(new WorldRuntime.DropItem(0, true, true, 0, 30)));
+            var later = await(runtime, f -> f.tick() > spectator.tick() + 3);
+            assertEquals(4, later.inventory().count(0));
+            assertEquals(
+                    1, later.items().stream().mapToInt(i -> i.item().count()).sum());
+        }
+        assertThrows(
+                IllegalArgumentException.class, () -> new WorldRuntime.DropItem(Inventory.CARRIED, false, false, 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> new WorldRuntime.DropItem(0, false, true, 0, Double.NaN));
+    }
+
+    @Test
     void restartPreservesPartialPickupDormantEntitiesAndTimersInTheSameWorldSnapshot() throws Exception {
         Path save = directory.resolve("items-restart.vxl");
         byte[] blocks = new byte[37];

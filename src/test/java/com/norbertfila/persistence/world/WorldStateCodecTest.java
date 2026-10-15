@@ -44,7 +44,7 @@ class WorldStateCodecTest {
         var items = new ItemState(
                 9,
                 List.of(
-                        new ItemSnapshot(3, BlockId.COBBLE, 7, 8.25, 12.5, -8.75, -1, 2.5, .5, 4, 19, false),
+                        new ItemSnapshot(3, BlockId.COBBLE, 7, 8.25, 12.5, -8.75, -1, 2.5, .5, 40, 19, false),
                         new ItemSnapshot(
                                 8, BlockId.DIRT, 64, 30_000_000.125, 1.125, -30_000_000.5, 0, 0, 0, 0, 17999, true)));
         var snapshot = new WorldSnapshot(
@@ -70,6 +70,7 @@ class WorldStateCodecTest {
                 bytes -> bytes.putDouble(start + 16, Double.NaN),
                 bytes -> bytes.putDouble(start + 40, Double.POSITIVE_INFINITY),
                 bytes -> bytes.putInt(start + 64, -1),
+                bytes -> bytes.putInt(start + 64, 41),
                 bytes -> bytes.putInt(start + 68, 18000),
                 bytes -> bytes.put(start + 72, (byte) 2));
         for (var mutation : mutations) {

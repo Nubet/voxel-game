@@ -11,6 +11,24 @@ import org.junit.jupiter.api.Test;
 
 class InputTest {
     @Test
+    void dropKeysCaptureControlAtPressTimeAndIgnoreRepeatsAndRelease() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_Q, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_Q, GLFW_REPEAT, GLFW_MOD_CONTROL, 2);
+        input.keyEvent(GLFW_KEY_Q, GLFW_RELEASE, GLFW_MOD_CONTROL, 3);
+        input.keyEvent(GLFW_KEY_Q, GLFW_PRESS, GLFW_MOD_CONTROL, 4);
+        input.keyEvent(GLFW_KEY_LEFT_CONTROL, GLFW_RELEASE, 0, 5);
+        assertEquals(new UiEvent.Key(UiKey.DROP_ONE), input.pollUiEvent());
+        assertEquals(new UiEvent.Key(UiKey.DROP_STACK), input.pollUiEvent());
+        assertEquals(null, input.pollUiEvent());
+        input.keyEvent(GLFW_KEY_Q, GLFW_PRESS, GLFW_MOD_CONTROL, 6);
+        input.discardTransientInput();
+        assertEquals(null, input.pollUiEvent());
+        input.keyEvent(GLFW_KEY_Q, GLFW_REPEAT, 0, 7);
+        assertEquals(null, input.pollUiEvent());
+    }
+
+    @Test
     void characterCallbackAndEditingKeysShareOrderWithoutKeyboardLayoutGuessing() {
         var input = new Input();
         input.keyEvent(GLFW_KEY_A, GLFW_PRESS, 0, 0);

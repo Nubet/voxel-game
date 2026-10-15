@@ -26,7 +26,7 @@ public record ItemSnapshot(
                 || Math.abs(vy) > 32
                 || Math.abs(vz) > 32
                 || pickupDelayTicks < 0
-                || pickupDelayTicks > ItemSystem.PICKUP_DELAY_TICKS
+                || pickupDelayTicks > ItemSystem.THROW_PICKUP_DELAY_TICKS
                 || ageTicks < 0
                 || ageTicks >= ItemSystem.DESPAWN_TICKS) throw new IllegalArgumentException("Invalid item entity");
     }
