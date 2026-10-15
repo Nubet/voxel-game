@@ -34,6 +34,24 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("profileCaves") {
+    group = "verification"
+    description = "Measures cold/warm cave generation time and allocation with a determinism check."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.CaveGenerationProfile")
+}
+
+tasks.register<JavaExec>("smokeCaves") {
+    group = "verification"
+    description = "Renders cave interiors and natural entrances for three seeds."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.CaveGenerationSmoke")
+    args(layout.buildDirectory.dir("cave-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 spotless {
     java {
         palantirJavaFormat("2.102.0")

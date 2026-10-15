@@ -7,6 +7,7 @@ import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -71,13 +72,13 @@ class TerrainGeneratorTest {
     }
 
     @Test
-    void vegetationPreservesVersionTenTerrainAndTrees() {
+    void classicTerrainAndDecorationsHaveStableVersionTwelveChecksums() {
         ChunkPos[] positions = {new ChunkPos(0, 2, 0), new ChunkPos(-2, 2, 3), new ChunkPos(-12, 4, 14)};
         int[][] expected = {{1180583825, -1863016422, 1742602241}, {1633097437, -283642084, 1228333330}};
         long[] seeds = {0, 42};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator generator = new TerrainGenerator(seeds[i], TerrainConfig.classic());
-            assertEquals(11, generator.generatorVersion());
+            assertEquals(12, generator.generatorVersion());
             for (int j = 0; j < positions.length; j++) {
                 byte[] blocks = generator.generate(positions[j]).blocks();
                 for (int k = 0; k < blocks.length; k++)
@@ -101,7 +102,11 @@ class TerrainGeneratorTest {
                 },
                 (x, z) -> -1);
         ChunkData data = generator.generate(new ChunkPos(-1, 0, 1));
-        assertEquals(256, calls[0]);
+        assertTrue(calls[0] >= 256 && calls[0] < 512);
+        int sampled = calls[0];
+        generator.generate(new ChunkPos(-1, -1, 1));
+        generator.generate(new ChunkPos(-1, 1, 1));
+        assertEquals(sampled, calls[0]);
         assertTrue(data.get(0, 8, 0) == BlockId.AIR || com.norbertfila.world.PlantRules.isPlant(data.get(0, 8, 0)));
         assertEquals(BlockId.GRASS, data.get(0, 7, 0));
         assertEquals(BlockId.BEDROCK, data.get(0, 6, 0));
@@ -110,10 +115,12 @@ class TerrainGeneratorTest {
     }
 
     @Test
-    void voxelsAgreeWithGlobalSamplesAcrossHorizontalAndVerticalBoundaries() {
+    void voxelsAgreeWithBaseSamplesAndPointCarvingAcrossAllChunkBoundaries() {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
+        var carver = new CaveCarver(generator);
         for (int chunkZ : new int[] {-2, -1, 0, 1})
             for (int chunkX : new int[] {-2, -1, 0, 1}) {
+                var segments = plannedSegments(generator, chunkX, chunkZ);
                 for (int chunkY : new int[] {-2, -1, 0, 1, 2, 3, 4}) {
                     ChunkData data = generator.generate(new ChunkPos(chunkX, chunkY, chunkZ));
                     for (int z = 0; z < Chunk.SIZE; z++)
@@ -123,6 +130,8 @@ class TerrainGeneratorTest {
                                 int worldY = chunkY * Chunk.SIZE + y;
                                 byte actual = data.get(x, y, z);
                                 byte expected = sample.materialAt(worldY);
+                                if (carver.carves(chunkX * 16 + x, worldY, chunkZ * 16 + z, expected, segments))
+                                    expected = BlockId.AIR;
                                 assertTrue(actual == expected
                                         || expected == BlockId.AIR
                                                 && (actual == BlockId.LOG
@@ -155,7 +164,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(11, generator.generatorVersion());
+        assertEquals(12, generator.generatorVersion());
     }
 
     @Test
@@ -173,6 +182,17 @@ class TerrainGeneratorTest {
         assertThrows(
                 IllegalStateException.class,
                 () -> new TerrainGenerator(0, TerrainConfig.defaults(), (x, z) -> 2).surfaceHeight(0, 0));
+    }
+
+    private static List<CavePlan.Segment> plannedSegments(TerrainGenerator generator, int chunkX, int chunkZ) {
+        var planner =
+                new CavePlanner(generator.seed(), TerrainConfig.defaults().minHeight() - 1, generator::surfaceHeight);
+        var segments = new ArrayList<CavePlan.Segment>();
+        int rx = Math.floorDiv(chunkX, 8), rz = Math.floorDiv(chunkZ, 8);
+        for (int z = rz - 1; z <= rz + 1; z++)
+            for (int x = rx - 1; x <= rx + 1; x++)
+                segments.addAll(planner.plan(x, z).segments(chunkX, chunkZ));
+        return segments;
     }
 
     private static byte blockAt(TerrainGenerator generator, int x, int y, int z) {
