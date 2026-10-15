@@ -1,78 +1,118 @@
 package com.norbertfila.lod;
 
-import java.util.Objects;
-
+/**
+ * Visual-only heightfield of one {@link #SIZE} by {@link #SIZE} block area, divided into square cells of
+ * {@code sampleStep} blocks. Each cell stores its top solid block, that block's material and the top of the water
+ * above it. Far terrain never feeds collision or simulation.
+ *
+ * <p>The heightfield represents only the topmost surface: caves, overhangs and blocks below a higher block are not
+ * visible, and trees and plants are left out.
+ */
 public final class FarTerrainTile {
-    private final int originX;
-    private final int originZ;
-    private final int tileSize;
+    public static final int SIZE = 64;
+    /** Height of a column with no solid block, such as a shaft dug through bedrock. */
+    public static final int NO_SURFACE = Integer.MIN_VALUE;
+    /** Water height of a column without water above its surface. */
+    public static final int NO_WATER = Integer.MIN_VALUE;
+
+    private final int tileX;
+    private final int tileZ;
     private final int sampleStep;
-    private final int sampleCount;
+    private final int cells;
+    private final long editRevision;
     private final int[] heights;
     private final byte[] materials;
+    private final int[] waterTops;
+    private final int minHeight;
+    private final int maxHeight;
 
-    public FarTerrainTile(int originX, int originZ, int tileSize, int sampleStep, int[] heights, byte[] materials) {
-        if (tileSize < 1 || sampleStep < 1 || tileSize % sampleStep != 0)
-            throw new IllegalArgumentException("Invalid far terrain tile sampling");
-        Objects.requireNonNull(heights);
-        Objects.requireNonNull(materials);
-        int expectedSamples = tileSize / sampleStep + 1;
-        if (heights.length != expectedSamples * expectedSamples || materials.length != heights.length) {
-            throw new IllegalArgumentException("Invalid far terrain sample count");
-        }
-        this.originX = originX;
-        this.originZ = originZ;
-        this.tileSize = tileSize;
+    /** Takes ownership of the arrays, indexed {@code cellZ * cells + cellX}. */
+    FarTerrainTile(
+            int tileX, int tileZ, int sampleStep, long editRevision, int[] heights, byte[] materials, int[] waterTops) {
+        if (!validStep(sampleStep)) throw new IllegalArgumentException("Sample step must divide the tile size");
+        int cells = SIZE / sampleStep;
+        if (heights.length != cells * cells || materials.length != heights.length || waterTops.length != heights.length)
+            throw new IllegalArgumentException("Invalid far terrain cell count");
+        this.tileX = tileX;
+        this.tileZ = tileZ;
         this.sampleStep = sampleStep;
-        this.sampleCount = expectedSamples;
-        this.heights = heights.clone();
-        this.materials = materials.clone();
+        this.cells = cells;
+        this.editRevision = editRevision;
+        this.heights = heights;
+        this.materials = materials;
+        this.waterTops = waterTops;
+        int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+        for (int index = 0; index < heights.length; index++) {
+            int top = Math.max(heights[index], waterTops[index]);
+            if (top == NO_SURFACE) continue;
+            min = Math.min(min, top);
+            max = Math.max(max, top);
+        }
+        minHeight = min;
+        maxHeight = max;
+    }
+
+    public static boolean validStep(int sampleStep) {
+        return sampleStep >= 1 && sampleStep <= SIZE && SIZE % sampleStep == 0;
+    }
+
+    public int tileX() {
+        return tileX;
+    }
+
+    public int tileZ() {
+        return tileZ;
     }
 
     public int originX() {
-        return originX;
+        return tileX * SIZE;
     }
 
     public int originZ() {
-        return originZ;
-    }
-
-    public int tileSize() {
-        return tileSize;
+        return tileZ * SIZE;
     }
 
     public int sampleStep() {
         return sampleStep;
     }
 
-    public int sampleCount() {
-        return sampleCount;
+    public int cells() {
+        return cells;
     }
 
-    public int heightAt(int sampleX, int sampleZ) {
-        return heights[index(sampleX, sampleZ)];
+    /** Stamp of the authoritative edits this tile was built from, see {@link WorldChangeOverlay#areaRevision}. */
+    public long editRevision() {
+        return editRevision;
     }
 
-    public byte materialAt(int sampleX, int sampleZ) {
-        return materials[index(sampleX, sampleZ)];
+    public int heightAt(int cellX, int cellZ) {
+        return heights[index(cellX, cellZ)];
     }
 
-    public int triangleCount() {
-        return (sampleCount - 1) * (sampleCount - 1) * 2;
+    public byte materialAt(int cellX, int cellZ) {
+        return materials[index(cellX, cellZ)];
     }
 
-    public int vertexCount() {
-        return triangleCount() * 3;
+    public int waterTopAt(int cellX, int cellZ) {
+        return waterTops[index(cellX, cellZ)];
+    }
+
+    /** Lowest surface or water top in the tile, or {@link Integer#MAX_VALUE} when no cell has either. */
+    public int minHeight() {
+        return minHeight;
+    }
+
+    public int maxHeight() {
+        return maxHeight;
     }
 
     public long estimatedBytes() {
-        return (long) heights.length * Integer.BYTES + materials.length;
+        return (long) heights.length * (2 * Integer.BYTES + 1);
     }
 
-    private int index(int sampleX, int sampleZ) {
-        if (sampleX < 0 || sampleX >= sampleCount || sampleZ < 0 || sampleZ >= sampleCount) {
-            throw new IndexOutOfBoundsException("Far terrain sample outside tile");
-        }
-        return sampleZ * sampleCount + sampleX;
+    private int index(int cellX, int cellZ) {
+        if (cellX < 0 || cellX >= cells || cellZ < 0 || cellZ >= cells)
+            throw new IndexOutOfBoundsException("Far terrain cell outside tile");
+        return cellZ * cells + cellX;
     }
 }

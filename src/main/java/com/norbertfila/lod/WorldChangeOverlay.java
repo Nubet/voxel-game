@@ -29,6 +29,9 @@ public final class WorldChangeOverlay {
             Comparator.comparingInt(ChunkPos::x).thenComparingInt(ChunkPos::y).thenComparingInt(ChunkPos::z);
     private final Map<ChunkPos, ChunkChanges> changes = new HashMap<>();
     private final Set<FarTilePos> dirtyTiles = new HashSet<>();
+    // Per chunk column (x, z): the edit stamp of its latest change and the chunk heights holding changes.
+    private final Map<Long, EditedColumn> columns = new HashMap<>();
+    private long editStamp;
     private int size;
 
     public OptionalInt get(BlockPos position) {
@@ -59,6 +62,7 @@ public final class WorldChangeOverlay {
         ChunkChanges chunkChanges = changes.computeIfAbsent(Coordinates.worldToChunk(position), ChunkChanges::new);
         int previous = chunkChanges.set(localIndex(position), packed);
         if (previous < 0) size++;
+        if (previous != packed) stamp(chunkChanges.position, true);
         dirtyTiles.add(dirtyTile);
         return previous < 0 ? OptionalInt.empty() : OptionalInt.of(previous & 0xff);
     }
@@ -72,9 +76,64 @@ public final class WorldChangeOverlay {
         int previous = chunkChanges.set(localIndex(position), (short) -1);
         if (chunkChanges.count == 0) changes.remove(chunkPosition);
         if (previous < 0) return OptionalInt.empty();
+        stamp(chunkPosition, chunkChanges.count > 0);
         size--;
         dirtyTiles.add(dirtyTile);
         return OptionalInt.of(previous & 0xff);
+    }
+
+    private void stamp(ChunkPos chunk, boolean holdsChanges) {
+        EditedColumn column = columns.computeIfAbsent(columnKey(chunk.x(), chunk.z()), ignored -> new EditedColumn());
+        column.stamp = ++editStamp;
+        if (holdsChanges) column.chunkHeights.add(chunk.y());
+        else column.chunkHeights.remove(chunk.y());
+    }
+
+    /**
+     * Stamp of the latest change in the square of block columns {@code [minX, minX + size) x [minZ, minZ + size)},
+     * or 0 when it was never edited. Stamps only grow, also when a change is removed, so a changed stamp means
+     * terrain built from an earlier {@link #edits} snapshot of the area is stale.
+     */
+    public long areaRevision(int minX, int minZ, int size) {
+        long revision = 0;
+        int minChunkX = Math.floorDiv(minX, Chunk.SIZE), maxChunkX = Math.floorDiv(minX + size - 1, Chunk.SIZE);
+        int minChunkZ = Math.floorDiv(minZ, Chunk.SIZE), maxChunkZ = Math.floorDiv(minZ + size - 1, Chunk.SIZE);
+        for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++)
+            for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+                EditedColumn column = columns.get(columnKey(chunkX, chunkZ));
+                if (column != null) revision = Math.max(revision, column.stamp);
+            }
+        return revision;
+    }
+
+    /** Immutable copy of the changes inside a square of block columns, for building far terrain off this thread. */
+    public AreaEdits edits(int minX, int minZ, int size) {
+        if (size < 1 || size > AreaEdits.MAX_SIZE) throw new IllegalArgumentException("Invalid edit area size");
+        Map<Integer, List<Long>> byColumn = new HashMap<>();
+        int minChunkX = Math.floorDiv(minX, Chunk.SIZE), maxChunkX = Math.floorDiv(minX + size - 1, Chunk.SIZE);
+        int minChunkZ = Math.floorDiv(minZ, Chunk.SIZE), maxChunkZ = Math.floorDiv(minZ + size - 1, Chunk.SIZE);
+        for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++)
+            for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+                EditedColumn column = columns.get(columnKey(chunkX, chunkZ));
+                if (column == null) continue;
+                for (int chunkY : column.chunkHeights) {
+                    short[] values = changes.get(new ChunkPos(chunkX, chunkY, chunkZ)).values;
+                    for (int local = 0; local < values.length; local++) {
+                        if (values[local] < 0) continue;
+                        int x = chunkX * Chunk.SIZE + (local & 15) - minX;
+                        int z = chunkZ * Chunk.SIZE + (local >>> 4 & 15) - minZ;
+                        if (x < 0 || z < 0 || x >= size || z >= size) continue;
+                        int y = chunkY * Chunk.SIZE + (local >>> 8);
+                        byColumn.computeIfAbsent(z * size + x, ignored -> new ArrayList<>())
+                                .add(AreaEdits.entry(y, values[local]));
+                    }
+                }
+            }
+        return AreaEdits.of(minX, minZ, size, areaRevision(minX, minZ, size), byColumn);
+    }
+
+    private static long columnKey(int chunkX, int chunkZ) {
+        return (long) chunkX << 32 | Integer.toUnsignedLong(chunkZ);
     }
 
     public List<FarTilePos> dirtyTiles() {
@@ -140,6 +199,11 @@ public final class WorldChangeOverlay {
 
     private static byte waterState(int packed) {
         return (byte) packed == BlockId.WATER ? (byte) (packed >>> 8) : WaterState.EMPTY;
+    }
+
+    private static final class EditedColumn {
+        private final java.util.TreeSet<Integer> chunkHeights = new java.util.TreeSet<>();
+        private long stamp;
     }
 
     /** Changes of one chunk; -1 marks a block without an override. */

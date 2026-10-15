@@ -2,79 +2,120 @@ package com.norbertfila.lod;
 
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.generation.TerrainSummary;
-import com.norbertfila.world.Chunk;
-import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
+import java.util.Arrays;
 import java.util.Objects;
-import java.util.Optional;
 
+/**
+ * Builds far tiles from per-column terrain summaries and an edit snapshot, without generating any chunk. Safe to call
+ * from worker threads: the source is thread-safe and the edits are immutable.
+ *
+ * <p>Each cell takes the generated column at its center with that column's edits applied. Edited columns elsewhere in
+ * the cell can only raise it, so buildings stay visible from afar, while digging off the center column is not shown.
+ */
 public final class FarTerrainGenerator {
+    private static final BlockRegistry BLOCKS = BlockRegistry.DEFAULT;
+
     private final TerrainSource source;
-    private final int tileSize;
-    private final int sampleStep;
-    private final int minRadiusChunks;
-    private final int maxRadiusChunks;
 
-    public FarTerrainGenerator(
-            TerrainSource source, int tileSize, int sampleStep, int minRadiusChunks, int maxRadiusChunks) {
-        if (tileSize < 1 || sampleStep < 1 || tileSize % sampleStep != 0)
-            throw new IllegalArgumentException("Invalid far terrain sampling");
-        if (minRadiusChunks < 0 || maxRadiusChunks < minRadiusChunks)
-            throw new IllegalArgumentException("Invalid far terrain radius");
+    public FarTerrainGenerator(TerrainSource source) {
         this.source = Objects.requireNonNull(source);
-        this.tileSize = tileSize;
-        this.sampleStep = sampleStep;
-        this.minRadiusChunks = minRadiusChunks;
-        this.maxRadiusChunks = maxRadiusChunks;
     }
 
-    public Optional<FarTerrainTile> generate(ChunkPos cameraChunk, int tileX, int tileZ) {
-        Objects.requireNonNull(cameraChunk);
-        return inRange(cameraChunk, tileX, tileZ) ? Optional.of(generate(tileX, tileZ)) : Optional.empty();
-    }
-
-    public FarTerrainTile generate(int tileX, int tileZ) {
-        int originX = Math.multiplyExact(tileX, tileSize);
-        int originZ = Math.multiplyExact(tileZ, tileSize);
-        int sampleCount = tileSize / sampleStep + 1;
-        int[] heights = new int[sampleCount * sampleCount];
+    public FarTerrainTile generate(int tileX, int tileZ, int sampleStep, AreaEdits edits) {
+        if (!FarTerrainTile.validStep(sampleStep))
+            throw new IllegalArgumentException("Sample step must divide the tile size");
+        int originX = Math.multiplyExact(tileX, FarTerrainTile.SIZE);
+        int originZ = Math.multiplyExact(tileZ, FarTerrainTile.SIZE);
+        if (!edits.covers(originX, originZ, FarTerrainTile.SIZE))
+            throw new IllegalArgumentException("Edits do not cover the tile");
+        int cells = FarTerrainTile.SIZE / sampleStep;
+        int[] heights = new int[cells * cells];
         byte[] materials = new byte[heights.length];
-        for (int z = 0; z < sampleCount; z++)
-            for (int x = 0; x < sampleCount; x++) {
-                TerrainSummary sample = source.sample(originX + x * sampleStep, originZ + z * sampleStep);
-                int index = z * sampleCount + x;
-                heights[index] = sample.surfaceHeight();
-                materials[index] = sample.surfaceMaterial();
+        int[] waterTops = new int[heights.length];
+        Arrays.fill(waterTops, FarTerrainTile.NO_WATER);
+        int center = sampleStep / 2;
+        for (int cellZ = 0; cellZ < cells; cellZ++)
+            for (int cellX = 0; cellX < cells; cellX++) {
+                int x = originX + cellX * sampleStep + center, z = originZ + cellZ * sampleStep + center;
+                TerrainSummary terrain = source.sample(x, z);
+                int column = edits.find(x, z);
+                int index = cellZ * cells + cellX;
+                long surface = surface(terrain, edits, column);
+                heights[index] = (int) (surface >> 8);
+                materials[index] = (byte) surface;
+                waterTops[index] = waterTop(terrain, edits, column, heights[index]);
             }
-        return new FarTerrainTile(originX, originZ, tileSize, sampleStep, heights, materials);
+        for (int column = 0; column < edits.columnCount(); column++) {
+            int localX = edits.columnX(column) - originX, localZ = edits.columnZ(column) - originZ;
+            if (localX % sampleStep == center && localZ % sampleStep == center) continue;
+            int index = localZ / sampleStep * cells + localX / sampleStep;
+            for (int change = 0; change < edits.changeCount(column); change++) {
+                byte block = edits.changeBlock(column, change);
+                if (!BLOCKS.isCollidable(block)) continue;
+                int y = edits.changeY(column, change);
+                if (y > heights[index]) {
+                    heights[index] = y;
+                    materials[index] = block;
+                    if (waterTops[index] <= y) waterTops[index] = FarTerrainTile.NO_WATER;
+                }
+                break;
+            }
+        }
+        return new FarTerrainTile(tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops);
     }
 
-    public boolean inRange(ChunkPos cameraChunk, int tileX, int tileZ) {
-        Objects.requireNonNull(cameraChunk);
-        long centerX = (long) tileX * tileSize + tileSize / 2L;
-        long centerZ = (long) tileZ * tileSize + tileSize / 2L;
-        long cameraX = (long) cameraChunk.x() * Chunk.SIZE + Chunk.SIZE / 2L;
-        long cameraZ = (long) cameraChunk.z() * Chunk.SIZE + Chunk.SIZE / 2L;
-        long dx = centerX - cameraX;
-        long dz = centerZ - cameraZ;
-        long distanceSquared = dx * dx + dz * dz;
-        long min = (long) minRadiusChunks * Chunk.SIZE;
-        long max = (long) maxRadiusChunks * Chunk.SIZE;
-        return distanceSquared >= min * min && distanceSquared <= max * max;
+    /**
+     * Highest solid block of a column with its edits applied, packed as {@code height << 8 | material}. Walks down
+     * from the highest change, jumping over generated air so a tower or a deep shaft costs one step per change.
+     */
+    private static long surface(TerrainSummary terrain, AreaEdits edits, int column) {
+        int changes = column < 0 ? 0 : edits.changeCount(column);
+        int surface = terrain.surfaceHeight();
+        long y = changes > 0 ? Math.max(surface, edits.changeY(column, 0)) : surface;
+        int change = 0;
+        while (true) {
+            while (change < changes && edits.changeY(column, change) > y) change++;
+            byte block;
+            if (change < changes && edits.changeY(column, change) == y) {
+                block = edits.changeBlock(column, change);
+            } else {
+                block = terrain.materialAt((int) y);
+                if (!BLOCKS.isCollidable(block)) {
+                    // Generated columns are air or water above the surface and air below bedrock.
+                    long next = change < changes ? edits.changeY(column, change) : Long.MIN_VALUE;
+                    if (y > surface) next = Math.max(next, surface);
+                    if (next == Long.MIN_VALUE) return (long) FarTerrainTile.NO_SURFACE << 8;
+                    y = next;
+                    continue;
+                }
+            }
+            if (BLOCKS.isCollidable(block)) return y << 8 | Byte.toUnsignedLong(block);
+            y--;
+        }
     }
 
-    public int tileSize() {
-        return tileSize;
-    }
-
-    public int sampleStep() {
-        return sampleStep;
-    }
-
-    public int minRadiusChunks() {
-        return minRadiusChunks;
-    }
-
-    public int maxRadiusChunks() {
-        return maxRadiusChunks;
+    /** Highest water block above {@code floor}, the column's surface, or {@link FarTerrainTile#NO_WATER}. */
+    private static int waterTop(TerrainSummary terrain, AreaEdits edits, int column, int floor) {
+        int changes = column < 0 ? 0 : edits.changeCount(column);
+        int waterLevel = terrain.waterLevel();
+        long y = Math.max(changes > 0 ? edits.changeY(column, 0) : Long.MIN_VALUE, waterLevel);
+        int change = 0;
+        while (y > floor) {
+            while (change < changes && edits.changeY(column, change) > y) change++;
+            byte block = change < changes && edits.changeY(column, change) == y
+                    ? edits.changeBlock(column, change)
+                    : terrain.materialAt((int) y);
+            if (block == BlockId.WATER) return (int) y;
+            if (change < changes && edits.changeY(column, change) == y) {
+                y--;
+                continue;
+            }
+            long next = change < changes ? edits.changeY(column, change) : Long.MIN_VALUE;
+            if (y > waterLevel) next = Math.max(next, waterLevel);
+            y = next;
+        }
+        return FarTerrainTile.NO_WATER;
     }
 }
