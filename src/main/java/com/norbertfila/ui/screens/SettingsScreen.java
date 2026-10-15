@@ -15,7 +15,7 @@ public final class SettingsScreen implements Screen {
     public static final int PANEL_X = 8;
     public static final int PANEL_Y = 0;
     public static final int PANEL_WIDTH = 304;
-    public static final int PANEL_HEIGHT = 236;
+    public static final int PANEL_HEIGHT = 264;
     public static final int SLIDER_X = 84;
     public static final int SLIDER_Y = 40;
     public static final int SLIDER_WIDTH = 180;
@@ -24,20 +24,27 @@ public final class SettingsScreen implements Screen {
     public static final int BUTTON_SIZE = 20;
     public static final int MINUS_X = 56;
     public static final int PLUS_X = 272;
-    public static final UiBounds BACK_BOUNDS = new UiBounds(108, 208, 88, 20);
+    public static final UiBounds BACK_BOUNDS = new UiBounds(108, 236, 88, 20);
 
     public static final int CAMERA_X = 116;
     public static final int CAMERA_WIDTH = 180;
-    public static final int FOV_Y = 72;
-    public static final int ZOOM_FOV_Y = 100;
-    public static final int SENSITIVITY_Y = 128;
-    public static final int ZOOM_SPEED_Y = 156;
-    public static final int GUI_SCALE_Y = 184;
+    public static final int SIMULATION_Y = 72;
+    public static final int FOV_Y = 100;
+    public static final int ZOOM_FOV_Y = 128;
+    public static final int SENSITIVITY_Y = 156;
+    public static final int ZOOM_SPEED_Y = 184;
+    public static final int GUI_SCALE_Y = 212;
 
     private final GameSettings settings;
     private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
     private final Button increase = new Button(new UiBounds(PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "+");
     private final Slider renderDistance;
+    private final Slider simulationDistance = new Slider(
+            new UiBounds(CAMERA_X, SIMULATION_Y, CAMERA_WIDTH, SLIDER_HEIGHT),
+            GameSettings.MIN_SIMULATION_DISTANCE,
+            GameSettings.MAX_RENDER_DISTANCE,
+            1,
+            GameSettings.MIN_SIMULATION_DISTANCE);
     private final Slider fieldOfView = new Slider(
             new UiBounds(CAMERA_X, FOV_Y, CAMERA_WIDTH, SLIDER_HEIGHT),
             (int) GameSettings.MIN_FIELD_OF_VIEW,
@@ -81,6 +88,7 @@ public final class SettingsScreen implements Screen {
         boolean minus = decrease.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean plus = increase.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean renderDistanceChanged = renderDistance.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        boolean simulationChanged = simulationDistance.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean fovChanged = fieldOfView.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean zoomFovChanged = zoomFieldOfView.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean sensitivityChanged = mouseSensitivity.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
@@ -89,7 +97,14 @@ public final class SettingsScreen implements Screen {
         boolean close = back.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         if (scaleChanged) cycleGuiScale();
         applyControls(
-                minus, plus, renderDistanceChanged, fovChanged, zoomFovChanged, sensitivityChanged, zoomSpeedChanged);
+                minus,
+                plus,
+                renderDistanceChanged,
+                simulationChanged,
+                fovChanged,
+                zoomFovChanged,
+                sensitivityChanged,
+                zoomSpeedChanged);
         return close ? Action.CLOSE : Action.NONE;
     }
 
@@ -106,6 +121,7 @@ public final class SettingsScreen implements Screen {
         boolean minus = false;
         boolean plus = false;
         boolean distanceChanged = false;
+        boolean simulationChanged = false;
         boolean fovChanged = false;
         boolean zoomFovChanged = false;
         boolean sensitivityChanged = false;
@@ -125,33 +141,44 @@ public final class SettingsScreen implements Screen {
                 plus = changed;
             }
             case 3 -> {
+                changed = simulationDistance.keyPress(key);
+                simulationChanged = changed;
+            }
+            case 4 -> {
                 changed = fieldOfView.keyPress(key);
                 fovChanged = changed;
             }
-            case 4 -> {
+            case 5 -> {
                 changed = zoomFieldOfView.keyPress(key);
                 zoomFovChanged = changed;
             }
-            case 5 -> {
+            case 6 -> {
                 changed = mouseSensitivity.keyPress(key);
                 sensitivityChanged = changed;
             }
-            case 6 -> {
+            case 7 -> {
                 changed = zoomSpeed.keyPress(key);
                 zoomSpeedChanged = changed;
             }
-            case 7 -> {
+            case 8 -> {
                 if (key == UiKey.ACTIVATE) {
                     cycleGuiScale();
                     changed = true;
                 }
             }
-            case 8 -> close = back.keyPress(key);
+            case 9 -> close = back.keyPress(key);
             default -> {}
         }
         if (changed)
             applyControls(
-                    minus, plus, distanceChanged, fovChanged, zoomFovChanged, sensitivityChanged, zoomSpeedChanged);
+                    minus,
+                    plus,
+                    distanceChanged,
+                    simulationChanged,
+                    fovChanged,
+                    zoomFovChanged,
+                    sensitivityChanged,
+                    zoomSpeedChanged);
         return close ? Action.CLOSE : Action.NONE;
     }
 
@@ -162,6 +189,7 @@ public final class SettingsScreen implements Screen {
         decrease.cancelInteraction();
         increase.cancelInteraction();
         renderDistance.cancelInteraction();
+        simulationDistance.cancelInteraction();
         fieldOfView.cancelInteraction();
         zoomFieldOfView.cancelInteraction();
         mouseSensitivity.cancelInteraction();
@@ -184,6 +212,7 @@ public final class SettingsScreen implements Screen {
         decrease.setPosition(MINUS_X + offsetX, BUTTON_Y + offsetY);
         increase.setPosition(PLUS_X + offsetX, BUTTON_Y + offsetY);
         renderDistance.setPosition(SLIDER_X + offsetX, SLIDER_Y + offsetY);
+        simulationDistance.setPosition(CAMERA_X + offsetX, SIMULATION_Y + offsetY);
         fieldOfView.setPosition(CAMERA_X + offsetX, FOV_Y + offsetY);
         zoomFieldOfView.setPosition(CAMERA_X + offsetX, ZOOM_FOV_Y + offsetY);
         mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
@@ -197,6 +226,7 @@ public final class SettingsScreen implements Screen {
             boolean minus,
             boolean plus,
             boolean distanceChanged,
+            boolean simulationChanged,
             boolean fovChanged,
             boolean zoomFovChanged,
             boolean sensitivityChanged,
@@ -205,6 +235,7 @@ public final class SettingsScreen implements Screen {
             settings.setRenderDistance(
                     minus ? renderDistance() - 1 : plus ? renderDistance() + 1 : renderDistance.value());
         }
+        if (simulationChanged) settings.setSimulationDistance(simulationDistance.value());
         if (fovChanged) settings.setFieldOfView(fieldOfView.value());
         if (zoomFovChanged) settings.setZoomFieldOfView(zoomFieldOfView.value());
         if (sensitivityChanged) settings.setMouseSensitivity(mouseSensitivity.value() / 100f);
@@ -214,6 +245,8 @@ public final class SettingsScreen implements Screen {
 
     private void syncControls() {
         renderDistance.setValue(settings.renderDistance());
+        simulationDistance.setRange(GameSettings.MIN_SIMULATION_DISTANCE, settings.renderDistance(), 1);
+        simulationDistance.setValue(settings.simulationDistance());
         fieldOfView.setValue(Math.round(settings.fieldOfView()));
         zoomFieldOfView.setRange((int) GameSettings.MIN_ZOOM_FIELD_OF_VIEW, Math.round(settings.fieldOfView()), 1);
         zoomFieldOfView.setValue(Math.round(settings.zoomFieldOfView()));
@@ -228,18 +261,19 @@ public final class SettingsScreen implements Screen {
         if (decrease.enabled() && decrease.bounds().contains(x, y)) focus(0);
         else if (renderDistance.bounds().contains(x, y)) focus(1);
         else if (increase.enabled() && increase.bounds().contains(x, y)) focus(2);
-        else if (fieldOfView.bounds().contains(x, y)) focus(3);
-        else if (zoomFieldOfView.bounds().contains(x, y)) focus(4);
-        else if (mouseSensitivity.bounds().contains(x, y)) focus(5);
-        else if (zoomSpeed.bounds().contains(x, y)) focus(6);
-        else if (guiScale.bounds().contains(x, y)) focus(7);
-        else if (back.bounds().contains(x, y)) focus(8);
+        else if (simulationDistance.bounds().contains(x, y)) focus(3);
+        else if (fieldOfView.bounds().contains(x, y)) focus(4);
+        else if (zoomFieldOfView.bounds().contains(x, y)) focus(5);
+        else if (mouseSensitivity.bounds().contains(x, y)) focus(6);
+        else if (zoomSpeed.bounds().contains(x, y)) focus(7);
+        else if (guiScale.bounds().contains(x, y)) focus(8);
+        else if (back.bounds().contains(x, y)) focus(9);
         else focus(-1);
     }
 
     private void focusNext(int direction) {
         int next = focusIndex;
-        do next = Math.floorMod(next + direction, 9);
+        do next = Math.floorMod(next + direction, 10);
         while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
         focus(next);
     }
@@ -249,12 +283,13 @@ public final class SettingsScreen implements Screen {
         decrease.setFocused(index == 0);
         renderDistance.setFocused(index == 1);
         increase.setFocused(index == 2);
-        fieldOfView.setFocused(index == 3);
-        zoomFieldOfView.setFocused(index == 4);
-        mouseSensitivity.setFocused(index == 5);
-        zoomSpeed.setFocused(index == 6);
-        guiScale.setFocused(index == 7);
-        back.setFocused(index == 8);
+        simulationDistance.setFocused(index == 3);
+        fieldOfView.setFocused(index == 4);
+        zoomFieldOfView.setFocused(index == 5);
+        mouseSensitivity.setFocused(index == 6);
+        zoomSpeed.setFocused(index == 7);
+        guiScale.setFocused(index == 8);
+        back.setFocused(index == 9);
     }
 
     private void cycleGuiScale() {
@@ -271,6 +306,10 @@ public final class SettingsScreen implements Screen {
 
     public Slider slider() {
         return renderDistance;
+    }
+
+    public Slider simulationDistanceSlider() {
+        return simulationDistance;
     }
 
     public Slider fieldOfViewSlider() {
@@ -331,6 +370,15 @@ public final class SettingsScreen implements Screen {
         canvas.textWithShadow(
                 font, "Render distance: " + renderDistance() + " chunks", panelX + 12, panelY + 22, 1, 1, 1, 1);
         canvas.textWithShadow(
+                font,
+                "Simulation: " + settings.simulationDistance(),
+                panelX + 8,
+                panelY + SIMULATION_Y - 4,
+                1,
+                1,
+                1,
+                1);
+        canvas.textWithShadow(
                 font, "FOV: " + Math.round(settings.fieldOfView()), panelX + 8, panelY + FOV_Y - 4, 1, 1, 1, 1);
         canvas.textWithShadow(
                 font,
@@ -361,6 +409,7 @@ public final class SettingsScreen implements Screen {
                 1);
         canvas.textWithShadow(font, "GUI scale", panelX + 8, panelY + GUI_SCALE_Y + 3, 1, 1, 1, 1);
         renderDistance.render(canvas);
+        simulationDistance.render(canvas);
         fieldOfView.render(canvas);
         zoomFieldOfView.render(canvas);
         mouseSensitivity.render(canvas);

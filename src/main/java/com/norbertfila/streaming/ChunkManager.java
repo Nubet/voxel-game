@@ -35,6 +35,12 @@ public final class ChunkManager implements AutoCloseable {
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
     public static final int RESULTS_PER_UPDATE = 32;
+    /**
+     * Chunks stay loaded this many columns past the render distance, so walking back and forth across the edge does
+     * not load and evict the same chunks over and over.
+     */
+    public static final int UNLOAD_MARGIN = 2;
+
     private static final long GENERATION_INTAKE_NANOS = 2_000_000;
     private static final int[][] FACE_OFFSETS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
     private static final ChunkSnapshot EMPTY_SECTION = new ChunkSnapshot(new byte[Chunk.BLOCK_BYTES], 0);
@@ -155,7 +161,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ChunkManager(World world, WorldGenerator generator, LayeredMesher mesher, ViewDemand viewDemand) {
-        this(world, generator, mesher, viewDemand, viewDemand.horizontalRadius() + 1);
+        this(world, generator, mesher, viewDemand, viewDemand.horizontalRadius() + UNLOAD_MARGIN);
     }
 
     public ChunkManager(World world, WorldGenerator generator, ViewDemand viewDemand, int unloadRadius) {
@@ -491,7 +497,7 @@ public final class ChunkManager implements AutoCloseable {
         boolean changed =
                 viewDemand.configure(radius, viewDemand.minChunkY(), viewDemand.maxChunkY(), viewDemand.shape());
         if (changed) {
-            hysteresisRadius = radius + 1;
+            hysteresisRadius = radius + UNLOAD_MARGIN;
             generationBacklog.clear();
             backlogSeeded = false;
             evictionCenter = null;

@@ -155,6 +155,33 @@ class SettingsScreenTest {
         assertEquals(1, settings.guiScale());
     }
 
+    @Test
+    void simulationSliderEndsAtTheRenderDistance() {
+        GameSettings settings = new GameSettings();
+        settings.setRenderDistance(10);
+        SettingsScreen screen = new SettingsScreen(settings);
+        double right = SettingsScreen.CAMERA_X + SettingsScreen.CAMERA_WIDTH;
+
+        screen.updatePointer(true, true, right, SettingsScreen.SIMULATION_Y);
+        screen.updatePointer(false, false, right, SettingsScreen.SIMULATION_Y);
+        assertEquals(10, settings.simulationDistance());
+
+        screen.updatePointer(true, true, SettingsScreen.CAMERA_X, SettingsScreen.SIMULATION_Y);
+        screen.updatePointer(false, false, SettingsScreen.CAMERA_X, SettingsScreen.SIMULATION_Y);
+        assertEquals(GameSettings.MIN_SIMULATION_DISTANCE, settings.simulationDistance());
+
+        settings.setSimulationDistance(8);
+        screen.updatePointer(true, true, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        screen.updatePointer(false, false, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        screen.updatePointer(true, true, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        screen.updatePointer(false, false, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        screen.updatePointer(true, true, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        screen.updatePointer(false, false, SettingsScreen.MINUS_X + 1, SettingsScreen.BUTTON_Y + 1);
+        assertEquals(7, settings.renderDistance());
+        assertEquals(7, settings.simulationDistance());
+        assertEquals(7, screen.simulationDistanceSlider().value());
+    }
+
     private static boolean update(SettingsScreen screen, boolean down, boolean press, double x, double y) {
         int before = screen.renderDistance();
         assertEquals(Screen.Action.NONE, screen.updatePointer(down, press, x, y));

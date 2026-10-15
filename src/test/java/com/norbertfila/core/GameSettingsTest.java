@@ -23,7 +23,23 @@ class GameSettingsTest {
         GameSettings settings = new GameSettings();
 
         assertThrows(IllegalArgumentException.class, () -> settings.setRenderDistance(1));
-        assertThrows(IllegalArgumentException.class, () -> settings.setRenderDistance(17));
+        assertThrows(
+                IllegalArgumentException.class, () -> settings.setRenderDistance(GameSettings.MAX_RENDER_DISTANCE + 1));
+        assertTrue(settings.setRenderDistance(32));
+    }
+
+    @Test
+    void keepsSimulationDistanceWithinRenderDistance() {
+        GameSettings settings = new GameSettings();
+        settings.setRenderDistance(12);
+
+        assertTrue(settings.setSimulationDistance(6));
+        assertThrows(IllegalArgumentException.class, () -> settings.setSimulationDistance(13));
+        assertThrows(IllegalArgumentException.class, () -> settings.setSimulationDistance(0));
+        settings.setRenderDistance(4);
+        assertEquals(4, settings.simulationDistance());
+        settings.setRenderDistance(16);
+        assertEquals(4, settings.simulationDistance());
     }
 
     @Test

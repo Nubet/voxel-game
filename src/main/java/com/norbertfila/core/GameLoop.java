@@ -258,7 +258,8 @@ public final class GameLoop {
                         settings.renderDistance(),
                         placePressId,
                         !blocked && input.rightMouseDown(),
-                        settings.farDistance()));
+                        settings.farDistance(),
+                        settings.simulationDistance()));
             if (previousSlot != hotbar.selectedSlot())
                 submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
             Screen.Action uiAction;

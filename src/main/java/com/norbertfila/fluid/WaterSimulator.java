@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 public final class WaterSimulator {
@@ -32,6 +33,14 @@ public final class WaterSimulator {
     private final Map<ChunkPos, Set<BlockPos>> waiting = new HashMap<>();
     // Deferred updates by the chunk they are in, as opposed to the chunks they wait for.
     private final Map<ChunkPos, Set<BlockPos>> deferredIn = new HashMap<>();
+    // Updates outside the simulation area, frozen with their remaining delay. Sorted so that waking them schedules
+    // same-tick updates in a repeatable order.
+    private final Map<ChunkPos, Map<BlockPos, Long>> dormant = new TreeMap<>(CHUNK_ORDER);
+    private int dormantCount;
+    // Chunks loaded outside the simulation area, by column. Their water is scanned when the area reaches them.
+    private final Map<Long, Set<ChunkPos>> unscanned = new HashMap<>();
+    private ChunkPos areaCenter;
+    private int areaRadius;
     private long currentTick;
 
     public WaterSimulator(World world, int farTileSize) {
@@ -47,6 +56,44 @@ public final class WaterSimulator {
         edits = new WorldEdit(world, farTileSize);
         scheduler = new FluidScheduler(maxUpdatesPerTick);
         this.extended = extended;
+    }
+
+    /**
+     * Limits updates to chunk columns within {@code radius} of {@code center}; updates elsewhere wait, keeping their
+     * remaining delay. Until the first call every chunk is simulated.
+     */
+    public void setSimulationArea(ChunkPos center, int radius, long tick) {
+        Objects.requireNonNull(center);
+        if (radius < 0) throw new IllegalArgumentException("Simulation radius must not be negative");
+        advanceClock(tick);
+        if (center.equals(areaCenter) && radius == areaRadius) return;
+        ChunkPos previousCenter = areaCenter;
+        int previousRadius = areaRadius;
+        areaCenter = center;
+        areaRadius = radius;
+        for (ChunkPos chunk : scheduler.chunks()) {
+            if (simulated(chunk)) continue;
+            for (var update : scheduler.pendingIn(chunk)) {
+                scheduler.cancel(update.position());
+                park(update.position(), update.executeAtTick() - tick);
+            }
+        }
+        for (ChunkPos chunk : List.copyOf(dormant.keySet())) {
+            if (!simulated(chunk)) continue;
+            var updates = dormant.remove(chunk);
+            dormantCount -= updates.size();
+            updates.forEach((position, remaining) -> scheduler.schedule(position, tick + remaining));
+        }
+        if (unscanned.isEmpty()) return;
+        for (int dz = -radius; dz <= radius; dz++)
+            for (int dx = -radius; dx <= radius; dx++) {
+                long x = (long) center.x() + dx, z = (long) center.z() + dz;
+                if (previousCenter != null
+                        && Math.abs(x - previousCenter.x()) <= previousRadius
+                        && Math.abs(z - previousCenter.z()) <= previousRadius) continue;
+                var chunks = unscanned.remove(column(x, z));
+                if (chunks != null) for (ChunkPos chunk : chunks) scan(chunk, tick);
+            }
     }
 
     public void onBlockChanged(BlockPos position, long tick) {
@@ -90,7 +137,12 @@ public final class WaterSimulator {
     }
 
     public int pendingUpdates() {
-        return scheduler.size() + deferred.size();
+        return scheduler.size() + deferred.size() + dormantCount;
+    }
+
+    /** Updates waiting for the player to bring their chunk back into the simulation area. */
+    public int dormantUpdates() {
+        return dormantCount;
     }
 
     public int deferredUpdates() {
@@ -112,6 +164,18 @@ public final class WaterSimulator {
     public void onChunkChanged(ChunkPos chunk, long tick) {
         Objects.requireNonNull(chunk);
         advanceClock(tick);
+        if (!simulated(chunk)) {
+            // Outside the area only bookkeeping happens; the scan below waits until the area reaches the chunk.
+            if (world.hasChunk(chunk))
+                unscanned
+                        .computeIfAbsent(column(chunk.x(), chunk.z()), ignored -> new TreeSet<>(CHUNK_ORDER))
+                        .add(chunk);
+            else {
+                Set<ChunkPos> pending = unscanned.get(column(chunk.x(), chunk.z()));
+                if (pending != null && pending.remove(chunk) && pending.isEmpty())
+                    unscanned.remove(column(chunk.x(), chunk.z()));
+            }
+        }
         if (!world.hasChunk(chunk)) {
             // Generated water without changes is woken again by the scan below when the chunk returns, so only
             // chunks holding authoritative changes keep their frozen updates. Otherwise exploring would retain
@@ -123,17 +187,25 @@ public final class WaterSimulator {
                     defer(new FluidSnapshot.Update(
                             update.position(), Math.max(0, update.executeAtTick() - tick), List.of(chunk)));
             }
-            if (!keep)
+            if (!keep) {
                 for (BlockPos position : List.copyOf(deferredIn.getOrDefault(chunk, Set.of())))
                     removeDeferred(deferred.get(position));
+                var frozen = dormant.remove(chunk);
+                if (frozen != null) dormantCount -= frozen.size();
+            }
         } else {
             for (BlockPos position : List.copyOf(waiting.getOrDefault(chunk, Set.of()))) {
                 var update = deferred.get(position);
                 if (!update.missingChunks().stream().allMatch(world::hasChunk)) continue;
                 removeDeferred(update);
-                scheduler.schedule(position, Math.addExact(tick, update.remainingTicks()));
+                activate(position, Math.addExact(tick, update.remainingTicks()));
             }
         }
+        if (simulated(chunk)) scan(chunk, tick);
+    }
+
+    /** Schedules every water block in and next to {@code chunk} that may still flow. */
+    private void scan(ChunkPos chunk, long tick) {
         // Include the edge halo: support changes can affect a donor across two chunk axes.
         int halo = extended ? 5 : 1;
         // Scan in global y, z, x order because same-tick fluid updates run in scheduling order. Chunks without water
@@ -190,6 +262,9 @@ public final class WaterSimulator {
             updates.add(
                     new FluidSnapshot.Update(update.position(), Math.max(0, update.executeAtTick() - tick), List.of()));
         updates.addAll(deferred.values());
+        dormant.values()
+                .forEach(chunk -> chunk.forEach((position, remaining) ->
+                        updates.add(new FluidSnapshot.Update(position, remaining, List.of()))));
         return new FluidSnapshot(tick, updates);
     }
 
@@ -206,8 +281,7 @@ public final class WaterSimulator {
                 missing.clear();
                 missing.add(ownChunk);
             }
-            if (missing.isEmpty())
-                scheduler.schedule(update.position(), Math.addExact(currentTick, update.remainingTicks()));
+            if (missing.isEmpty()) activate(update.position(), Math.addExact(currentTick, update.remainingTicks()));
             else defer(new FluidSnapshot.Update(update.position(), update.remainingTicks(), List.copyOf(missing)));
         }
     }
@@ -285,7 +359,30 @@ public final class WaterSimulator {
             // New local supply can make the previously missing dependency irrelevant.
             removeDeferred(parked);
         }
-        scheduler.schedule(position, tick);
+        activate(position, tick);
+    }
+
+    private void activate(BlockPos position, long executeAtTick) {
+        ChunkPos chunk = Coordinates.worldToChunk(position);
+        if (simulated(chunk)) scheduler.schedule(position, executeAtTick);
+        else park(position, executeAtTick - currentTick);
+    }
+
+    private void park(BlockPos position, long remainingTicks) {
+        var updates = dormant.computeIfAbsent(Coordinates.worldToChunk(position), ignored -> new LinkedHashMap<>());
+        Long previous = updates.get(position);
+        if (previous == null) dormantCount++;
+        if (previous == null || remainingTicks < previous) updates.put(position, Math.max(0, remainingTicks));
+    }
+
+    private static long column(long x, long z) {
+        return x << 32 | z & 0xFFFFFFFFL;
+    }
+
+    private boolean simulated(ChunkPos chunk) {
+        return areaCenter == null
+                || Math.abs((long) chunk.x() - areaCenter.x()) <= areaRadius
+                        && Math.abs((long) chunk.z() - areaCenter.z()) <= areaRadius;
     }
 
     private static long nextTick(long tick) {

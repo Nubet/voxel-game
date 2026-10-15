@@ -125,6 +125,11 @@ public final class FluidScheduler {
                 .toList();
     }
 
+    /** Chunks holding at least one pending update. */
+    public List<ChunkPos> chunks() {
+        return List.copyOf(byChunk.keySet());
+    }
+
     /** Pending updates inside one chunk, in execution order. */
     public List<PendingUpdate> pendingIn(ChunkPos chunk) {
         Set<BlockPos> positions = byChunk.get(Objects.requireNonNull(chunk));
