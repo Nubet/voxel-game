@@ -67,6 +67,11 @@ public final class ChunkManager implements AutoCloseable {
     private ChunkPos evictionCenter;
     private long residencyRevision;
     private Residency residency = Residency.EMPTY;
+    // Sections with an uploaded mesh per chunk column, counted over the demanded height range; a column is drawn by
+    // near terrain once every section of it is.
+    private final Map<Long, Integer> drawnSections = new HashMap<>();
+    private long coverageRevision;
+    private Coverage coverage = Coverage.EMPTY;
     private final AtomicLong generationTokens = new AtomicLong();
     private final AtomicLong meshTokenSequence = new AtomicLong();
     private Consumer<ChunkPos> chunkLifecycleListener = ignored -> {};
@@ -242,7 +247,7 @@ public final class ChunkManager implements AutoCloseable {
         List<ChunkPos> evicted = new ArrayList<>();
         for (ChunkPos position : candidates) {
             if (!entries.containsKey(position) || withinHysteresis(position, center)) continue;
-            entries.remove(position);
+            sectionUndrawn(entries.remove(position));
             meshTokens.remove(position);
             meshingParts.remove(position);
             pendingRemesh.remove(position);
@@ -390,7 +395,10 @@ public final class ChunkManager implements AutoCloseable {
         ChunkEntry entry = entries.get(result.position());
         if (!entry.uploaded(result.meshRevision())) return false;
         meshingParts.remove(result.position());
-        if (entry.firstUpload()) visibleLatency.record(System.nanoTime() - entry.requestedAt());
+        if (entry.firstUpload()) {
+            visibleLatency.record(System.nanoTime() - entry.requestedAt());
+            sectionDrawn(result.position());
+        }
         processPendingRemesh(result.position());
         return true;
     }
@@ -499,6 +507,63 @@ public final class ChunkManager implements AutoCloseable {
         Objects.requireNonNull(change);
         if (!change.changed()) return;
         requestRemesh(change.dirtyChunks());
+    }
+
+    private void sectionDrawn(ChunkPos position) {
+        if (position.y() < viewDemand.minChunkY() || position.y() > viewDemand.maxChunkY()) return;
+        drawnSections.merge(columnKey(position.x(), position.z()), 1, Integer::sum);
+        coverageRevision++;
+    }
+
+    private void sectionUndrawn(ChunkEntry entry) {
+        ChunkPos position = entry.position();
+        if (!entry.hasMesh() || position.y() < viewDemand.minChunkY() || position.y() > viewDemand.maxChunkY()) return;
+        drawnSections.computeIfPresent(
+                columnKey(position.x(), position.z()), (key, count) -> count > 1 ? count - 1 : null);
+        coverageRevision++;
+    }
+
+    // Multiplying by an odd constant is a bijection, so keys stay unique while x and z bits spread over the hash.
+    private static long columnKey(int x, int z) {
+        return ((long) x << 32 | Integer.toUnsignedLong(z)) * 0x9E3779B97F4A7C15L;
+    }
+
+    /**
+     * Chunk columns around the view center whose every demanded section has an uploaded mesh, so near terrain fully
+     * draws them. The same instance is returned until coverage or the center changes.
+     */
+    public Coverage coverage() {
+        ChunkPos center = viewDemand.center();
+        int radius = hysteresisRadius;
+        int minX = center.x() - radius, minZ = center.z() - radius, size = 2 * radius + 1;
+        if (coverage.revision() == coverageRevision
+                && coverage.minChunkX() == minX
+                && coverage.minChunkZ() == minZ
+                && coverage.size() == size) return coverage;
+        int sections = viewDemand.maxChunkY() - viewDemand.minChunkY() + 1;
+        long[] bits = new long[(size * size + 63) / 64];
+        for (int z = 0; z < size; z++)
+            for (int x = 0; x < size; x++) {
+                Integer drawn = drawnSections.get(columnKey(minX + x, minZ + z));
+                if (drawn != null && drawn >= sections) bits[(z * size + x) >>> 6] |= 1L << (z * size + x);
+            }
+        coverage = new Coverage(coverageRevision, minX, minZ, size, bits);
+        return coverage;
+    }
+
+    /**
+     * Columns {@code [minChunkX, minChunkX + size) x [minChunkZ, minChunkZ + size)} as bits indexed {@code z * size +
+     * x}; a set bit means near terrain draws that whole column. The array is never modified after construction.
+     */
+    public record Coverage(long revision, int minChunkX, int minChunkZ, int size, long[] bits) {
+        public static final Coverage EMPTY = new Coverage(-1, 0, 0, 0, new long[0]);
+
+        public boolean drawn(int chunkX, int chunkZ) {
+            long x = (long) chunkX - minChunkX, z = (long) chunkZ - minChunkZ;
+            if (x < 0 || z < 0 || x >= size || z >= size) return false;
+            int index = (int) (z * size + x);
+            return (bits[index >>> 6] & 1L << index) != 0;
+        }
     }
 
     /** The resident chunks and their generation tokens; the same instance is returned until residency changes. */

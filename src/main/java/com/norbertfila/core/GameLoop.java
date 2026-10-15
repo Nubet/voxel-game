@@ -352,7 +352,6 @@ public final class GameLoop {
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (state != null) {
-                var far = state.far();
                 renderer.far()
                         .render(
                                 camera.relativeViewProjection(
@@ -361,12 +360,8 @@ public final class GameLoop {
                                 camera.y(),
                                 camera.z(),
                                 visibility.amount(),
-                                far.nearMinX(),
-                                far.nearMinZ(),
-                                far.nearMaxX(),
-                                far.nearMaxZ());
-                // Far fragments that survive the near-area clip lie behind the near area, so near terrain needs no
-                // depth test against them.
+                                state.coverage());
+                // Near terrain draws over far terrain; far terrain only shows where near terrain is missing.
                 glClear(GL_DEPTH_BUFFER_BIT);
             }
             if (gpuTimer != null) gpuTimer.stamp();

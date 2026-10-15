@@ -242,13 +242,7 @@ public final class WorldRuntime implements AutoCloseable {
                             chunks.update(center);
                             var eye = player.renderEyePosition(1);
                             far.markEdited(world.changes().drainDirtyTiles());
-                            far.update(
-                                    eye.x(),
-                                    eye.z(),
-                                    center.x(),
-                                    center.z(),
-                                    state.renderDistance(),
-                                    state.farDistance());
+                            far.update(eye.x(), eye.z(), state.renderDistance(), state.farDistance());
                             far.process();
                             // Upload backpressure must not prevent collision-data admission.
                             int meshBudget = Math.min(
@@ -430,6 +424,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     state.paused(),
                                     chunks.residency(),
                                     far.residency(),
+                                    chunks.coverage(),
                                     Map.copyOf(valid),
                                     water.pendingUpdates(),
                                     metrics,
@@ -754,6 +749,7 @@ public final class WorldRuntime implements AutoCloseable {
             boolean paused,
             ChunkManager.Residency residency,
             FarTerrainStreamer.Residency far,
+            ChunkManager.Coverage coverage,
             Map<Long, ChunkManager.MeshResult> validUploads,
             int pendingWater,
             SimulationMetrics metrics,
@@ -761,6 +757,7 @@ public final class WorldRuntime implements AutoCloseable {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
+            Objects.requireNonNull(coverage);
             validUploads = Map.copyOf(validUploads);
             Objects.requireNonNull(inventory);
         }

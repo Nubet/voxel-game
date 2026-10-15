@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.ChunkData;
@@ -670,6 +671,29 @@ class ChunkManagerTest {
             }
             assertEquals(
                     1, opened.mesh().solid().quadCount(), "only the face toward the removed block becomes visible");
+        }
+    }
+
+    @Test
+    void columnCountsAsDrawnOnlyOnceEverySectionIsUploadedAndStopsAfterEviction() {
+        try (ChunkManager manager =
+                new ChunkManager(new World(), emptyGenerator(), new ViewDemand(0, 0, 1, ViewDemand.Shape.SQUARE))) {
+            manager.update(new ChunkPos(0, 0, 0));
+            var first = awaitMesh(manager).meshes();
+            assertFalse(manager.coverage().drawn(0, 0));
+            assertTrue(manager.markUploaded(first.get(0)));
+            if (first.size() > 1) assertTrue(manager.markUploaded(first.get(1)));
+            else {
+                assertFalse(manager.coverage().drawn(0, 0), "one of two sections uploaded");
+                assertTrue(manager.markUploaded(awaitMesh(manager).meshes().get(0)));
+            }
+            var drawn = manager.coverage();
+            assertTrue(drawn.drawn(0, 0));
+            assertFalse(drawn.drawn(1, 0));
+            assertSame(drawn, manager.coverage(), "unchanged coverage is not rebuilt");
+
+            manager.update(new ChunkPos(100, 0, 0));
+            assertFalse(manager.coverage().drawn(0, 0));
         }
     }
 
