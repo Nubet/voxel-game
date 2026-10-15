@@ -8,7 +8,9 @@ import java.util.Objects;
  * copy instead of making their own.
  */
 public final class ChunkSnapshot {
+    // Null for a chunk of one block type, which then reads as uniformBlock and costs no array.
     private final byte[] blocks;
+    private final byte uniformBlock;
     private final byte[] waterData;
     private final long revision;
     private final long meshDependencyRevision;
@@ -22,25 +24,36 @@ public final class ChunkSnapshot {
     }
 
     ChunkSnapshot(byte[] blocks, byte[] waterData, long revision, long meshDependencyRevision) {
-        this(revision, meshDependencyRevision, validatedCopy(blocks), validatedWater(blocks, waterData));
+        this(revision, meshDependencyRevision, validatedCopy(blocks), BlockId.AIR, validatedWater(blocks, waterData));
     }
 
     /** Takes ownership of the arrays; callers must not keep or modify them. */
-    private ChunkSnapshot(long revision, long meshDependencyRevision, byte[] blocks, byte[] waterData) {
+    private ChunkSnapshot(
+            long revision, long meshDependencyRevision, byte[] blocks, byte uniformBlock, byte[] waterData) {
         this.blocks = blocks;
+        this.uniformBlock = uniformBlock;
         this.waterData = waterData;
         this.revision = revision;
         this.meshDependencyRevision = meshDependencyRevision;
     }
 
     static ChunkSnapshot owning(byte[] blocks, byte[] waterData, long revision, long meshDependencyRevision) {
-        return new ChunkSnapshot(revision, meshDependencyRevision, blocks, waterData);
+        return new ChunkSnapshot(revision, meshDependencyRevision, blocks, BlockId.AIR, waterData);
+    }
+
+    static ChunkSnapshot uniform(byte block, byte[] waterData, long revision, long meshDependencyRevision) {
+        return new ChunkSnapshot(revision, meshDependencyRevision, null, block, waterData);
     }
 
     ChunkSnapshot withMeshDependencyRevision(long meshDependencyRevision) {
         return meshDependencyRevision == this.meshDependencyRevision
                 ? this
-                : new ChunkSnapshot(revision, meshDependencyRevision, blocks, waterData);
+                : new ChunkSnapshot(revision, meshDependencyRevision, blocks, uniformBlock, waterData);
+    }
+
+    /** Bytes of block and water arrays held by this snapshot, shared with snapshots of the same revision. */
+    long arrayBytes() {
+        return (blocks == null ? 0 : blocks.length) + (waterData == null ? 0 : waterData.length);
     }
 
     private static byte[] validatedCopy(byte[] blocks) {
@@ -64,12 +77,13 @@ public final class ChunkSnapshot {
     }
 
     public byte get(int x, int y, int z) {
-        return blocks[index(x, y, z)];
+        int index = index(x, y, z);
+        return blocks == null ? uniformBlock : blocks[index];
     }
 
     public byte waterState(int x, int y, int z) {
         int index = index(x, y, z);
-        if (blocks[index] != BlockId.WATER) return WaterState.EMPTY;
+        if ((blocks == null ? uniformBlock : blocks[index]) != BlockId.WATER) return WaterState.EMPTY;
         return waterData == null ? WaterState.SOURCE : waterData[index];
     }
 

@@ -41,6 +41,21 @@ public final class LayerStorage {
         if (layer.get(index) != value) layers[y] = layer.set(index, value);
     }
 
+    /** Replaces dense layers that now hold a single block type by their compact form. */
+    public void compactLayers() {
+        for (int y = 0; y < Chunk.SIZE; y++) {
+            ChunkData layer = layers[y];
+            if (layer.kind() != ChunkData.Kind.DENSE) continue;
+            byte first = layer.get(0);
+            boolean uniform = true;
+            for (int index = 1; index < LAYER_BLOCKS && uniform; index++) uniform = layer.get(index) == first;
+            if (uniform)
+                layers[y] = first == BlockId.AIR
+                        ? ChunkData.empty(LAYER_BLOCKS)
+                        : new ChunkData.Uniform(first, LAYER_BLOCKS);
+        }
+    }
+
     public void copyInto(byte[] target) {
         if (target.length != Chunk.BLOCK_BYTES) throw new IllegalArgumentException("Invalid target size");
         for (int y = 0; y < Chunk.SIZE; y++) layers[y].copyInto(target, y * LAYER_BLOCKS);

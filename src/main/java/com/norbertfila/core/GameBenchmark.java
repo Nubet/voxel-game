@@ -462,6 +462,7 @@ public final class GameBenchmark {
                     .put("gcCount", end.gcCount() - start.gcCount())
                     .put("gcMs", end.gcMillis() - start.gcMillis())
                     .put("retainedHeapMB", retainedHeapMb)
+                    .put("chunkMemoryMB", megabytes(end.chunkBytes()))
                     .put("gpuMeshMB", megabytes(end.gpuMeshBytes()))
                     .put("gpuArenaMB", megabytes(end.gpuArenaBytes()))
                     .put("gpuArenas", end.gpuArenas())
@@ -517,7 +518,8 @@ public final class GameBenchmark {
             long gcMillis,
             long gpuMeshBytes,
             long gpuArenaBytes,
-            int gpuArenas) {
+            int gpuArenas,
+            long chunkBytes) {
         static Counters sample(WorldRuntime runtime, WorldRuntime.Frame state, TerrainRenderer renderer) {
             var threads = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
             long gcCount = 0, gcMillis = 0;
@@ -534,7 +536,8 @@ public final class GameBenchmark {
                     gcMillis,
                     renderer.memoryStats().allocated(),
                     renderer.memoryStats().arenaBytes(),
-                    renderer.memoryStats().arenas());
+                    renderer.memoryStats().arenas(),
+                    state.metrics().estimatedChunkBytes());
         }
     }
 

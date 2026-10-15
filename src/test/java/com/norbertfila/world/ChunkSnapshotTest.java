@@ -41,6 +41,44 @@ class ChunkSnapshotTest {
     }
 
     @Test
+    void uniformChunksSnapshotWithoutBlockArrays() {
+        Chunk stone = Chunk.uniform(BlockId.STONE);
+        ChunkSnapshot snapshot = stone.snapshot();
+        assertEquals(0, snapshot.arrayBytes());
+        assertEquals(BlockId.STONE, snapshot.get(15, 0, 7));
+        assertEquals(WaterState.EMPTY, snapshot.waterState(1, 1, 1));
+        assertEquals(WaterState.SOURCE, Chunk.uniform(BlockId.WATER).snapshot().waterState(3, 4, 5));
+    }
+
+    @Test
+    void layersEditedBackToOneBlockAreCompactedWhenSnapshotted() {
+        Chunk chunk = Chunk.uniform(BlockId.STONE);
+        chunk.set(3, 2, 1, BlockId.AIR);
+        assertEquals(Chunk.BLOCK_BYTES, chunk.snapshot().arrayBytes());
+        chunk.set(3, 2, 1, BlockId.STONE);
+        assertEquals(0, chunk.snapshot().arrayBytes());
+        assertEquals(BlockId.STONE, chunk.uniformBlock());
+        assertEquals(16, chunk.estimatedBytes());
+    }
+
+    @Test
+    void worldBoundsCachedSnapshotArraysButKeepsPublishedOnesIntact() {
+        World world = new World();
+        java.util.List<ChunkSnapshot> published = new java.util.ArrayList<>();
+        for (int x = 0; x < 4200; x++) {
+            Chunk chunk = new Chunk();
+            chunk.set(x % 16, 0, 0, BlockId.STONE);
+            world.putChunk(new ChunkPos(x, 0, 0), chunk);
+            published.add(world.blockNeighborhood(new ChunkPos(x, 0, 0)).center());
+        }
+        assertTrue(world.cachedSnapshots() <= 4096);
+        assertEquals(BlockId.STONE, published.get(0).get(0, 0, 0));
+        assertEquals(
+                BlockId.STONE,
+                world.blockNeighborhood(new ChunkPos(0, 0, 0)).center().get(0, 0, 0));
+    }
+
+    @Test
     void snapshotCopiesExternallyOwnedInput() {
         byte[] blocks = new byte[Chunk.BLOCK_BYTES];
         blocks[0] = BlockId.STONE;
