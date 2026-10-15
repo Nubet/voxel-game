@@ -53,6 +53,42 @@ class WaterSimulatorTest {
     }
 
     @Test
+    void updatesOutsideTheSimulationAreaWaitUntilTheAreaCoversThem() {
+        Scene scene = new Scene();
+        scene.simulator.setSimulationArea(new ChunkPos(0, 0, 0), 0, 0);
+        scene.set(0, 1, 0, BlockId.WATER);
+        for (int tick = 0; tick < 300; tick++) scene.step();
+
+        assertEquals(7, scene.state(7, 1, 0));
+        assertEquals(WaterState.EMPTY, scene.state(-1, 1, 0));
+        assertTrue(scene.simulator.dormantUpdates() > 0);
+        assertEquals(scene.simulator.dormantUpdates(), scene.simulator.pendingUpdates());
+        assertEquals(
+                scene.simulator.pendingUpdates(),
+                scene.simulator.snapshot(scene.time).updates().size());
+
+        scene.simulator.setSimulationArea(new ChunkPos(0, 0, 0), 1, scene.time);
+        scene.settle();
+        assertEquals(1, scene.state(-1, 1, 0));
+        assertEquals(7, scene.state(-7, 1, 0));
+        assertEquals(7, scene.state(0, 1, -7));
+    }
+
+    @Test
+    void chunkLoadedOutsideTheSimulationAreaIsScannedWhenTheAreaReachesIt() {
+        Scene scene = new Scene();
+        scene.simulator.setSimulationArea(new ChunkPos(10, 0, 0), 2, 0);
+        scene.edits.setBlock(new BlockPos(0, 1, 0), BlockId.WATER, WaterState.SOURCE);
+        scene.simulator.onChunkChanged(new ChunkPos(0, 0, 0), 0);
+        assertEquals(0, scene.simulator.pendingUpdates());
+
+        scene.simulator.setSimulationArea(new ChunkPos(0, 0, 0), 2, 0);
+        scene.settle();
+        assertEquals(7, scene.state(7, 1, 0));
+        assertEquals(7, scene.state(-7, 1, 0));
+    }
+
+    @Test
     void waterfallExceedsHorizontalRangeAndSpreadsOnlyAtItsFoot() {
         Scene scene = new Scene(0, 0, 0, 40, 2_000);
         scene.set(0, 40, 0, BlockId.WATER);

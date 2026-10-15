@@ -284,7 +284,7 @@ public final class UiViewportSmoke {
         screens.open(screen);
         screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
-        for (int i = 0; i < 9; i++) screens.keyPress(UiKey.NEXT);
+        for (int i = 0; i < 10; i++) screens.keyPress(UiKey.NEXT);
         check(screen.backButton().focused(), "Back missing from keyboard navigation");
         clear();
         render(ui, canvas, screens, hotbar, viewport);

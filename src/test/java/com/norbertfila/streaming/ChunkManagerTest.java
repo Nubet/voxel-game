@@ -462,13 +462,18 @@ class ChunkManagerTest {
 
         manager.update(new ChunkPos(0, 0, 0));
         await(manager);
-        ChunkManager.UpdateResult moved = manager.update(new ChunkPos(2, 0, 0));
+        ChunkPos away = new ChunkPos(ChunkManager.UNLOAD_MARGIN + 1, 0, 0);
+        assertTrue(manager.update(new ChunkPos(ChunkManager.UNLOAD_MARGIN, 0, 0))
+                .evicted()
+                .isEmpty());
         await(manager);
-        ChunkManager.UpdateResult steady = manager.update(new ChunkPos(2, 0, 0));
+        ChunkManager.UpdateResult moved = manager.update(away);
+        await(manager);
+        ChunkManager.UpdateResult steady = manager.update(away);
 
         assertEquals(List.of(new ChunkPos(0, 0, 0)), moved.evicted());
         assertEquals(1, moved.scheduled());
-        assertEquals(1, manager.residentCount());
+        assertEquals(2, manager.residentCount());
         assertTrue(steady.evicted().isEmpty());
         assertEquals(0, steady.generated());
         manager.close();

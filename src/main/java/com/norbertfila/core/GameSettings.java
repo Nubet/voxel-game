@@ -9,7 +9,11 @@ public final class GameSettings {
     public static final float DEFAULT_MOUSE_SENSITIVITY = .11f;
     public static final float DEFAULT_ZOOM_SPEED = 12f;
     public static final int MIN_RENDER_DISTANCE = 2;
-    public static final int MAX_RENDER_DISTANCE = 16;
+    public static final int MAX_RENDER_DISTANCE = 32;
+    /** Block updates such as flowing water run only this many chunks from the player, at most the render distance. */
+    public static final int MIN_SIMULATION_DISTANCE = 1;
+
+    public static final int DEFAULT_SIMULATION_DISTANCE = 6;
     /** Far terrain radius in chunks; 0 or a value not above the render distance turns it off. */
     public static final int MAX_FAR_DISTANCE = 128;
 
@@ -19,6 +23,7 @@ public final class GameSettings {
     public static final int MAX_GUI_SCALE = 4;
 
     private int renderDistance = 4;
+    private int simulationDistance = Math.min(DEFAULT_SIMULATION_DISTANCE, renderDistance);
     private int farDistance = DEFAULT_FAR_DISTANCE;
     private float fieldOfView = DEFAULT_FIELD_OF_VIEW;
     private float zoomFieldOfView = DEFAULT_ZOOM_FIELD_OF_VIEW;
@@ -37,6 +42,20 @@ public final class GameSettings {
         }
         if (renderDistance == value) return false;
         renderDistance = value;
+        if (simulationDistance > renderDistance) simulationDistance = renderDistance;
+        return true;
+    }
+
+    public int simulationDistance() {
+        return simulationDistance;
+    }
+
+    public boolean setSimulationDistance(int value) {
+        if (value < MIN_SIMULATION_DISTANCE || value > renderDistance)
+            throw new IllegalArgumentException(
+                    "Simulation distance must be between " + MIN_SIMULATION_DISTANCE + " and the render distance");
+        if (simulationDistance == value) return false;
+        simulationDistance = value;
         return true;
     }
 

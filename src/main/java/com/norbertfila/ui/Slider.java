@@ -62,6 +62,7 @@ public final class Slider {
     public void setRange(int minimum, int maximum, int step) {
         if (minimum >= maximum || step <= 0 || ((long) maximum - minimum) % step != 0)
             throw new IllegalArgumentException("Invalid slider range or step");
+        if (this.minimum == minimum && this.maximum == maximum && this.step == step) return;
         this.minimum = minimum;
         this.maximum = maximum;
         this.step = step;

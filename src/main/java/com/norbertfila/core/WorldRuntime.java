@@ -231,6 +231,9 @@ public final class WorldRuntime implements AutoCloseable {
                             ChunkPos center = Coordinates.worldToChunk(
                                     new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
                                             Math.floor(position.z())));
+                            // Before streaming, so that chunks loading outside the area this tick skip the water scan.
+                            water.setSimulationArea(
+                                    center, Math.min(state.simulationDistance(), state.renderDistance()), tick[0]);
                             long predictionStarted = System.nanoTime();
                             var collisionDemand = new LinkedHashSet<>(player.requiredCollisionChunks(
                                     world, input.peekTick(), dt, state.yaw(), state.pitch()));
@@ -625,13 +628,14 @@ public final class WorldRuntime implements AutoCloseable {
             int renderDistance,
             long placePressId,
             boolean placeHeld,
-            int farDistance) {
+            int farDistance,
+            int simulationDistance) {
         public Controls(
                 PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
             this(input, yaw, pitch, blocked, paused, renderDistance, 0, false);
         }
 
-        /** Controls without far terrain. */
+        /** Controls without far terrain, simulating every loaded chunk. */
         public Controls(
                 PlayerInput input,
                 double yaw,
@@ -641,7 +645,7 @@ public final class WorldRuntime implements AutoCloseable {
                 int renderDistance,
                 long placePressId,
                 boolean placeHeld) {
-            this(input, yaw, pitch, blocked, paused, renderDistance, placePressId, placeHeld, 0);
+            this(input, yaw, pitch, blocked, paused, renderDistance, placePressId, placeHeld, 0, renderDistance);
         }
 
         public Controls {
@@ -656,6 +660,8 @@ public final class WorldRuntime implements AutoCloseable {
                     || renderDistance > GameSettings.MAX_RENDER_DISTANCE
                     || farDistance < 0
                     || farDistance > GameSettings.MAX_FAR_DISTANCE
+                    || simulationDistance < 0
+                    || simulationDistance > GameSettings.MAX_RENDER_DISTANCE
                     || placePressId < 0) throw new IllegalArgumentException("Invalid runtime controls");
         }
     }
