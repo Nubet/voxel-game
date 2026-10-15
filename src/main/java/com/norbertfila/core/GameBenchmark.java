@@ -336,7 +336,7 @@ public final class GameBenchmark {
         private long settleNanos, measureStarted, measureNanos;
         private boolean settleTimedOut;
         private long lastSampledTick = -1, missedTicks, droppedCommands;
-        private long visibleSum, drawSum, frames;
+        private long visibleSum, drawSum, meshDrawSum, frames;
         private int residentMax, uploadQueueMax, over16, over33;
         private Counters start, end;
         private double retainedHeapMb, profilerOverheadUs;
@@ -357,6 +357,7 @@ public final class GameBenchmark {
             frames++;
             visibleSum += stats.visible();
             drawSum += stats.drawCalls();
+            meshDrawSum += stats.draws();
             uploadQueueMax = Math.max(uploadQueueMax, uploadQueue);
             residentMax = Math.max(residentMax, state.residents().size());
             if (state.tick() == lastSampledTick) return;
@@ -450,6 +451,8 @@ public final class GameBenchmark {
                     .put("residentMax", residentMax)
                     .put("visibleAvg", frames == 0 ? 0.0 : (double) visibleSum / frames)
                     .put("drawsAvg", frames == 0 ? 0.0 : (double) drawSum / frames)
+                    .put("meshDrawsAvg", frames == 0 ? 0.0 : (double) meshDrawSum / frames)
+                    .put("directDraw", Boolean.getBoolean("voxel.render.directDraw"))
                     .put("uploadQueueMax", uploadQueueMax)
                     .put("renderAllocMBps", megabytes(end.renderAllocated() - start.renderAllocated()) / seconds)
                     .put("worldAllocMBps", megabytes(end.worldAllocated() - start.worldAllocated()) / seconds)

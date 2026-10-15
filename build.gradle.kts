@@ -52,4 +52,5 @@ tasks.register<JavaExec>("benchmarkGame") {
     systemProperty("voxel.benchmark.label", findProperty("label") ?: "unlabeled")
     systemProperty("voxel.benchmark.gpuTimers", findProperty("gpuTimers") ?: "true")
     findProperty("seconds")?.let { systemProperty("voxel.benchmark.seconds", it) }
+    findProperty("directDraw")?.let { systemProperty("voxel.render.directDraw", it) }
 }

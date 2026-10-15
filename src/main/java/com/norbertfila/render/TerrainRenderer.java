@@ -12,8 +12,10 @@ import com.norbertfila.world.RenderLayer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -22,6 +24,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 /**
  * Draws chunk quad meshes by vertex pulling: each mesh part is a shader storage buffer of quad records, and the vertex
@@ -47,6 +50,14 @@ public final class TerrainRenderer implements AutoCloseable {
     private final Program solidProgram;
     private final Program waterProgram;
     private final int emptyVertexArray;
+    // Draw commands for the current frame; the direct path issues the same commands one by one for A/B checks.
+    private final DrawCommands commands = new DrawCommands();
+    private int[] distinctBuffers = new int[8];
+    private final boolean multiDraw = !Boolean.getBoolean("voxel.render.directDraw");
+    private final int indirectBufferId;
+    private final int chunkBufferId;
+    private IntBuffer commandStaging = MemoryUtil.memAllocInt(1024);
+    private IntBuffer chunkStaging = MemoryUtil.memAllocInt(1024);
     private final long startedAt = System.nanoTime();
     private boolean closed;
 
@@ -76,6 +87,8 @@ public final class TerrainRenderer implements AutoCloseable {
         solidProgram = solid;
         // Vertex pulling reads no attributes, but the core profile still requires a bound vertex array.
         emptyVertexArray = glGenVertexArrays();
+        indirectBufferId = glGenBuffers();
+        chunkBufferId = glGenBuffers();
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
@@ -196,23 +209,31 @@ public final class TerrainRenderer implements AutoCloseable {
         // Chunk-center ordering approximates back-to-front blending; overlapping water inside one chunk can still sort
         // incorrectly.
         visibleWater.sort(backToFront(cameraX, cameraY, cameraZ));
+        commands.clear();
+        addGroupedByBuffer(RenderLayer.OPAQUE, solidMeshes, visibleSolids);
+        addGroupedByBuffer(RenderLayer.CUTOUT, solidMeshes, visibleSolids);
+        // Water keeps its back-to-front order; a new run starts only where the arena buffer changes.
+        for (ChunkPos position : visibleWater) add(RenderLayer.TRANSLUCENT, waterMeshes.get(position), position);
         float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
         blockTextures.bind(0);
         glBindVertexArray(emptyVertexArray);
-        int draws = 0;
+        int calls = 0;
         try {
+            uploadDraws();
             restoreTerrainState();
-            solidProgram.use(viewProjection, underwater, time);
-            draws += draw(solidProgram, solidMeshes, visibleSolids, RenderLayer.OPAQUE, cameraX, cameraY, cameraZ);
-            draws += draw(solidProgram, solidMeshes, visibleSolids, RenderLayer.CUTOUT, cameraX, cameraY, cameraZ);
+            solidProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+            glUniform1i(solidProgram.renderLayer, RenderLayer.OPAQUE.ordinal());
+            calls += submit(RenderLayer.OPAQUE);
+            glUniform1i(solidProgram.renderLayer, RenderLayer.CUTOUT.ordinal());
+            calls += submit(RenderLayer.CUTOUT);
             if (!visibleWater.isEmpty()) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
-                waterProgram.use(viewProjection, underwater, time);
-                draws += draw(
-                        waterProgram, waterMeshes, visibleWater, RenderLayer.TRANSLUCENT, cameraX, cameraY, cameraZ);
+                waterProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+                glUniform1i(waterProgram.renderLayer, RenderLayer.TRANSLUCENT.ordinal());
+                calls += submit(RenderLayer.TRANSLUCENT);
             }
         } finally {
             restoreTerrainState();
@@ -221,7 +242,81 @@ public final class TerrainRenderer implements AutoCloseable {
             endFrame();
         }
         int visible = culling.visible().size();
-        return new RenderStats(visible, regionIndex.size() - visible, draws);
+        return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws());
+    }
+
+    /** Opaque and cutout order does not matter for blending, so draws are grouped to make one run per arena. */
+    private void addGroupedByBuffer(RenderLayer layer, GpuMeshPool pool, List<ChunkPos> positions) {
+        int distinct = 0;
+        for (ChunkPos position : positions) {
+            int buffer = pool.get(position).buffer();
+            int index = 0;
+            while (index < distinct && distinctBuffers[index] != buffer) index++;
+            if (index < distinct) continue;
+            if (distinct == distinctBuffers.length) distinctBuffers = Arrays.copyOf(distinctBuffers, distinct * 2);
+            distinctBuffers[distinct++] = buffer;
+        }
+        for (int index = 0; index < distinct; index++) {
+            int buffer = distinctBuffers[index];
+            for (ChunkPos position : positions) {
+                GpuMesh mesh = pool.get(position);
+                if (mesh.buffer() == buffer) add(layer, mesh, position);
+            }
+        }
+    }
+
+    private void add(RenderLayer layer, GpuMesh mesh, ChunkPos position) {
+        int quads = mesh.ranges().count(layer);
+        if (quads == 0) return;
+        commands.add(
+                layer.ordinal(),
+                mesh.buffer(),
+                (mesh.firstRecord() + mesh.ranges().first(layer)) * QuadMesh.VERTICES_PER_QUAD,
+                quads * QuadMesh.VERTICES_PER_QUAD,
+                position);
+    }
+
+    private void uploadDraws() {
+        if (commands.changedSinceLastUpload()) {
+            int ints = commands.draws() * DrawCommands.COMMAND_INTS;
+            commandStaging =
+                    upload(GL_DRAW_INDIRECT_BUFFER, indirectBufferId, commandStaging, commands.commands(), ints);
+            chunkStaging = upload(GL_SHADER_STORAGE_BUFFER, chunkBufferId, chunkStaging, commands.chunks(), ints);
+        }
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectBufferId);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, chunkBufferId);
+    }
+
+    /** Copies the first {@code ints} values of {@code data}; orphaning the buffer avoids waiting on draws in flight. */
+    private static IntBuffer upload(int target, int glBuffer, IntBuffer staging, int[] data, int ints) {
+        IntBuffer buffer = staging.capacity() >= ints ? staging.clear() : MemoryUtil.memRealloc(staging, ints * 2);
+        buffer.put(data, 0, ints).flip();
+        glBindBuffer(target, glBuffer);
+        glBufferData(target, buffer, GL_STREAM_DRAW);
+        return buffer;
+    }
+
+    private int submit(RenderLayer layer) {
+        int calls = 0;
+        int[] data = commands.commands();
+        for (int run = 0; run < commands.runs(); run++) {
+            if (commands.runPass(run) != layer.ordinal()) continue;
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, commands.runBuffer(run));
+            int start = commands.runStart(run), count = commands.runCount(run);
+            if (multiDraw) {
+                glMultiDrawArraysIndirect(
+                        GL_TRIANGLES, (long) start * DrawCommands.COMMAND_INTS * Integer.BYTES, count, 0);
+                calls++;
+            } else {
+                for (int draw = start; draw < start + count; draw++) {
+                    int command = draw * DrawCommands.COMMAND_INTS;
+                    glDrawArraysInstancedBaseInstance(
+                            GL_TRIANGLES, data[command + 2], data[command], 1, data[command + 3]);
+                    calls++;
+                }
+            }
+        }
+        return calls;
     }
 
     /** Hands replaced or removed meshes to the arenas, which reuse their ranges once the GPU is done with them. */
@@ -230,39 +325,6 @@ public final class TerrainRenderer implements AutoCloseable {
         waterMeshes.drainDeletions(Integer.MAX_VALUE);
         solidArenas.endFrame();
         waterArenas.endFrame();
-    }
-
-    private static int draw(
-            Program program,
-            GpuMeshPool pool,
-            List<ChunkPos> positions,
-            RenderLayer layer,
-            double cameraX,
-            double cameraY,
-            double cameraZ) {
-        glUniform1i(program.renderLayer, layer.ordinal());
-        int draws = 0, boundBuffer = -1;
-        for (ChunkPos position : positions) {
-            GpuMesh mesh = pool.get(position);
-            int quads = mesh.ranges().count(layer);
-            if (quads == 0) continue;
-            // Subtract in double precision so chunk origins far from zero stay exact relative to the camera.
-            glUniform3f(
-                    program.chunkOrigin,
-                    (float) ((double) position.x() * Chunk.SIZE - cameraX),
-                    (float) ((double) position.y() * Chunk.SIZE - cameraY),
-                    (float) ((double) position.z() * Chunk.SIZE - cameraZ));
-            if (mesh.buffer() != boundBuffer) {
-                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.buffer());
-                boundBuffer = mesh.buffer();
-            }
-            glDrawArrays(
-                    GL_TRIANGLES,
-                    (mesh.firstRecord() + mesh.ranges().first(layer)) * QuadMesh.VERTICES_PER_QUAD,
-                    quads * QuadMesh.VERTICES_PER_QUAD);
-            draws++;
-        }
-        return draws;
     }
 
     private static void restoreTerrainState() {
@@ -301,6 +363,10 @@ public final class TerrainRenderer implements AutoCloseable {
         solidProgram.close();
         waterProgram.close();
         glDeleteVertexArrays(emptyVertexArray);
+        glDeleteBuffers(indirectBufferId);
+        glDeleteBuffers(chunkBufferId);
+        MemoryUtil.memFree(commandStaging);
+        MemoryUtil.memFree(chunkStaging);
     }
 
     public record UploadStats(
@@ -313,7 +379,8 @@ public final class TerrainRenderer implements AutoCloseable {
             List<MeshResult> failed,
             List<MeshResult> discarded) {}
 
-    public record RenderStats(int visible, int culled, int drawCalls) {}
+    /** {@code drawCalls} counts GL calls issued; {@code draws} counts mesh ranges drawn, the same on both paths. */
+    public record RenderStats(int visible, int culled, int drawCalls, int draws) {}
 
     public MemoryStats memoryStats() {
         return new MemoryStats(
@@ -337,7 +404,8 @@ public final class TerrainRenderer implements AutoCloseable {
     private static final class Program implements AutoCloseable {
         private final int id;
         private final int viewProjection;
-        private final int chunkOrigin;
+        private final int cameraBlock;
+        private final int cameraFraction;
         private final int renderLayer;
         private final int waterTime;
         private final int waterFog;
@@ -354,7 +422,8 @@ public final class TerrainRenderer implements AutoCloseable {
                 if (glGetProgrami(linked, GL_LINK_STATUS) == GL_FALSE)
                     throw new IllegalStateException("Shader program link failed: " + glGetProgramInfoLog(linked));
                 viewProjection = uniform(linked, "uVP");
-                chunkOrigin = uniform(linked, "uChunkOrigin");
+                cameraBlock = uniform(linked, "uCameraBlock");
+                cameraFraction = uniform(linked, "uCameraFraction");
                 renderLayer = uniform(linked, "uRenderLayer");
                 waterTime = uniform(linked, "uWaterTime");
                 waterFog = uniform(linked, "uWaterFog");
@@ -373,8 +442,12 @@ public final class TerrainRenderer implements AutoCloseable {
             }
         }
 
-        void use(Matrix4f viewProjectionMatrix, float underwater, float time) {
+        void use(Matrix4f viewProjectionMatrix, float underwater, float time, double x, double y, double z) {
             glUseProgram(id);
+            // Integer block plus fraction keeps chunk origins exact in the shader far from the world origin.
+            double blockX = Math.floor(x), blockY = Math.floor(y), blockZ = Math.floor(z);
+            glUniform3i(cameraBlock, (int) blockX, (int) blockY, (int) blockZ);
+            glUniform3f(cameraFraction, (float) (x - blockX), (float) (y - blockY), (float) (z - blockZ));
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 FloatBuffer matrix = stack.mallocFloat(16);
                 viewProjectionMatrix.get(matrix);
