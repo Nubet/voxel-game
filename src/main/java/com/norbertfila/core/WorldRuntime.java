@@ -4,6 +4,7 @@ import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
+import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.interaction.BlockTargeting;
 import com.norbertfila.interaction.VoxelRaycaster;
@@ -189,8 +190,11 @@ public final class WorldRuntime implements AutoCloseable {
             Map<Long, Long> issuedAt = new HashMap<>();
             WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
             long[] estimatedChunkBytes = {0}, publishNanos = {0};
-            BlockInteraction interaction =
-                    new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
+            BlockBreaking breaking = new BlockBreaking(world);
+            BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
+                water.onBlockChanged(position, tick[0]);
+                breaking.blockChanged(position);
+            });
             BlockTargeting targeting = new BlockTargeting(world);
             try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
                     FarTerrainStreamer far = new FarTerrainStreamer(generator, world.changes(), FAR_TERRAIN_WORKERS)) {
@@ -271,7 +275,8 @@ public final class WorldRuntime implements AutoCloseable {
                                 issuedAt.put(mesh.token(), System.nanoTime());
                             }
                             Action action;
-                            boolean inventoryInput = false;
+                            boolean interactionBlocked = false;
+                            Edit breakPress = null;
                             for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
                                 if (!activated && !(action instanceof ResetInput)) continue;
                                 if ((state.blocked() || state.paused())
@@ -281,31 +286,40 @@ public final class WorldRuntime implements AutoCloseable {
                                         && !(action instanceof SelectSlot)) continue;
                                 switch (action) {
                                     case ResetInput ignored -> {
+                                        interactionBlocked = true;
                                         input.clear();
                                         player.clearInputGestures();
+                                        breaking.cancel();
                                     }
                                     case Jump jump -> input.pressJump(jump.time());
                                     case NextMode ignored -> {
+                                        interactionBlocked = true;
                                         inventory.returnCarried();
                                         player.requestNextMode();
                                         input.clear();
+                                        breaking.cancel();
                                     }
                                     case Edit edit -> {
                                         if (edit.remove() && !player.modeChangePending()) {
-                                            var result = remove(interaction, player, edit, inventory);
-                                            result.ifPresent(chunks::requestRemesh);
+                                            breakPress = edit;
                                         }
                                     }
-                                    case SelectSlot selected -> inventory.select(selected.slot());
-                                    case Teleport teleport ->
+                                    case SelectSlot selected -> {
+                                        breaking.cancel();
+                                        inventory.select(selected.slot());
+                                    }
+                                    case Teleport teleport -> {
+                                        interactionBlocked = true;
+                                        breaking.cancel();
                                         player.restore(
                                                 new PlayerState.Position(teleport.x(), teleport.y(), teleport.z()),
                                                 PlayerController.Mode.SPECTATOR,
                                                 false);
+                                    }
                                     case Fill fill ->
                                         chunks.requestRemesh(interaction.fill(fill.min(), fill.max(), fill.block()));
                                     case InventoryAction command -> {
-                                        inventoryInput = true;
+                                        interactionBlocked = true;
                                         if (command instanceof ReturnCarried) inventory.returnCarried();
                                         else if (!player.modeChangePending()
                                                 && player.mode() != PlayerController.Mode.SPECTATOR) {
@@ -324,12 +338,14 @@ public final class WorldRuntime implements AutoCloseable {
                             if (newPress) {
                                 placementAttempted = true;
                                 placementCooldown.attempted();
-                                if (!inventoryInput)
+                                if (!interactionBlocked && breakPress == null && !state.breakHeld())
                                     placeInventory(interaction, player, state, inventory)
                                             .ifPresent(chunks::requestRemesh);
                             }
                             // UI commands can arrive after this tick sampled gameplay controls.
-                            if (!inventoryInput
+                            if (!interactionBlocked
+                                    && breakPress == null
+                                    && !state.breakHeld()
                                     && !placementAttempted
                                     && placementCooldown.ready()
                                     && state.placeHeld()) {
@@ -369,13 +385,29 @@ public final class WorldRuntime implements AutoCloseable {
                                     player.pauseInterpolation();
                                 }
                                 playerNanos = System.nanoTime() - playerStarted;
-                                if (tick[0] % 300 == 0) {
-                                    long captureStarted = System.nanoTime();
-                                    saves.request(capture(
-                                            identity, ++sequence[0], world, water, tick[0], inventory, player, state));
-                                    captureNanos = System.nanoTime() - captureStarted;
-                                }
                             } else player.pauseInterpolation();
+                            if (activated
+                                    && poseReady[0]
+                                    && !state.blocked()
+                                    && !state.paused()
+                                    && !player.modeChangePending()
+                                    && !interactionBlocked
+                                    && (state.breakHeld() || breakPress != null)) {
+                                Edit mining = breakPress == null
+                                        ? new Edit(true, BlockId.AIR, state.yaw(), state.pitch())
+                                        : breakPress;
+                                var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
+                                if (breaking.tick(
+                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt))
+                                    remove(interaction, player, mining, inventory)
+                                            .ifPresent(chunks::requestRemesh);
+                            } else breaking.cancel();
+                            if (activated && !state.paused() && tick[0] % 300 == 0) {
+                                long captureStarted = System.nanoTime();
+                                saves.request(capture(
+                                        identity, ++sequence[0], world, water, tick[0], inventory, player, state));
+                                captureNanos = System.nanoTime() - captureStarted;
+                            }
                             saves.poll();
                             Map<Long, ChunkManager.MeshResult> valid = new HashMap<>();
                             outstanding.forEach((token, mesh) -> {
@@ -388,7 +420,7 @@ public final class WorldRuntime implements AutoCloseable {
                             long contactStarted = System.nanoTime();
                             var contact = WaterContact.sample(world, player.state());
                             long contactNanos = System.nanoTime() - contactStarted;
-                            var target = activated && poseReady[0]
+                            var target = activated && poseReady[0] && !interactionBlocked
                                     ? target(targeting, player, state)
                                     : Optional.<VoxelRaycaster.Hit>empty();
                             long oldestAck =
@@ -438,7 +470,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     water.pendingUpdates(),
                                     metrics,
                                     inventory.snapshot(),
-                                    target));
+                                    target,
+                                    breaking.progress()));
                             publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -552,8 +585,13 @@ public final class WorldRuntime implements AutoCloseable {
     private static Optional<VoxelRaycaster.Hit> target(
             BlockTargeting targeting, PlayerController player, Controls controls) {
         if (controls.blocked() || controls.paused() || player.modeChangePending()) return Optional.empty();
+        return target(targeting, player, controls.yaw(), controls.pitch());
+    }
+
+    private static Optional<VoxelRaycaster.Hit> target(
+            BlockTargeting targeting, PlayerController player, double yawDegrees, double pitchDegrees) {
         var eye = player.renderEyePosition(1);
-        double yaw = Math.toRadians(controls.yaw()), pitch = Math.toRadians(controls.pitch());
+        double yaw = Math.toRadians(yawDegrees), pitch = Math.toRadians(pitchDegrees);
         return targeting.find(
                 player.mode(),
                 eye.x(),
@@ -600,8 +638,11 @@ public final class WorldRuntime implements AutoCloseable {
     static Optional<BlockChangeResult> placeInventory(
             BlockInteraction interaction, PlayerController player, Controls controls, Inventory inventory) {
         byte block = inventory.selectedBlock();
-        if (controls.blocked() || controls.paused() || block == BlockId.AIR || player.modeChangePending())
-            return Optional.empty();
+        if (controls.blocked()
+                || controls.paused()
+                || controls.breakHeld()
+                || block == BlockId.AIR
+                || player.modeChangePending()) return Optional.empty();
         var result = edit(
                 interaction,
                 player,
@@ -651,7 +692,33 @@ public final class WorldRuntime implements AutoCloseable {
             long placePressId,
             boolean placeHeld,
             int farDistance,
-            int simulationDistance) {
+            int simulationDistance,
+            boolean breakHeld) {
+        public Controls(
+                PlayerInput input,
+                double yaw,
+                double pitch,
+                boolean blocked,
+                boolean paused,
+                int renderDistance,
+                long placePressId,
+                boolean placeHeld,
+                int farDistance,
+                int simulationDistance) {
+            this(
+                    input,
+                    yaw,
+                    pitch,
+                    blocked,
+                    paused,
+                    renderDistance,
+                    placePressId,
+                    placeHeld,
+                    farDistance,
+                    simulationDistance,
+                    false);
+        }
+
         public Controls(
                 PlayerInput input, double yaw, double pitch, boolean blocked, boolean paused, int renderDistance) {
             this(input, yaw, pitch, blocked, paused, renderDistance, 0, false);
@@ -782,7 +849,8 @@ public final class WorldRuntime implements AutoCloseable {
             int pendingWater,
             SimulationMetrics metrics,
             InventorySnapshot inventory,
-            Optional<VoxelRaycaster.Hit> target) {
+            Optional<VoxelRaycaster.Hit> target,
+            Optional<BlockBreaking.Progress> breaking) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -790,6 +858,7 @@ public final class WorldRuntime implements AutoCloseable {
             validUploads = Map.copyOf(validUploads);
             Objects.requireNonNull(inventory);
             Objects.requireNonNull(target);
+            Objects.requireNonNull(breaking);
         }
 
         public Map<ChunkPos, Long> residents() {

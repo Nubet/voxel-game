@@ -14,7 +14,37 @@ public record BlockDefinition(
         boolean breakable,
         boolean targetable,
         BlockShape shape,
-        boolean replaceable) {
+        boolean replaceable,
+        double breakSeconds) {
+    public BlockDefinition(
+            int id,
+            String name,
+            int topTexture,
+            int bottomTexture,
+            int sideTexture,
+            boolean collidable,
+            boolean occludesFullFace,
+            RenderLayer renderLayer,
+            boolean breakable,
+            boolean targetable,
+            BlockShape shape,
+            boolean replaceable) {
+        this(
+                id,
+                name,
+                topTexture,
+                bottomTexture,
+                sideTexture,
+                collidable,
+                occludesFullFace,
+                renderLayer,
+                breakable,
+                targetable,
+                shape,
+                replaceable,
+                1);
+    }
+
     public BlockDefinition(
             int id,
             String name,
@@ -70,6 +100,8 @@ public record BlockDefinition(
             throw new IllegalArgumentException("Texture layers must be non-negative");
         Objects.requireNonNull(renderLayer);
         Objects.requireNonNull(shape);
+        if (!Double.isFinite(breakSeconds) || breakSeconds < 0)
+            throw new IllegalArgumentException("Block breaking time must be finite and non-negative");
     }
 
     public int textureLayer(int face) {

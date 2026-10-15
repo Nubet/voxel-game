@@ -235,6 +235,8 @@ public final class GameLoop {
             }
             if (previousDistance != settings.renderDistance())
                 window.setTitle("Voxel Engine | Render distance: " + settings.renderDistance());
+            if ((previousScreen != screens.current() || !input.focused())
+                    && (input.leftMouseDown() || input.rightMouseDown())) pointerReady = false;
             boolean blocked = minimized
                     || screens.blocksGameplay()
                     || !input.focused()
@@ -271,7 +273,8 @@ public final class GameLoop {
                         placePressId,
                         !blocked && input.rightMouseDown(),
                         settings.farDistance(),
-                        settings.simulationDistance()));
+                        settings.simulationDistance(),
+                        !blocked && input.leftMouseDown()));
             if (previousSlot != hotbar.selectedSlot())
                 submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
             Screen.Action uiAction;

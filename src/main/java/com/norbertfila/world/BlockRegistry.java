@@ -196,7 +196,8 @@ public final class BlockRegistry {
                 true,
                 true,
                 BlockShape.CROSS,
-                true);
+                true,
+                0);
     }
 
     private static BlockDefinition uniform(byte id, String name, int texture, boolean occludesFullFace) {

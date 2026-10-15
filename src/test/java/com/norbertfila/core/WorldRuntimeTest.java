@@ -28,6 +28,157 @@ class WorldRuntimeTest {
     Path directory;
 
     @Test
+    void survivalTapDoesNotMineAndReleasePauseAndLookingAwayCancelProgress() throws Exception {
+        Path save = directory.resolve("survival-mining.vxl");
+        World world = new World();
+        BlockPos block = new BlockPos(3, 2, 0);
+        world.setBlock(block, BlockId.STONE, 64);
+        TestWorlds.save(save, 42, 1, world);
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(breakingControls(false, false, false));
+            long before = await(runtime, f -> f.target().isPresent()).tick();
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            var tapped = await(runtime, f -> f.tick() > before + 65);
+            assertEquals(block, tapped.target().orElseThrow().block());
+            assertTrue(tapped.breaking().isEmpty());
+            assertEquals(0, tapped.inventory().count(0));
+
+            runtime.controls(breakingControls(true, false, false));
+            var mining = await(
+                    runtime,
+                    f -> f.breaking().isPresent() && f.breaking().orElseThrow().fraction() >= .25);
+            assertEquals(block, mining.breaking().orElseThrow().block());
+            assertEquals(0, mining.inventory().count(0));
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            await(
+                    runtime,
+                    f -> f.publishedAt() > mining.publishedAt()
+                            && f.breaking().isPresent()
+                            && f.breaking().orElseThrow().fraction() < .25);
+            runtime.controls(breakingControls(false, false, false));
+            await(runtime, f -> f.breaking().isEmpty() && f.target().isPresent());
+
+            runtime.controls(breakingControls(true, false, false));
+            var restarted = await(runtime, f -> f.breaking().isPresent());
+            assertTrue(restarted.breaking().orElseThrow().fraction() < .25);
+            runtime.controls(breakingControls(true, false, true));
+            await(runtime, f -> f.paused() && f.breaking().isEmpty());
+            runtime.controls(breakingControls(true, false, false));
+            var resumed = await(runtime, f -> !f.paused() && f.breaking().isPresent());
+            assertTrue(resumed.breaking().orElseThrow().fraction() < .25);
+
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 90, 0, false, false, 0, 0, false, 0, 0, true));
+            await(
+                    runtime,
+                    f -> f.yaw() == 90 && f.target().isEmpty() && f.breaking().isEmpty());
+            runtime.controls(breakingControls(true, false, false));
+            await(runtime, f -> f.breaking().isPresent());
+            assertTrue(runtime.offer(new WorldRuntime.Fill(block, block, BlockId.DIRT)));
+            var replaced = await(
+                    runtime,
+                    f -> f.target().isPresent()
+                            && f.target().orElseThrow().blockId() == BlockId.DIRT
+                            && f.breaking().isPresent());
+            assertTrue(replaced.breaking().orElseThrow().fraction() < .25);
+            var mined = await(runtime, f -> f.inventory().count(0) == 1);
+            assertEquals(BlockId.DIRT, mined.inventory().block(0));
+            assertTrue(mined.target().isEmpty());
+            assertTrue(mined.breaking().isEmpty());
+        }
+    }
+
+    @Test
+    void creativeClickRemovesImmediatelyWithoutHoldingOrCollectingAndMiningWinsOverPlacement() throws Exception {
+        Path save = directory.resolve("creative-mining.vxl");
+        World world = new World();
+        BlockPos block = new BlockPos(3, 2, 0);
+        world.setBlock(block, BlockId.STONE, 64);
+        TestWorlds.save(save, 42, 1, world);
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(breakingControls(false, false, false));
+            await(runtime, f -> f.target().isPresent());
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(
+                    runtime,
+                    f -> f.mode() == PlayerController.Mode.CREATIVE
+                            && !f.modePending()
+                            && f.target().isPresent());
+            assertTrue(runtime.offer(new WorldRuntime.PickCreative(0, BlockId.DIRT)));
+            long before = await(
+                            runtime,
+                            f -> f.inventory().count(0) == 64 && f.target().isPresent())
+                    .tick();
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 1, true, 0, 0, true));
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            var removed = await(runtime, f -> f.target().isEmpty());
+            assertTrue(removed.tick() < before + 60);
+            assertTrue(removed.breaking().isEmpty());
+            assertEquals(64, removed.inventory().count(0));
+            assertEquals(BlockId.DIRT, removed.inventory().block(0));
+        }
+        World restored = new World();
+        TestWorlds.restore(restored, TestWorlds.load(save), 64);
+        assertEquals(BlockId.AIR, restored.changes().get(block).orElseThrow());
+        assertTrue(restored.changes().get(new BlockPos(2, 2, 0)).isEmpty());
+    }
+
+    @Test
+    void survivalMiningBlocksSimultaneousPlacementAndPlacementConsumesOnlyAfterRelease() throws Exception {
+        Path save = directory.resolve("mining-placement.vxl");
+        World world = new World();
+        BlockPos anchor = new BlockPos(3, 2, 0), placed = new BlockPos(2, 2, 0);
+        world.setBlock(anchor, BlockId.STONE, 64);
+        var inventory = new Inventory();
+        inventory.add(BlockId.DIRT);
+        TestWorlds.save(
+                save,
+                TestWorlds.capture(42, 1, world, com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory.snapshot()));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(breakingControls(false, false, false));
+            await(runtime, f -> f.target().isPresent());
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 1, true, 0, 0, true));
+            var mining = await(runtime, f -> f.breaking().isPresent());
+            assertEquals(anchor, mining.target().orElseThrow().block());
+            assertEquals(1, mining.inventory().count(0));
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 2, true, 0, 0, false));
+            var result = await(runtime, f -> f.inventory().count(0) == 0);
+            assertEquals(placed, result.target().orElseThrow().block());
+            assertEquals(BlockId.DIRT, result.target().orElseThrow().blockId());
+            assertTrue(result.breaking().isEmpty());
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 2, false));
+        }
+        World restored = new World();
+        TestWorlds.restore(restored, TestWorlds.load(save), 64);
+        assertEquals(BlockId.DIRT, restored.changes().get(placed).orElseThrow());
+        assertEquals(BlockId.STONE, restored.changes().get(anchor).orElseThrow());
+    }
+
+    @Test
+    void completedSurvivalMiningCannotDestroyABlockWhenInventoryIsFull() throws Exception {
+        Path save = directory.resolve("mining-full.vxl");
+        World world = new World();
+        BlockPos block = new BlockPos(3, 2, 0);
+        world.setBlock(block, BlockId.STONE, 64);
+        byte[] blocks = new byte[Inventory.SLOTS + 1];
+        int[] counts = new int[Inventory.SLOTS + 1];
+        java.util.Arrays.fill(blocks, 0, Inventory.SLOTS, BlockId.DIRT);
+        java.util.Arrays.fill(counts, 0, Inventory.SLOTS, Inventory.MAX_STACK);
+        var inventory = new com.norbertfila.player.InventorySnapshot(blocks, counts, 0);
+        TestWorlds.save(save, TestWorlds.capture(42, 1, world, com.norbertfila.fluid.FluidSnapshot.EMPTY, inventory));
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(breakingControls(true, false, false));
+            long before = await(runtime, f -> f.breaking().isPresent()).tick();
+            var after = await(runtime, f -> f.tick() > before + 65);
+            assertEquals(block, after.target().orElseThrow().block());
+            assertEquals(inventory, after.inventory());
+        }
+    }
+
+    private static WorldRuntime.Controls breakingControls(boolean held, boolean blocked, boolean paused) {
+        return new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, blocked, paused, 0, 0, false, 0, 0, held);
+    }
+
+    @Test
     void publishesStableTargetsAndClearsThemForBlockedPausedEditedAndSpectatorStates() throws Exception {
         Path save = directory.resolve("target.vxl");
         World world = new World();
@@ -60,7 +211,12 @@ class WorldRuntimeTest {
                     f -> !f.paused() && f.tick() > paused.tick() && f.target().isPresent());
 
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 0, false, 0, 0, true));
+            var mining = await(runtime, f -> f.breaking().isPresent());
+            assertEquals(near, mining.breaking().orElseThrow().block());
+            assertEquals(0, mining.inventory().count(0));
             await(runtime, f -> f.target().isEmpty() && f.inventory().count(0) == 1);
+            runtime.controls(active);
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
             var creative = await(
                     runtime,
@@ -359,7 +515,10 @@ class WorldRuntimeTest {
             var old = awaitSettledMesh(runtime, new ChunkPos(0, 0, 0));
             assertTrue(runtime.frame().isCurrent(old));
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, -90)));
+            runtime.controls(
+                    new WorldRuntime.Controls(PlayerInput.NONE, 0, -90, false, false, 0, 0, false, 0, 0, true));
             await(runtime, f -> !f.isCurrent(old));
+            runtime.controls(controls(false, false));
             runtime.acknowledge(old, true);
             var replacement = awaitMesh(runtime, old.mesh().position());
             assertNotEquals(old.mesh().token(), replacement.mesh().token());

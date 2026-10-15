@@ -182,4 +182,19 @@ class BlockRegistryTest {
         assertTrue(protectedBlock.targetable());
         assertTrue(protectedBlock.collidable());
     }
+
+    @Test
+    void breakingTimesBelongToBlockDefinitionsAndPlantsAreInstant() {
+        assertEquals(1, BlockRegistry.DEFAULT.definition(BlockId.STONE).breakSeconds());
+        assertEquals(0, BlockRegistry.DEFAULT.definition(BlockId.POPPY).breakSeconds());
+        assertEquals(2.5, timedBlock(2.5).breakSeconds());
+        assertEquals(0, timedBlock(0).breakSeconds());
+        for (double invalid : new double[] {-1, Double.NaN, Double.POSITIVE_INFINITY})
+            assertThrows(IllegalArgumentException.class, () -> timedBlock(invalid));
+    }
+
+    private static BlockDefinition timedBlock(double seconds) {
+        return new BlockDefinition(
+                1, "timed", 0, 0, 0, true, true, RenderLayer.OPAQUE, true, true, BlockShape.CUBE, false, seconds);
+    }
 }
