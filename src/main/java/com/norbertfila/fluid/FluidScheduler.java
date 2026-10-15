@@ -1,12 +1,17 @@
 package com.norbertfila.fluid;
 
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 
@@ -14,10 +19,13 @@ public final class FluidScheduler {
     public static final int WATER_TICK_DELAY = 15;
     public static final int DEFAULT_MAX_UPDATES_PER_TICK = 2_000;
     private final int maxUpdatesPerTick;
+    private static final Comparator<FluidTick> ORDER =
+            Comparator.comparingLong(FluidTick::executeAtTick).thenComparingLong(FluidTick::sequence);
     private final Map<BlockPos, FluidTick> scheduled = new HashMap<>();
     // Remove accelerated entries in O(log n), without retaining stale heap nodes.
-    private final NavigableSet<FluidTick> queue =
-            new TreeSet<>(Comparator.comparingLong(FluidTick::executeAtTick).thenComparingLong(FluidTick::sequence));
+    private final NavigableSet<FluidTick> queue = new TreeSet<>(ORDER);
+    // Scheduled positions per chunk, so unloading a chunk finds its updates without scanning the whole queue.
+    private final Map<ChunkPos, Set<BlockPos>> byChunk = new HashMap<>();
     private long sequence;
     private long currentTick = -1;
     private int updatesThisTick;
@@ -45,6 +53,7 @@ public final class FluidScheduler {
         long nextSequence = Math.incrementExact(sequence);
         FluidTick tick = new FluidTick(position, executeAtTick, sequence);
         if (previous != null) queue.remove(previous);
+        else index(position);
         scheduled.put(position, tick);
         queue.add(tick);
         sequence = nextSequence;
@@ -67,6 +76,7 @@ public final class FluidScheduler {
                 if (next.executeAtTick() > tick) break;
                 queue.pollFirst();
                 scheduled.remove(next.position());
+                unindex(next.position());
                 updatesThisTick++;
                 try {
                     update.accept(next.position());
@@ -74,6 +84,7 @@ public final class FluidScheduler {
                     FluidTick replacement = scheduled.get(next.position());
                     if (replacement == null || replacement.executeAtTick() > next.executeAtTick()) {
                         if (replacement != null) queue.remove(replacement);
+                        else index(next.position());
                         scheduled.put(next.position(), next);
                         queue.add(next);
                     }
@@ -114,9 +125,34 @@ public final class FluidScheduler {
                 .toList();
     }
 
+    /** Pending updates inside one chunk, in execution order. */
+    public List<PendingUpdate> pendingIn(ChunkPos chunk) {
+        Set<BlockPos> positions = byChunk.get(Objects.requireNonNull(chunk));
+        if (positions == null) return List.of();
+        List<FluidTick> ticks = new ArrayList<>(positions.size());
+        for (BlockPos position : positions) ticks.add(scheduled.get(position));
+        ticks.sort(ORDER);
+        List<PendingUpdate> result = new ArrayList<>(ticks.size());
+        for (FluidTick tick : ticks) result.add(new PendingUpdate(tick.position(), tick.executeAtTick()));
+        return result;
+    }
+
     public void cancel(BlockPos position) {
         FluidTick previous = scheduled.remove(position);
-        if (previous != null) queue.remove(previous);
+        if (previous == null) return;
+        queue.remove(previous);
+        unindex(position);
+    }
+
+    private void index(BlockPos position) {
+        byChunk.computeIfAbsent(Coordinates.worldToChunk(position), ignored -> new HashSet<>())
+                .add(position);
+    }
+
+    private void unindex(BlockPos position) {
+        ChunkPos chunk = Coordinates.worldToChunk(position);
+        Set<BlockPos> positions = byChunk.get(chunk);
+        if (positions != null && positions.remove(position) && positions.isEmpty()) byChunk.remove(chunk);
     }
 
     public record PendingUpdate(BlockPos position, long executeAtTick) {}

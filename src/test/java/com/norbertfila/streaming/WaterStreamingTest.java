@@ -88,7 +88,8 @@ class WaterStreamingTest {
             assertTrue(simulator.pendingUpdates() > 0);
             tick[0] = 5;
             settle(manager, demand, new ChunkPos(10, 1, -1), uploaded);
-            assertTrue(simulator.deferredUpdates() > 0);
+            // Untouched generated water keeps nothing frozen; the scan wakes it again when the chunk returns.
+            assertEquals(0, simulator.deferredUpdates());
             simulator.tick(1000);
             assertEquals(0, simulator.tick(2000).processedUpdates());
             tick[0] = 2000;
