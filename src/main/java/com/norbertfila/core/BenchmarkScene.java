@@ -112,6 +112,40 @@ enum BenchmarkScene {
         Pose pose(double t, Site site) {
             return new Pose(site.x(), site.surfaceY() + 70, site.z(), 45, -12);
         }
+    },
+    /**
+     * Long run for stability checks: circles far from the site and back, toggles block edits and a water pool at the
+     * site, and halves the render distance every other minute. Not part of the default scene list.
+     */
+    SOAK(0, 270) {
+        private static final double RADIUS = 400;
+
+        @Override
+        Pose pose(double t, Site site) {
+            double angle = t * FLIGHT_SPEED / RADIUS;
+            double x = site.x() + RADIUS * Math.sin(angle), z = site.z() + RADIUS - RADIUS * Math.cos(angle);
+            return new Pose(x, site.flightY() + 40, z, Math.toDegrees(angle), -12);
+        }
+
+        @Override
+        void commands(double from, double to, Site site, Consumer<WorldRuntime.Action> sink) {
+            for (long step = steps(from, 2); step < steps(to, 2); step++) {
+                boolean place = step % 2 == 0;
+                sink.accept(new WorldRuntime.Fill(
+                        new BlockPos(site.x() + 6, site.surfaceY() + 1, site.z() + 6),
+                        new BlockPos(site.x() + 9, site.surfaceY() + 4, site.z() + 9),
+                        place ? BlockId.STONE : BlockId.AIR));
+                sink.accept(new WorldRuntime.Fill(
+                        new BlockPos(site.x() - 2, site.surfaceY() + 4, site.z() - 2),
+                        new BlockPos(site.x() + 2, site.surfaceY() + 4, site.z() + 2),
+                        place ? BlockId.WATER : BlockId.AIR));
+            }
+        }
+
+        @Override
+        int renderDistance(double t, int base) {
+            return (long) (t / 60) % 2 == 1 ? Math.max(2, base / 2) : base;
+        }
     };
 
     static final double FLIGHT_SPEED = 24;
@@ -135,6 +169,11 @@ enum BenchmarkScene {
 
     Pose pose(double t, Site site) {
         return new Pose(site.x(), site.surfaceY() + 12, site.z(), 45, -15);
+    }
+
+    /** Render distance at script time {@code t}; scenes keep the configured one unless they test switching it. */
+    int renderDistance(double t, int base) {
+        return base;
     }
 
     /** Emits the commands scheduled in script time {@code [from, to)}. */

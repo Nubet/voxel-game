@@ -53,6 +53,8 @@ tasks.register<JavaExec>("benchmarkGame") {
     systemProperty("voxel.benchmark.gpuTimers", findProperty("gpuTimers") ?: "true")
     findProperty("seconds")?.let { systemProperty("voxel.benchmark.seconds", it) }
     findProperty("directDraw")?.let { systemProperty("voxel.render.directDraw", it) }
+    findProperty("width")?.let { systemProperty("voxel.benchmark.width", it) }
+    findProperty("height")?.let { systemProperty("voxel.benchmark.height", it) }
     findProperty("far")?.let { systemProperty("voxel.benchmark.far", it) }
     findProperty("screenshots")?.let { systemProperty("voxel.benchmark.screenshots", it) }
 }

@@ -23,21 +23,6 @@ class GpuArenaTest {
     }
 
     @Test
-    void compactionMovesLiveAllocationsAndRemovesFragmentation() {
-        GpuArena arena = new GpuArena(256, 16);
-        GpuArena.Allocation first = arena.allocate(32);
-        GpuArena.Allocation second = arena.allocate(32);
-        arena.free(first);
-
-        GpuArena.Compaction compaction = arena.compact();
-
-        assertEquals(1, compaction.moves().size());
-        assertEquals(0, second.offset());
-        assertEquals(224, arena.freeBytes());
-        assertEquals(0, arena.fragmentationBytes());
-    }
-
-    @Test
     void rejectsAllocationWhenOnlyFragmentedSpaceRemains() {
         GpuArena arena = new GpuArena(128, 16);
         GpuArena.Allocation first = arena.allocate(32);

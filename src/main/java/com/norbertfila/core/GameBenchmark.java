@@ -62,6 +62,9 @@ public final class GameBenchmark {
     private static final Logger LOG = Logger.getLogger(GameBenchmark.class.getName());
     private static final Path WORLDS = Path.of("build/benchmark-worlds");
     private static final long TIME_LIMIT_NANOS = 300_000_000_000L;
+    // The soak scene alone may run longer, up to the 10 minute cap for one benchmark run.
+    private static final long SOAK_TIME_LIMIT_NANOS = 600_000_000_000L;
+    private static final long SOAK_REPORT_NANOS = 30_000_000_000L;
     private static final long SETTLE_STABLE_NANOS = 1_000_000_000L;
     private static final long SETTLE_TIMEOUT_NANOS = 60_000_000_000L;
     private static final long WARMUP_NANOS = 2_000_000_000L;
@@ -124,7 +127,8 @@ public final class GameBenchmark {
                             renderer,
                             measureOverride,
                             screenshots == null ? null : Path.of(screenshots),
-                            window);
+                            window,
+                            settings);
                     loop.run(
                             window,
                             input,
@@ -174,7 +178,9 @@ public final class GameBenchmark {
 
     private static List<BenchmarkScene> scenes(String value) {
         if (value.isBlank() || value.equalsIgnoreCase("all") || value.equalsIgnoreCase("true"))
-            return List.of(BenchmarkScene.values());
+            return Arrays.stream(BenchmarkScene.values())
+                    .filter(scene -> scene != BenchmarkScene.SOAK)
+                    .toList();
         return Arrays.stream(value.split(","))
                 .map(name -> BenchmarkScene.valueOf(name.strip().toUpperCase(Locale.ROOT)))
                 .toList();
@@ -207,7 +213,10 @@ public final class GameBenchmark {
         private final double measureOverride;
         private final Path screenshots;
         private final Window window;
-        private final long deadline = System.nanoTime() + TIME_LIMIT_NANOS;
+        private final GameSettings settings;
+        private final int baseRenderDistance;
+        private final long deadline;
+        private long lastSoakReport;
         private final List<Measurement> completed = new ArrayList<>();
         private int sceneIndex;
         private Phase phase = Phase.LOADING;
@@ -223,10 +232,15 @@ public final class GameBenchmark {
                 TerrainRenderer renderer,
                 double measureOverride,
                 Path screenshots,
-                Window window) {
+                Window window,
+                GameSettings settings) {
             this.scenes = List.copyOf(scenes);
             this.screenshots = screenshots;
             this.window = window;
+            this.settings = settings;
+            baseRenderDistance = settings.renderDistance();
+            deadline = System.nanoTime()
+                    + (scenes.equals(List.of(BenchmarkScene.SOAK)) ? SOAK_TIME_LIMIT_NANOS : TIME_LIMIT_NANOS);
             this.site = site;
             this.profiler = profiler;
             this.renderer = renderer;
@@ -251,6 +265,7 @@ public final class GameBenchmark {
             var pose = scene().pose(t, site);
             camera.setPosition(pose.x(), pose.y(), pose.z());
             camera.restoreLook((float) pose.yaw(), (float) pose.pitch());
+            settings.setRenderDistance(scene().renderDistance(t, baseRenderDistance));
             if (phase != Phase.RUNNING) return;
             if (state != null && state.tick() != lastTeleportTick) {
                 lastTeleportTick = state.tick();
@@ -312,6 +327,10 @@ public final class GameBenchmark {
                         profiler.recording(true);
                         current.begin(runtime, state, renderer, now);
                     } else if (current.measureStarted != 0) current.sample(state, stats, uploadQueue);
+                    if (scene() == BenchmarkScene.SOAK && now - lastSoakReport >= SOAK_REPORT_NANOS) {
+                        lastSoakReport = now;
+                        soakReport(t, state, uploadQueue);
+                    }
                     if (t >= scene().setupSeconds() + measureSeconds()) {
                         profiler.recording(false);
                         current.end(runtime, state, renderer, profiler, now);
@@ -341,6 +360,38 @@ public final class GameBenchmark {
         private void enter(Phase next, long now) {
             phase = next;
             phaseStarted = now;
+        }
+
+        /** One line of long-run health: memory after the last collection, queues and GPU memory. */
+        private void soakReport(double t, WorldRuntime.Frame state, int uploadQueue) {
+            long oldGen = 0;
+            for (var pool : ManagementFactory.getMemoryPoolMXBeans()) {
+                var usage = pool.getCollectionUsage();
+                if (usage != null && pool.getType() == java.lang.management.MemoryType.HEAP) oldGen += usage.getUsed();
+            }
+            var metrics = state.metrics();
+            var streaming = metrics.streaming();
+            System.out.printf(
+                    Locale.ROOT,
+                    "[soak] t=%.0f rd=%d heapAfterGcMB=%.1f chunkMB=%.1f residents=%d farTiles=%d farQueued=%d"
+                            + " genOutstanding=%d meshOutstanding=%d pendingRemesh=%d uploadQueue=%d acks=%d"
+                            + " gpuMeshMB=%.1f gpuArenaMB=%.1f farGpuMB=%.1f threads=%d%n",
+                    t,
+                    settings.renderDistance(),
+                    megabytes(oldGen),
+                    megabytes(metrics.estimatedChunkBytes()),
+                    state.residents().size(),
+                    metrics.far().resident(),
+                    metrics.far().queued(),
+                    streaming.generationOutstanding(),
+                    streaming.meshOutstanding(),
+                    streaming.pendingRemesh(),
+                    uploadQueue,
+                    metrics.outstandingAcks(),
+                    megabytes(renderer.memoryStats().allocated()),
+                    megabytes(renderer.memoryStats().arenaBytes()),
+                    megabytes(renderer.far().gpuBytes()),
+                    Thread.activeCount());
         }
 
         /** Saves the last presented frame; diagnostic only, so a failure is logged and the run continues. */

@@ -1,8 +1,6 @@
 package com.norbertfila.render;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -47,26 +45,6 @@ public final class GpuArena {
         if (current != allocation) throw new IllegalArgumentException("Allocation does not belong to this arena");
         addFree(allocation.offset, allocation.size);
         mergeAround(allocation.offset);
-    }
-
-    public Compaction compact() {
-        List<Allocation> allocations = new ArrayList<>(active.values());
-        allocations.sort((left, right) -> Long.compare(left.offset, right.offset));
-        long nextOffset = 0;
-        long movedBytes = 0;
-        List<Move> moves = new ArrayList<>();
-        for (Allocation allocation : allocations) {
-            long target = align(nextOffset);
-            if (allocation.offset != target) {
-                moves.add(new Move(allocation.id, allocation.offset, target, allocation.size));
-                allocation.offset = target;
-                movedBytes += allocation.size;
-            }
-            nextOffset = target + allocation.size;
-        }
-        free.clear();
-        addFree(nextOffset, capacityBytes - nextOffset);
-        return new Compaction(moves, movedBytes);
     }
 
     public long capacityBytes() {
@@ -127,7 +105,7 @@ public final class GpuArena {
 
     public static final class Allocation {
         private final long id;
-        private long offset;
+        private final long offset;
         private final long size;
 
         private Allocation(long id, long offset, long size) {
@@ -146,14 +124,6 @@ public final class GpuArena {
 
         public long size() {
             return size;
-        }
-    }
-
-    public record Move(long id, long fromOffset, long toOffset, long size) {}
-
-    public record Compaction(List<Move> moves, long movedBytes) {
-        public Compaction {
-            moves = List.copyOf(moves);
         }
     }
 }
