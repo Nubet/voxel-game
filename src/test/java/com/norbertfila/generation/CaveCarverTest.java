@@ -10,6 +10,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CaveCarverTest {
+    private final CaveCarver carver = new CaveCarver(new HillsGenerator(0));
+
     @Test
     void chunkedCarvingMatchesAnIndependentEllipsoidOracleAcrossAllAxes() {
         var segments =
@@ -19,7 +21,7 @@ class CaveCarverTest {
             for (int cz = -1; cz <= 1; cz++)
                 for (int cx = -1; cx <= 1; cx++) {
                     byte[] blocks = stone();
-                    CaveCarver.carve(new ChunkPos(cx, cy, cz), blocks, plan.segments(cx, cz));
+                    carver.carve(new ChunkPos(cx, cy, cz), blocks, plan.segments(cx, cz));
                     for (int y = 0; y < 16; y++)
                         for (int z = 0; z < 16; z++)
                             for (int x = 0; x < 16; x++) {
@@ -41,11 +43,10 @@ class CaveCarverTest {
             BlockId.BEDROCK, BlockId.WATER, BlockId.SAND, BlockId.LOG, BlockId.COBBLE, BlockId.DIRT, BlockId.GRASS
         };
         System.arraycopy(materials, 0, blocks, 0, materials.length);
-        assertTrue(CaveCarver.carve(new ChunkPos(0, 0, 0), blocks, List.of(new CavePlan.Segment(4, 2, 2, 8, 8))));
+        assertTrue(carver.carve(new ChunkPos(0, 0, 0), blocks, List.of(new CavePlan.Segment(4, 2, 2, 8, 8))));
         for (int i = 0; i < materials.length; i++)
             assertEquals(CaveCarver.carveable(materials[i]) ? BlockId.AIR : materials[i], blocks[i]);
-        assertFalse(
-                CaveCarver.carve(new ChunkPos(0, 0, 0), blocks, List.of(new CavePlan.Segment(100, 100, 100, 1, 1))));
+        assertFalse(carver.carve(new ChunkPos(0, 0, 0), blocks, List.of(new CavePlan.Segment(100, 100, 100, 1, 1))));
     }
 
     @Test
