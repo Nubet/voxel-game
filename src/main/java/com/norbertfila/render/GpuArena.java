@@ -25,13 +25,15 @@ public final class GpuArena {
     public Allocation allocate(long bytes) {
         if (bytes <= 0) throw new IllegalArgumentException("Allocation size must be positive");
         for (Map.Entry<Long, Long> entry : free.entrySet()) {
-            long offset = align(entry.getKey());
-            long padding = offset - entry.getKey();
-            if (padding <= entry.getValue() && bytes <= entry.getValue() - padding) {
+            // Read before removing: TreeMap may reuse a removed entry's node for its successor.
+            long start = entry.getKey(), size = entry.getValue();
+            long offset = align(start);
+            long padding = offset - start;
+            if (padding <= size && bytes <= size - padding) {
                 long end = offset + bytes;
-                free.remove(entry.getKey());
-                addFree(entry.getKey(), padding);
-                addFree(end, entry.getValue() - padding - bytes);
+                free.remove(start);
+                addFree(start, padding);
+                addFree(end, size - padding - bytes);
                 Allocation allocation = new Allocation(++nextId, offset, bytes);
                 active.put(allocation.id(), allocation);
                 return allocation;
