@@ -9,16 +9,16 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
 
 /**
- * Bounded least-recently-used cache of immutable per-column values keyed by chunk column. Concurrent requests for the
- * same column share one computation: the first caller computes while the others wait for its result. A failed
+ * Bounded least-recently-used cache of immutable values keyed by two-dimensional generation coordinates. Concurrent requests for the
+ * same key share one computation: the first caller computes while the others wait for its result. A failed
  * computation is not cached.
  */
-final class ColumnCache<T> {
+final class GenerationCache<T> {
     private final int capacity;
     private final Map<Long, FutureTask<T>> entries;
     private final LongAdder hits = new LongAdder(), misses = new LongAdder();
 
-    ColumnCache(int capacity) {
+    GenerationCache(int capacity) {
         if (capacity < 1) throw new IllegalArgumentException("Capacity must be positive");
         this.capacity = capacity;
         entries = new LinkedHashMap<>(capacity * 2, .75f, true);
@@ -52,10 +52,10 @@ final class ColumnCache<T> {
             }
             if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
             if (failed.getCause() instanceof Error error) throw error;
-            throw new IllegalStateException("Column computation failed", failed.getCause());
+            throw new IllegalStateException("Generation computation failed", failed.getCause());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting for a column", interrupted);
+            throw new IllegalStateException("Interrupted while waiting for generation", interrupted);
         }
     }
 
