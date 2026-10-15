@@ -6,9 +6,17 @@ import com.norbertfila.world.RegionPos;
 import org.joml.Matrix4fc;
 
 public final class Frustum {
+    public static final int OUTSIDE = 0, INTERSECTS = 1, INSIDE = 2;
     private final float[] planes = new float[24];
 
+    public Frustum() {}
+
     private Frustum(Matrix4fc matrix) {
+        set(matrix);
+    }
+
+    /** Recomputes the planes in place so a renderer can reuse one frustum every frame. */
+    public Frustum set(Matrix4fc matrix) {
         setPlane(
                 0,
                 matrix.m03() + matrix.m00(),
@@ -45,6 +53,7 @@ public final class Frustum {
                 matrix.m13() - matrix.m12(),
                 matrix.m23() - matrix.m22(),
                 matrix.m33() - matrix.m32());
+        return this;
     }
 
     public static Frustum from(Matrix4fc matrix) {
@@ -79,6 +88,20 @@ public final class Frustum {
             }
         }
         return true;
+    }
+
+    /** {@link #OUTSIDE}, {@link #INSIDE} when the box lies within every plane, else {@link #INTERSECTS}. */
+    public int classify(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+        int result = INSIDE;
+        for (int plane = 0; plane < 6; plane++) {
+            int offset = plane * 4;
+            float a = planes[offset], b = planes[offset + 1], c = planes[offset + 2], d = planes[offset + 3];
+            float far = a * (a >= 0 ? maxX : minX) + b * (b >= 0 ? maxY : minY) + c * (c >= 0 ? maxZ : minZ) + d;
+            if (far < 0) return OUTSIDE;
+            float near = a * (a >= 0 ? minX : maxX) + b * (b >= 0 ? minY : maxY) + c * (c >= 0 ? minZ : maxZ) + d;
+            if (near < 0) result = INTERSECTS;
+        }
+        return result;
     }
 
     private void setPlane(int index, float a, float b, float c, float d) {

@@ -154,11 +154,7 @@ public final class VegetationSmoke {
         glClearColor(32 / 255f, 64 / 255f, 96 / 255f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         var relative = new Matrix4f(vp).translate(eye);
-        check(
-                renderer.render(relative, Frustum.from(vp), eye.x, eye.y, eye.z, 0)
-                                .drawCalls()
-                        > 0,
-                "No draws");
+        check(renderer.render(relative, eye.x, eye.y, eye.z, 0).drawCalls() > 0, "No draws");
         check(glGetError() == GL_NO_ERROR, "Render GL error");
     }
 
