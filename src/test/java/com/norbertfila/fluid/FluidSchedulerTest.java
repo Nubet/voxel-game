@@ -1,6 +1,8 @@
 package com.norbertfila.fluid;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.BlockPos;
@@ -229,5 +231,29 @@ class FluidSchedulerTest {
         assertEquals(List.of(15L, 30L, 45L, 60L), executedAt);
         assertEquals(.25, FluidScheduler.WATER_TICK_DELAY * FixedSimulation.TICK_SECONDS);
         assertEquals(1, scheduler.size());
+    }
+
+    @Test
+    void pendingInListsOnlyThatChunkInExecutionOrderAndTracksRemovals() {
+        FluidScheduler scheduler = new FluidScheduler();
+        scheduler.schedule(new BlockPos(3, 1, 1), 20);
+        scheduler.schedule(new BlockPos(-1, 1, 1), 5);
+        scheduler.schedule(new BlockPos(5, 1, 1), 10);
+        scheduler.schedule(new BlockPos(5, 1, 1), 4);
+
+        var chunk = new com.norbertfila.world.ChunkPos(0, 0, 0);
+        assertEquals(
+                java.util.List.of(new BlockPos(5, 1, 1), new BlockPos(3, 1, 1)),
+                scheduler.pendingIn(chunk).stream()
+                        .map(FluidScheduler.PendingUpdate::position)
+                        .toList());
+        scheduler.cancel(new BlockPos(3, 1, 1));
+        scheduler.processDue(4, ignored -> {});
+        assertTrue(scheduler.pendingIn(chunk).isEmpty());
+        assertEquals(
+                1,
+                scheduler
+                        .pendingIn(new com.norbertfila.world.ChunkPos(-1, 0, 0))
+                        .size());
     }
 }

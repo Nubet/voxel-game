@@ -106,12 +106,35 @@ final class WaterFlowRules {
     }
 
     private static int read(World world, BlockPos position, Set<ChunkPos> missing) {
+        int state = state(world, position);
+        if (state == UNAVAILABLE) missing.add(Coordinates.worldToChunk(position));
+        return state;
+    }
+
+    /**
+     * True for a source whose wake-up neighborhood, the cells below, above and beside it and beside the cell above,
+     * holds only sources and blocking blocks. A source never changes, so updating any of those cells does nothing.
+     */
+    static boolean settledSource(World world, BlockPos position) {
+        if (state(world, position) != WaterState.SOURCE) return false;
+        if (!sourceOrBlocked(world, offset(position, 0, -1, 0))) return false;
+        BlockPos above = offset(position, 0, 1, 0);
+        if (!sourceOrBlocked(world, above)) return false;
+        for (int direction = 0; direction < DX.length; direction++)
+            if (!sourceOrBlocked(world, offset(position, DX[direction], 0, DZ[direction]))
+                    || !sourceOrBlocked(world, offset(above, DX[direction], 0, DZ[direction]))) return false;
+        return true;
+    }
+
+    private static boolean sourceOrBlocked(World world, BlockPos position) {
+        int state = state(world, position);
+        return state == WaterState.SOURCE || state == BLOCKED;
+    }
+
+    private static int state(World world, BlockPos position) {
         if (position == null) return BLOCKED;
         ChunkPos chunk = Coordinates.worldToChunk(position);
-        if (!world.hasChunk(chunk)) {
-            missing.add(chunk);
-            return UNAVAILABLE;
-        }
+        if (!world.hasChunk(chunk)) return UNAVAILABLE;
         int block = world.getBlock(position).orElseThrow();
         if (block == BlockId.AIR || PlantRules.isPlant((byte) block)) return WaterState.EMPTY;
         if (block != BlockId.WATER) return BLOCKED;

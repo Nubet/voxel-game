@@ -30,6 +30,8 @@ public final class WaterSimulator {
     private final boolean extended;
     private final Map<BlockPos, FluidSnapshot.Update> deferred = new LinkedHashMap<>();
     private final Map<ChunkPos, Set<BlockPos>> waiting = new HashMap<>();
+    // Deferred updates by the chunk they are in, as opposed to the chunks they wait for.
+    private final Map<ChunkPos, Set<BlockPos>> deferredIn = new HashMap<>();
     private long currentTick;
 
     public WaterSimulator(World world, int farTileSize) {
@@ -66,6 +68,9 @@ public final class WaterSimulator {
             Set<ChunkPos> missing = new LinkedHashSet<>();
             int next = WaterFlowRules.nextState(world, position, missing, extended);
             if (next == WaterFlowRules.UNAVAILABLE) {
+                ChunkPos own = Coordinates.worldToChunk(position);
+                // An unloaded chunk without changes is woken by the scan when it loads; parking it would leak.
+                if (!world.hasChunk(own) && !world.changes().hasChanges(own)) return;
                 defer(new FluidSnapshot.Update(position, FluidScheduler.WATER_TICK_DELAY, List.copyOf(missing)));
                 return;
             }
@@ -108,12 +113,19 @@ public final class WaterSimulator {
         Objects.requireNonNull(chunk);
         advanceClock(tick);
         if (!world.hasChunk(chunk)) {
-            for (var update : scheduler.pending()) {
-                if (!Coordinates.worldToChunk(update.position()).equals(chunk)) continue;
+            // Generated water without changes is woken again by the scan below when the chunk returns, so only
+            // chunks holding authoritative changes keep their frozen updates. Otherwise exploring would retain
+            // every shoreline update ever scheduled.
+            boolean keep = world.changes().hasChanges(chunk);
+            for (var update : scheduler.pendingIn(chunk)) {
                 scheduler.cancel(update.position());
-                defer(new FluidSnapshot.Update(
-                        update.position(), Math.max(0, update.executeAtTick() - tick), List.of(chunk)));
+                if (keep)
+                    defer(new FluidSnapshot.Update(
+                            update.position(), Math.max(0, update.executeAtTick() - tick), List.of(chunk)));
             }
+            if (!keep)
+                for (BlockPos position : List.copyOf(deferredIn.getOrDefault(chunk, Set.of())))
+                    removeDeferred(deferred.get(position));
         } else {
             for (BlockPos position : List.copyOf(waiting.getOrDefault(chunk, Set.of()))) {
                 var update = deferred.get(position);
@@ -161,7 +173,11 @@ public final class WaterSimulator {
                     long wx = (long) chunk.x() * Chunk.SIZE + x;
                     long wy = (long) chunk.y() * Chunk.SIZE + y;
                     long wz = (long) chunk.z() * Chunk.SIZE + z;
-                    scheduleNeighborhood(new BlockPos((int) wx, (int) wy, (int) wz), nextTick(tick), false);
+                    BlockPos water = new BlockPos((int) wx, (int) wy, (int) wz);
+                    // Open water away from shores and falls would only queue updates that change nothing, enough of
+                    // them to back up the update budget while flying over the sea.
+                    if (WaterFlowRules.settledSource(world, water)) continue;
+                    scheduleNeighborhood(water, nextTick(tick), false);
                 }
             }
         }
@@ -198,12 +214,18 @@ public final class WaterSimulator {
 
     private void defer(FluidSnapshot.Update update) {
         deferred.put(update.position(), update);
+        deferredIn
+                .computeIfAbsent(Coordinates.worldToChunk(update.position()), ignored -> new LinkedHashSet<>())
+                .add(update.position());
         for (ChunkPos chunk : update.missingChunks())
             waiting.computeIfAbsent(chunk, ignored -> new LinkedHashSet<>()).add(update.position());
     }
 
     private void removeDeferred(FluidSnapshot.Update update) {
         deferred.remove(update.position());
+        ChunkPos own = Coordinates.worldToChunk(update.position());
+        Set<BlockPos> parked = deferredIn.get(own);
+        if (parked != null && parked.remove(update.position()) && parked.isEmpty()) deferredIn.remove(own);
         for (ChunkPos chunk : update.missingChunks()) {
             Set<BlockPos> positions = waiting.get(chunk);
             positions.remove(update.position());

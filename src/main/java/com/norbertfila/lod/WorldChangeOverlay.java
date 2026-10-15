@@ -137,6 +137,11 @@ public final class WorldChangeOverlay {
         return (long) chunkX << 32 | Integer.toUnsignedLong(chunkZ);
     }
 
+    /** True when the chunk holds at least one authoritative change. */
+    public boolean hasChanges(ChunkPos chunk) {
+        return changes.containsKey(Objects.requireNonNull(chunk));
+    }
+
     public List<FarTilePos> dirtyTiles() {
         return dirtyTiles.stream().sorted(ORDER).toList();
     }
