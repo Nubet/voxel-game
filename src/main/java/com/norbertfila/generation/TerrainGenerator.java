@@ -3,10 +3,13 @@ package com.norbertfila.generation;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 11;
+    private static final int GENERATOR_VERSION = 12;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -21,7 +24,9 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpZ;
     private final TreeGenerator trees;
     private final VegetationGenerator vegetation;
-    private final ColumnCache<TerrainColumn> columns = new ColumnCache<>(COLUMN_CACHE_CAPACITY);
+    private final GenerationCache<TerrainColumn> columns = new GenerationCache<>(COLUMN_CACHE_CAPACITY);
+    private final GenerationCache<CavePlan> cavePlans = new GenerationCache<>(128);
+    private final CavePlanner cavePlanner;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
@@ -51,6 +56,7 @@ public final class TerrainGenerator implements TerrainSource {
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         trees = new TreeGenerator(seed, forestDensity, this);
         vegetation = new VegetationGenerator(seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity);
+        cavePlanner = new CavePlanner(seed, config.minHeight() - 1, this::surfaceHeight);
     }
 
     private static Noise2D forestNoise(Noise2D noise) {
@@ -142,14 +148,23 @@ public final class TerrainGenerator implements TerrainSource {
         int originZ = origin(position.z());
         TerrainColumn column = columns.get(position.x(), position.z(), () -> column(originX, originZ));
         int uniform = column.uniformBlock(originY);
-        if (uniform >= 0) return ChunkData.uniform(position, (byte) uniform);
+        if (uniform >= 0
+                && (!CaveCarver.carveable((byte) uniform)
+                        || column.caves().stream()
+                                .noneMatch(s -> s.y() + s.radiusY() > originY
+                                        && s.y() - s.radiusY() < (double) originY + Chunk.SIZE)))
+            return ChunkData.uniform(position, (byte) uniform);
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
-        for (int z = 0; z < Chunk.SIZE; z++)
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                int index = z * Chunk.SIZE + x;
-                for (int y = 0; y < Chunk.SIZE; y++)
-                    blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
-            }
+        if (uniform >= 0) Arrays.fill(blocks, (byte) uniform);
+        else
+            for (int z = 0; z < Chunk.SIZE; z++)
+                for (int x = 0; x < Chunk.SIZE; x++) {
+                    int index = z * Chunk.SIZE + x;
+                    for (int y = 0; y < Chunk.SIZE; y++)
+                        blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
+                }
+        boolean carved = CaveCarver.carve(position, blocks, column.caves());
+        if (uniform >= 0 && !carved) return ChunkData.uniform(position, (byte) uniform);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
         vegetation.generate(originX, originY, originZ, blocks, column);
         return new ChunkData(position, blocks);
@@ -159,11 +174,29 @@ public final class TerrainGenerator implements TerrainSource {
         TerrainSummary[] summaries = new TerrainSummary[TerrainColumn.AREA];
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) summaries[z * Chunk.SIZE + x] = sample(originX + x, originZ + z);
-        return TerrainColumn.of(summaries, trees.trees(originX, originZ));
+        return TerrainColumn.of(
+                summaries, trees.trees(originX, originZ), cavesAt(originX / Chunk.SIZE, originZ / Chunk.SIZE));
     }
 
-    ColumnCache.Stats columnCacheStats() {
+    private List<CavePlan.Segment> cavesAt(int chunkX, int chunkZ) {
+        int regionX = Math.floorDiv(chunkX, CavePlanner.REGION_SIZE / Chunk.SIZE);
+        int regionZ = Math.floorDiv(chunkZ, CavePlanner.REGION_SIZE / Chunk.SIZE);
+        List<CavePlan.Segment> segments = new ArrayList<>();
+        for (int z = regionZ - 1; z <= regionZ + 1; z++)
+            for (int x = regionX - 1; x <= regionX + 1; x++) {
+                int rx = x, rz = z;
+                segments.addAll(
+                        cavePlans.get(rx, rz, () -> cavePlanner.plan(rx, rz)).segments(chunkX, chunkZ));
+            }
+        return List.copyOf(segments);
+    }
+
+    GenerationCache.Stats columnCacheStats() {
         return columns.stats();
+    }
+
+    GenerationCache.Stats caveCacheStats() {
+        return cavePlans.stats();
     }
 
     private static double layer(Noise2D noise, TerrainConfig.Layer layer, double x, double z) {

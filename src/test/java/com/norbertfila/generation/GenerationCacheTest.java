@@ -13,10 +13,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
-class ColumnCacheTest {
+class GenerationCacheTest {
     @Test
     void concurrentRequestsForOneColumnComputeItOnce() throws Exception {
-        var cache = new ColumnCache<Object>(4);
+        var cache = new GenerationCache<Object>(4);
         AtomicInteger computations = new AtomicInteger();
         CountDownLatch release = new CountDownLatch(1);
         List<Future<Object>> results = new ArrayList<>();
@@ -36,12 +36,12 @@ class ColumnCacheTest {
             for (Future<Object> result : results) assertSame(first, result.get());
         }
         assertEquals(1, computations.get());
-        assertEquals(new ColumnCache.Stats(1, 5, 1), cache.stats());
+        assertEquals(new GenerationCache.Stats(1, 5, 1), cache.stats());
     }
 
     @Test
     void evictsLeastRecentlyUsedColumnBeyondCapacity() {
-        var cache = new ColumnCache<String>(2);
+        var cache = new GenerationCache<String>(2);
         cache.get(0, 0, () -> "a");
         cache.get(1, 0, () -> "b");
         cache.get(0, 0, () -> "unused");
@@ -53,7 +53,7 @@ class ColumnCacheTest {
 
     @Test
     void distinguishesNegativeCoordinates() {
-        var cache = new ColumnCache<String>(8);
+        var cache = new GenerationCache<String>(8);
         cache.get(-1, 0, () -> "west");
         cache.get(0, -1, () -> "north");
         assertEquals("west", cache.get(-1, 0, () -> "x"));
@@ -62,7 +62,7 @@ class ColumnCacheTest {
 
     @Test
     void failedComputationIsRetried() {
-        var cache = new ColumnCache<String>(2);
+        var cache = new GenerationCache<String>(2);
         assertThrows(
                 IllegalStateException.class,
                 () -> cache.get(5, 5, () -> {
