@@ -20,10 +20,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public final class BlockInteraction {
-    private static final double REACH = 6;
     private final World world;
     private final WorldEdit edit;
-    private final VoxelRaycaster raycaster = new VoxelRaycaster();
+    private final BlockTargeting targeting;
     private final Consumer<BlockPos> changed;
 
     public BlockInteraction(World world, int farTileSize) {
@@ -32,6 +31,7 @@ public final class BlockInteraction {
 
     public BlockInteraction(World world, int farTileSize, Consumer<BlockPos> changed) {
         this.world = Objects.requireNonNull(world);
+        targeting = new BlockTargeting(world);
         edit = new WorldEdit(world, farTileSize);
         this.changed = Objects.requireNonNull(changed);
     }
@@ -56,18 +56,8 @@ public final class BlockInteraction {
             double directionY,
             double directionZ,
             Inventory inventory) {
-        if (Objects.requireNonNull(mode) == PlayerController.Mode.SPECTATOR) return Optional.empty();
-        return raycaster
-                .cast(
-                        world,
-                        originX,
-                        originY,
-                        originZ,
-                        directionX,
-                        directionY,
-                        directionZ,
-                        REACH,
-                        id -> canTarget(mode, id))
+        return targeting
+                .find(mode, originX, originY, originZ, directionX, directionY, directionZ)
                 .filter(hit -> canBreak(mode, hit.blockId()))
                 .filter(hit -> inventory == null || inventory.canAdd((byte) hit.blockId()))
                 .map(hit -> {
@@ -93,8 +83,8 @@ public final class BlockInteraction {
         if (!BlockId.isValid(blockId))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(blockId));
         if (blockId == BlockId.AIR || mode == PlayerController.Mode.SPECTATOR) return Optional.empty();
-        Optional<VoxelRaycaster.Hit> target = raycaster.cast(
-                world, originX, originY, originZ, directionX, directionY, directionZ, REACH, id -> canTarget(mode, id));
+        Optional<VoxelRaycaster.Hit> target =
+                targeting.find(mode, originX, originY, originZ, directionX, directionY, directionZ);
         if (target.isEmpty()) return Optional.empty();
         VoxelRaycaster.Hit hit = target.get();
         VoxelRaycaster.Normal normal = hit.normal();
@@ -147,11 +137,6 @@ public final class BlockInteraction {
         BlockChangeResult result = edit.setBlock(position, value);
         if (result.changed()) changed.accept(position);
         return result;
-    }
-
-    private static boolean canTarget(PlayerController.Mode mode, int id) {
-        return mode == PlayerController.Mode.CREATIVE
-                || BlockRegistry.DEFAULT.definition((byte) id).targetable();
     }
 
     private static boolean canBreak(PlayerController.Mode mode, int id) {

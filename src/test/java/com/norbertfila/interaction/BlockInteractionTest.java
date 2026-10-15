@@ -407,8 +407,8 @@ class BlockInteractionTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"0,true", "-0.001,false"})
-    void limitsRemovalAndPlacementToSixBlocks(double originX, boolean reachable) {
+    @CsvSource({"SURVIVAL,1.5,true", "SURVIVAL,1.499999,false", "CREATIVE,0,true", "CREATIVE,-0.001,false"})
+    void limitsRemovalAndPlacementToTheModeReach(PlayerController.Mode mode, double originX, boolean reachable) {
         World world = worldWithBlock(new BlockPos(6, 1, 1));
         world.putChunk(new ChunkPos(-1, 0, 0), new Chunk());
         BlockInteraction interaction = new BlockInteraction(world, 8);
@@ -416,14 +416,11 @@ class BlockInteractionTest {
         assertEquals(
                 reachable,
                 interaction
-                        .place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, PlayerController.Mode.SURVIVAL, DISTANT_BODY)
+                        .place(originX, 1.5, 1.5, 1, 0, 0, BlockId.DIRT, mode, DISTANT_BODY)
                         .isPresent());
-        if (reachable) interaction.remove(PlayerController.Mode.SURVIVAL, originX, 1.5, 1.5, 1, 0, 0);
+        if (reachable) interaction.remove(mode, originX, 1.5, 1.5, 1, 0, 0);
         assertEquals(
-                reachable,
-                interaction
-                        .remove(PlayerController.Mode.SURVIVAL, originX, 1.5, 1.5, 1, 0, 0)
-                        .isPresent());
+                reachable, interaction.remove(mode, originX, 1.5, 1.5, 1, 0, 0).isPresent());
         assertEquals(
                 reachable ? BlockId.AIR : BlockId.STONE,
                 world.getBlock(new BlockPos(6, 1, 1)).orElseThrow());

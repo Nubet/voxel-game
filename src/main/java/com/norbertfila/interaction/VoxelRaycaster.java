@@ -76,6 +76,7 @@ public final class VoxelRaycaster {
         while (true) {
             double distance;
             Normal normal;
+            // Resolve equal boundary distances in X/Y/Z order to keep edge and corner hits deterministic.
             if (tMaxX <= tMaxY && tMaxX <= tMaxZ) {
                 if (tMaxX > maxDistance || stepX == 0 || x == boundary(stepX)) return Optional.empty();
                 x += stepX;

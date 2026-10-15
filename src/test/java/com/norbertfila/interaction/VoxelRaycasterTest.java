@@ -54,6 +54,36 @@ class VoxelRaycasterTest {
         assertTrue(hit.distance() > 0);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "1,1,0,1,0,0,-1,0,0",
+        "1,1,0,1,1,0,0,-1,0",
+        "0,1,1,0,1,0,0,-1,0",
+        "0,1,1,0,1,1,0,0,-1",
+        "1,1,1,1,0,0,-1,0,0",
+        "1,1,1,1,1,0,0,-1,0",
+        "1,1,1,1,1,1,0,0,-1"
+    })
+    void resolvesExactEdgeAndCornerTiesInXThenYThenZOrder(
+            int dx, int dy, int dz, int x, int y, int z, int nx, int ny, int nz) {
+        BlockPos block = new BlockPos(x, y, z);
+        var hit =
+                raycaster.cast(worldWithBlock(block), .5, .5, .5, dx, dy, dz, 2).orElseThrow();
+        assertEquals(block, hit.block());
+        assertEquals(new VoxelRaycaster.Normal(nx, ny, nz), hit.normal());
+        assertEquals(.5 * Math.sqrt(dx * dx + dy * dy + dz * dz), hit.distance(), 1e-12);
+    }
+
+    @Test
+    void enteringANegativeCellFromItsExactBoundaryHasZeroDistanceAndAnEnteredFace() {
+        var hit = raycaster
+                .cast(worldWithBlock(new BlockPos(-1, 1, 1)), 0, 1.5, 1.5, -1, 0, 0, 0)
+                .orElseThrow();
+        assertEquals(new BlockPos(-1, 1, 1), hit.block());
+        assertEquals(new VoxelRaycaster.Normal(1, 0, 0), hit.normal());
+        assertEquals(0, hit.distance());
+    }
+
     @Test
     void crossesNegativeChunkBoundary() {
         World world = worldWithBlock(new BlockPos(-1, 1, 1));

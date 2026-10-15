@@ -5,6 +5,8 @@ import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.interaction.BlockInteraction;
+import com.norbertfila.interaction.BlockTargeting;
+import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
@@ -189,6 +191,7 @@ public final class WorldRuntime implements AutoCloseable {
             long[] estimatedChunkBytes = {0}, publishNanos = {0};
             BlockInteraction interaction =
                     new BlockInteraction(world, FAR_TILE_SIZE, position -> water.onBlockChanged(position, tick[0]));
+            BlockTargeting targeting = new BlockTargeting(world);
             try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
                     FarTerrainStreamer far = new FarTerrainStreamer(generator, world.changes(), FAR_TERRAIN_WORKERS)) {
                 boolean[] viewReady = {false}, poseReady = {false};
@@ -385,6 +388,9 @@ public final class WorldRuntime implements AutoCloseable {
                             long contactStarted = System.nanoTime();
                             var contact = WaterContact.sample(world, player.state());
                             long contactNanos = System.nanoTime() - contactStarted;
+                            var target = activated && poseReady[0]
+                                    ? target(targeting, player, state)
+                                    : Optional.<VoxelRaycaster.Hit>empty();
                             long oldestAck =
                                     issuedAt.isEmpty() ? 0 : System.nanoTime() - Collections.min(issuedAt.values());
                             var metrics = new SimulationMetrics(
@@ -431,7 +437,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     Map.copyOf(valid),
                                     water.pendingUpdates(),
                                     metrics,
-                                    inventory.snapshot()));
+                                    inventory.snapshot(),
+                                    target));
                             publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -540,6 +547,21 @@ public final class WorldRuntime implements AutoCloseable {
             if (sessionId < 1) throw new IllegalArgumentException("Invalid session ID");
             Objects.requireNonNull(mesh);
         }
+    }
+
+    private static Optional<VoxelRaycaster.Hit> target(
+            BlockTargeting targeting, PlayerController player, Controls controls) {
+        if (controls.blocked() || controls.paused() || player.modeChangePending()) return Optional.empty();
+        var eye = player.renderEyePosition(1);
+        double yaw = Math.toRadians(controls.yaw()), pitch = Math.toRadians(controls.pitch());
+        return targeting.find(
+                player.mode(),
+                eye.x(),
+                eye.y(),
+                eye.z(),
+                Math.cos(yaw) * Math.cos(pitch),
+                Math.sin(pitch),
+                Math.sin(yaw) * Math.cos(pitch));
     }
 
     static Optional<BlockChangeResult> edit(
@@ -759,13 +781,15 @@ public final class WorldRuntime implements AutoCloseable {
             Map<Long, ChunkManager.MeshResult> validUploads,
             int pendingWater,
             SimulationMetrics metrics,
-            InventorySnapshot inventory) {
+            InventorySnapshot inventory,
+            Optional<VoxelRaycaster.Hit> target) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
             Objects.requireNonNull(coverage);
             validUploads = Map.copyOf(validUploads);
             Objects.requireNonNull(inventory);
+            Objects.requireNonNull(target);
         }
 
         public Map<ChunkPos, Long> residents() {

@@ -28,6 +28,56 @@ class WorldRuntimeTest {
     Path directory;
 
     @Test
+    void publishesStableTargetsAndClearsThemForBlockedPausedEditedAndSpectatorStates() throws Exception {
+        Path save = directory.resolve("target.vxl");
+        World world = new World();
+        BlockPos near = new BlockPos(3, 2, 0), far = new BlockPos(6, 2, 0);
+        world.setBlock(near, BlockId.STONE, 64);
+        world.setBlock(far, BlockId.STONE, 64);
+        TestWorlds.save(save, 42, 1, world);
+        var active = new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0);
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(active);
+            var targeted = await(runtime, f -> f.target().isPresent());
+            var hit = targeted.target().orElseThrow();
+            assertEquals(near, hit.block());
+            assertEquals(2.5, hit.distance());
+
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 90, 0, false, false, 0));
+            await(runtime, f -> f.yaw() == 90 && f.target().isEmpty());
+            runtime.controls(active);
+            await(runtime, f -> f.target().isPresent());
+
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, true, false, 0));
+            await(runtime, f -> f.target().isEmpty());
+            runtime.controls(active);
+            await(runtime, f -> f.target().isPresent());
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, true, 0));
+            var paused = await(runtime, f -> f.paused() && f.target().isEmpty());
+            runtime.controls(active);
+            await(
+                    runtime,
+                    f -> !f.paused() && f.tick() > paused.tick() && f.target().isPresent());
+
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            await(runtime, f -> f.target().isEmpty() && f.inventory().count(0) == 1);
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            var creative = await(
+                    runtime,
+                    f -> f.mode() == PlayerController.Mode.CREATIVE
+                            && f.target().isPresent());
+            assertEquals(far, creative.target().orElseThrow().block());
+            assertEquals(5.5, creative.target().orElseThrow().distance());
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(
+                    runtime,
+                    f -> f.mode() == PlayerController.Mode.SPECTATOR
+                            && f.target().isEmpty());
+            assertEquals(hit, targeted.target().orElseThrow());
+        }
+    }
+
+    @Test
     void asynchronousStopDoesNotWaitForStartupAndRejectsNewCommands() throws Exception {
         var terrain = new Flat();
         terrain.blockSpawn = true;
