@@ -369,9 +369,7 @@ public final class WorldRuntime implements AutoCloseable {
                             });
                             if (tick[0] % 60 == 0) {
                                 fluidMetrics[0] = water.metrics(tick[0]);
-                                estimatedChunkBytes[0] = world.residentPositions().stream()
-                                        .mapToLong(p -> world.getChunk(p).estimatedBytes())
-                                        .sum();
+                                estimatedChunkBytes[0] = world.estimatedBytes();
                             }
                             long contactStarted = System.nanoTime();
                             var contact = WaterContact.sample(world, player.state());

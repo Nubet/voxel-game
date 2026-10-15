@@ -77,12 +77,29 @@ public final class Chunk {
     /** Returns a snapshot that shares its arrays with every other snapshot taken at the same content revision. */
     public ChunkSnapshot snapshot() {
         if (snapshot == null || snapshot.revision() != revision) {
-            byte[] blocks = new byte[BLOCK_BYTES];
-            data.copyInto(blocks);
-            snapshot = ChunkSnapshot.owning(
-                    blocks, waterData == null ? null : waterData.clone(), revision, meshDependencyRevision);
+            // Edits can leave layers holding one block type; compact them now, while the data is copied anyway.
+            data.compactLayers();
+            byte[] water = waterData == null ? null : waterData.clone();
+            int uniform = data.uniformBlock();
+            if (uniform >= 0) {
+                snapshot = ChunkSnapshot.uniform((byte) uniform, water, revision, meshDependencyRevision);
+            } else {
+                byte[] blocks = new byte[BLOCK_BYTES];
+                data.copyInto(blocks);
+                snapshot = ChunkSnapshot.owning(blocks, water, revision, meshDependencyRevision);
+            }
         }
         return snapshot.withMeshDependencyRevision(meshDependencyRevision);
+    }
+
+    /** True when a cached snapshot holds a block array; the world bounds how many chunks keep one. */
+    boolean holdsSnapshotArrays() {
+        return snapshot != null && snapshot.arrayBytes() > 0;
+    }
+
+    /** Drops the cached snapshot; the next {@link #snapshot()} rebuilds it. Published snapshots stay valid. */
+    void releaseSnapshot() {
+        snapshot = null;
     }
 
     public ChunkData.Kind storageKind() {
@@ -103,6 +120,11 @@ public final class Chunk {
 
     public long estimatedBytes() {
         return data.estimatedBytes() + (waterData == null ? 0 : waterData.length);
+    }
+
+    /** Bytes of block and water arrays held only by the cached meshing snapshot. */
+    long snapshotBytes() {
+        return snapshot == null ? 0 : snapshot.arrayBytes();
     }
 
     private static int index(int x, int y, int z) {

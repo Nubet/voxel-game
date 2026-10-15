@@ -12,6 +12,12 @@ public final class World {
     private final ChunkStorage storage;
     private final WorldChangeOverlay changes;
     private final Set<ChunkPos> requestedChunks = new HashSet<>();
+    // Chunks whose cached meshing snapshot holds block arrays, least recently used first. Snapshots are a cache:
+    // dropping one only costs a copy the next time a mesh task needs that chunk.
+    private static final int DEFAULT_SNAPSHOT_LIMIT = 4096;
+    private final int snapshotLimit = DEFAULT_SNAPSHOT_LIMIT;
+    private final java.util.LinkedHashMap<ChunkPos, Chunk> snapshotHolders =
+            new java.util.LinkedHashMap<>(64, .75f, true);
 
     public World() {
         this(new ChunkStorage(), new WorldChangeOverlay());
@@ -28,6 +34,7 @@ public final class World {
 
     public void putChunk(ChunkPos position, Chunk chunk) {
         changes.applyTo(position, chunk);
+        snapshotHolders.remove(position);
         storage.put(position, chunk);
         requestedChunks.remove(position);
         invalidateNeighbors(position);
@@ -43,6 +50,7 @@ public final class World {
 
     public Chunk removeChunk(ChunkPos position) {
         requestedChunks.remove(Objects.requireNonNull(position));
+        snapshotHolders.remove(position);
         Chunk removed = storage.remove(position);
         if (removed != null) invalidateNeighbors(position);
         return removed;
@@ -168,6 +176,28 @@ public final class World {
 
     private ChunkSnapshot snapshot(ChunkPos position) {
         Chunk chunk = storage.get(position);
-        return chunk == null ? null : chunk.snapshot();
+        if (chunk == null) return null;
+        ChunkSnapshot snapshot = chunk.snapshot();
+        if (!chunk.holdsSnapshotArrays()) snapshotHolders.remove(position);
+        else {
+            snapshotHolders.put(position, chunk);
+            if (snapshotHolders.size() > snapshotLimit) {
+                var eldest = snapshotHolders.entrySet().iterator();
+                eldest.next().getValue().releaseSnapshot();
+                eldest.remove();
+            }
+        }
+        return snapshot;
+    }
+
+    /** Estimated bytes of resident block data, water states and cached snapshots. */
+    public long estimatedBytes() {
+        long snapshots = 0;
+        for (Chunk chunk : snapshotHolders.values()) snapshots += chunk.snapshotBytes();
+        return storage.estimatedBytes() + snapshots;
+    }
+
+    public int cachedSnapshots() {
+        return snapshotHolders.size();
     }
 }
