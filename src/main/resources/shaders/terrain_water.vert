@@ -1,12 +1,19 @@
-#version 430 core
+#version 460 core
 
 // Rebuilds six vertices per water quad record; see QuadMesh for the bit layout and QuadCodec for the CPU twin.
 layout(std430, binding = 0) readonly buffer Quads {
     uint quads[];
 };
 
+// Chunk coordinates of each draw, indexed by the base instance both draw paths pass.
+layout(std430, binding = 1) readonly buffer Draws {
+    ivec4 chunks[];
+};
+
 uniform mat4 uVP;
-uniform vec3 uChunkOrigin;
+// The camera is split into an integer block and a fraction so origins are exact far from the world origin.
+uniform ivec3 uCameraBlock;
+uniform vec3 uCameraFraction;
 
 out vec2 vUv;
 flat out float vLayer;
@@ -43,6 +50,7 @@ void main() {
     vLayer = float(cell >> 16);
     vShade = SHADE[face];
     vFlow = face == 2 ? unpackSnorm2x16(flow) : vec2(0.0, falling ? -1.0 : 0.0);
-    vCameraOffset = uChunkOrigin + local;
+    vec3 chunkOrigin = vec3(chunks[gl_BaseInstance].xyz * 16 - uCameraBlock) - uCameraFraction;
+    vCameraOffset = chunkOrigin + local;
     gl_Position = uVP * vec4(vCameraOffset, 1.0);
 }
