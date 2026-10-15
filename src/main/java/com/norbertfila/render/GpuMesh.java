@@ -4,34 +4,33 @@ import com.norbertfila.meshing.QuadMesh;
 import com.norbertfila.meshing.QuadRanges;
 import java.util.Objects;
 
-/** One uploaded quad buffer owned by the GL thread. Closing it deletes the buffer exactly once. */
+/** Quad records of one mesh part inside a shared GPU buffer. Closing it releases the range exactly once. */
 public final class GpuMesh implements AutoCloseable {
-    interface Deleter {
-        void delete(int buffer);
-    }
-
     private final int buffer;
+    private final int firstRecord;
     private final QuadMesh.Format format;
     private final QuadRanges ranges;
     private final long bytes;
-    private final Deleter deleter;
+    private final Runnable release;
     private boolean closed;
 
-    GpuMesh(int buffer, QuadMesh mesh, Deleter deleter) {
-        this(buffer, mesh.format(), mesh.ranges(), mesh.bytes(), deleter);
-    }
-
-    GpuMesh(int buffer, QuadMesh.Format format, QuadRanges ranges, long bytes, Deleter deleter) {
+    GpuMesh(int buffer, int firstRecord, QuadMesh.Format format, QuadRanges ranges, long bytes, Runnable release) {
+        if (firstRecord < 0 || bytes < 0) throw new IllegalArgumentException("Invalid mesh range");
         this.buffer = buffer;
+        this.firstRecord = firstRecord;
         this.format = Objects.requireNonNull(format);
         this.ranges = Objects.requireNonNull(ranges);
-        if (bytes < 0) throw new IllegalArgumentException("Mesh size must not be negative");
         this.bytes = bytes;
-        this.deleter = Objects.requireNonNull(deleter);
+        this.release = Objects.requireNonNull(release);
     }
 
     int buffer() {
         return buffer;
+    }
+
+    /** Index of the first quad record of this mesh within {@link #buffer()}. */
+    int firstRecord() {
+        return firstRecord;
     }
 
     QuadMesh.Format format() {
@@ -54,6 +53,6 @@ public final class GpuMesh implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        deleter.delete(buffer);
+        release.run();
     }
 }

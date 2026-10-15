@@ -61,9 +61,10 @@ class GpuMeshPoolTest {
     private static GpuMesh mesh(int first, int second, List<String> deleted) {
         return new GpuMesh(
                 first,
+                0,
                 QuadMesh.Format.SOLID,
                 new QuadRanges(18, 0, 0),
                 144,
-                buffer -> deleted.add(first + ":" + second));
+                () -> deleted.add(first + ":" + second));
     }
 }
