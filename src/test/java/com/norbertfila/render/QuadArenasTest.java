@@ -111,6 +111,37 @@ class QuadArenasTest {
         return records;
     }
 
+    @Test
+    void liveSlicesNeverShareRecordsUnderRandomReuse() {
+        var gl = new FakeGl();
+        var arenas = new QuadArenas(gl, RECORD, 256, new GpuMemoryBudget(1 << 20));
+        var random = new java.util.Random(11);
+        List<QuadArenas.Slice> live = new ArrayList<>();
+        Map<QuadArenas.Slice, Integer> values = new HashMap<>();
+        for (int step = 0; step < 20_000; step++) {
+            if (live.isEmpty() || random.nextInt(3) != 0) {
+                int value = step + 1, quads = 1 + random.nextInt(random.nextInt(10) == 0 ? 60 : 8);
+                var slice = arenas.allocate(records(quads, value));
+                live.add(slice);
+                values.put(slice, value);
+            } else {
+                var slice = live.remove(random.nextInt(live.size()));
+                values.remove(slice);
+                arenas.release(slice);
+            }
+            if (random.nextInt(4) == 0) {
+                if (random.nextBoolean()) gl.signalAll();
+                arenas.endFrame();
+            }
+            if (step % 97 == 0)
+                for (var slice : live) {
+                    int ints = (int) (slice.bytes() / Integer.BYTES);
+                    int[] data = gl.read(slice.buffer(), (long) slice.firstRecord() * RECORD, ints);
+                    for (int value : data) assertEquals(values.get(slice), value, "slice overwritten at step " + step);
+                }
+        }
+    }
+
     private static final class FakeGl implements QuadArenas.Gl {
         final Map<Integer, int[]> buffers = new HashMap<>();
         final Set<Long> liveFences = new HashSet<>();
