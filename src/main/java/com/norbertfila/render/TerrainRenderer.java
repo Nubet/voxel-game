@@ -125,6 +125,10 @@ public final class TerrainRenderer implements AutoCloseable {
         return far;
     }
 
+    public BlockTextureArray blockTextures() {
+        return blockTextures;
+    }
+
     public void enqueueUpload(MeshResult result) {
         uploads.enqueue(result);
     }

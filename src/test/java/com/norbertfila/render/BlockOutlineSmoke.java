@@ -3,9 +3,13 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
+import com.norbertfila.core.Hotbar;
+import com.norbertfila.interaction.BlockBreakEvent;
+import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.platform.Window;
+import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.world.*;
@@ -13,6 +17,8 @@ import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -28,6 +34,7 @@ public final class BlockOutlineSmoke {
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures());
                 BlockOutlineRenderer outline = new BlockOutlineRenderer();
+                BlockEffectsRenderer effects = new BlockEffectsRenderer(textures);
                 UiRenderer ui = new UiRenderer()) {
             System.out.println("GPU=" + glGetString(GL_RENDERER) + " GL=" + glGetString(GL_VERSION));
             int framebuffer = glCreateFramebuffers(),
@@ -43,11 +50,13 @@ public final class BlockOutlineSmoke {
                         "Incomplete framebuffer");
                 glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
                 glViewport(0, 0, WIDTH, HEIGHT);
-                faces(textures, outline, ui, output);
-                occlusion(textures, outline);
-                precision(textures, outline, output);
+                faces(textures, outline, effects, ui, output);
+                occlusion(textures, outline, effects);
+                precision(textures, outline, effects, output);
+                particles(effects, output);
+                effectCleanup(textures);
                 cleanup();
-                check(glGetError() == GL_NO_ERROR, "Outline GL error");
+                check(glGetError() == GL_NO_ERROR, "Block feedback GL error");
             } finally {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glDeleteRenderbuffers(depth);
@@ -56,10 +65,15 @@ public final class BlockOutlineSmoke {
             }
         }
         System.out.println(
-                "PASS TARGET-02: six faces, occlusion, unchanged depth, GL state/cleanup, HUD and large/negative coordinates");
+                "PASS block feedback: outline/cracks on six faces, progressive damage, particles/expiry, occlusion, depth/state/cleanup, HUD and large coordinates");
     }
 
-    private static void faces(BlockTextureArray textures, BlockOutlineRenderer outline, UiRenderer ui, Path output)
+    private static void faces(
+            BlockTextureArray textures,
+            BlockOutlineRenderer outline,
+            BlockEffectsRenderer effects,
+            UiRenderer ui,
+            Path output)
             throws Exception {
         BlockPos block = new BlockPos(0, 0, 0);
         try (TerrainRenderer terrain = terrain(textures, block)) {
@@ -109,12 +123,33 @@ public final class BlockOutlineSmoke {
                 canvas.rectangle(first % WIDTH, HEIGHT - 1 - first / WIDTH, 2, 2, 1, 1, 1, 1);
                 ui.render(canvas, new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT, 1));
                 check(rgb(pixels(), first) == 0xffffff, "HUD did not draw over outline");
+                int previousChanged = 0;
+                for (double fraction : new double[] {.05, .5, .95}) {
+                    draw(terrain, view);
+                    var progress = new BlockBreaking.Progress(block, BlockId.STONE, fraction);
+                    effects.render(
+                            view.projection(), Optional.of(progress), List.of(), 0, view.x(), view.y(), view.z());
+                    check(Arrays.equals(depth, depth()), "Cracks wrote depth");
+                    byte[] damaged = pixels();
+                    int damagedPixels = differences(before, damaged);
+                    check(
+                            damagedPixels > previousChanged,
+                            "Cracks did not grow on face " + index + " stage " + fraction);
+                    previousChanged = damagedPixels;
+                    canvas.clear();
+                    var viewport = new UiViewport(WIDTH, HEIGHT, WIDTH, HEIGHT, 2);
+                    var hud = new Hud();
+                    hud.render(canvas, new Hotbar(), viewport);
+                    ui.render(canvas, viewport);
+                    write(output.resolve("mining-face-" + index + "-" + fraction + ".png"), pixels());
+                }
             }
             check(terrain.memoryStats().allocated() == allocated, "Selection changed terrain GPU allocations");
         }
     }
 
-    private static void occlusion(BlockTextureArray textures, BlockOutlineRenderer outline) {
+    private static void occlusion(
+            BlockTextureArray textures, BlockOutlineRenderer outline, BlockEffectsRenderer effects) {
         BlockPos block = new BlockPos(0, 0, 0);
         try (TerrainRenderer terrain = terrain(textures, block, new BlockPos(0, 0, 2))) {
             View view = view(block, 0, 0, 1);
@@ -122,10 +157,20 @@ public final class BlockOutlineSmoke {
             byte[] before = pixels();
             outline.render(view.projection(), block, view.x(), view.y(), view.z());
             check(Arrays.equals(before, pixels()), "Outline visible through occluding block");
+            effects.render(
+                    view.projection(),
+                    Optional.of(new BlockBreaking.Progress(block, BlockId.STONE, .95)),
+                    List.of(new BlockBreakEvent(0, block, BlockId.STONE)),
+                    .15,
+                    view.x(),
+                    view.y(),
+                    view.z());
+            check(Arrays.equals(before, pixels()), "Block effects visible through occluding block");
         }
     }
 
-    private static void precision(BlockTextureArray textures, BlockOutlineRenderer outline, Path output)
+    private static void precision(
+            BlockTextureArray textures, BlockOutlineRenderer outline, BlockEffectsRenderer effects, Path output)
             throws Exception {
         byte[] reference = null;
         for (BlockPos block : new BlockPos[] {
@@ -138,6 +183,14 @@ public final class BlockOutlineSmoke {
                 View view = view(block, 1, 1, 1);
                 draw(terrain, view);
                 outline.render(view.projection(), block, view.x(), view.y(), view.z());
+                effects.render(
+                        view.projection(),
+                        Optional.of(new BlockBreaking.Progress(block, BlockId.STONE, .75)),
+                        List.of(),
+                        0,
+                        view.x(),
+                        view.y(),
+                        view.z());
                 byte[] image = pixels();
                 if (reference == null) reference = image;
                 else check(Arrays.equals(reference, image), "Camera-relative precision lost at " + block);
@@ -160,8 +213,80 @@ public final class BlockOutlineSmoke {
         }
     }
 
-    private static int field(BlockOutlineRenderer renderer, String name) throws Exception {
-        var field = BlockOutlineRenderer.class.getDeclaredField(name);
+    private static void particles(BlockEffectsRenderer effects, Path output) throws Exception {
+        glUseProgram(0);
+        glBindVertexArray(0);
+        var block = new BlockPos(0, 0, 0);
+        var view = view(block, 1, 1, 1);
+        var events = List.of(new BlockBreakEvent(0, block, BlockId.DIRT));
+        for (double seconds : new double[] {0, .2, .5, .7}) {
+            glDepthMask(true);
+            glClearColor(.4f, .6f, .8f, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            byte[] before = pixels();
+            float[] beforeDepth = depth();
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(false);
+            glDepthFunc(GL_GREATER);
+            glEnable(GL_BLEND);
+            glEnable(GL_CULL_FACE);
+            glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ZERO, GL_ONE);
+            glActiveTexture(GL_TEXTURE3);
+            int program = glGetInteger(GL_CURRENT_PROGRAM), vao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+            effects.render(view.projection(), Optional.empty(), events, seconds, view.x(), view.y(), view.z());
+            check(
+                    !glIsEnabled(GL_DEPTH_TEST) && !glGetBoolean(GL_DEPTH_WRITEMASK),
+                    "Effects did not restore depth state");
+            check(glGetInteger(GL_DEPTH_FUNC) == GL_GREATER, "Effects did not restore depth function");
+            check(glIsEnabled(GL_BLEND) && glIsEnabled(GL_CULL_FACE), "Effects did not restore blend/cull state");
+            check(
+                    glGetInteger(GL_BLEND_SRC_RGB) == GL_ONE
+                            && glGetInteger(GL_BLEND_DST_RGB) == GL_ZERO
+                            && glGetInteger(GL_BLEND_SRC_ALPHA) == GL_ZERO
+                            && glGetInteger(GL_BLEND_DST_ALPHA) == GL_ONE,
+                    "Effects did not restore blend function");
+            check(glGetInteger(GL_ACTIVE_TEXTURE) == GL_TEXTURE3, "Effects did not restore active texture");
+            check(
+                    glGetInteger(GL_CURRENT_PROGRAM) == program && glGetInteger(GL_VERTEX_ARRAY_BINDING) == vao,
+                    "Effects did not restore program/VAO");
+            check(Arrays.equals(beforeDepth, depth()), "Particles wrote depth");
+            int changed = differences(before, pixels());
+            check(seconds >= .65 ? changed == 0 : changed > 20, "Missing or expired particles at " + seconds);
+            write(output.resolve("debris-" + seconds + ".png"), pixels());
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(true);
+            glDepthFunc(GL_LESS);
+            glDisable(GL_BLEND);
+            glActiveTexture(GL_TEXTURE0);
+        }
+    }
+
+    private static void effectCleanup(BlockTextureArray textures) throws Exception {
+        var effects = new BlockEffectsRenderer(textures);
+        int vao = field(effects, "vao"), vbo = field(effects, "vbo");
+        int cracks = field(effects, "cracks"), debris = field(effects, "debris");
+        effects.close();
+        effects.close();
+        check(
+                !glIsVertexArray(vao) && !glIsBuffer(vbo) && !glIsProgram(cracks) && !glIsProgram(debris),
+                "Effect GPU resources leaked");
+        textures.bind(0);
+        try {
+            effects.render(new Matrix4f(), Optional.empty(), List.of(), 0, 0, 0, 0);
+            throw new AssertionError("Closed effects renderer accepted drawing");
+        } catch (IllegalStateException expected) {
+            check(expected.getMessage().contains("closed"), "Unexpected closed-renderer failure");
+        }
+    }
+
+    private static int differences(byte[] first, byte[] second) {
+        int count = 0;
+        for (int pixel = 0; pixel < WIDTH * HEIGHT; pixel++) if (rgb(first, pixel) != rgb(second, pixel)) count++;
+        return count;
+    }
+
+    private static int field(Object renderer, String name) throws Exception {
+        var field = renderer.getClass().getDeclaredField(name);
         field.setAccessible(true);
         return field.getInt(renderer);
     }

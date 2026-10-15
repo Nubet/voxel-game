@@ -4,6 +4,7 @@ import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
+import com.norbertfila.interaction.BlockBreakEvent;
 import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.interaction.BlockTargeting;
@@ -191,6 +192,7 @@ public final class WorldRuntime implements AutoCloseable {
             WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
             long[] estimatedChunkBytes = {0}, publishNanos = {0};
             BlockBreaking breaking = new BlockBreaking(world);
+            Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
             BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
                 water.onBlockChanged(position, tick[0]);
                 breaking.blockChanged(position);
@@ -398,9 +400,19 @@ public final class WorldRuntime implements AutoCloseable {
                                         : breakPress;
                                 var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
                                 if (breaking.tick(
-                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt))
+                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt)) {
                                     remove(interaction, player, mining, inventory)
-                                            .ifPresent(chunks::requestRemesh);
+                                            .filter(BlockChangeResult::changed)
+                                            .ifPresent(result -> {
+                                                chunks.requestRemesh(result);
+                                                var hit = miningTarget.orElseThrow();
+                                                brokenBlocks.addLast(new BlockBreakEvent(
+                                                        tick[0],
+                                                        hit.block(),
+                                                        result.previous().orElseThrow()));
+                                                if (brokenBlocks.size() > 32) brokenBlocks.removeFirst();
+                                            });
+                                }
                             } else breaking.cancel();
                             if (activated && !state.paused() && tick[0] % 300 == 0) {
                                 long captureStarted = System.nanoTime();
@@ -471,7 +483,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     metrics,
                                     inventory.snapshot(),
                                     target,
-                                    breaking.progress()));
+                                    breaking.progress(),
+                                    List.copyOf(brokenBlocks)));
                             publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -850,7 +863,8 @@ public final class WorldRuntime implements AutoCloseable {
             SimulationMetrics metrics,
             InventorySnapshot inventory,
             Optional<VoxelRaycaster.Hit> target,
-            Optional<BlockBreaking.Progress> breaking) {
+            Optional<BlockBreaking.Progress> breaking,
+            List<BlockBreakEvent> brokenBlocks) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -859,6 +873,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(inventory);
             Objects.requireNonNull(target);
             Objects.requireNonNull(breaking);
+            brokenBlocks = List.copyOf(brokenBlocks);
         }
 
         public Map<ChunkPos, Long> residents() {

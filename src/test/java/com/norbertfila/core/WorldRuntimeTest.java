@@ -41,6 +41,7 @@ class WorldRuntimeTest {
             var tapped = await(runtime, f -> f.tick() > before + 65);
             assertEquals(block, tapped.target().orElseThrow().block());
             assertTrue(tapped.breaking().isEmpty());
+            assertTrue(tapped.brokenBlocks().isEmpty());
             assertEquals(0, tapped.inventory().count(0));
 
             runtime.controls(breakingControls(true, false, false));
@@ -49,6 +50,7 @@ class WorldRuntimeTest {
                     f -> f.breaking().isPresent() && f.breaking().orElseThrow().fraction() >= .25);
             assertEquals(block, mining.breaking().orElseThrow().block());
             assertEquals(0, mining.inventory().count(0));
+            assertTrue(mining.brokenBlocks().isEmpty());
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
             await(
                     runtime,
@@ -84,6 +86,16 @@ class WorldRuntimeTest {
             assertEquals(BlockId.DIRT, mined.inventory().block(0));
             assertTrue(mined.target().isEmpty());
             assertTrue(mined.breaking().isEmpty());
+            assertEquals(1, mined.brokenBlocks().size());
+            var event = mined.brokenBlocks().getFirst();
+            assertEquals(block, event.block());
+            assertEquals(BlockId.DIRT, event.blockId());
+            assertTrue(event.tick() > replaced.tick() && event.tick() <= mined.tick());
+            assertThrows(
+                    UnsupportedOperationException.class,
+                    () -> mined.brokenBlocks().clear());
+            var later = await(runtime, f -> f.tick() > mined.tick() + 3);
+            assertEquals(mined.brokenBlocks(), later.brokenBlocks());
         }
     }
 
@@ -113,6 +125,9 @@ class WorldRuntimeTest {
             var removed = await(runtime, f -> f.target().isEmpty());
             assertTrue(removed.tick() < before + 60);
             assertTrue(removed.breaking().isEmpty());
+            assertEquals(1, removed.brokenBlocks().size());
+            assertEquals(block, removed.brokenBlocks().getFirst().block());
+            assertEquals(BlockId.STONE, removed.brokenBlocks().getFirst().blockId());
             assertEquals(64, removed.inventory().count(0));
             assertEquals(BlockId.DIRT, removed.inventory().block(0));
         }
@@ -171,6 +186,7 @@ class WorldRuntimeTest {
             var after = await(runtime, f -> f.tick() > before + 65);
             assertEquals(block, after.target().orElseThrow().block());
             assertEquals(inventory, after.inventory());
+            assertTrue(after.brokenBlocks().isEmpty());
         }
     }
 

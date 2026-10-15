@@ -5,15 +5,18 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
+import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
+import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.Screen;
@@ -92,7 +95,8 @@ public final class GameLoop {
             FrameProfiler profiler) {
         try (GpuFrameTimer gpuTimer =
                         profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null;
-                BlockOutlineRenderer outline = new BlockOutlineRenderer()) {
+                BlockOutlineRenderer outline = new BlockOutlineRenderer();
+                BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures())) {
             return run(
                     window,
                     input,
@@ -105,7 +109,8 @@ public final class GameLoop {
                     driver,
                     profiler,
                     gpuTimer,
-                    outline);
+                    outline,
+                    effects);
         }
     }
 
@@ -121,7 +126,8 @@ public final class GameLoop {
             FrameDriver driver,
             FrameProfiler profiler,
             GpuFrameTimer gpuTimer,
-            BlockOutlineRenderer outline) {
+            BlockOutlineRenderer outline,
+            BlockEffectsRenderer effects) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -387,6 +393,27 @@ public final class GameLoop {
             if (gpuTimer != null) gpuTimer.stamp();
             var viewProjection = camera.relativeViewProjection(width[0], height[0]);
             var stats = renderer.render(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            Optional<BlockBreaking.Progress> mining = Optional.empty();
+            if (!editingBlocked && input.leftMouseDown() && state.target().isPresent()) {
+                var selected = state.target().orElseThrow();
+                mining = state.breaking()
+                        .filter(progress ->
+                                progress.block().equals(selected.block()) && progress.blockId() == selected.blockId());
+            }
+            if (state != null) {
+                double effectSeconds = state.tick() * FixedSimulation.TICK_SECONDS;
+                if (!state.paused())
+                    effectSeconds += Math.clamp(
+                            (System.nanoTime() - state.publishedAt()) * 1e-9, 0, FixedSimulation.TICK_SECONDS);
+                effects.render(
+                        viewProjection,
+                        mining,
+                        state.brokenBlocks(),
+                        effectSeconds,
+                        camera.x(),
+                        camera.y(),
+                        camera.z());
+            }
             if (!editingBlocked && state.target().isPresent())
                 outline.render(
                         viewProjection, state.target().orElseThrow().block(), camera.x(), camera.y(), camera.z());
