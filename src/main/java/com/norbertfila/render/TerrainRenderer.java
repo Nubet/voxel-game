@@ -30,8 +30,11 @@ import org.lwjgl.system.MemoryStack;
 public final class TerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
-    private static final GpuMesh.Deleter DELETE_BUFFER = buffer -> glDeleteBuffers(buffer);
+    private static final long ARENA_BYTES = 1024L * 1024;
     private final GpuMemoryBudget memoryBudget;
+    private final GpuMemoryBudget arenaBudget;
+    private final QuadArenas solidArenas;
+    private final QuadArenas waterArenas;
     // Solid and water parts of a chunk are separate GPU meshes so either can be replaced alone.
     private final GpuMeshPool solidMeshes;
     private final GpuMeshPool waterMeshes;
@@ -55,8 +58,13 @@ public final class TerrainRenderer implements AutoCloseable {
         this.blockTextures = Objects.requireNonNull(blockTextures);
         regionIndex = new RegionIndex(regionEdge);
         memoryBudget = new GpuMemoryBudget(gpuBudgetBytes);
+        arenaBudget = new GpuMemoryBudget(gpuBudgetBytes);
         solidMeshes = new GpuMeshPool(memoryBudget);
         waterMeshes = new GpuMeshPool(memoryBudget);
+        solidArenas = new QuadArenas(
+                QuadArenas.OPENGL, QuadMesh.Format.SOLID.ints() * Integer.BYTES, ARENA_BYTES, arenaBudget);
+        waterArenas = new QuadArenas(
+                QuadArenas.OPENGL, QuadMesh.Format.WATER.ints() * Integer.BYTES, ARENA_BYTES, arenaBudget);
         Program solid = null;
         try {
             solid = new Program("/shaders/terrain_solid.vert");
@@ -76,27 +84,32 @@ public final class TerrainRenderer implements AutoCloseable {
     public void upload(ChunkPos position, ChunkMesh mesh) {
         Objects.requireNonNull(position);
         Objects.requireNonNull(mesh);
-        if (mesh.solid() != null) upload(solidMeshes, position, mesh.solid());
-        if (mesh.water() != null) upload(waterMeshes, position, mesh.water());
+        if (mesh.solid() != null) upload(solidMeshes, solidArenas, position, mesh.solid());
+        if (mesh.water() != null) upload(waterMeshes, waterArenas, position, mesh.water());
         if (solidMeshes.get(position) != null || waterMeshes.get(position) != null) regionIndex.add(position);
         else regionIndex.remove(position);
     }
 
-    private static void upload(GpuMeshPool pool, ChunkPos position, QuadMesh mesh) {
+    /** Replaces the part only after the new records are on the GPU; on failure the previous mesh stays. */
+    private static void upload(GpuMeshPool pool, QuadArenas arenas, ChunkPos position, QuadMesh mesh) {
         if (mesh.quadCount() == 0) {
             pool.remove(position);
-            pool.drainDeletions(1);
             return;
         }
-        int buffer = glGenBuffers();
+        QuadArenas.Slice slice = arenas.allocate(mesh.records());
+        if (slice == null) throw new IllegalStateException("GPU geometry budget exhausted");
         try {
-            glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer);
-            glBufferData(GL_SHADER_STORAGE_BUFFER, mesh.records(), GL_STATIC_DRAW);
-            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-            pool.put(position, new GpuMesh(buffer, mesh, DELETE_BUFFER));
-            pool.drainDeletions(1);
+            pool.put(
+                    position,
+                    new GpuMesh(
+                            slice.buffer(),
+                            slice.firstRecord(),
+                            mesh.format(),
+                            mesh.ranges(),
+                            mesh.bytes(),
+                            () -> arenas.release(slice)));
         } catch (RuntimeException | Error failure) {
-            glDeleteBuffers(buffer);
+            arenas.release(slice);
             throw failure;
         }
     }
@@ -111,7 +124,7 @@ public final class TerrainRenderer implements AutoCloseable {
             throw new IllegalArgumentException("Upload budgets must be positive");
         }
         long start = System.nanoTime();
-        long bytesUploaded = 0;
+        long bytesUploaded = 0, slowestUpload = 0;
         int uploadCount = 0;
         List<MeshResult> uploaded = new ArrayList<>();
         List<MeshResult> failed = new ArrayList<>();
@@ -123,6 +136,7 @@ public final class TerrainRenderer implements AutoCloseable {
                 return false;
             });
             if (request == null) break;
+            long uploadStarted = System.nanoTime();
             try {
                 upload(request.position(), request.mesh());
                 bytesUploaded += request.bytes();
@@ -135,6 +149,7 @@ public final class TerrainRenderer implements AutoCloseable {
                                 + " queueDepth=" + uploads.size(),
                         failure);
             }
+            slowestUpload = Math.max(slowestUpload, System.nanoTime() - uploadStarted);
             uploadCount++;
             if (bytesUploaded >= byteBudget || System.nanoTime() - start >= timeBudgetNanos) break;
         }
@@ -143,6 +158,7 @@ public final class TerrainRenderer implements AutoCloseable {
                 uploads.size(),
                 System.nanoTime() - start,
                 uploadCount,
+                slowestUpload,
                 List.copyOf(uploaded),
                 List.copyOf(failed),
                 List.copyOf(discarded));
@@ -153,8 +169,6 @@ public final class TerrainRenderer implements AutoCloseable {
         solidMeshes.remove(position);
         waterMeshes.remove(position);
         regionIndex.remove(position);
-        solidMeshes.drainDeletions(1);
-        waterMeshes.drainDeletions(1);
     }
 
     /**
@@ -204,9 +218,18 @@ public final class TerrainRenderer implements AutoCloseable {
             restoreTerrainState();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
             glBindVertexArray(0);
+            endFrame();
         }
         int visible = culling.visible().size();
         return new RenderStats(visible, regionIndex.size() - visible, draws);
+    }
+
+    /** Hands replaced or removed meshes to the arenas, which reuse their ranges once the GPU is done with them. */
+    private void endFrame() {
+        solidMeshes.drainDeletions(Integer.MAX_VALUE);
+        waterMeshes.drainDeletions(Integer.MAX_VALUE);
+        solidArenas.endFrame();
+        waterArenas.endFrame();
     }
 
     private static int draw(
@@ -218,7 +241,7 @@ public final class TerrainRenderer implements AutoCloseable {
             double cameraY,
             double cameraZ) {
         glUniform1i(program.renderLayer, layer.ordinal());
-        int draws = 0;
+        int draws = 0, boundBuffer = -1;
         for (ChunkPos position : positions) {
             GpuMesh mesh = pool.get(position);
             int quads = mesh.ranges().count(layer);
@@ -229,10 +252,13 @@ public final class TerrainRenderer implements AutoCloseable {
                     (float) ((double) position.x() * Chunk.SIZE - cameraX),
                     (float) ((double) position.y() * Chunk.SIZE - cameraY),
                     (float) ((double) position.z() * Chunk.SIZE - cameraZ));
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.buffer());
+            if (mesh.buffer() != boundBuffer) {
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mesh.buffer());
+                boundBuffer = mesh.buffer();
+            }
             glDrawArrays(
                     GL_TRIANGLES,
-                    mesh.ranges().first(layer) * QuadMesh.VERTICES_PER_QUAD,
+                    (mesh.firstRecord() + mesh.ranges().first(layer)) * QuadMesh.VERTICES_PER_QUAD,
                     quads * QuadMesh.VERTICES_PER_QUAD);
             draws++;
         }
@@ -270,6 +296,8 @@ public final class TerrainRenderer implements AutoCloseable {
         closed = true;
         solidMeshes.close();
         waterMeshes.close();
+        solidArenas.close();
+        waterArenas.close();
         solidProgram.close();
         waterProgram.close();
         glDeleteVertexArrays(emptyVertexArray);
@@ -280,6 +308,7 @@ public final class TerrainRenderer implements AutoCloseable {
             int queueDepth,
             long uploadNanos,
             int uploadCount,
+            long slowestUploadNanos,
             List<MeshResult> uploaded,
             List<MeshResult> failed,
             List<MeshResult> discarded) {}
@@ -291,10 +320,18 @@ public final class TerrainRenderer implements AutoCloseable {
                 memoryBudget.allocatedBytes(),
                 memoryBudget.peakBytes(),
                 memoryBudget.uploadedBytes(),
-                memoryBudget.deletedBytes());
+                memoryBudget.deletedBytes(),
+                solidArenas.capacityBytes() + waterArenas.capacityBytes(),
+                solidArenas.arenaCount() + waterArenas.arenaCount(),
+                solidArenas.fragmentationBytes() + waterArenas.fragmentationBytes());
     }
 
-    public record MemoryStats(long allocated, long peak, long uploaded, long deleted) {}
+    /**
+     * {@code allocated} counts bytes of live meshes; {@code arenaBytes} is the GPU memory reserved for them across
+     * {@code arenas} buffers.
+     */
+    public record MemoryStats(
+            long allocated, long peak, long uploaded, long deleted, long arenaBytes, int arenas, long fragmentation) {}
 
     /** One linked terrain program; solid and water programs share the fragment shader and uniform names. */
     private static final class Program implements AutoCloseable {

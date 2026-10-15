@@ -413,6 +413,7 @@ public final class GameBenchmark {
                 Distribution distribution = segments[segment.ordinal()];
                 String name = segment.name().toLowerCase(Locale.ROOT);
                 record.put(name + "P50Ms", distribution.p50Millis()).put(name + "P95Ms", distribution.p95Millis());
+                if (segment == Segment.UPLOAD) record.put("uploadMaxMs", distribution.maxMillis());
             }
             record.put("gpuSamples", gpuTerrain.samples())
                     .put("gpuTerrainP50Ms", gpuTerrain.p50Millis())
@@ -457,6 +458,8 @@ public final class GameBenchmark {
                     .put("gcMs", end.gcMillis() - start.gcMillis())
                     .put("retainedHeapMB", retainedHeapMb)
                     .put("gpuMeshMB", megabytes(end.gpuMeshBytes()))
+                    .put("gpuArenaMB", megabytes(end.gpuArenaBytes()))
+                    .put("gpuArenas", end.gpuArenas())
                     .put("vramDeltaMB", nvxStartKb < 0 ? Double.NaN : (nvxStartKb - nvxEndKb) / 1024.0)
                     .put("droppedCommands", droppedCommands)
                     .put("profilerOverheadUsPerFrame", profilerOverheadUs)
@@ -507,7 +510,9 @@ public final class GameBenchmark {
             long totalAllocated,
             long gcCount,
             long gcMillis,
-            long gpuMeshBytes) {
+            long gpuMeshBytes,
+            long gpuArenaBytes,
+            int gpuArenas) {
         static Counters sample(WorldRuntime runtime, WorldRuntime.Frame state, TerrainRenderer renderer) {
             var threads = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
             long gcCount = 0, gcMillis = 0;
@@ -522,7 +527,9 @@ public final class GameBenchmark {
                     threads.getTotalThreadAllocatedBytes(),
                     gcCount,
                     gcMillis,
-                    renderer.memoryStats().allocated());
+                    renderer.memoryStats().allocated(),
+                    renderer.memoryStats().arenaBytes(),
+                    renderer.memoryStats().arenas());
         }
     }
 
