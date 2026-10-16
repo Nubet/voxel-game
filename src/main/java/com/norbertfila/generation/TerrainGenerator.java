@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 25;
+    private static final int GENERATOR_VERSION = 26;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -47,6 +47,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final GenerationCache<CavePlan> cavePlans = new GenerationCache<>(128);
     private final CavePlanner cavePlanner;
     private final CaveCarver caveCarver;
+    private final OreGenerator ores;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
         this(seed, config, new PerlinNoise(seed));
@@ -87,6 +88,7 @@ public final class TerrainGenerator implements TerrainSource {
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
         caveCarver = new CaveCarver(this);
+        ores = new OreGenerator(seed);
     }
 
     private static Noise2D forestNoise(Noise2D noise) {
@@ -269,7 +271,9 @@ public final class TerrainGenerator implements TerrainSource {
             return ChunkData.uniform(position, BlockId.AIR);
         TerrainColumn column = columns.get(position.x(), position.z(), () -> column(originX, originZ));
         int uniform = column.uniformBlock(originY);
+        boolean mayHaveOres = (uniform < 0 || uniform == BlockId.STONE) && ores.mayGenerate(originY);
         if (uniform >= 0
+                && !mayHaveOres
                 && (!CaveCarver.carveable((byte) uniform)
                         || column.caves().stream()
                                 .noneMatch(s -> s.y() + s.radiusY() > originY
@@ -285,7 +289,9 @@ public final class TerrainGenerator implements TerrainSource {
                         blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
                 }
         boolean carved = caveCarver.carve(position, blocks, column.caves());
-        if (uniform >= 0 && !carved) return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
+        boolean mineralized = mayHaveOres && ores.generate(position, blocks);
+        if (uniform >= 0 && !carved && !mineralized)
+            return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
         vegetation.generate(originX, originY, originZ, blocks, column);
         return tinted(new ChunkData(position, blocks), originX, originZ);

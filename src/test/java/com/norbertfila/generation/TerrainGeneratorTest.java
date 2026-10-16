@@ -92,7 +92,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(25, generator.generatorVersion());
+            assertEquals(26, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -153,6 +153,9 @@ class TerrainGeneratorTest {
                                 byte expected = sample.materialAt(worldY);
                                 if (carver.carves(chunkX * 16 + x, worldY, chunkZ * 16 + z, expected, segments))
                                     expected = BlockId.AIR;
+                                if (expected == BlockId.STONE
+                                        && OreGenerator.DEFAULT_ORES.stream().anyMatch(ore -> ore.block() == actual))
+                                    continue;
                                 assertTrue(actual == expected
                                         || expected == BlockId.AIR
                                                 && (actual == BlockId.LOG
@@ -185,7 +188,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(25, generator.generatorVersion());
+        assertEquals(26, generator.generatorVersion());
     }
 
     @Test
