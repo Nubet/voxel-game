@@ -2,6 +2,7 @@ package com.norbertfila.core;
 
 import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
+import com.norbertfila.render.CloudMode;
 import java.util.Objects;
 
 public final class GameSettings {
@@ -48,6 +49,15 @@ public final class GameSettings {
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private float zoomSpeed = DEFAULT_ZOOM_SPEED;
     private int guiScale = GUI_SCALE_AUTO;
+    private CloudMode clouds = CloudMode.FAST;
+
+    public CloudMode clouds() {
+        return clouds;
+    }
+
+    public void setClouds(CloudMode mode) {
+        clouds = Objects.requireNonNull(mode);
+    }
 
     public int renderDistance() {
         return renderDistance;

@@ -3,6 +3,7 @@ package com.norbertfila.ui.screens;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
+import com.norbertfila.render.CloudMode;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
 import com.norbertfila.ui.Screen;
@@ -66,7 +67,8 @@ public final class SettingsScreen implements Screen {
             new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 100, 1, 11);
     private final Slider zoomSpeed =
             new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 30, 1, 12);
-    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 100, 20), "");
+    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 56, 20), "");
+    private final Button clouds = new Button(new UiBounds(208, GUI_SCALE_Y, 88, 20), "");
     private final Button back = new Button(BACK_BOUNDS, "");
     private int focusIndex = -1;
     private boolean pointerReady = true;
@@ -101,6 +103,7 @@ public final class SettingsScreen implements Screen {
         boolean zoomSpeedChanged = zoomSpeed.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         boolean scaleChanged = guiScale.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         if (language.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleLanguage();
+        if (clouds.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleClouds();
         boolean close = back.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
         if (scaleChanged) cycleGuiScale();
         applyControls(
@@ -174,9 +177,12 @@ public final class SettingsScreen implements Screen {
                 }
             }
             case 9 -> {
+                if (clouds.keyPress(key)) cycleClouds();
+            }
+            case 10 -> {
                 if (language.keyPress(key)) cycleLanguage();
             }
-            case 10 -> close = back.keyPress(key);
+            case 11 -> close = back.keyPress(key);
             default -> {}
         }
         if (changed)
@@ -205,6 +211,7 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.cancelInteraction();
         zoomSpeed.cancelInteraction();
         guiScale.cancelInteraction();
+        clouds.cancelInteraction();
         language.cancelInteraction();
         back.cancelInteraction();
     }
@@ -229,6 +236,7 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
         zoomSpeed.setPosition(CAMERA_X + offsetX, ZOOM_SPEED_Y + offsetY);
         guiScale.setPosition(CAMERA_X + offsetX, GUI_SCALE_Y + offsetY);
+        clouds.setPosition(208 + offsetX, GUI_SCALE_Y + offsetY);
         language.setPosition(CAMERA_X + offsetX, LANGUAGE_Y + offsetY);
         back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
         if (moved) cancelInteraction();
@@ -267,6 +275,8 @@ public final class SettingsScreen implements Screen {
         decrease.setEnabled(canDecrease());
         increase.setEnabled(canIncrease());
         guiScale.setLabel(guiScaleLabel());
+        clouds.setLabel(
+                translations.text("settings.clouds." + settings.clouds().name().toLowerCase(java.util.Locale.ROOT)));
         language.setLabel(translations.language().displayName());
         back.setLabel(translations.text("action.back"));
     }
@@ -281,14 +291,15 @@ public final class SettingsScreen implements Screen {
         else if (mouseSensitivity.bounds().contains(x, y)) focus(6);
         else if (zoomSpeed.bounds().contains(x, y)) focus(7);
         else if (guiScale.bounds().contains(x, y)) focus(8);
-        else if (language.bounds().contains(x, y)) focus(9);
-        else if (back.bounds().contains(x, y)) focus(10);
+        else if (clouds.bounds().contains(x, y)) focus(9);
+        else if (language.bounds().contains(x, y)) focus(10);
+        else if (back.bounds().contains(x, y)) focus(11);
         else focus(-1);
     }
 
     private void focusNext(int direction) {
         int next = focusIndex;
-        do next = Math.floorMod(next + direction, 11);
+        do next = Math.floorMod(next + direction, 12);
         while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
         focus(next);
     }
@@ -304,8 +315,9 @@ public final class SettingsScreen implements Screen {
         mouseSensitivity.setFocused(index == 6);
         zoomSpeed.setFocused(index == 7);
         guiScale.setFocused(index == 8);
-        language.setFocused(index == 9);
-        back.setFocused(index == 10);
+        clouds.setFocused(index == 9);
+        language.setFocused(index == 10);
+        back.setFocused(index == 11);
     }
 
     private void cycleGuiScale() {
@@ -326,6 +338,16 @@ public final class SettingsScreen implements Screen {
         Language[] languages = Language.values();
         translations.setLanguage(languages[(translations.language().ordinal() + 1) % languages.length]);
         syncControls();
+    }
+
+    private void cycleClouds() {
+        CloudMode[] modes = CloudMode.values();
+        settings.setClouds(modes[(settings.clouds().ordinal() + 1) % modes.length]);
+        syncControls();
+    }
+
+    public Button cloudsButton() {
+        return clouds;
     }
 
     public Button languageButton() {
@@ -462,6 +484,7 @@ public final class SettingsScreen implements Screen {
         decrease.render(canvas, font);
         increase.render(canvas, font);
         guiScale.render(canvas, font);
+        clouds.render(canvas, font);
         language.render(canvas, font);
         back.render(canvas, font);
     }

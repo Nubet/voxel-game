@@ -3,6 +3,7 @@ package com.norbertfila.ui.screens;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.core.GameSettings;
+import com.norbertfila.render.CloudMode;
 import com.norbertfila.ui.*;
 import java.nio.FloatBuffer;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,8 @@ class SettingsScreenTest {
         screen.cancelInteraction();
         settings.setRenderDistance(GameSettings.MAX_RENDER_DISTANCE);
         screen.keyPress(UiKey.PREVIOUS);
+        screen.keyPress(UiKey.PREVIOUS);
+        assertTrue(screen.cloudsButton().focused());
         screen.keyPress(UiKey.PREVIOUS);
         assertTrue(screen.guiScaleButton().focused());
         screen.keyPress(UiKey.PREVIOUS);
@@ -188,6 +191,24 @@ class SettingsScreenTest {
         int before = screen.renderDistance();
         assertEquals(Screen.Action.NONE, screen.updatePointer(down, press, x, y));
         return before != screen.renderDistance();
+    }
+
+    @Test
+    void cloudModeCyclesOnReleaseAndKeyboardWithoutOverlappingGuiScale() {
+        GameSettings settings = new GameSettings();
+        SettingsScreen screen = new SettingsScreen(settings);
+        var bounds = screen.cloudsButton().bounds();
+        assertTrue(bounds.x()
+                >= screen.guiScaleButton().bounds().x()
+                        + screen.guiScaleButton().bounds().width());
+        assertEquals(CloudMode.FAST, settings.clouds());
+        screen.updatePointer(true, true, bounds.x() + 1, bounds.y() + 1);
+        assertEquals(CloudMode.FAST, settings.clouds());
+        screen.updatePointer(false, false, bounds.x() + 1, bounds.y() + 1);
+        assertEquals(CloudMode.OFF, settings.clouds());
+        screen.keyPress(UiKey.ACTIVATE);
+        assertEquals(CloudMode.FAST, settings.clouds());
+        assertThrows(NullPointerException.class, () -> settings.setClouds(null));
     }
 
     private static float redAt(FloatBuffer data, UiBounds bounds) {
