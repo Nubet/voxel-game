@@ -33,6 +33,7 @@ import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.crosshair.CrosshairPolicy;
 import com.norbertfila.ui.crosshair.CrosshairRenderer;
+import com.norbertfila.ui.crosshair.CrosshairTransition;
 import com.norbertfila.ui.screens.ChatScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.PauseScreen;
@@ -155,6 +156,7 @@ public final class GameLoop {
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
         var crosshair = new CrosshairRenderer();
+        var crosshairTransition = new CrosshairTransition();
         DebugOverlay debugOverlay = new DebugOverlay();
         boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
@@ -547,13 +549,22 @@ public final class GameLoop {
                         now);
                 if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
-            if (!editingBlocked)
-                crosshair.render(
-                        canvas,
-                        viewport,
+            if (editingBlocked
+                    || state == null
+                    || !state.ready()
+                    || state.modePending()
+                    || state.mode() == PlayerController.Mode.SPECTATOR) crosshairTransition.reset();
+            else
+                crosshairTransition.update(
                         CrosshairPolicy.select(settings.crosshair(), state.target()),
-                        settings.crosshair(),
-                        1);
+                        settings.crosshair().smooth(),
+                        delta);
+            crosshair.render(
+                    canvas,
+                    viewport,
+                    crosshairTransition.style(),
+                    settings.crosshair(),
+                    crosshairTransition.visibility());
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
