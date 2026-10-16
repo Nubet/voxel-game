@@ -31,6 +31,16 @@ public final class BlockRegistry {
     public static final int DANDELION_WHITE_TEXTURE = 22;
     public static final int POPPY_TEXTURE = 23;
     public static final int MUD_TEXTURE = 24;
+    public static final int PODZOL_TOP_TEXTURE = 25;
+    public static final int PODZOL_SIDE_TEXTURE = 26;
+    public static final int COARSE_DIRT_TEXTURE = 27;
+    public static final int CLAY_TEXTURE = 28;
+    public static final int TERRACOTTA_RED_TEXTURE = 29;
+    public static final int TERRACOTTA_ORANGE_TEXTURE = 30;
+    public static final int ICE_TEXTURE = 31;
+    public static final int PACKED_ICE_TEXTURE = 32;
+    public static final int DRY_GRASS_TOP_TEXTURE = 33;
+    public static final int DRY_GRASS_SIDE_TEXTURE = 34;
     public static final BlockRegistry DEFAULT = defaults();
 
     private final BlockDefinition[] definitions;
@@ -115,6 +125,16 @@ public final class BlockRegistry {
         textures.put("refi_dandelion_white", DANDELION_WHITE_TEXTURE);
         textures.put("refi_poppy", POPPY_TEXTURE);
         textures.put("refi_mud", MUD_TEXTURE);
+        textures.put("refi_podzol_top", PODZOL_TOP_TEXTURE);
+        textures.put("refi_podzol_side", PODZOL_SIDE_TEXTURE);
+        textures.put("refi_coarse_dirt", COARSE_DIRT_TEXTURE);
+        textures.put("refi_clay", CLAY_TEXTURE);
+        textures.put("refi_terracotta_red", TERRACOTTA_RED_TEXTURE);
+        textures.put("refi_terracotta_orange", TERRACOTTA_ORANGE_TEXTURE);
+        textures.put("refi_ice", ICE_TEXTURE);
+        textures.put("refi_packed_ice", PACKED_ICE_TEXTURE);
+        textures.put("refi_dry_grass_top", DRY_GRASS_TOP_TEXTURE);
+        textures.put("refi_dry_grass_side", DRY_GRASS_SIDE_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(
@@ -182,7 +202,39 @@ public final class BlockRegistry {
                         plant(BlockId.DANDELION_YELLOW, "dandelion_yellow", DANDELION_YELLOW_TEXTURE),
                         plant(BlockId.DANDELION_WHITE, "dandelion_white", DANDELION_WHITE_TEXTURE),
                         plant(BlockId.POPPY, "poppy", POPPY_TEXTURE),
-                        uniform(BlockId.MUD, "mud", MUD_TEXTURE, true)),
+                        uniform(BlockId.MUD, "mud", MUD_TEXTURE, true),
+                        new BlockDefinition(
+                                BlockId.PODZOL,
+                                "podzol",
+                                PODZOL_TOP_TEXTURE,
+                                DIRT_TEXTURE,
+                                PODZOL_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
+                        uniform(BlockId.COARSE_DIRT, "coarse_dirt", COARSE_DIRT_TEXTURE, true),
+                        uniform(BlockId.CLAY, "clay", CLAY_TEXTURE, true),
+                        uniform(BlockId.TERRACOTTA_RED, "terracotta_red", TERRACOTTA_RED_TEXTURE, true),
+                        uniform(BlockId.TERRACOTTA_ORANGE, "terracotta_orange", TERRACOTTA_ORANGE_TEXTURE, true),
+                        new BlockDefinition(
+                                BlockId.ICE,
+                                "ice",
+                                ICE_TEXTURE,
+                                ICE_TEXTURE,
+                                ICE_TEXTURE,
+                                true,
+                                false,
+                                RenderLayer.TRANSLUCENT),
+                        uniform(BlockId.PACKED_ICE, "packed_ice", PACKED_ICE_TEXTURE, true),
+                        new BlockDefinition(
+                                BlockId.DRY_GRASS,
+                                "dry_grass",
+                                DRY_GRASS_TOP_TEXTURE,
+                                DIRT_TEXTURE,
+                                DRY_GRASS_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE)),
                 textures);
     }
 

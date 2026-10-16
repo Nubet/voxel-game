@@ -50,6 +50,8 @@ public final class SurfaceMaterialResolver {
         }
         if (slope > 1.5)
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
+        if (temperature < -.8 && height > (long) baseHeight + 150)
+            return new Result(materials.surface(SurfaceMaterial.ICE), materials.subsurface(SurfaceMaterial.ICE));
         if (temperature < -.55)
             return new Result(materials.surface(SurfaceMaterial.SNOW), materials.subsurface(SurfaceMaterial.SNOW));
         if (temperature < -.3)
@@ -63,6 +65,9 @@ public final class SurfaceMaterialResolver {
             return new Result(materials.surface(band), materials.subsurface(band));
         }
         SurfaceProfile surface = profile.surface();
+        if (surface.surface() == SurfaceMaterial.GRASS && climate.temperature() > .1 && climate.humidity() < -.15)
+            return new Result(
+                    materials.surface(SurfaceMaterial.DRY_GRASS), materials.subsurface(SurfaceMaterial.DRY_GRASS));
         if (surface.surface() == SurfaceMaterial.SNOW)
             return new Result(materials.surface(SurfaceMaterial.GRASS), materials.subsurface(SurfaceMaterial.DIRT));
         return new Result(materials.surface(surface.surface()), materials.subsurface(surface.subsurface()));

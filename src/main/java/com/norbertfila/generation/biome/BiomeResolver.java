@@ -1,6 +1,22 @@
 package com.norbertfila.generation.biome;
 
 public final class BiomeResolver {
+    public BiomeType resolve(
+            ClimateSample climate, int height, int baseHeight, double slope, boolean nearWater, int waterLevel) {
+        float temperature = climate.temperature() - Math.max(0, height - baseHeight) * .004f;
+        if (height > baseHeight + 90 && temperature < -.25f) return BiomeType.ALPINE;
+        if (temperature < -.2f) return BiomeType.TAIGA;
+        if (climate.humidity() > .15f
+                && nearWater
+                && slope < .8
+                && height >= waterLevel - 1
+                && height <= waterLevel + 2) return BiomeType.SWAMP;
+        BiomeType climateBiome = resolve(climate);
+        return climateBiome == BiomeType.ALPINE
+                ? BiomeType.TAIGA
+                : climateBiome == BiomeType.SWAMP ? BiomeType.FOREST : climateBiome;
+    }
+
     public BiomeType resolve(ClimateSample climate) {
         float temperature = climate.temperature();
         float humidity = climate.humidity();

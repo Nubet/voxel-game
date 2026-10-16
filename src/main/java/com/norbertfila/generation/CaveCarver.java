@@ -3,6 +3,7 @@ package com.norbertfila.generation;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.PlantRules;
 import java.util.List;
 import java.util.Objects;
 
@@ -52,7 +53,12 @@ final class CaveCarver {
     }
 
     static boolean carveable(byte block) {
-        return block == BlockId.STONE || block == BlockId.DIRT || block == BlockId.GRASS;
+        return block == BlockId.STONE
+                || block == BlockId.DIRT
+                || PlantRules.supports(block)
+                || block == BlockId.CLAY
+                || block == BlockId.TERRACOTTA_RED
+                || block == BlockId.TERRACOTTA_ORANGE;
     }
 
     boolean carves(int x, int y, int z, byte block, List<CavePlan.Segment> segments) {

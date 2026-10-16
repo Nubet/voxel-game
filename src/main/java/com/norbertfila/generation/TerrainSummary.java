@@ -108,8 +108,12 @@ public record TerrainSummary(
             if (worldY == bedrockHeight) return BlockId.BEDROCK;
         }
         if (worldY > surfaceHeight) return worldY <= waterLevel ? BlockId.WATER : BlockId.AIR;
+        if (deepMaterial == BlockId.TERRACOTTA_RED && worldY >= surfaceHeight - 48)
+            return TerrainGenerator.badlandsMaterial(worldY);
         if (worldY == surfaceHeight) return surfaceMaterial;
-        return worldY >= surfaceHeight - 3 ? subsurfaceMaterial : deepMaterial;
+        return worldY >= surfaceHeight - 3
+                ? subsurfaceMaterial
+                : deepMaterial == BlockId.TERRACOTTA_RED ? BlockId.STONE : deepMaterial;
     }
 
     public boolean flooded() {

@@ -13,6 +13,13 @@ class GreedyMesherTest {
     private final GreedyMesher greedy = new GreedyMesher();
 
     @Test
+    void solidIceDoesNotEmitInternalTransparentFaces() {
+        Chunk ice = Chunk.uniform(BlockId.ICE);
+        assertEquals(36 * 6, meshWith(greedy, ice).vertices().length);
+        assertEquals(6 * 16 * 16 * 36, meshWith(baseline, ice).vertices().length);
+    }
+
+    @Test
     void mergedSurfacesMatchBaselinePositionsDirectionsAndColorsAcrossAllBoundaries() {
         var generator = new com.norbertfila.generation.HillsGenerator();
         var world = new com.norbertfila.world.World();

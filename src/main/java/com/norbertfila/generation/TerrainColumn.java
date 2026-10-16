@@ -19,7 +19,7 @@ final class TerrainColumn {
     private final byte[] surfaceMaterials;
     private final byte[] subsurfaceMaterials;
     private final BiomeType[] biomes;
-    private final byte deepMaterial;
+    private final byte[] deepMaterials;
     private final int bedrockHeight;
     private final int[] waterLevels;
     private final int minWater;
@@ -35,7 +35,7 @@ final class TerrainColumn {
             byte[] surfaceMaterials,
             byte[] subsurfaceMaterials,
             BiomeType[] biomes,
-            byte deepMaterial,
+            byte[] deepMaterials,
             int bedrockHeight,
             int[] waterLevels,
             List<TreeGenerator.Tree> trees,
@@ -45,7 +45,7 @@ final class TerrainColumn {
         this.surfaceMaterials = surfaceMaterials;
         this.subsurfaceMaterials = subsurfaceMaterials;
         this.biomes = biomes;
-        this.deepMaterial = deepMaterial;
+        this.deepMaterials = deepMaterials;
         this.bedrockHeight = bedrockHeight;
         this.waterLevels = waterLevels;
         minWater = java.util.Arrays.stream(waterLevels).min().orElseThrow();
@@ -73,8 +73,14 @@ final class TerrainColumn {
     int uniformBlock(int minY) {
         long maxY = (long) minY + Chunk.SIZE - 1;
         if (bedrockHeight != TerrainSummary.NO_BEDROCK && maxY < bedrockHeight) return Byte.toUnsignedInt(BlockId.AIR);
-        if ((bedrockHeight == TerrainSummary.NO_BEDROCK || minY > bedrockHeight) && maxY < (long) minSurface - 3)
-            return Byte.toUnsignedInt(deepMaterial);
+        if ((bedrockHeight == TerrainSummary.NO_BEDROCK || minY > bedrockHeight) && maxY < (long) minSurface - 3) {
+            byte material = materialAt(0, minY);
+            boolean uniform = true;
+            for (int index = 0; index < AREA && uniform; index++)
+                uniform = (deepMaterials[index] != BlockId.TERRACOTTA_RED || maxY < (long) surfaceHeights[index] - 48)
+                        && materialAt(index, minY) == material;
+            if (uniform) return Byte.toUnsignedInt(material);
+        }
         if (minY > highestFeature) {
             if (minY > maxWater) return Byte.toUnsignedInt(BlockId.AIR);
             if (maxY <= minWater) return Byte.toUnsignedInt(BlockId.WATER);
@@ -83,7 +89,7 @@ final class TerrainColumn {
     }
 
     /**
-     * Builds a column from per-column summaries indexed {@code z * 16 + x}. Deep material and bedrock must be shared.
+     * Builds a column from per-column summaries indexed {@code z * 16 + x}. Bedrock must be shared.
      */
     static TerrainColumn of(TerrainSummary[] summaries, List<TreeGenerator.Tree> trees) {
         return of(summaries, trees, List.of(), new BitSet());
@@ -99,23 +105,25 @@ final class TerrainColumn {
         int[] heights = new int[AREA];
         int[] waterLevels = new int[AREA];
         byte[] surface = new byte[AREA], subsurface = new byte[AREA];
+        byte[] deep = new byte[AREA];
         BiomeType[] biomes = new BiomeType[AREA];
         for (int index = 0; index < AREA; index++) {
             TerrainSummary summary = summaries[index];
-            if (summary.deepMaterial() != first.deepMaterial() || summary.bedrockHeight() != first.bedrockHeight())
-                throw new IllegalArgumentException("Column summaries must share deep material and bedrock");
+            if (summary.bedrockHeight() != first.bedrockHeight())
+                throw new IllegalArgumentException("Column summaries must share bedrock");
             heights[index] = summary.surfaceHeight();
             surface[index] = summary.surfaceMaterial();
             subsurface[index] = summary.subsurfaceMaterial();
             biomes[index] = summary.biome();
             waterLevels[index] = summary.waterLevel();
+            deep[index] = summary.deepMaterial();
         }
         return new TerrainColumn(
                 heights,
                 surface,
                 subsurface,
                 biomes,
-                first.deepMaterial(),
+                deep,
                 first.bedrockHeight(),
                 waterLevels,
                 trees,
@@ -157,12 +165,12 @@ final class TerrainColumn {
                 surfaceHeights[index],
                 surfaceMaterials[index],
                 subsurfaceMaterials[index],
-                deepMaterial,
+                deepMaterials[index],
                 bedrockHeight,
                 waterLevels[index]);
     }
 
     long estimatedBytes() {
-        return AREA * (2L * Integer.BYTES + 2L) + trees.size() * 48L + caves.size() * 8L + removedSurface.size() / 8L;
+        return AREA * (2L * Integer.BYTES + 3L) + trees.size() * 48L + caves.size() * 8L + removedSurface.size() / 8L;
     }
 }

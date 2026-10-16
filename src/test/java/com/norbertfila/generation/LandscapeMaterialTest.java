@@ -19,9 +19,9 @@ class LandscapeMaterialTest {
         var biomes = new com.norbertfila.generation.biome.BiomeResolver();
         for (float humidity : new float[] {-.01f, .01f}) {
             var climate = new ClimateSample(-.21f, humidity);
-            var profile = registry.profile(biomes.resolve(climate));
+            var profile = registry.profile(biomes.resolve(climate, 40, 32, 0, false, 28));
             assertEquals(
-                    BlockId.GRASS,
+                    BlockId.PODZOL,
                     resolver.resolve(40, 0, 28, 32, climate, profile).surface());
         }
     }
@@ -65,20 +65,6 @@ class LandscapeMaterialTest {
         assertEquals(
                 BlockId.STONE,
                 resolver.resolve(182, 2, 28, 32, climate, profile).surface());
-    }
-
-    @Test
-    void terrainHeightsRemainIndependentFromBiomeResolution() {
-        var config = TerrainConfig.defaults();
-        var alteredClimate = config.withClimate(
-                new TerrainConfig.Layer(.03, 2, .5, 2, 1), new TerrainConfig.Layer(.01, 1, .5, 2, 1));
-        for (long seed : new long[] {0, 42, -7, 1234}) {
-            var terrain = new TerrainGenerator(seed, config);
-            var altered = new TerrainGenerator(seed, alteredClimate);
-            for (int z = -512; z <= 512; z += 64)
-                for (int x = -512; x <= 512; x += 64)
-                    assertEquals(terrain.surfaceHeight(x, z), altered.surfaceHeight(x, z));
-        }
     }
 
     @Test

@@ -23,7 +23,15 @@ public final class BlockId {
             DANDELION_YELLOW = 19,
             DANDELION_WHITE = 20,
             POPPY = 21,
-            MUD = 22;
+            MUD = 22,
+            PODZOL = 23,
+            COARSE_DIRT = 24,
+            CLAY = 25,
+            TERRACOTTA_RED = 26,
+            TERRACOTTA_ORANGE = 27,
+            ICE = 28,
+            PACKED_ICE = 29,
+            DRY_GRASS = 30;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -53,7 +61,15 @@ public final class BlockId {
                     DANDELION_YELLOW,
                     DANDELION_WHITE,
                     POPPY,
-                    MUD -> true;
+                    MUD,
+                    PODZOL,
+                    COARSE_DIRT,
+                    CLAY,
+                    TERRACOTTA_RED,
+                    TERRACOTTA_ORANGE,
+                    ICE,
+                    PACKED_ICE,
+                    DRY_GRASS -> true;
             default -> false;
         };
     }

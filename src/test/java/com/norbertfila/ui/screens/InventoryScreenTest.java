@@ -15,10 +15,14 @@ class InventoryScreenTest {
         for (boolean creative : new boolean[] {false, true}) {
             var screen = new InventoryScreen(creative);
             screen.update(InventorySnapshot.EMPTY, 8, VIEWPORT);
-            for (int cell = 0; cell < 36; cell++) {
+            int catalogCells =
+                    creative ? Math.max(27, ((InventoryScreen.catalogBlocks().size() + 8) / 9) * 9) : 27;
+            for (int cell = 0; cell < catalogCells + 9; cell++) {
                 var box = screen.bounds(cell);
                 screen.updatePointer(false, false, box.x() + 1, box.y() + 1);
-                int expected = creative && cell < 27 ? Inventory.CARRIED : cell >= 27 ? cell - 27 : cell + 9;
+                int expected = creative && cell < catalogCells
+                        ? Inventory.CARRIED
+                        : cell >= catalogCells ? cell - catalogCells : cell + 9;
                 assertEquals(new Screen.Action.DropSlot(expected, false), screen.keyPress(UiKey.DROP_ONE));
                 assertEquals(new Screen.Action.DropSlot(expected, true), screen.keyPress(UiKey.DROP_STACK));
             }

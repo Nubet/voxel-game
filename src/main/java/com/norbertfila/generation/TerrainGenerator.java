@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 19;
+    private static final int GENERATOR_VERSION = 20;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -109,7 +109,14 @@ public final class TerrainGenerator implements TerrainSource {
     private ColumnSample columnSample(double worldX, double worldZ) {
         GeographySample geography = geographySample(worldX, worldZ);
         ClimateSample climateSample = climate.sample(geography.x(), geography.z());
-        BiomeType biome = biomeResolver.resolve(climateSample);
+        int height = (int) Math.floor(geography.elevation());
+        BiomeType biome = biomeResolver.resolve(
+                climateSample,
+                height,
+                config.baseHeight(),
+                surfaceSlope((int) worldX, (int) worldZ, geography.elevation()),
+                nearWater((int) worldX, (int) worldZ, height, geography.waterLevel()),
+                geography.waterLevel());
         return new ColumnSample(
                 geography.elevation(),
                 climateSample,
@@ -142,6 +149,14 @@ public final class TerrainGenerator implements TerrainSource {
                 + region.details() * layer(details, config.details(), x, z)
                 + mountainHeight(x, z);
         if (config.landforms().amplitude() > 0) {
+            var weather = climate.sample(x, z);
+            double aridity = mountainMask((weather.temperature() - .1) / .4, 0, 1)
+                    * mountainMask((.2 - weather.humidity()) / .4, 0, 1);
+            double dunes = 3 * Math.sin(x * .035 + 2 * Math.sin(z * .006)) * aridity;
+            double terrace = 4 * Math.sin(height * Math.PI / 8) * aridity;
+            height +=
+                    Math.clamp((dunes + terrace) / 7, -1, 1) * config.details().amplitude()
+                            - region.details() * layer(details, config.details(), x, z);
             double regionalHeight = config.baseHeight() + continentalLayer + region.elevation();
             height = Math.max(height, Math.min(regionalHeight - 3, config.waterLevel() + 1.0));
         }
@@ -165,16 +180,27 @@ public final class TerrainGenerator implements TerrainSource {
                 column.waterKind(),
                 nearWater(worldX, worldZ, height, column.waterLevel()),
                 shores.sample(worldX * .008, worldZ * .008));
+        boolean badlands = column.biome() == BiomeType.BADLANDS;
+        byte subsurface = column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
+        byte deep = badlands ? BlockId.TERRACOTTA_RED : BlockId.STONE;
         return new TerrainSummary(
                 height,
-                materials.surface(),
-                materials.subsurface(),
-                BlockId.STONE,
+                badlands ? badlandsMaterial(height) : materials.surface(),
+                subsurface,
+                deep,
                 config.minHeight() - 1,
                 column.waterLevel(),
                 column.biome(),
                 column.climate(),
                 column.waterKind());
+    }
+
+    static byte badlandsMaterial(int y) {
+        return switch (Math.floorMod(y, 24) / 8) {
+            case 0 -> BlockId.TERRACOTTA_RED;
+            case 1 -> BlockId.TERRACOTTA_ORANGE;
+            default -> BlockId.CLAY;
+        };
     }
 
     private boolean nearWater(int x, int z, int height, int level) {

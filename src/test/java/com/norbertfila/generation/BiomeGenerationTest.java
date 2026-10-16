@@ -24,13 +24,16 @@ class BiomeGenerationTest {
     }
 
     @Test
-    void biomeClimateDoesNotChangeContinuousTerrainHeight() {
+    void climateShapingRemainsDeterministicAndContinuous() {
         var shape = TerrainConfig.defaults();
         var climate =
                 shape.withClimate(new TerrainConfig.Layer(.02, 2, .5, 2, 1), new TerrainConfig.Layer(.03, 2, .5, 2, 1));
-        var first = new TerrainGenerator(42L, shape);
+        var first = new TerrainGenerator(42L, climate);
         var second = new TerrainGenerator(42L, climate);
         for (int z = -128; z <= 128; z += 16)
-            for (int x = -128; x <= 128; x += 16) assertEquals(first.surfaceHeight(x, z), second.surfaceHeight(x, z));
+            for (int x = -128; x <= 128; x += 16) {
+                assertEquals(first.surfaceHeight(x, z), second.surfaceHeight(x, z));
+                assertEquals(first.surfaceElevation(x, z), first.surfaceElevation(x + 1e-6, z), .001);
+            }
     }
 }

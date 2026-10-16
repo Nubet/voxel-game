@@ -13,5 +13,6 @@ public enum SurfaceMaterial {
     ICE,
     CLAY,
     TERRACOTTA_RED,
-    TERRACOTTA_ORANGE
+    TERRACOTTA_ORANGE,
+    DRY_GRASS
 }

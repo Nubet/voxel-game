@@ -95,7 +95,7 @@ public final class GreedyMesher implements ChunkMesher {
                             && CUBE[id]
                             && !(excludeWater && block == BlockId.WATER)
                             && !OCCLUDES[Byte.toUnsignedInt(neighbor)]
-                            && !(block == BlockId.WATER && neighbor == BlockId.WATER);
+                            && !(block == neighbor && (block == BlockId.WATER || block == BlockId.ICE));
                     mask[v * S + u] = visible ? block : BlockId.AIR;
                 }
             for (int v = 0; v < S; v++)

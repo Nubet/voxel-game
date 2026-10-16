@@ -12,7 +12,11 @@ public final class PlantRules {
     }
 
     public static boolean supports(byte ground) {
-        return ground == BlockId.GRASS;
+        return ground == BlockId.GRASS
+                || ground == BlockId.PODZOL
+                || ground == BlockId.MUD
+                || ground == BlockId.COARSE_DIRT
+                || ground == BlockId.DRY_GRASS;
     }
 
     public static boolean supportsDry(byte ground) {
