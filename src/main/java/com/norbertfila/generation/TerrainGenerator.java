@@ -11,6 +11,7 @@ import com.norbertfila.generation.biome.SurfaceMaterialResolver;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WorldBounds;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -18,7 +19,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 24;
+    private static final int GENERATOR_VERSION = 25;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -76,15 +77,15 @@ public final class TerrainGenerator implements TerrainSource {
         landforms = new RegionalLandforms(config.landforms(), noise);
         hydrology = new RegionalHydrology(
                 seed,
-                config.waterLevel(),
-                config.maxHeight(),
+                waterLevel(),
+                Math.min(config.maxHeight(), WorldBounds.MAX_Y_EXCLUSIVE - 1),
                 (x, z) -> baseSample(x, z).elevation());
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
-        cavePlanner = new CavePlanner(seed, config.minHeight() - 1, this::surfaceHeight);
+        cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
         caveCarver = new CaveCarver(this);
     }
 
@@ -165,7 +166,7 @@ public final class TerrainGenerator implements TerrainSource {
         GeographySample base = baseSample(worldX, worldZ);
         if (config.landforms().amplitude() == 0) return base;
         var water = hydrology.sample(worldX, worldZ, base.elevation());
-        return new GeographySample(water.height(), base.x(), base.z(), water.waterLevel(), water.kind());
+        return new GeographySample(boundedHeight(water.height()), base.x(), base.z(), water.waterLevel(), water.kind());
     }
 
     private GeographySample baseSample(double worldX, double worldZ) {
@@ -197,7 +198,15 @@ public final class TerrainGenerator implements TerrainSource {
         }
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
-        return new GeographySample(height, x, z, config.waterLevel(), WaterKind.OCEAN);
+        return new GeographySample(boundedHeight(height), x, z, waterLevel(), WaterKind.OCEAN);
+    }
+
+    private static double boundedHeight(double height) {
+        return Math.clamp(height, WorldBounds.MIN_Y + 1, WorldBounds.MAX_Y_EXCLUSIVE - 1);
+    }
+
+    private int waterLevel() {
+        return (int) boundedHeight(config.waterLevel());
     }
 
     @Override
@@ -223,7 +232,7 @@ public final class TerrainGenerator implements TerrainSource {
                 badlands ? SurfaceMaterialMapper.badlands(height) : materials.surface(),
                 subsurface,
                 deep,
-                config.minHeight() - 1,
+                WorldBounds.MIN_Y,
                 column.waterLevel(),
                 column.biome(),
                 column.climate(),
@@ -256,6 +265,8 @@ public final class TerrainGenerator implements TerrainSource {
         int originX = origin(position.x());
         int originY = origin(position.y());
         int originZ = origin(position.z());
+        if (position.y() < WorldBounds.MIN_CHUNK_Y || position.y() > WorldBounds.MAX_CHUNK_Y)
+            return ChunkData.uniform(position, BlockId.AIR);
         TerrainColumn column = columns.get(position.x(), position.z(), () -> column(originX, originZ));
         int uniform = column.uniformBlock(originY);
         if (uniform >= 0

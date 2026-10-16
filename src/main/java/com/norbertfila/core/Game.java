@@ -95,8 +95,8 @@ public final class Game {
     }
 
     static ViewDemand terrainDemand(TerrainConfig config) {
-        int minChunkY = Math.floorDiv(config.minHeight() - Chunk.SIZE, Chunk.SIZE);
-        int maxChunkY = Math.floorDiv(Math.max(config.maxHeight(), config.waterLevel()) + Chunk.SIZE, Chunk.SIZE);
+        int minChunkY = com.norbertfila.world.WorldBounds.MIN_CHUNK_Y;
+        int maxChunkY = com.norbertfila.world.WorldBounds.MAX_CHUNK_Y;
         return new ViewDemand(TERRAIN_RADIUS, minChunkY, maxChunkY, ViewDemand.Shape.SQUARE);
     }
 }

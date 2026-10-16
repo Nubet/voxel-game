@@ -612,7 +612,16 @@ class WorldRuntimeTest {
         World world = new World();
         world.setBlock(new BlockPos(plant.x(), 8, plant.z()), BlockId.AIR, 64);
         Path save = directory.resolve("vegetation.vxl");
-        TestWorlds.save(save, generator.seed(), generator.generatorVersion(), world);
+        TestWorlds.save(
+                save,
+                com.norbertfila.persistence.world.WorldSnapshots.capture(
+                        TestWorlds.identity(generator.seed(), generator.generatorVersion()),
+                        1,
+                        world,
+                        com.norbertfila.fluid.FluidSnapshot.EMPTY,
+                        com.norbertfila.player.InventorySnapshot.EMPTY,
+                        new com.norbertfila.persistence.world.SavedPlayerState(
+                                .5, 9, .5, -90, -25, com.norbertfila.player.PlayerController.Mode.SURVIVAL, false)));
         try (WorldRuntime runtime = new WorldRuntime(
                 generator,
                 new com.norbertfila.meshing.WaterMesher(),

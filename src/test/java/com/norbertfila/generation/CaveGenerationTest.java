@@ -17,7 +17,7 @@ class CaveGenerationTest {
         for (int z = -3; z <= 3; z++)
             for (int x = -3; x <= 3; x++) {
                 var data = generator.generate(new ChunkPos(x, -4, z));
-                if (data.isUniform()) uniform++;
+                if (generator.generate(new ChunkPos(x, -3, z)).isUniform()) uniform++;
                 for (int lz = 0; lz < 16; lz++)
                     for (int lx = 0; lx < 16; lx++) {
                         var base = generator.sample(x * 16 + lx, z * 16 + lz);

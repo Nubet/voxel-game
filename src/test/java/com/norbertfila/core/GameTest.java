@@ -8,20 +8,22 @@ import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WorldBounds;
 import org.junit.jupiter.api.Test;
 
 class GameTest {
     @Test
-    void demandsTheWholeHeightRangeWithGroundAndHeadroom() {
+    void demandsAllTwentyWorldSectionsRegardlessOfCameraHeight() {
         TerrainConfig config = TerrainConfig.defaults();
         var demand = Game.terrainDemand(config);
-        assertTrue(demand.minChunkY() * Chunk.SIZE <= config.minHeight() - Chunk.SIZE);
-        assertTrue((demand.maxChunkY() + 1) * Chunk.SIZE > config.maxHeight() + Chunk.SIZE);
+        assertEquals(WorldBounds.MIN_CHUNK_Y, demand.minChunkY());
+        assertEquals(WorldBounds.MAX_CHUNK_Y, demand.maxChunkY());
         demand.update(new ChunkPos(0, 20, 0));
         assertEquals(
                 81 * (demand.maxChunkY() - demand.minChunkY() + 1),
                 demand.requested().size());
-        assertTrue(demand.requested().contains(new ChunkPos(0, Math.floorDiv(config.maxHeight(), Chunk.SIZE), 0)));
+        assertTrue(demand.requested().contains(new ChunkPos(0, WorldBounds.MAX_CHUNK_Y, 0)));
+        assertEquals(81 * 20, demand.requested().size());
     }
 
     @Test
@@ -50,11 +52,11 @@ class GameTest {
     }
 
     @Test
-    void streamingIncludesWaterAboveTheTerrainBoundsWithHeadroom() {
+    void streamingDoesNotExpandForWaterAboveTheWorldCeiling() {
         TerrainConfig c = TerrainConfig.defaults();
         TerrainConfig config = new TerrainConfig(
                 c.baseHeight(), c.continental(), c.hills(), c.details(), c.mountains(), c.warp(), 350);
         var demand = Game.terrainDemand(config);
-        assertTrue(((long) demand.maxChunkY() + 1) * Chunk.SIZE > config.waterLevel() + Chunk.SIZE);
+        assertEquals(WorldBounds.MAX_CHUNK_Y, demand.maxChunkY());
     }
 }

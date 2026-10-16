@@ -7,6 +7,7 @@ import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.WorldBounds;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -91,7 +92,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(24, generator.generatorVersion());
+            assertEquals(25, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -119,15 +120,19 @@ class TerrainGeneratorTest {
                 (x, z) -> -1);
         ChunkData data = generator.generate(new ChunkPos(-1, 0, 1));
         assertTrue(calls[0] >= 256);
+        generator.generate(new ChunkPos(-1, -1, 1));
+        generator.generate(new ChunkPos(-1, 1, 1));
         int sampled = calls[0];
+        generator.generate(new ChunkPos(-1, 0, 1));
         generator.generate(new ChunkPos(-1, -1, 1));
         generator.generate(new ChunkPos(-1, 1, 1));
         assertEquals(sampled, calls[0]);
         assertTrue(data.get(0, 8, 0) == BlockId.AIR || com.norbertfila.world.PlantRules.isPlant(data.get(0, 8, 0)));
         assertEquals(BlockId.GRASS, data.get(0, 7, 0));
-        assertEquals(BlockId.BEDROCK, data.get(0, 6, 0));
-        assertEquals(BlockId.AIR, data.get(0, 4, 0));
-        assertEquals(BlockId.AIR, data.get(0, 3, 0));
+        assertEquals(BlockId.DIRT, data.get(0, 6, 0));
+        assertEquals(BlockId.DIRT, data.get(0, 4, 0));
+        assertEquals(
+                BlockId.BEDROCK, generator.generate(new ChunkPos(-1, -4, 1)).get(0, 0, 0));
     }
 
     @Test
@@ -180,7 +185,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(24, generator.generatorVersion());
+        assertEquals(25, generator.generatorVersion());
     }
 
     @Test
@@ -201,8 +206,7 @@ class TerrainGeneratorTest {
     }
 
     private static List<CavePlan.Segment> plannedSegments(TerrainGenerator generator, int chunkX, int chunkZ) {
-        var planner =
-                new CavePlanner(generator.seed(), TerrainConfig.defaults().minHeight() - 1, generator::surfaceHeight);
+        var planner = new CavePlanner(generator.seed(), WorldBounds.MIN_Y, generator::surfaceHeight);
         var segments = new ArrayList<CavePlan.Segment>();
         int rx = Math.floorDiv(chunkX, 8), rz = Math.floorDiv(chunkZ, 8);
         for (int z = rz - 1; z <= rz + 1; z++)

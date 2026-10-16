@@ -25,7 +25,7 @@ public final class CaveGenerationSmoke {
             for (long seed : new long[] {0, 42, -123456789}) {
                 var config = TerrainConfig.defaults();
                 var terrain = new TerrainGenerator(seed, config);
-                var planner = new CavePlanner(seed, config.minHeight() - 1, terrain::surfaceHeight);
+                var planner = new CavePlanner(seed, com.norbertfila.world.WorldBounds.MIN_Y, terrain::surfaceHeight);
                 var carver = new CaveCarver(terrain);
                 CavePlan.Segment chamber = null;
                 Vector3f entrance = null;

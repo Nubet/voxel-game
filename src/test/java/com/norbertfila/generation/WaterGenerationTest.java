@@ -23,8 +23,8 @@ class WaterGenerationTest {
                 assertEquals(level, sample.waterLevel());
                 assertEquals(height < level, sample.flooded());
                 assertEquals(sample.surfaceMaterial(), block(generator, x, height, z));
-                assertEquals(BlockId.BEDROCK, block(generator, x, height - 1, z));
-                assertEquals(BlockId.AIR, block(generator, x, height - 2, z));
+                assertEquals(BlockId.BEDROCK, block(generator, x, WorldBounds.MIN_Y, z));
+                assertEquals(BlockId.AIR, block(generator, x, WorldBounds.MIN_Y - 1, z));
                 for (int y = height + 1; y <= Math.max(height, level) + 1; y++) {
                     byte expected = y <= level ? BlockId.WATER : BlockId.AIR;
                     byte actual = block(generator, x, y, z);
