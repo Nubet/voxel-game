@@ -44,6 +44,8 @@ void main() {
         bool alongV = corner == 1 || corner == 2;
         bool alongU = corner >= 2;
         local = vec3(base + (alongV ? FACE_V[face] * height : ivec3(0)) + (alongU ? FACE_U[face] * width : ivec3(0)));
+        uint top = (material >> 24) & 7u;
+        if (top != 0u && (face == 2 || (face != 3 && alongV))) local.y -= 1.0 - float(top) / 8.0;
         vUv = vec2(alongU ? width : 0, alongV ? height : 0);
         vShade = SHADE[face];
     } else {

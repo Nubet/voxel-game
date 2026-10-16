@@ -37,7 +37,8 @@ public final class VoxelCollision {
         for (long y = range.minY; y <= range.maxY; y++)
             for (long z = range.minZ; z <= range.maxZ; z++)
                 for (long x = range.minX; x <= range.maxX; x++)
-                    if (solid(world, (int) x, (int) y, (int) z)) return false;
+                    if (solid(world, (int) x, (int) y, (int) z)
+                            && body.intersects(shape(world, (int) x, (int) y, (int) z))) return false;
         return true;
     }
 
@@ -137,11 +138,28 @@ public final class VoxelCollision {
             for (long z = range.minZ; z <= range.maxZ; z++) {
                 for (long x = range.minX; x <= range.maxX; x++) {
                     if (!solid(world, (int) x, (int) y, (int) z)) continue;
-                    delta = clipAgainst(body, delta, axis, x, y, z, x + 1.0, y + 1.0, z + 1.0);
+                    var shape = shape(world, (int) x, (int) y, (int) z);
+                    delta = clipAgainst(
+                            body,
+                            delta,
+                            axis,
+                            shape.minX(),
+                            shape.minY(),
+                            shape.minZ(),
+                            shape.maxX(),
+                            shape.maxY(),
+                            shape.maxZ());
                 }
             }
         }
         return delta;
+    }
+
+    private static Aabb shape(World world, int x, int y, int z) {
+        var model = BlockRegistry.DEFAULT
+                .definition((byte) world.getBlock(new BlockPos(x, y, z)).orElseThrow())
+                .model();
+        return new Aabb(x, y + model.minY(), z, x + 1.0, y + model.maxY(), z + 1.0);
     }
 
     private static double clipAgainst(

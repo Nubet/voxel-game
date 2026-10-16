@@ -20,16 +20,22 @@ final class VegetationGenerator {
     private final Noise2D density;
     private final Noise2D forest;
     private final BiomeRegistry biomes;
+    private final TerrainSource terrain;
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest) {
         this(seed, density, forest, BiomeRegistry.defaults());
     }
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest, BiomeRegistry biomes) {
+        this(seed, density, forest, biomes, null);
+    }
+
+    VegetationGenerator(long seed, Noise2D density, Noise2D forest, BiomeRegistry biomes, TerrainSource terrain) {
         this.seed = seed;
         this.density = density;
         this.forest = forest;
         this.biomes = biomes;
+        this.terrain = terrain;
     }
 
     void generate(int ox, int oy, int oz, byte[] blocks, TerrainColumn columns) {
@@ -65,18 +71,23 @@ final class VegetationGenerator {
                         || columns.surfaceHeight(column) < columns.waterLevel(column)) continue;
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
                 BiomeProfile profile = biomes.profile(columns.biome(column));
-                boolean ordinary = profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
-                        || profile.vegetation().plants().contains(PlantType.FERN);
-                boolean dry = profile.vegetation().plants().stream()
-                        .anyMatch(plant -> plant == PlantType.CACTUS || plant == PlantType.DEAD_BUSH);
-                if (!ordinary && !dry) continue;
-                if (!PlantRules.supports(columns.surfaceMaterial(column))
-                        && !(dry && PlantRules.supportsDry(columns.surfaceMaterial(column)))) continue;
-                PlantType special = specialPlant(profile, hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z));
-                if (special != null) {
-                    place(x, z, oy, blocks, columns, block(special));
+                if (columns.surfaceMaterial(column) == BlockId.SNOW
+                        || columns.biome(column) == com.norbertfila.generation.biome.BiomeType.ALPINE
+                                && columns.surfaceMaterial(column) == BlockId.STONE) {
+                    place(x, z, oy, blocks, columns, BlockId.SNOW_LAYER);
                     continue;
                 }
+                boolean ordinary = profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
+                        || profile.vegetation().plants().contains(PlantType.FERN);
+                PlantType special = specialPlant(profile, hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z));
+                if (special != null) {
+                    boolean nearWater = nearWater(ox + x, oz + z, columns, column);
+                    byte plant = block(special);
+                    if (PlantRules.supports(plant, columns.surfaceMaterial(column), nearWater))
+                        place(x, z, oy, blocks, columns, plant, nearWater);
+                    continue;
+                }
+                if (!ordinary || !PlantRules.supports(columns.surfaceMaterial(column))) continue;
                 double t =
                         Math.clamp((sample(density, ((long) ox + x) * .012, ((long) oz + z) * .012) + .4) / .9, 0, 1);
                 if (unit(hash(seed ^ GRASS_SALT, (long) ox + x, (long) oz + z))
@@ -94,36 +105,66 @@ final class VegetationGenerator {
     }
 
     private static void place(int x, int z, int oy, byte[] blocks, TerrainColumn columns, byte plant) {
+        place(x, z, oy, blocks, columns, plant, false);
+    }
+
+    private static void place(
+            int x, int z, int oy, byte[] blocks, TerrainColumn columns, byte plant, boolean nearWater) {
         int column = z * Chunk.SIZE + x;
         long y = (long) columns.surfaceHeight(column) + 1 - oy;
-        if (y < 0 || y >= Chunk.SIZE || !suitable(columns, column)) return;
+        if (y < 0
+                || y >= Chunk.SIZE
+                || !suitable(columns, column)
+                || !PlantRules.supports(plant, columns.surfaceMaterial(column), nearWater)) return;
         int index = ((int) y * Chunk.SIZE + z) * Chunk.SIZE + x;
         if (blocks[index] == BlockId.AIR) blocks[index] = plant;
     }
 
     private static boolean suitable(TerrainColumn columns, int column) {
-        return PlantRules.supports(columns.surfaceMaterial(column))
-                && columns.surfaceSupported(column)
-                && columns.surfaceHeight(column) >= columns.waterLevel(column);
+        return columns.surfaceSupported(column) && columns.surfaceHeight(column) >= columns.waterLevel(column);
     }
 
     private static PlantType specialPlant(BiomeProfile profile, long value) {
         var plants = profile.vegetation().plants();
-        if (plants.contains(PlantType.CACTUS) && unit(value) < .08) return PlantType.CACTUS;
-        if (plants.contains(PlantType.DEAD_BUSH) && unit(value) < .16) return PlantType.DEAD_BUSH;
-        if (plants.contains(PlantType.REED) && unit(value) < .12) return PlantType.REED;
-        if (plants.contains(PlantType.MUSHROOM) && unit(value) < .08) return PlantType.MUSHROOM;
-        if (plants.contains(PlantType.BERRY_BUSH) && unit(value) < .1) return PlantType.BERRY_BUSH;
-        if (plants.contains(PlantType.ALPINE_GRASS) && unit(value) < .2) return PlantType.ALPINE_GRASS;
+        double roll = unit(value);
+        for (PlantType type : PlantType.values()) {
+            double weight = switch (type) {
+                case CACTUS -> .04;
+                case DEAD_BUSH, MUSHROOM -> .06;
+                case REED, BERRY_BUSH -> .08;
+                case ALPINE_GRASS -> .12;
+                default -> 0;
+            };
+            if (!plants.contains(type)) continue;
+            if (roll < weight) return type;
+            roll -= weight;
+        }
         return null;
     }
 
     private static byte block(PlantType plant) {
         return switch (plant) {
-            case CACTUS, REED, ALPINE_GRASS -> BlockId.SHORT_GRASS;
-            case DEAD_BUSH, MUSHROOM, BERRY_BUSH -> BlockId.FERN;
+            case CACTUS -> BlockId.CACTUS;
+            case REED -> BlockId.REED;
+            case ALPINE_GRASS -> BlockId.ALPINE_GRASS;
+            case DEAD_BUSH -> BlockId.DEAD_BUSH;
+            case MUSHROOM -> BlockId.MUSHROOM;
+            case BERRY_BUSH -> BlockId.BERRY_BUSH;
             default -> throw new IllegalArgumentException("Not a special plant: " + plant);
         };
+    }
+
+    private boolean nearWater(int x, int z, TerrainColumn column, int index) {
+        if (terrain == null) return Math.abs((long) column.surfaceHeight(index) - column.waterLevel(index)) <= 1;
+        int y = column.surfaceHeight(index);
+        for (int[] d : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+            long wx = (long) x + d[0], wz = (long) z + d[1];
+            if (wx < Integer.MIN_VALUE || wx > Integer.MAX_VALUE || wz < Integer.MIN_VALUE || wz > Integer.MAX_VALUE)
+                continue;
+            var neighbor = terrain.sample((int) wx, (int) wz);
+            if (neighbor.materialAt(y) == BlockId.WATER) return true;
+        }
+        return false;
     }
 
     private static int bounded(long seed, int index, int bound) {

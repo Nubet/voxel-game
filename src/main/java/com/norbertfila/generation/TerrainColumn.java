@@ -58,10 +58,9 @@ final class TerrainColumn {
             min = Math.min(min, height);
             max = Math.max(max, height);
         }
-        // Plants sit one block above the surface; tree crowns end two blocks above the trunk.
         long highest = (long) max + 1;
         for (TreeGenerator.Tree tree : this.trees)
-            highest = Math.max(highest, (long) tree.baseY() + tree.trunkHeight() + 2);
+            highest = Math.max(highest, (long) tree.baseY() + tree.trunkHeight() + 3);
         minSurface = min;
         highestFeature = (int) Math.min(Integer.MAX_VALUE, highest);
     }

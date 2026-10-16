@@ -2,5 +2,6 @@ package com.norbertfila.world;
 
 public enum BlockShape {
     CUBE,
-    CROSS
+    CROSS,
+    SNOW_LAYER
 }

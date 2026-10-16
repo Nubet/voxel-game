@@ -34,7 +34,7 @@ public final class GreedyMesher implements ChunkMesher {
             byte block = (byte) id;
             if (!BlockId.isValid(block)) continue;
             BlockDefinition definition = BlockRegistry.DEFAULT.definition(block);
-            CUBE[id] = definition.model().shape() == BlockShape.CUBE;
+            CUBE[id] = definition.model().shape() != BlockShape.CROSS;
             CROSS[id] = definition.model().shape() == BlockShape.CROSS;
             OCCLUDES[id] = definition.occludesFullFace();
             LAYER[id] = definition.renderLayer().ordinal();
@@ -105,7 +105,15 @@ public final class GreedyMesher implements ChunkMesher {
                     int width = 1;
                     while (u + width < S && mask[v * S + u + width] == block) width++;
                     int height = 1;
-                    while (v + height < S && rowMatches(mask, block, u, v + height, width)) height++;
+                    while (v + height < S
+                            && rowMatches(mask, block, u, v + height, width)
+                            && (face == 2
+                                    || face == 3
+                                    || BlockRegistry.DEFAULT
+                                                    .definition(block)
+                                                    .model()
+                                                    .maxY()
+                                            == 1)) height++;
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) mask[row * S + column] = BlockId.AIR;
                     cell(face, depth, u, v, cell);
@@ -136,7 +144,8 @@ public final class GreedyMesher implements ChunkMesher {
         int[] corner = VisibleFaceMesher.FACES[face][0];
         out.add(QuadCodec.solidPosition(
                 cell[0] + corner[0], cell[1] + corner[1], cell[2] + corner[2], face, width, height, false));
-        out.add(QuadCodec.solidMaterial(TEXTURE[id][face], id));
+        int top = Math.round(BlockRegistry.DEFAULT.definition(block).model().maxY() * 8) % 8;
+        out.add(QuadCodec.solidMaterial(TEXTURE[id][face], id) | top << 24);
     }
 
     private static void appendCrossPlants(Scratch scratch) {

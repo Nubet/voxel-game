@@ -90,7 +90,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(20, generator.generatorVersion());
+            assertEquals(21, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -179,7 +179,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(20, generator.generatorVersion());
+        assertEquals(21, generator.generatorVersion());
     }
 
     @Test

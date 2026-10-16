@@ -111,14 +111,18 @@ public final class BlockInteraction {
         if (!world.hasChunk(Coordinates.worldToChunk(position))) return Optional.empty();
         int previous = world.getBlock(position).orElseThrow();
         if (!BlockRegistry.DEFAULT.definition((byte) previous).replaceable()) return Optional.empty();
-        if (PlantRules.isPlant(blockId) && !PlantRules.canPlace(world, position)) return Optional.empty();
+        if (PlantRules.isPlant(blockId) && !PlantRules.canPlace(world, position, blockId)) return Optional.empty();
         if (BlockRegistry.DEFAULT.isCollidable(blockId)
                 && playerBody.intersects(new Aabb(
                         position.x(),
                         position.y(),
                         position.z(),
                         position.x() + 1.0,
-                        position.y() + 1.0,
+                        position.y()
+                                + BlockRegistry.DEFAULT
+                                        .definition(blockId)
+                                        .model()
+                                        .maxY(),
                         position.z() + 1.0))) return Optional.empty();
         return Optional.of(setBlock(position, blockId));
     }

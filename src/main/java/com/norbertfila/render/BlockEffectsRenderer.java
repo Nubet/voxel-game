@@ -15,7 +15,7 @@ import org.lwjgl.system.MemoryUtil;
 public final class BlockEffectsRenderer implements AutoCloseable {
     private final BlockTextureArray textures;
     private final int cracks, debris, vao, vbo;
-    private final int crackVP, crackOffset, crackProgress, debrisVP;
+    private final int crackVP, crackOffset, crackProgress, crackHeight, debrisVP;
     private FloatBuffer particles;
     private boolean closed;
 
@@ -28,6 +28,7 @@ public final class BlockEffectsRenderer implements AutoCloseable {
             crackVP = ShaderPrograms.uniform(createdCracks, "uVP");
             crackOffset = ShaderPrograms.uniform(createdCracks, "uOffset");
             crackProgress = ShaderPrograms.uniform(createdCracks, "uProgress");
+            crackHeight = ShaderPrograms.uniform(createdCracks, "uHeight");
             debrisVP = ShaderPrograms.uniform(createdDebris, "uVP");
             glProgramUniform1i(createdDebris, ShaderPrograms.uniform(createdDebris, "uBlockTextures"), 0);
             createdVao = glCreateVertexArrays();
@@ -107,6 +108,12 @@ public final class BlockEffectsRenderer implements AutoCloseable {
                 var mining = progress.orElseThrow();
                 var block = mining.block();
                 glUseProgram(cracks);
+                glUniform1f(
+                        crackHeight,
+                        com.norbertfila.world.BlockRegistry.DEFAULT
+                                .definition((byte) mining.blockId())
+                                .model()
+                                .maxY());
                 glUniformMatrix4fv(crackVP, false, matrix);
                 glUniform3f(crackOffset, (float) (block.x() - cameraX), (float) (block.y() - cameraY), (float)
                         (block.z() - cameraZ));

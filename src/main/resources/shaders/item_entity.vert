@@ -5,6 +5,7 @@ uniform vec3 uOffset;
 uniform float uAngle;
 uniform ivec3 uLayers;
 uniform bool uCross;
+uniform float uHeight;
 out vec2 vUv;
 flat out int vLayer;
 flat out float vLight;
@@ -23,6 +24,7 @@ void main() {
     else if (face == 4) point = vec3(uv.x, uv.y, 0);
     else point = vec3(uv.x, uv.y, 1);
     point = (point - .5) * .25;
+    point.y *= uHeight;
     float c = cos(uAngle), s = sin(uAngle);
     point.xz = mat2(c, s, -s, c) * point.xz;
     vUv = vec2(uv.x, 1 - uv.y);

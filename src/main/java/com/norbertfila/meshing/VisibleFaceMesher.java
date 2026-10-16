@@ -56,7 +56,13 @@ public final class VisibleFaceMesher implements ChunkMesher {
                         for (int index : TRIANGLE_INDICES) {
                             int[] p = FACES[f][index];
                             out.add(cx * Chunk.SIZE + x + p[0]);
-                            out.add(cy * Chunk.SIZE + y + p[1]);
+                            out.add(cy * Chunk.SIZE
+                                    + y
+                                    + p[1]
+                                            * BlockRegistry.DEFAULT
+                                                    .definition(block)
+                                                    .model()
+                                                    .maxY());
                             out.add(cz * Chunk.SIZE + z + p[2]);
                             out.add(rgb[0] * shade);
                             out.add(rgb[1] * shade);

@@ -110,6 +110,8 @@ public final class QuadCodec {
                         + (alongU ? (faceCorners[3][axis] - faceCorners[0][axis]) * width : 0);
             px = cx * Chunk.SIZE + x + offset[0];
             py = cy * Chunk.SIZE + y + offset[1];
+            int top = material >>> 24 & 7;
+            if (top != 0 && (face == 2 || face != 3 && alongV)) py -= 1 - top / 8f;
             pz = cz * Chunk.SIZE + z + offset[2];
             u = alongU ? width : 0;
             v = alongV ? height : 0;

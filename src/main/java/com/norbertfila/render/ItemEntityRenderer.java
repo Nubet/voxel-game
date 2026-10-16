@@ -14,7 +14,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
     private static final double RENDER_DISTANCE = 64;
     private final BlockTextureArray textures;
     private final Frustum frustum = new Frustum();
-    private final int program, vao, vp, offset, angle, layers, cross;
+    private final int program, vao, vp, offset, angle, layers, cross, height;
     private boolean closed;
 
     public ItemEntityRenderer(BlockTextureArray textures) {
@@ -27,6 +27,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
             angle = ShaderPrograms.uniform(createdProgram, "uAngle");
             layers = ShaderPrograms.uniform(createdProgram, "uLayers");
             cross = ShaderPrograms.uniform(createdProgram, "uCross");
+            height = ShaderPrograms.uniform(createdProgram, "uHeight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uBlockTextures"), 0);
             createdVao = glCreateVertexArrays();
         } catch (RuntimeException | Error failure) {
@@ -97,6 +98,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
                 glUniform1f(angle, (float) (time * 1.5 + phase));
                 glUniform3i(layers, block.sideTexture(), block.topTexture(), block.bottomTexture());
                 glUniform1i(cross, isCross ? 1 : 0);
+                glUniform1f(height, block.model().maxY());
                 glDrawArrays(GL_TRIANGLES, 0, isCross ? 12 : 36);
                 drawn++;
             }

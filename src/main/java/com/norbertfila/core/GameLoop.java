@@ -477,7 +477,12 @@ public final class GameLoop {
             }
             if (!editingBlocked && state.target().isPresent())
                 outline.render(
-                        viewProjection, state.target().orElseThrow().block(), camera.x(), camera.y(), camera.z());
+                        viewProjection,
+                        state.target().orElseThrow().block(),
+                        (byte) state.target().orElseThrow().blockId(),
+                        camera.x(),
+                        camera.y(),
+                        camera.z());
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);

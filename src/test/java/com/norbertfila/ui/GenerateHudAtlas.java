@@ -40,9 +40,10 @@ public final class GenerateHudAtlas {
             if (definition.shape() == BlockShape.CROSS) {
                 copy(textures.get(definition.sideTexture()), icon, 0, 0);
             } else {
-                face(icon, textures.get(definition.sideTexture()), 1, 4, 7, 4, 0, 8, .78);
-                face(icon, textures.get(definition.sideTexture()), 8, 8, 7, -4, 0, 8, .6);
-                face(icon, textures.get(definition.topTexture()), 8, 0, 7, 4, -7, 4, 1);
+                int height = Math.max(1, Math.round(8 * definition.model().maxY()));
+                face(icon, textures.get(definition.sideTexture()), 1, 12 - height, 7, 4, 0, height, .78);
+                face(icon, textures.get(definition.sideTexture()), 8, 16 - height, 7, -4, 0, height, .6);
+                face(icon, textures.get(definition.topTexture()), 8, 8 - height, 7, 4, -7, 4, 1);
             }
             var region = UiAtlas.item((byte) id);
             copy(icon, atlas, region.x(), region.y());

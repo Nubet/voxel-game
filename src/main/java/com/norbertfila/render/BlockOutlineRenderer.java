@@ -2,14 +2,16 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.BlockRegistry;
 import java.util.Objects;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class BlockOutlineRenderer implements AutoCloseable {
     private final int program, vao, vbo;
-    private final int viewProjection, offset;
+    private final int viewProjection, offset, height;
     private boolean closed;
 
     public BlockOutlineRenderer() {
@@ -18,6 +20,7 @@ public final class BlockOutlineRenderer implements AutoCloseable {
             createdProgram = ShaderPrograms.create("/shaders/block_outline.vert", "/shaders/block_outline.frag");
             viewProjection = ShaderPrograms.uniform(createdProgram, "uVP");
             offset = ShaderPrograms.uniform(createdProgram, "uOffset");
+            height = ShaderPrograms.uniform(createdProgram, "uHeight");
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
             glNamedBufferData(createdVbo, vertices(), GL_STATIC_DRAW);
@@ -38,6 +41,16 @@ public final class BlockOutlineRenderer implements AutoCloseable {
 
     public void render(
             Matrix4f relativeViewProjection, BlockPos block, double cameraX, double cameraY, double cameraZ) {
+        render(relativeViewProjection, block, BlockId.STONE, cameraX, cameraY, cameraZ);
+    }
+
+    public void render(
+            Matrix4f relativeViewProjection,
+            BlockPos block,
+            byte blockId,
+            double cameraX,
+            double cameraY,
+            double cameraZ) {
         if (closed) throw new IllegalStateException("Block outline renderer is closed");
         Objects.requireNonNull(relativeViewProjection);
         Objects.requireNonNull(block);
@@ -55,6 +68,8 @@ public final class BlockOutlineRenderer implements AutoCloseable {
             glDisable(GL_BLEND);
             glLineWidth(1);
             glUseProgram(program);
+            glUniform1f(
+                    height, BlockRegistry.DEFAULT.definition(blockId).model().maxY());
             glUniformMatrix4fv(viewProjection, false, relativeViewProjection.get(stack.mallocFloat(16)));
             // Subtract in double precision before narrowing, including near the limits of block coordinates.
             glUniform3f(offset, (float) (block.x() - cameraX), (float) (block.y() - cameraY), (float)

@@ -41,6 +41,20 @@ public final class BlockRegistry {
     public static final int PACKED_ICE_TEXTURE = 32;
     public static final int DRY_GRASS_TOP_TEXTURE = 33;
     public static final int DRY_GRASS_SIDE_TEXTURE = 34;
+    public static final int CACTUS_TOP_TEXTURE = 35,
+            CACTUS_SIDE_TEXTURE = 36,
+            CACTUS_BOTTOM_TEXTURE = 37,
+            DEAD_BUSH_TEXTURE = 38,
+            REED_TEXTURE = 39,
+            MUSHROOM_TEXTURE = 40,
+            BERRY_BUSH_TEXTURE = 41,
+            ALPINE_GRASS_TEXTURE = 42,
+            PINE_LOG_TOP_TEXTURE = 43,
+            PINE_LOG_SIDE_TEXTURE = 44,
+            PINE_NEEDLES_TEXTURE = 45,
+            SWAMP_LOG_TOP_TEXTURE = 46,
+            SWAMP_LOG_SIDE_TEXTURE = 47,
+            SWAMP_LEAVES_TEXTURE = 48;
     public static final BlockRegistry DEFAULT = defaults();
 
     private final BlockDefinition[] definitions;
@@ -135,6 +149,20 @@ public final class BlockRegistry {
         textures.put("refi_packed_ice", PACKED_ICE_TEXTURE);
         textures.put("refi_dry_grass_top", DRY_GRASS_TOP_TEXTURE);
         textures.put("refi_dry_grass_side", DRY_GRASS_SIDE_TEXTURE);
+        textures.put("refi_cactus_top", CACTUS_TOP_TEXTURE);
+        textures.put("refi_cactus_side", CACTUS_SIDE_TEXTURE);
+        textures.put("refi_cactus_bottom", CACTUS_BOTTOM_TEXTURE);
+        textures.put("refi_dead_bush", DEAD_BUSH_TEXTURE);
+        textures.put("refi_reed", REED_TEXTURE);
+        textures.put("refi_mushroom", MUSHROOM_TEXTURE);
+        textures.put("refi_berry_bush", BERRY_BUSH_TEXTURE);
+        textures.put("refi_alpine_grass", ALPINE_GRASS_TEXTURE);
+        textures.put("refi_pine_log_top", PINE_LOG_TOP_TEXTURE);
+        textures.put("refi_pine_log_side", PINE_LOG_SIDE_TEXTURE);
+        textures.put("refi_pine_needles", PINE_NEEDLES_TEXTURE);
+        textures.put("refi_swamp_log_top", SWAMP_LOG_TOP_TEXTURE);
+        textures.put("refi_swamp_log_side", SWAMP_LOG_SIDE_TEXTURE);
+        textures.put("refi_swamp_leaves", SWAMP_LEAVES_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(
@@ -234,7 +262,54 @@ public final class BlockRegistry {
                                 DRY_GRASS_SIDE_TEXTURE,
                                 true,
                                 true,
-                                RenderLayer.OPAQUE)),
+                                RenderLayer.OPAQUE),
+                        new BlockDefinition(
+                                BlockId.CACTUS,
+                                "cactus",
+                                CACTUS_TOP_TEXTURE,
+                                CACTUS_BOTTOM_TEXTURE,
+                                CACTUS_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
+                        plant(BlockId.DEAD_BUSH, "dead_bush", DEAD_BUSH_TEXTURE),
+                        plant(BlockId.REED, "reed", REED_TEXTURE),
+                        plant(BlockId.MUSHROOM, "mushroom", MUSHROOM_TEXTURE),
+                        plant(BlockId.BERRY_BUSH, "berry_bush", BERRY_BUSH_TEXTURE),
+                        plant(BlockId.ALPINE_GRASS, "alpine_grass", ALPINE_GRASS_TEXTURE),
+                        new BlockDefinition(
+                                BlockId.PINE_LOG,
+                                "pine_log",
+                                PINE_LOG_TOP_TEXTURE,
+                                PINE_LOG_TOP_TEXTURE,
+                                PINE_LOG_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
+                        uniform(BlockId.PINE_NEEDLES, "pine_needles", PINE_NEEDLES_TEXTURE, false),
+                        new BlockDefinition(
+                                BlockId.SWAMP_LOG,
+                                "swamp_log",
+                                SWAMP_LOG_TOP_TEXTURE,
+                                SWAMP_LOG_TOP_TEXTURE,
+                                SWAMP_LOG_SIDE_TEXTURE,
+                                true,
+                                true,
+                                RenderLayer.OPAQUE),
+                        uniform(BlockId.SWAMP_LEAVES, "swamp_leaves", SWAMP_LEAVES_TEXTURE, false),
+                        new BlockDefinition(
+                                BlockId.SNOW_LAYER,
+                                "snow_layer",
+                                SNOW_TEXTURE,
+                                SNOW_TEXTURE,
+                                SNOW_TEXTURE,
+                                true,
+                                false,
+                                RenderLayer.OPAQUE,
+                                true,
+                                true,
+                                BlockShape.SNOW_LAYER,
+                                true)),
                 textures);
     }
 

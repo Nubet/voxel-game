@@ -54,8 +54,19 @@ public final class WorldEdit {
             BlockPos above = new BlockPos(position.x(), position.y() + 1, position.z());
             if (world.hasChunk(Coordinates.worldToChunk(above))
                     && PlantRules.isPlant((byte) world.getBlock(above).orElseThrow())
-                    && !PlantRules.supports(value))
+                    && PlantRules.unsupported(world, above))
                 dirty.addAll(setBlock(above, BlockId.AIR).dirtyChunks());
+            if (previous.orElseThrow() == BlockId.WATER && value != BlockId.WATER)
+                for (int[] d : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+                    long x = (long) position.x() + d[0], z = (long) position.z() + d[1];
+                    if (x < Integer.MIN_VALUE
+                            || x > Integer.MAX_VALUE
+                            || z < Integer.MIN_VALUE
+                            || z > Integer.MAX_VALUE) continue;
+                    BlockPos reed = new BlockPos((int) x, position.y() + 1, (int) z);
+                    if (world.getBlock(reed).orElse(BlockId.AIR) == BlockId.REED && PlantRules.unsupported(world, reed))
+                        dirty.addAll(setBlock(reed, BlockId.AIR).dirtyChunks());
+                }
         }
         List<ChunkPos> ordered = new ArrayList<>(dirty);
         ordered.sort(ORDER);
@@ -66,6 +77,13 @@ public final class WorldEdit {
         if (!world.hasChunk(loaded)) return List.of();
         Set<ChunkPos> dirty = new LinkedHashSet<>();
         validatePlantsIn(loaded, false, dirty);
+        for (int[] d : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+            long x = (long) loaded.x() + d[0], z = (long) loaded.z() + d[1];
+            if (x < Integer.MIN_VALUE || x > Integer.MAX_VALUE || z < Integer.MIN_VALUE || z > Integer.MAX_VALUE)
+                continue;
+            var neighbor = new ChunkPos((int) x, loaded.y(), (int) z);
+            if (world.hasChunk(neighbor)) validatePlantsIn(neighbor, false, dirty);
+        }
         if (loaded.y() < Integer.MAX_VALUE) {
             ChunkPos above = new ChunkPos(loaded.x(), loaded.y() + 1, loaded.z());
             if (world.hasChunk(above)) validatePlantsIn(above, true, dirty);

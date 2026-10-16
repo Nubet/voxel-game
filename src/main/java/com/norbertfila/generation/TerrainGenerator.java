@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 20;
+    private static final int GENERATOR_VERSION = 21;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -78,7 +78,7 @@ public final class TerrainGenerator implements TerrainSource {
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
         vegetation = new VegetationGenerator(
-                seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry);
+                seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
         cavePlanner = new CavePlanner(seed, config.minHeight() - 1, this::surfaceHeight);
         caveCarver = new CaveCarver(this);
     }

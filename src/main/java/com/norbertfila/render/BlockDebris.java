@@ -28,6 +28,7 @@ final class BlockDebris {
             var definition = BlockRegistry.DEFAULT.definition((byte) event.blockId());
             for (int index = 0; index < PARTICLES_PER_BLOCK; index++) {
                 double x = (index % 3 + .5) / 3, y = (index / 3 % 2 + .5) / 2, z = (index / 6 + .5) / 4;
+                y *= definition.model().maxY();
                 double vx = (x - .5) * 3 + random.nextDouble(-.4, .4);
                 double vy = random.nextDouble(.5, 2.2), vz = (z - .5) * 3 + random.nextDouble(-.4, .4);
                 double lifetime = random.nextDouble(.4, MAX_LIFETIME);

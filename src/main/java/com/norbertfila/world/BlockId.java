@@ -31,7 +31,18 @@ public final class BlockId {
             TERRACOTTA_ORANGE = 27,
             ICE = 28,
             PACKED_ICE = 29,
-            DRY_GRASS = 30;
+            DRY_GRASS = 30,
+            CACTUS = 31,
+            DEAD_BUSH = 32,
+            REED = 33,
+            MUSHROOM = 34,
+            BERRY_BUSH = 35,
+            ALPINE_GRASS = 36,
+            PINE_LOG = 37,
+            PINE_NEEDLES = 38,
+            SWAMP_LOG = 39,
+            SWAMP_LEAVES = 40,
+            SNOW_LAYER = 41;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -70,6 +81,17 @@ public final class BlockId {
                     ICE,
                     PACKED_ICE,
                     DRY_GRASS -> true;
+            case CACTUS,
+                    DEAD_BUSH,
+                    REED,
+                    MUSHROOM,
+                    BERRY_BUSH,
+                    ALPINE_GRASS,
+                    PINE_LOG,
+                    PINE_NEEDLES,
+                    SWAMP_LOG,
+                    SWAMP_LEAVES,
+                    SNOW_LAYER -> true;
             default -> false;
         };
     }

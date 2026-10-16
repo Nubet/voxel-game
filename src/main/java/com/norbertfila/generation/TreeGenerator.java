@@ -141,22 +141,32 @@ final class TreeGenerator {
 
     private static void placeTrunk(Tree tree, int originX, int originY, int originZ, byte[] blocks) {
         for (int dy = 0; dy < tree.trunkHeight; dy++)
-            place(tree.x, (long) tree.baseY + dy, tree.z, originX, originY, originZ, blocks, BlockId.LOG);
+            place(tree.x, (long) tree.baseY + dy, tree.z, originX, originY, originZ, blocks, log(tree));
     }
 
     private static void placeCrown(Tree tree, int originX, int originY, int originZ, byte[] blocks) {
         int layers = tree.type == TreeType.CONIFER ? 6 : tree.type == TreeType.SWAMP ? 4 : 5;
         for (int layer = 0; layer < layers; layer++) {
             int radius = tree.type == TreeType.CONIFER
-                    ? Math.max(1, Math.min(tree.crownRadius, 1 + layer / 2))
+                    ? Math.max(0, Math.min(tree.crownRadius, (layers - 1 - layer) / 2))
                     : layer == 0 || layer == layers - 1 ? 1 : tree.crownRadius;
             long y = (long) tree.baseY + tree.trunkHeight - 2 + layer;
             for (int dz = -radius; dz <= radius; dz++)
                 for (int dx = -radius; dx <= radius; dx++) {
-                    if (Math.abs(dx) + Math.abs(dz) > radius + 1 || dx == 0 && dz == 0) continue;
-                    if (Math.abs(dx) == radius && Math.abs(dz) == radius
+                    if (Math.abs(dx) + Math.abs(dz) > radius + 1 || dx == 0 && dz == 0 && layer < 2) continue;
+                    if (radius > 0 && Math.abs(dx) == radius && Math.abs(dz) == radius
                             || Math.floorMod(hash(tree.shapeSeed, layer, dx * 31L + dz), 11) == 0) continue;
-                    place((long) tree.x + dx, y, (long) tree.z + dz, originX, originY, originZ, blocks, BlockId.LEAVES);
+                    place((long) tree.x + dx, y, (long) tree.z + dz, originX, originY, originZ, blocks, leaves(tree));
+                    if (tree.type == TreeType.SWAMP && layer == 1 && (Math.abs(dx) == radius || Math.abs(dz) == radius))
+                        place(
+                                (long) tree.x + dx,
+                                y - 1,
+                                (long) tree.z + dz,
+                                originX,
+                                originY,
+                                originZ,
+                                blocks,
+                                leaves(tree));
                 }
         }
     }
@@ -166,8 +176,27 @@ final class TreeGenerator {
         long x = worldX - originX, y = worldY - originY, z = worldZ - originZ;
         if (x < 0 || x >= Chunk.SIZE || y < 0 || y >= Chunk.SIZE || z < 0 || z >= Chunk.SIZE) return;
         int index = ((int) y * Chunk.SIZE + (int) z) * Chunk.SIZE + (int) x;
-        if (blocks[index] == BlockId.AIR || block == BlockId.LOG && blocks[index] == BlockId.LEAVES)
-            blocks[index] = block;
+        if (blocks[index] == BlockId.AIR || isLog(block) && isLeaves(blocks[index])) blocks[index] = block;
+    }
+
+    private static boolean isLog(byte block) {
+        return block == BlockId.LOG || block == BlockId.PINE_LOG || block == BlockId.SWAMP_LOG;
+    }
+
+    private static boolean isLeaves(byte block) {
+        return block == BlockId.LEAVES || block == BlockId.PINE_NEEDLES || block == BlockId.SWAMP_LEAVES;
+    }
+
+    private static byte log(Tree tree) {
+        return tree.type == TreeType.CONIFER
+                ? BlockId.PINE_LOG
+                : tree.type == TreeType.SWAMP ? BlockId.SWAMP_LOG : BlockId.LOG;
+    }
+
+    private static byte leaves(Tree tree) {
+        return tree.type == TreeType.CONIFER
+                ? BlockId.PINE_NEEDLES
+                : tree.type == TreeType.SWAMP ? BlockId.SWAMP_LEAVES : BlockId.LEAVES;
     }
 
     record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type) {}

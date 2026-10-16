@@ -60,8 +60,21 @@ public final class VoxelRaycaster {
         BlockPos position = new BlockPos(x, y, z);
         int blockId = blockId(world, position);
         if (blockId < 0) return Optional.empty();
-        if (blockId != BlockId.AIR && targetable.test(blockId))
-            return Optional.of(new Hit(position, Normal.ZERO, 0, blockId));
+        if (blockId != BlockId.AIR && targetable.test(blockId)) {
+            Hit hit = modelHit(
+                    position,
+                    blockId,
+                    originX,
+                    originY,
+                    originZ,
+                    directionX,
+                    directionY,
+                    directionZ,
+                    0,
+                    maxDistance,
+                    Normal.ZERO);
+            if (hit != null) return Optional.of(hit);
+        }
 
         int stepX = step(directionX);
         int stepY = step(directionY);
@@ -99,9 +112,45 @@ public final class VoxelRaycaster {
             position = new BlockPos(x, y, z);
             blockId = blockId(world, position);
             if (blockId < 0) return Optional.empty();
-            if (blockId != BlockId.AIR && targetable.test(blockId))
-                return Optional.of(new Hit(position, normal, distance, blockId));
+            if (blockId != BlockId.AIR && targetable.test(blockId)) {
+                Hit hit = modelHit(
+                        position,
+                        blockId,
+                        originX,
+                        originY,
+                        originZ,
+                        directionX,
+                        directionY,
+                        directionZ,
+                        distance,
+                        maxDistance,
+                        normal);
+                if (hit != null) return Optional.of(hit);
+            }
         }
+    }
+
+    private static Hit modelHit(
+            BlockPos position,
+            int block,
+            double ox,
+            double oy,
+            double oz,
+            double dx,
+            double dy,
+            double dz,
+            double entry,
+            double limit,
+            Normal normal) {
+        var model = BlockRegistry.DEFAULT.definition((byte) block).model();
+        double localY = oy + dy * entry - position.y();
+        if (localY >= model.minY() && localY <= model.maxY()) return new Hit(position, normal, entry, block);
+        if (dy == 0) return null;
+        double distance = (position.y() + (dy < 0 ? model.maxY() : model.minY()) - oy) / dy;
+        double x = ox + dx * distance - position.x(), z = oz + dz * distance - position.z();
+        return distance >= entry && distance <= limit && x >= 0 && x <= 1 && z >= 0 && z <= 1
+                ? new Hit(position, new Normal(0, dy < 0 ? 1 : -1, 0), distance, block)
+                : null;
     }
 
     private static double firstBoundary(double origin, int cell, double direction, int step) {

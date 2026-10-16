@@ -2,6 +2,7 @@
 
 uniform mat4 uVP;
 uniform vec3 uOffset;
+uniform float uHeight;
 out vec2 vUv;
 flat out int vFace;
 
@@ -18,5 +19,6 @@ void main() {
     else if (vFace == 4) point = vec3(vUv.x, vUv.y, 0);
     else point = vec3(vUv.x, vUv.y, 1);
     point = (point - .5) * 1.002 + .5;
+    point.y *= uHeight;
     gl_Position = uVP * vec4(uOffset + point, 1);
 }
