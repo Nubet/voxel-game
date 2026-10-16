@@ -131,7 +131,8 @@ final class VegetationGenerator {
             double weight = switch (type) {
                 case CACTUS -> .04;
                 case DEAD_BUSH, MUSHROOM -> .06;
-                case REED, BERRY_BUSH -> .08;
+                case REED -> .08;
+                case BERRY_BUSH -> .005;
                 case ALPINE_GRASS -> .12;
                 default -> 0;
             };

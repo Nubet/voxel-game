@@ -25,6 +25,7 @@ class BiomeDecorationsTest {
                 PlantType.ALPINE_GRASS,
                 BlockId.ALPINE_GRASS);
         var found = new HashSet<Byte>();
+        int berryBushes = 0;
         for (BiomeType biome : BiomeType.values()) {
             var summaries = new TerrainSummary[256];
             byte ground = biome == BiomeType.DESERT || biome == BiomeType.BADLANDS ? BlockId.SAND : BlockId.GRASS;
@@ -40,15 +41,21 @@ class BiomeDecorationsTest {
                             biome,
                             new ClimateSample(0, 0)));
             var column = TerrainColumn.of(summaries, List.of());
-            byte[] blocks = new byte[4096];
-            new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1, registry).generate(0, 0, 0, blocks, column);
-            for (byte block : blocks)
-                if (block != BlockId.AIR) {
-                    assertTrue(PlantRules.supports(block, ground, true));
-                    found.add(block);
-                }
+            var generator = new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1, registry);
+            for (int chunk = 0; chunk < 64; chunk++) {
+                byte[] blocks = new byte[4096];
+                generator.generate(chunk * Chunk.SIZE, 0, 0, blocks, column);
+                for (byte block : blocks)
+                    if (block != BlockId.AIR) {
+                        assertTrue(PlantRules.supports(block, ground, true));
+                        found.add(block);
+                        if (block == BlockId.BERRY_BUSH) berryBushes++;
+                    }
+            }
         }
         assertTrue(found.containsAll(expected.values()), "Generated species: " + found);
+        double berryDensity = berryBushes / (64d * Chunk.SIZE * Chunk.SIZE);
+        assertTrue(berryDensity > .002 && berryDensity < .008, "Berry bush density: " + berryDensity);
     }
 
     @Test
