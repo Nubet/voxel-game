@@ -548,7 +548,12 @@ public final class GameLoop {
                 if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
             if (!editingBlocked)
-                crosshair.render(canvas, viewport, CrosshairPolicy.select(settings.crosshair(), state.target()));
+                crosshair.render(
+                        canvas,
+                        viewport,
+                        CrosshairPolicy.select(settings.crosshair(), state.target()),
+                        settings.crosshair(),
+                        1);
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);

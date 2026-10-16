@@ -34,13 +34,30 @@ public final class UiCanvas {
         }
     }
 
-    public void rectangle(int x, int y, int width, int height, float r, float g, float b, float a) {
+    public void rectangle(float x, float y, float width, float height, float r, float g, float b, float a) {
         float u = .5f / UiAtlas.WIDTH, v = .5f / UiAtlas.HEIGHT;
         quad(x, y, width, height, r, g, b, a, u, v, u, v);
     }
 
     public void sprite(UiAtlas.Region region, int x, int y, int width, int height) {
         sprite(region, x, y, width, height, 1, 1, 1);
+    }
+
+    public void sprite(UiAtlas.Region region, float x, float y, float width, float height, float alpha) {
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Sprite dimensions must be positive");
+        quad(
+                x,
+                y,
+                width,
+                height,
+                1,
+                1,
+                1,
+                alpha,
+                region.x() / (float) UiAtlas.WIDTH,
+                region.y() / (float) UiAtlas.HEIGHT,
+                (region.x() + region.width()) / (float) UiAtlas.WIDTH,
+                (region.y() + region.height()) / (float) UiAtlas.HEIGHT);
     }
 
     private void sprite(UiAtlas.Region region, int x, int y, int width, int height, float r, float g, float b) {
@@ -157,10 +174,10 @@ public final class UiCanvas {
     }
 
     private void quad(
-            int x,
-            int y,
-            int width,
-            int height,
+            float x,
+            float y,
+            float width,
+            float height,
             float r,
             float g,
             float b,
