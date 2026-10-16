@@ -86,12 +86,17 @@ public final class BiomeRegistry {
             SurfaceMaterial surface,
             SurfaceMaterial subsurface,
             Set<PlantType> plants) {
+        TreeType treeType = switch (surface) {
+            case PODZOL -> TreeType.CONIFER;
+            case MUD -> TreeType.SWAMP;
+            default -> TreeType.BROADLEAF;
+        };
         return new BiomeProfile(
                 trees,
                 grass,
                 flowers,
                 new SurfaceProfile(surface, subsurface),
                 new VegetationProfile(grass, flowers, plants),
-                new TreeProfile(trees, TreeType.GENERIC));
+                new TreeProfile(trees, treeType));
     }
 }

@@ -3,6 +3,7 @@ package com.norbertfila.generation;
 import static com.norbertfila.generation.GenerationHash.hash;
 
 import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.generation.biome.TreeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.PlantRules;
@@ -85,15 +86,17 @@ final class TreeGenerator {
             }
         long shapeSeed = hash(seed ^ SHAPE_SALT, cellX, cellZ);
         TerrainSummary sample = terrain.sample(x, z);
+        TreeType type = biomes.profile(sample.biome()).trees().type();
+        int trunkHeight = type == TreeType.CONIFER
+                ? 5 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4)
+                : type == TreeType.SWAMP
+                        ? 3 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 3)
+                        : 4 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4);
+        int crownRadius = type == TreeType.CONIFER
+                ? 2
+                : type == TreeType.SWAMP ? 2 : 2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2);
         return new Candidate(
-                new Tree(
-                        x,
-                        z,
-                        sample.surfaceHeight() + 1,
-                        4 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4),
-                        2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2),
-                        shapeSeed),
-                sample);
+                new Tree(x, z, sample.surfaceHeight() + 1, trunkHeight, crownRadius, shapeSeed, type), sample);
     }
 
     private boolean selected(long cellX, long cellZ, long x, long z) {
@@ -142,8 +145,11 @@ final class TreeGenerator {
     }
 
     private static void placeCrown(Tree tree, int originX, int originY, int originZ, byte[] blocks) {
-        for (int layer = 0; layer < 5; layer++) {
-            int radius = layer == 0 || layer == 4 ? 1 : tree.crownRadius;
+        int layers = tree.type == TreeType.CONIFER ? 6 : tree.type == TreeType.SWAMP ? 4 : 5;
+        for (int layer = 0; layer < layers; layer++) {
+            int radius = tree.type == TreeType.CONIFER
+                    ? Math.max(1, Math.min(tree.crownRadius, 1 + layer / 2))
+                    : layer == 0 || layer == layers - 1 ? 1 : tree.crownRadius;
             long y = (long) tree.baseY + tree.trunkHeight - 2 + layer;
             for (int dz = -radius; dz <= radius; dz++)
                 for (int dx = -radius; dx <= radius; dx++) {
@@ -164,7 +170,7 @@ final class TreeGenerator {
             blocks[index] = block;
     }
 
-    record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed) {}
+    record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type) {}
 
     private record Candidate(Tree tree, TerrainSummary terrain) {}
 }
