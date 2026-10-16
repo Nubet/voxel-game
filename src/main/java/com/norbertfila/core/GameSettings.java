@@ -3,6 +3,7 @@ package com.norbertfila.core;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
 import com.norbertfila.render.CloudMode;
+import com.norbertfila.ui.crosshair.CrosshairSettings;
 import java.util.Objects;
 
 public final class GameSettings {
@@ -50,6 +51,15 @@ public final class GameSettings {
     private float zoomSpeed = DEFAULT_ZOOM_SPEED;
     private int guiScale = GUI_SCALE_AUTO;
     private CloudMode clouds = CloudMode.FANCY;
+    private CrosshairSettings crosshair = CrosshairSettings.DEFAULT;
+
+    public CrosshairSettings crosshair() {
+        return crosshair;
+    }
+
+    public void setCrosshair(CrosshairSettings value) {
+        crosshair = Objects.requireNonNull(value);
+    }
 
     public CloudMode clouds() {
         return clouds;

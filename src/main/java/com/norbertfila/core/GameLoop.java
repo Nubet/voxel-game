@@ -31,6 +31,8 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.crosshair.CrosshairPolicy;
+import com.norbertfila.ui.crosshair.CrosshairRenderer;
 import com.norbertfila.ui.screens.ChatScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.PauseScreen;
@@ -152,7 +154,7 @@ public final class GameLoop {
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
-        var crosshair = new com.norbertfila.ui.crosshair.CrosshairRenderer();
+        var crosshair = new CrosshairRenderer();
         DebugOverlay debugOverlay = new DebugOverlay();
         boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
@@ -545,7 +547,8 @@ public final class GameLoop {
                         now);
                 if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
-            if (!editingBlocked) crosshair.render(canvas, viewport);
+            if (!editingBlocked)
+                crosshair.render(canvas, viewport, CrosshairPolicy.select(settings.crosshair(), state.target()));
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
