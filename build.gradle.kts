@@ -34,6 +34,15 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("smokeTerrainUniforms") {
+    group = "verification"
+    description = "Checks active and optimized-out uniforms in all terrain shader variants."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.TerrainProgramSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeClouds") {
     group = "verification"
     description = "Checks cloud rendering, depth occlusion and state on OpenGL."

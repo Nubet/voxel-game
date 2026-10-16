@@ -27,7 +27,8 @@ final class TerrainProgram implements AutoCloseable {
             cameraBlock = uniform(linked, "uCameraBlock");
             cameraFraction = uniform(linked, "uCameraFraction");
             renderLayer = uniform(linked, "uRenderLayer");
-            waterTime = uniform(linked, "uWaterTime");
+            // Solid and far shaders have zero flow, so drivers can optimize away the water clock.
+            waterTime = glGetUniformLocation(linked, "uWaterTime");
             waterFog = uniform(linked, "uWaterFog");
             coverageOrigin = uniform(linked, "uCoverageOrigin");
             coverageSize = uniform(linked, "uCoverageSize");
