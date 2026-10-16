@@ -205,6 +205,8 @@ class SettingsScreenTest {
         screen.updatePointer(true, true, bounds.x() + 1, bounds.y() + 1);
         assertEquals(CloudMode.FAST, settings.clouds());
         screen.updatePointer(false, false, bounds.x() + 1, bounds.y() + 1);
+        assertEquals(CloudMode.FANCY, settings.clouds());
+        screen.keyPress(UiKey.ACTIVATE);
         assertEquals(CloudMode.OFF, settings.clouds());
         screen.keyPress(UiKey.ACTIVATE);
         assertEquals(CloudMode.FAST, settings.clouds());

@@ -23,6 +23,7 @@ import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.render.BlockTextureArray;
+import com.norbertfila.render.CloudMode;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.streaming.ChunkManager;
@@ -108,6 +109,8 @@ public final class GameBenchmark {
             var settings = new GameSettings();
             settings.setRenderDistance(renderDistance);
             settings.setFarDistance(farDistance);
+            settings.setClouds(CloudMode.valueOf(
+                    System.getProperty("voxel.benchmark.clouds", "FAST").toUpperCase(Locale.ROOT)));
             var identity = new WorldIdentity(UUID.randomUUID(), SEED, "default", terrain.generatorVersion());
             var entry = io.create(catalog, new WorldMetadata(identity, "benchmark", Instant.now()))
                     .join();

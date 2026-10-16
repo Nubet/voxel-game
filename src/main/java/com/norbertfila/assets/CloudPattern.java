@@ -22,7 +22,7 @@ public final class CloudPattern {
         }
     }
 
-    static CloudPattern load(InputStream stream) throws IOException {
+    public static CloudPattern load(InputStream stream) throws IOException {
         if (stream == null) throw new IOException("Missing cloud pattern");
         var image = ImageIO.read(stream);
         if (image == null || image.getWidth() != image.getHeight() || image.getWidth() < 2 || image.getWidth() > 256)

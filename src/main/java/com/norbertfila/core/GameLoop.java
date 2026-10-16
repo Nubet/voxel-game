@@ -12,7 +12,6 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
-import com.norbertfila.render.CloudMode;
 import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
@@ -423,8 +422,14 @@ public final class GameLoop {
             double effectSeconds = state == null
                     ? 0
                     : animationSeconds(state.tick(), state.publishedAt(), state.paused(), System.nanoTime());
-            if (settings.clouds() != CloudMode.OFF)
-                clouds.render(viewProjection, camera.x(), camera.y(), camera.z(), effectSeconds, visibility.amount());
+            clouds.render(
+                    viewProjection,
+                    camera.x(),
+                    camera.y(),
+                    camera.z(),
+                    effectSeconds,
+                    visibility.amount(),
+                    settings.clouds());
             if (gpuTimer != null) gpuTimer.stamp();
             if (state != null)
                 renderer.far()

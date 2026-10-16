@@ -12,7 +12,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
 
 public final class CloudRendererSmoke {
-    private static final int SIZE = 128;
+    private static final int SIZE = 512;
 
     public static void main(String[] args) throws Exception {
         try (Window window = new Window(SIZE, SIZE, "Cloud regression");
@@ -22,7 +22,7 @@ public final class CloudRendererSmoke {
             clear(1);
             clouds.render(vp, 0, 64, 0, 0, 0);
             ByteBuffer reference = capture();
-            write(reference);
+            write(reference, "fast-clouds");
             int filled = 0, empty = 0;
             for (int i = 0; i < reference.capacity(); i += 4) {
                 if (Byte.toUnsignedInt(reference.get(i)) > 100) filled++;
@@ -50,6 +50,35 @@ public final class CloudRendererSmoke {
             clear(1);
             clouds.render(vp, 0, 64, 0, 64, 0);
             check(!reference.equals(capture()), "Clouds did not move");
+            clear(1);
+            ByteBuffer disabled = capture();
+            clouds.render(vp, 0, 64, 0, 0, 0, CloudMode.OFF);
+            check(disabled.equals(capture()), "Disabled clouds rendered");
+            clear(1);
+            clouds.render(vp, 0, 64, 0, 0, 0, CloudMode.FANCY);
+            ByteBuffer fancy = capture();
+            check(!disabled.equals(fancy) && !reference.equals(fancy), "Fancy clouds not visible");
+            write(fancy, "fancy-clouds-below");
+            clear(1);
+            clouds.render(vp, 1024.0 * 1_000_000, 64, -1024.0 * 1_000_000, 0, 0, CloudMode.FANCY);
+            check(fancy.equals(capture()), "Large coordinates changed fancy clouds");
+            clear(0);
+            clouds.render(vp, 0, 64, 0, 0, 0, CloudMode.FANCY);
+            check(disabled.equals(capture()), "Fancy clouds ignored foreground depth");
+            clear(1);
+            Matrix4f above =
+                    new Matrix4f().ortho(-256, 256, -256, 256, .1f, 800).lookAt(0, 0, 0, 0, -1, 0, 0, 0, 1);
+            clouds.render(above, 0, 320, 0, 0, 0, CloudMode.FANCY);
+            check(!disabled.equals(capture()), "Fancy clouds invisible from above");
+            write(capture(), "fancy-clouds-above");
+            clear(1);
+            Matrix4f side = new Matrix4f()
+                    .perspective((float) Math.toRadians(70), 1, .1f, 1600)
+                    .lookAt(0, 0, 0, 0, .25f, -1, 0, 1, 0);
+            clouds.render(side, 0, 180, 0, 0, 0, CloudMode.FANCY);
+            check(!disabled.equals(capture()), "Fancy cloud sides invisible");
+            write(capture(), "fancy-clouds-side");
+            check(glGetBoolean(GL_DEPTH_WRITEMASK) && !glIsEnabled(GL_BLEND), "Fancy state leak");
             check(glGetError() == GL_NO_ERROR, "Cloud GL error");
             System.out.println("PASS cloud mask, large coordinates, depth occlusion and GL state; GPU="
                     + glGetString(GL_RENDERER));
@@ -72,7 +101,7 @@ public final class CloudRendererSmoke {
         if (!condition) throw new AssertionError(message);
     }
 
-    private static void write(ByteBuffer pixels) throws Exception {
+    private static void write(ByteBuffer pixels, String name) throws Exception {
         var image = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < SIZE; y++)
             for (int x = 0; x < SIZE; x++) {
@@ -86,6 +115,6 @@ public final class CloudRendererSmoke {
             }
         Path directory = Path.of("build/cloud-smoke");
         Files.createDirectories(directory);
-        ImageIO.write(image, "png", directory.resolve("fast-clouds.png").toFile());
+        ImageIO.write(image, "png", directory.resolve(name + ".png").toFile());
     }
 }

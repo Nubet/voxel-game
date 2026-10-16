@@ -16,18 +16,21 @@ public final class CloudRenderer implements AutoCloseable {
     private final int program;
     private final int vao;
     private final int texture;
+    private final int meshBuffer;
+    private final int meshVertices;
     private final int viewProjection;
     private final int height;
     private final int phase;
     private final int periodUniform;
     private final int visibility;
+    private final int fancy;
     private final double period;
     private boolean closed;
 
     public CloudRenderer() {
         CloudPattern pattern = CloudPattern.loadDefault();
         period = pattern.size() * (double) CELL_SIZE;
-        int createdProgram = 0, createdVao = 0, createdTexture = 0;
+        int createdProgram = 0, createdVao = 0, createdTexture = 0, createdMesh = 0;
         try {
             createdProgram = ShaderPrograms.create("/shaders/clouds.vert", "/shaders/clouds.frag");
             viewProjection = uniform(createdProgram, "uVP");
@@ -35,6 +38,7 @@ public final class CloudRenderer implements AutoCloseable {
             phase = uniform(createdProgram, "uPhase");
             periodUniform = uniform(createdProgram, "uPeriod");
             visibility = uniform(createdProgram, "uVisibility");
+            fancy = uniform(createdProgram, "uFancy");
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uClouds"), 0);
             glProgramUniform1f(createdProgram, uniform(createdProgram, "uRadius"), RADIUS);
             createdVao = glGenVertexArrays();
@@ -69,7 +73,14 @@ public final class CloudRenderer implements AutoCloseable {
             } finally {
                 MemoryUtil.memFree(pixels);
             }
+            float[] mesh = CloudMesh.build(pattern, CELL_SIZE, 4);
+            meshVertices = mesh.length / 4;
+            createdMesh = glGenBuffers();
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, createdMesh);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, mesh, GL_STATIC_DRAW);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
         } catch (RuntimeException | Error failure) {
+            glDeleteBuffers(createdMesh);
             glDeleteTextures(createdTexture);
             glDeleteVertexArrays(createdVao);
             glDeleteProgram(createdProgram);
@@ -78,9 +89,22 @@ public final class CloudRenderer implements AutoCloseable {
         program = createdProgram;
         vao = createdVao;
         texture = createdTexture;
+        meshBuffer = createdMesh;
     }
 
     public void render(Matrix4f vp, double cameraX, double cameraY, double cameraZ, double seconds, float underwater) {
+        render(vp, cameraX, cameraY, cameraZ, seconds, underwater, CloudMode.FAST);
+    }
+
+    public void render(
+            Matrix4f vp,
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            double seconds,
+            float underwater,
+            CloudMode mode) {
+        java.util.Objects.requireNonNull(mode);
         if (closed) throw new IllegalStateException("Cloud renderer is closed");
         if (!Double.isFinite(cameraX)
                 || !Double.isFinite(cameraY)
@@ -89,11 +113,14 @@ public final class CloudRenderer implements AutoCloseable {
                 || seconds < 0) throw new IllegalArgumentException("Invalid cloud view");
         if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
             throw new IllegalArgumentException("Underwater visibility must be in [0, 1]");
-        if (underwater == 1) return;
+        if (underwater == 1 || mode == CloudMode.OFF) return;
+        boolean extruded = mode == CloudMode.FANCY;
         glEnable(GL_DEPTH_TEST);
-        glDepthMask(false);
+        // Dithered coverage lets thick clouds self-occlude without sorting translucent faces.
+        glDepthMask(extruded);
         glDisable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
+        if (extruded) glDisable(GL_BLEND);
+        else glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             glUseProgram(program);
@@ -102,11 +129,16 @@ public final class CloudRenderer implements AutoCloseable {
             glUniform1f(periodUniform, (float) period);
             glUniform2f(phase, movingPhase(cameraX, seconds, period), phase(cameraZ, period));
             glUniform1f(visibility, 1 - underwater);
+            glUniform1i(fancy, extruded ? 1 : 0);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
             glBindVertexArray(vao);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            if (extruded) {
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, meshBuffer);
+                glDrawArraysInstanced(GL_TRIANGLES, 0, meshVertices, 9);
+            } else glDrawArrays(GL_TRIANGLES, 0, 6);
         } finally {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
             glBindVertexArray(0);
             glBindTexture(GL_TEXTURE_2D, 0);
             glUseProgram(0);
@@ -127,6 +159,7 @@ public final class CloudRenderer implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
+        glDeleteBuffers(meshBuffer);
         glDeleteTextures(texture);
         glDeleteVertexArrays(vao);
         glDeleteProgram(program);
