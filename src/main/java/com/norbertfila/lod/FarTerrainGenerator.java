@@ -34,6 +34,7 @@ public final class FarTerrainGenerator {
         int[] heights = new int[cells * cells];
         byte[] materials = new byte[heights.length];
         int[] waterTops = new int[heights.length];
+        byte[] tints = new byte[heights.length];
         Arrays.fill(waterTops, FarTerrainTile.NO_WATER);
         int center = sampleStep / 2;
         for (int cellZ = 0; cellZ < cells; cellZ++)
@@ -42,6 +43,7 @@ public final class FarTerrainGenerator {
                 TerrainSummary terrain = source.sample(x, z);
                 int column = edits.find(x, z);
                 int index = cellZ * cells + cellX;
+                tints[index] = (byte) source.tintIndex(x, z);
                 long surface = surface(terrain, edits, column);
                 heights[index] = (int) (surface >> 8);
                 materials[index] = (byte) surface;
@@ -63,7 +65,7 @@ public final class FarTerrainGenerator {
                 break;
             }
         }
-        return new FarTerrainTile(tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops);
+        return new FarTerrainTile(tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops, tints);
     }
 
     /**

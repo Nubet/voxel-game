@@ -73,6 +73,7 @@ public final class GreedyMesher implements ChunkMesher {
         Scratch scratch = SCRATCH.get();
         scratch.reset(singleLayer);
         scratch.load(snapshot, neighborhood);
+        scratch.snapshot = snapshot;
         for (int face = 0; face < 6; face++) meshFace(scratch, face, excludeWater);
         appendCrossPlants(scratch);
         return scratch;
@@ -80,7 +81,7 @@ public final class GreedyMesher implements ChunkMesher {
 
     private static void meshFace(Scratch scratch, int face, boolean excludeWater) {
         byte[] grid = scratch.grid;
-        byte[] mask = scratch.mask;
+        int[] mask = scratch.mask;
         int[] cell = scratch.cell;
         int step = NEIGHBOR_STEP[face];
         for (int depth = 0; depth < S; depth++) {
@@ -96,17 +97,21 @@ public final class GreedyMesher implements ChunkMesher {
                             && !(excludeWater && block == BlockId.WATER)
                             && !OCCLUDES[Byte.toUnsignedInt(neighbor)]
                             && !(block == neighbor && (block == BlockId.WATER || block == BlockId.ICE));
-                    mask[v * S + u] = visible ? block : BlockId.AIR;
+                    int tint = com.norbertfila.generation.biome.BiomeTint.tintedTexture(TEXTURE[id][face])
+                            ? scratch.snapshot.tintIndex(cell[0], cell[2])
+                            : 0;
+                    mask[v * S + u] = visible ? id | tint << 8 : 0;
                 }
             for (int v = 0; v < S; v++)
                 for (int u = 0; u < S; u++) {
-                    byte block = mask[v * S + u];
+                    int material = mask[v * S + u];
+                    byte block = (byte) material;
                     if (block == BlockId.AIR) continue;
                     int width = 1;
-                    while (u + width < S && mask[v * S + u + width] == block) width++;
+                    while (u + width < S && mask[v * S + u + width] == material) width++;
                     int height = 1;
                     while (v + height < S
-                            && rowMatches(mask, block, u, v + height, width)
+                            && rowMatches(mask, material, u, v + height, width)
                             && (face == 2
                                     || face == 3
                                     || BlockRegistry.DEFAULT
@@ -117,7 +122,7 @@ public final class GreedyMesher implements ChunkMesher {
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) mask[row * S + column] = BlockId.AIR;
                     cell(face, depth, u, v, cell);
-                    emitQuad(scratch, face, block, width, height);
+                    emitQuad(scratch, face, block, width, height, material >>> 8);
                 }
         }
     }
@@ -132,12 +137,12 @@ public final class GreedyMesher implements ChunkMesher {
         return ((y + 1) * P + z + 1) * P + x + 1;
     }
 
-    private static boolean rowMatches(byte[] mask, byte block, int start, int row, int width) {
+    private static boolean rowMatches(int[] mask, int block, int start, int row, int width) {
         for (int u = start; u < start + width; u++) if (mask[row * S + u] != block) return false;
         return true;
     }
 
-    private static void emitQuad(Scratch scratch, int face, byte block, int width, int height) {
+    private static void emitQuad(Scratch scratch, int face, byte block, int width, int height, int tint) {
         int id = Byte.toUnsignedInt(block);
         IntList out = scratch.layer(LAYER[id]);
         int[] cell = scratch.cell;
@@ -145,7 +150,7 @@ public final class GreedyMesher implements ChunkMesher {
         out.add(QuadCodec.solidPosition(
                 cell[0] + corner[0], cell[1] + corner[1], cell[2] + corner[2], face, width, height, false));
         int top = Math.round(BlockRegistry.DEFAULT.definition(block).model().maxY() * 8) % 8;
-        out.add(QuadCodec.solidMaterial(TEXTURE[id][face], id) | top << 24);
+        out.add(QuadCodec.solidMaterial(TEXTURE[id][face] | tint << 8, id) | top << 24);
     }
 
     private static void appendCrossPlants(Scratch scratch) {
@@ -156,7 +161,7 @@ public final class GreedyMesher implements ChunkMesher {
                 for (int x = 0; x < S; x++) {
                     int id = Byte.toUnsignedInt(grid[padded(x, y, z)]);
                     if (!CROSS[id]) continue;
-                    int material = QuadCodec.solidMaterial(TEXTURE[id][0], id);
+                    int material = QuadCodec.solidMaterial(TEXTURE[id][0] | scratch.snapshot.tintIndex(x, z) << 8, id);
                     for (int plane : new int[] {QuadCodec.CROSS_PLANE_A, QuadCodec.CROSS_PLANE_B})
                         for (boolean back : new boolean[] {false, true}) {
                             out.add(QuadCodec.solidPosition(x, y, z, plane, 1, 1, back));
@@ -168,7 +173,8 @@ public final class GreedyMesher implements ChunkMesher {
     /** Per-thread working memory. Nothing in it escapes a meshing call except the arrays built from it. */
     static final class Scratch {
         private final byte[] grid = new byte[P * P * P];
-        private final byte[] mask = new byte[S * S];
+        private final int[] mask = new int[S * S];
+        private ChunkSnapshot snapshot;
         private final int[] cell = new int[3];
         private final IntList[] layers = {new IntList(), new IntList(), new IntList()};
         private boolean singleLayer;

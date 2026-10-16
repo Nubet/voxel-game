@@ -17,6 +17,7 @@ uniform vec3 uCameraFraction;
 
 out vec2 vUv;
 flat out float vLayer;
+flat out float vTint;
 out float vShade;
 flat out vec2 vFlow;
 out vec3 vCameraOffset;
@@ -32,6 +33,7 @@ const float SHADE[6] = float[](0.77, 0.77, 1.0, 0.56, 0.86, 0.86);
 const int FRONT[6] = int[](0, 1, 2, 0, 2, 3);
 
 void main() {
+    vTint = 0.0;
     uint quad = uint(gl_VertexID) / 6u;
     int vertex = gl_VertexID % 6;
     uint cell = quads[quad * 4u];

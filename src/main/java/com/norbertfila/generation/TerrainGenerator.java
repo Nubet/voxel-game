@@ -33,6 +33,8 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
     private final RegionalHydrology hydrology;
+    private final GenerationCache<BiomeType> tintBiomes = new GenerationCache<>(4096);
+    private final GenerationCache<byte[]> tintColumns = new GenerationCache<>(2048);
     private final Noise2D shores;
     private final ClimateNoise climate;
     private final BiomeResolver biomeResolver = new BiomeResolver();
@@ -95,6 +97,37 @@ public final class TerrainGenerator implements TerrainSource {
     @Override
     public int generatorVersion() {
         return GENERATOR_VERSION;
+    }
+
+    @Override
+    public int tintIndex(int x, int z) {
+        int gx = Math.floorDiv(x, 64), gz = Math.floorDiv(z, 64);
+        return com.norbertfila.generation.biome.BiomeTint.blend(
+                tintBiome(gx, gz),
+                tintBiome(gx + 1, gz),
+                tintBiome(gx, gz + 1),
+                tintBiome(gx + 1, gz + 1),
+                Math.floorMod(x, 64) / 64.0,
+                Math.floorMod(z, 64) / 64.0);
+    }
+
+    private BiomeType tintBiome(int x, int z) {
+        return tintBiomes.get(
+                x,
+                z,
+                () -> sample((int) Math.clamp((long) x * 64, Integer.MIN_VALUE, Integer.MAX_VALUE), (int)
+                                Math.clamp((long) z * 64, Integer.MIN_VALUE, Integer.MAX_VALUE))
+                        .biome());
+    }
+
+    private ChunkData tinted(ChunkData data, int ox, int oz) {
+        byte[] tint = tintColumns.get(Math.floorDiv(ox, Chunk.SIZE), Math.floorDiv(oz, Chunk.SIZE), () -> {
+            byte[] result = new byte[Chunk.SIZE * Chunk.SIZE];
+            for (int z = 0; z < Chunk.SIZE; z++)
+                for (int x = 0; x < Chunk.SIZE; x++) result[z * Chunk.SIZE + x] = (byte) tintIndex(ox + x, oz + z);
+            return result;
+        });
+        return data.withTints(tint);
     }
 
     @Override
@@ -236,7 +269,7 @@ public final class TerrainGenerator implements TerrainSource {
                         || column.caves().stream()
                                 .noneMatch(s -> s.y() + s.radiusY() > originY
                                         && s.y() - s.radiusY() < (double) originY + Chunk.SIZE)))
-            return ChunkData.uniform(position, (byte) uniform);
+            return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
         if (uniform >= 0) Arrays.fill(blocks, (byte) uniform);
         else
@@ -247,10 +280,10 @@ public final class TerrainGenerator implements TerrainSource {
                         blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
                 }
         boolean carved = caveCarver.carve(position, blocks, column.caves());
-        if (uniform >= 0 && !carved) return ChunkData.uniform(position, (byte) uniform);
+        if (uniform >= 0 && !carved) return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
         vegetation.generate(originX, originY, originZ, blocks, column);
-        return new ChunkData(position, blocks);
+        return tinted(new ChunkData(position, blocks), originX, originZ);
     }
 
     private TerrainColumn column(int originX, int originZ) {

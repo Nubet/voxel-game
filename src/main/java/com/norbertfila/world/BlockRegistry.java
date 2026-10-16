@@ -163,6 +163,7 @@ public final class BlockRegistry {
         textures.put("refi_swamp_log_top", SWAMP_LOG_TOP_TEXTURE);
         textures.put("refi_swamp_log_side", SWAMP_LOG_SIDE_TEXTURE);
         textures.put("refi_swamp_leaves", SWAMP_LEAVES_TEXTURE);
+        textures.put("refi_grass_side_overlay", 49);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(

@@ -53,6 +53,9 @@ public final class VisibleFaceMesher implements ChunkMesher {
                         if (!FaceVisibility.isVisible(block, snapshot, neighborhood, f, x, y, z)) continue;
                         float shade = f == 2 ? 1.0f : f == 3 ? .56f : f < 2 ? .77f : .86f;
                         float[] rgb = color(block, f);
+                        int texture = BlockRegistry.DEFAULT.definition(block).textureLayer(f);
+                        if (BiomeTint.tintedTexture(texture) && texture != 3)
+                            rgb = BiomeTint.color(snapshot.tintIndex(x, z), BiomeTint.foliageTexture(texture));
                         for (int index : TRIANGLE_INDICES) {
                             int[] p = FACES[f][index];
                             out.add(cx * Chunk.SIZE + x + p[0]);

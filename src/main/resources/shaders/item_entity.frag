@@ -8,6 +8,12 @@ out vec4 fragColor;
 
 void main() {
     vec4 color = texture(uBlockTextures, vec3(vUv, vLayer));
+    if (vLayer == 1) color.rgb *= vec3(.32, .69, .22);
+    if (vLayer == 11 || vLayer == 45 || vLayer == 48) color.rgb *= vec3(.3, .55, .22);
+    if (vLayer == 3) {
+        vec4 overlay = texture(uBlockTextures, vec3(vUv, 49));
+        color.rgb = mix(color.rgb, overlay.rgb * vec3(.32, .69, .22), overlay.a);
+    }
     if (color.a < .1) discard;
     fragColor = vec4(color.rgb * vLight, color.a);
 }

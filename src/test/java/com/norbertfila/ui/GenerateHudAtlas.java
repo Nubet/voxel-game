@@ -30,6 +30,39 @@ public final class GenerateHudAtlas {
             if (entry.getValue() != BlockRegistry.FALLBACK_TEXTURE)
                 textures.put(entry.getValue(), read("/assets/textures/blocks/" + entry.getKey() + ".png", 16, 16));
         }
+        for (var entry : textures.entrySet()) {
+            int layer = entry.getKey();
+            if (!com.norbertfila.generation.biome.BiomeTint.tintedTexture(layer) || layer == 3) continue;
+            float[] tint = com.norbertfila.generation.biome.BiomeTint.color(
+                    0, com.norbertfila.generation.biome.BiomeTint.foliageTexture(layer));
+            var image = entry.getValue();
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++) {
+                    int pixel = image.getRGB(x, y);
+                    image.setRGB(
+                            x,
+                            y,
+                            pixel & 0xff000000
+                                    | (int) ((pixel >> 16 & 255) * tint[0]) << 16
+                                    | (int) ((pixel >> 8 & 255) * tint[1]) << 8
+                                    | (int) ((pixel & 255) * tint[2]));
+                }
+        }
+        var side = textures.get(BlockRegistry.GRASS_SIDE_TEXTURE);
+        var overlay = textures.get(49);
+        float[] grass = com.norbertfila.generation.biome.BiomeTint.color(0, false);
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++) {
+                int pixel = overlay.getRGB(x, y);
+                if ((pixel >>> 24) < 128) continue;
+                side.setRGB(
+                        x,
+                        y,
+                        0xff000000
+                                | (int) ((pixel >> 16 & 255) * grass[0]) << 16
+                                | (int) ((pixel >> 8 & 255) * grass[1]) << 8
+                                | (int) ((pixel & 255) * grass[2]));
+            }
         var fallback = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
         for (int y = 1; y < 15; y++)
             for (int x = 1; x < 15; x++) fallback.setRGB(x, y, (x / 4 + y / 4) % 2 == 0 ? 0xffff00ff : 0xff181818);

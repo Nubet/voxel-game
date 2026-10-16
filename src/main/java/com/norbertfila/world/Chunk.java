@@ -11,6 +11,15 @@ public final class Chunk {
     private ChunkSnapshot snapshot;
     private long revision;
     private long meshDependencyRevision;
+    private byte[] tints;
+
+    public void setTints(byte[] values) {
+        if (values.length != SIZE * SIZE) throw new IllegalArgumentException("Invalid tint grid");
+        for (byte value : values) if (value < 0 || value > 31) throw new IllegalArgumentException("Invalid tint index");
+        tints = values.clone();
+        snapshot = null;
+        invalidateMesh();
+    }
 
     public Chunk() {}
 
@@ -89,6 +98,7 @@ public final class Chunk {
                 snapshot = ChunkSnapshot.owning(blocks, water, revision, meshDependencyRevision);
             }
         }
+        snapshot = snapshot.withTints(tints);
         return snapshot.withMeshDependencyRevision(meshDependencyRevision);
     }
 
@@ -119,7 +129,7 @@ public final class Chunk {
     }
 
     public long estimatedBytes() {
-        return data.estimatedBytes() + (waterData == null ? 0 : waterData.length);
+        return data.estimatedBytes() + (waterData == null ? 0 : waterData.length) + (tints == null ? 0 : tints.length);
     }
 
     /** Bytes of block and water arrays held only by the cached meshing snapshot. */

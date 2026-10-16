@@ -46,12 +46,17 @@ public final class FarTileMesher {
                 int height = top(tile, x, z, water);
                 byte material = water ? BlockId.WATER : tile.materialAt(x, z);
                 int endX = x + 1;
-                while (endX < cells && !done[z * cells + endX] && same(tile, endX, z, water, height, material)) endX++;
+                while (endX < cells
+                        && !done[z * cells + endX]
+                        && same(tile, endX, z, water, height, material)
+                        && (water || tile.tintAt(endX, z) == tile.tintAt(x, z))) endX++;
                 int endZ = z + 1;
-                while (endZ < cells && rowMatches(tile, done, x, endX, endZ, water, height, material)) endZ++;
+                while (endZ < cells
+                        && rowMatches(tile, done, x, endX, endZ, water, height, material, tile.tintAt(x, z))) endZ++;
                 for (int row = z; row < endZ; row++)
                     for (int column = x; column < endX; column++) done[row * cells + column] = true;
                 int texture = BlockRegistry.DEFAULT.definition(material).textureLayer(FACE_TOP);
+                if (!water) texture |= tile.tintAt(x, z) << 8;
                 // The top face spans u along -z and v along +x, so its first corner is the far z edge.
                 add(
                         records,
@@ -67,9 +72,19 @@ public final class FarTileMesher {
     }
 
     private static boolean rowMatches(
-            FarTerrainTile tile, boolean[] done, int x, int endX, int z, boolean water, int height, byte material) {
+            FarTerrainTile tile,
+            boolean[] done,
+            int x,
+            int endX,
+            int z,
+            boolean water,
+            int height,
+            byte material,
+            int tint) {
         for (int column = x; column < endX; column++)
-            if (done[z * tile.cells() + column] || !same(tile, column, z, water, height, material)) return false;
+            if (done[z * tile.cells() + column]
+                    || !same(tile, column, z, water, height, material)
+                    || !water && tile.tintAt(column, z) != tint) return false;
         return true;
     }
 
@@ -128,6 +143,7 @@ public final class FarTileMesher {
                         texture = BlockRegistry.DEFAULT
                                 .definition(tile.materialAt(x, z))
                                 .textureLayer(face);
+                        texture |= tile.tintAt(x, z) << 8;
                     }
                 }
             }

@@ -14,6 +14,7 @@ public final class ChunkSnapshot {
     private final byte[] waterData;
     private final long revision;
     private final long meshDependencyRevision;
+    private final byte[] tints;
 
     public ChunkSnapshot(byte[] blocks, long revision) {
         this(blocks, revision, 0);
@@ -30,11 +31,33 @@ public final class ChunkSnapshot {
     /** Takes ownership of the arrays; callers must not keep or modify them. */
     private ChunkSnapshot(
             long revision, long meshDependencyRevision, byte[] blocks, byte uniformBlock, byte[] waterData) {
+        this(revision, meshDependencyRevision, blocks, uniformBlock, waterData, null);
+    }
+
+    private ChunkSnapshot(
+            long revision,
+            long meshDependencyRevision,
+            byte[] blocks,
+            byte uniformBlock,
+            byte[] waterData,
+            byte[] tints) {
         this.blocks = blocks;
         this.uniformBlock = uniformBlock;
         this.waterData = waterData;
         this.revision = revision;
         this.meshDependencyRevision = meshDependencyRevision;
+        this.tints = tints;
+    }
+
+    ChunkSnapshot withTints(byte[] tints) {
+        return this.tints == tints
+                ? this
+                : new ChunkSnapshot(revision, meshDependencyRevision, blocks, uniformBlock, waterData, tints);
+    }
+
+    public int tintIndex(int x, int z) {
+        index(x, 0, z);
+        return tints == null ? 0 : tints[z * Chunk.SIZE + x];
     }
 
     static ChunkSnapshot owning(byte[] blocks, byte[] waterData, long revision, long meshDependencyRevision) {
@@ -48,7 +71,7 @@ public final class ChunkSnapshot {
     ChunkSnapshot withMeshDependencyRevision(long meshDependencyRevision) {
         return meshDependencyRevision == this.meshDependencyRevision
                 ? this
-                : new ChunkSnapshot(revision, meshDependencyRevision, blocks, uniformBlock, waterData);
+                : new ChunkSnapshot(revision, meshDependencyRevision, blocks, uniformBlock, waterData, tints);
     }
 
     /** Bytes of block and water arrays held by this snapshot, shared with snapshots of the same revision. */

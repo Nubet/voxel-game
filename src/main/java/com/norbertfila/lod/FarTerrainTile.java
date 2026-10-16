@@ -23,12 +23,25 @@ public final class FarTerrainTile {
     private final int[] heights;
     private final byte[] materials;
     private final int[] waterTops;
+    private final byte[] tints;
     private final int minHeight;
     private final int maxHeight;
 
     /** Takes ownership of the arrays, indexed {@code cellZ * cells + cellX}. */
     FarTerrainTile(
             int tileX, int tileZ, int sampleStep, long editRevision, int[] heights, byte[] materials, int[] waterTops) {
+        this(tileX, tileZ, sampleStep, editRevision, heights, materials, waterTops, new byte[heights.length]);
+    }
+
+    FarTerrainTile(
+            int tileX,
+            int tileZ,
+            int sampleStep,
+            long editRevision,
+            int[] heights,
+            byte[] materials,
+            int[] waterTops,
+            byte[] tints) {
         if (!validStep(sampleStep)) throw new IllegalArgumentException("Sample step must divide the tile size");
         int cells = SIZE / sampleStep;
         if (heights.length != cells * cells || materials.length != heights.length || waterTops.length != heights.length)
@@ -41,6 +54,8 @@ public final class FarTerrainTile {
         this.heights = heights;
         this.materials = materials;
         this.waterTops = waterTops;
+        if (tints.length != heights.length) throw new IllegalArgumentException("Invalid tint grid");
+        this.tints = tints;
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int index = 0; index < heights.length; index++) {
             int top = Math.max(heights[index], waterTops[index]);
@@ -97,6 +112,10 @@ public final class FarTerrainTile {
         return waterTops[index(cellX, cellZ)];
     }
 
+    public int tintAt(int x, int z) {
+        return tints[index(x, z)];
+    }
+
     /** Lowest surface or water top in the tile, or {@link Integer#MAX_VALUE} when no cell has either. */
     public int minHeight() {
         return minHeight;
@@ -107,7 +126,7 @@ public final class FarTerrainTile {
     }
 
     public long estimatedBytes() {
-        return (long) heights.length * (2 * Integer.BYTES + 1);
+        return (long) heights.length * (2 * Integer.BYTES + 2);
     }
 
     private int index(int cellX, int cellZ) {

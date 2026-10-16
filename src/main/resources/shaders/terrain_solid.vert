@@ -17,6 +17,7 @@ uniform vec3 uCameraFraction;
 
 out vec2 vUv;
 flat out float vLayer;
+flat out float vTint;
 out float vShade;
 flat out vec2 vFlow;
 out vec3 vCameraOffset;
@@ -57,7 +58,8 @@ void main() {
         vUv = vec2(right ? 1.0 : 0.0, float(1 - top));
         vShade = 1.0;
     }
-    vLayer = float(material & 0xFFFFu);
+    vLayer = float(material & 255u);
+    vTint = float((material >> 8) & 31u);
     vFlow = vec2(0.0);
     vec3 chunkOrigin = vec3(chunks[gl_BaseInstance].xyz * 16 - uCameraBlock) - uCameraFraction;
     vCameraOffset = chunkOrigin + local;

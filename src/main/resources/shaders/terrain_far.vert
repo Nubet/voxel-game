@@ -16,6 +16,7 @@ uniform vec3 uCameraFraction;
 
 out vec2 vUv;
 flat out float vLayer;
+flat out float vTint;
 out float vShade;
 flat out vec2 vFlow;
 out vec3 vCameraOffset;
@@ -44,7 +45,8 @@ void main() {
     ivec3 local = base + (alongV ? FACE_V[face] * height : ivec3(0)) + (alongU ? FACE_U[face] * width : ivec3(0));
     vUv = vec2(alongU ? width : 0, alongV ? height : 0);
     vShade = SHADE[face];
-    vLayer = float(extent >> 16);
+    vLayer = float((extent >> 16) & 255u);
+    vTint = float((extent >> 24) & 31u);
     vFlow = vec2(0.0);
     ivec3 origin = chunks[gl_BaseInstance].xyz * 16 - uCameraBlock;
     // The world y can be far from the camera; subtracting as integers first keeps it exact.

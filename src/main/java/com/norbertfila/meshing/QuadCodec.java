@@ -97,7 +97,7 @@ public final class QuadCodec {
         int face = position >>> 15 & 7;
         int width = (position >>> 18 & 15) + 1, height = (position >>> 22 & 15) + 1;
         boolean back = (position >>> 26 & 1) != 0;
-        int texture = material & 0xFFFF;
+        int texture = material & 0xFF;
         byte block = (byte) (material >>> 16);
         float px, py, pz, u, v, shade;
         if (face < CROSS_PLANE_A) {
@@ -133,6 +133,9 @@ public final class QuadCodec {
         out[o + 2] = pz;
         if (colored) {
             float[] color = VisibleFaceMesher.color(block, face < CROSS_PLANE_A ? face : 2);
+            if (com.norbertfila.generation.biome.BiomeTint.tintedTexture(texture) && texture != 3)
+                color = com.norbertfila.generation.biome.BiomeTint.color(
+                        material >>> 8 & 31, com.norbertfila.generation.biome.BiomeTint.foliageTexture(texture));
             out[o + 3] = color[0] * shade;
             out[o + 4] = color[1] * shade;
             out[o + 5] = color[2] * shade;

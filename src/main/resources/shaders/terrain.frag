@@ -2,6 +2,7 @@
 
 in vec2 vUv;
 flat in float vLayer;
+flat in float vTint;
 in float vShade;
 flat in vec2 vFlow;
 in vec3 vCameraOffset;
@@ -21,6 +22,17 @@ uniform int uCoverageSize;
 
 out vec4 fragColor;
 
+vec3 biomeTint(bool foliage) {
+    int index = int(vTint);
+    int style = index / 8;
+    vec3 base = foliage ? vec3(.3, .55, .22) : vec3(.32, .69, .22);
+    vec3 target = base;
+    if (style == 1) target = foliage ? vec3(.55, .5, .18) : vec3(.82, .72, .38);
+    if (style == 2) target = foliage ? vec3(.22, .45, .18) : vec3(.38, .62, .32);
+    if (style == 3) target = foliage ? vec3(.2, .42, .16) : vec3(.24, .48, .18);
+    return mix(base, target, float(index % 8) / 7.0);
+}
+
 void main() {
     if (uCoverageSize > 0) {
         ivec2 column = ivec2(floor((vCameraOffset.xz - uCoverageOrigin) / 16.0));
@@ -31,6 +43,12 @@ void main() {
     }
     vec2 uv = vUv - (uRenderLayer == 2 ? vFlow * uWaterTime * 0.25 : vec2(0.0));
     vec4 texel = texture(uBlockTextures, vec3(uv, vLayer));
+    bool foliage = vLayer == 11.0 || vLayer == 45.0 || vLayer == 48.0;
+    if (vLayer == 1.0 || foliage) texel.rgb *= biomeTint(foliage);
+    if (vLayer == 3.0) {
+        vec4 overlay = texture(uBlockTextures, vec3(uv, 49.0));
+        texel.rgb = mix(texel.rgb, overlay.rgb * biomeTint(false), overlay.a);
+    }
     if (uRenderLayer == 1 && texel.a < 0.5) discard;
     fragColor = vec4(texel.rgb * vShade, uRenderLayer == 2 ? 0.55 : 1.0);
     if (uWaterFog.a > 0.0) {
