@@ -52,6 +52,14 @@ tasks.register<JavaExec>("smokeClouds") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("debugBiomes") {
+    group = "verification"
+    description = "Writes a biome debug map to build/biome-debug/biomes.png."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.BiomeDebugMap")
+}
+
 tasks.register<JavaExec>("smokeTerrainPasses") {
     group = "verification"
     description = "Checks split terrain passes against the combined renderer on OpenGL."

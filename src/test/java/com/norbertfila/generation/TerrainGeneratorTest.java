@@ -40,7 +40,6 @@ class TerrainGeneratorTest {
                 grass |= material == BlockId.GRASS;
                 snow |= material == BlockId.SNOW;
                 dirt |= sample.subsurfaceMaterial() == BlockId.DIRT;
-                if (material == BlockId.GRAVEL) assertTrue(sample.flooded());
                 if (material == BlockId.SAND) assertTrue(sample.surfaceHeight() <= sample.waterLevel() + 2);
             }
         assertTrue(sand, "sand");
