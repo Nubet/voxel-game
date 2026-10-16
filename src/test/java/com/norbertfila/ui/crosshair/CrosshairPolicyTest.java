@@ -31,6 +31,11 @@ class CrosshairPolicyTest {
                 CrosshairPolicy.select(new CrosshairSettings(false, true, true, 1, 100), distant));
         assertEquals(
                 CrosshairStyle.DEFAULT,
+                CrosshairPolicy.select(
+                        new CrosshairSettings(false, true, true, 1, 100),
+                        targeting.find(Mode.SURVIVAL, 1.5, 1.5, 1.5, 1, 0, 0)));
+        assertEquals(
+                CrosshairStyle.DEFAULT,
                 CrosshairPolicy.select(new CrosshairSettings(true, false, true, 1, 100), distant));
     }
 

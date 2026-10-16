@@ -15,6 +15,7 @@ class CrosshairSettingsScreenTest {
         var settings = new GameSettings();
         var screen = new CrosshairSettingsScreen(settings);
         screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.NEXT);
         screen.keyPress(UiKey.ACTIVATE);
         assertFalse(settings.crosshair().hideWithoutTarget());
         screen.keyPress(UiKey.NEXT);
@@ -48,6 +49,7 @@ class CrosshairSettingsScreenTest {
         assertEquals(Screen.Action.NONE, screen.updatePointer(false, false, button.x() + 1, button.y() + 1));
         screen.layout(viewport);
         screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.NEXT);
         screen.keyPress(UiKey.ACTIVATE);
         assertFalse(settings.crosshair().hideWithoutTarget());
         assertEquals(Screen.Action.NONE, screen.keyPress(UiKey.BACK));
@@ -78,5 +80,26 @@ class CrosshairSettingsScreenTest {
         screen.updatePointer(true, true, x, y);
         screen.updatePointer(false, false, x, y);
         assertFalse(settings.crosshair().hideWithoutTarget());
+    }
+
+    @Test
+    void dynamicIsOnByDefaultAndCanBeToggledWithKeyboardAndPointer() {
+        var settings = new GameSettings();
+        assertTrue(settings.crosshair().dynamic());
+        var screen = new CrosshairSettingsScreen(settings);
+        var viewport = new UiViewport(640, 480, 640, 480, 1);
+        screen.layout(viewport);
+        screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.ACTIVATE);
+        assertEquals(new CrosshairSettings(false, true, true, 1, 100), settings.crosshair());
+        assertEquals(
+                com.norbertfila.ui.crosshair.CrosshairStyle.DEFAULT,
+                com.norbertfila.ui.crosshair.CrosshairPolicy.select(settings.crosshair(), java.util.Optional.empty()));
+        int x = (640 - 304) / 2 + 215, y = (480 - 240) / 2 + 29;
+        screen.updatePointer(false, false, x, y);
+        screen.updatePointer(true, true, x, y);
+        assertFalse(settings.crosshair().dynamic());
+        screen.updatePointer(false, false, x, y);
+        assertEquals(CrosshairSettings.DEFAULT, settings.crosshair());
     }
 }

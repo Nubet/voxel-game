@@ -14,6 +14,7 @@ public final class CrosshairSettingsScreen implements Screen {
     private final GameSettings settings;
     private final Translations translations;
     private final CrosshairRenderer renderer = new CrosshairRenderer();
+    private final Button dynamic = new Button(new UiBounds(212, 26, 80, 20), "");
     private final Button hide = new Button(new UiBounds(212, 52, 80, 20), "");
     private final Button smooth = new Button(new UiBounds(212, 78, 80, 20), "");
     private final Slider scale =
@@ -36,14 +37,16 @@ public final class CrosshairSettingsScreen implements Screen {
         if (!down) pointerReady = true;
         if (!pointerReady) return Action.NONE;
         if (pressed) {
-            if (hide.bounds().contains(cursorX, cursorY)) focus(0);
-            else if (smooth.bounds().contains(cursorX, cursorY)) focus(1);
-            else if (scale.bounds().contains(cursorX, cursorY)) focus(2);
-            else if (opacity.bounds().contains(cursorX, cursorY)) focus(3);
-            else if (preview.bounds().contains(cursorX, cursorY)) focus(4);
-            else if (back.bounds().contains(cursorX, cursorY)) focus(5);
+            if (dynamic.bounds().contains(cursorX, cursorY)) focus(0);
+            else if (hide.bounds().contains(cursorX, cursorY)) focus(1);
+            else if (smooth.bounds().contains(cursorX, cursorY)) focus(2);
+            else if (scale.bounds().contains(cursorX, cursorY)) focus(3);
+            else if (opacity.bounds().contains(cursorX, cursorY)) focus(4);
+            else if (preview.bounds().contains(cursorX, cursorY)) focus(5);
+            else if (back.bounds().contains(cursorX, cursorY)) focus(6);
             else focus(-1);
         }
+        if (dynamic.updatePointer(down, pressed, cursorX, cursorY)) toggleDynamic();
         if (hide.updatePointer(down, pressed, cursorX, cursorY)) toggleHide();
         if (smooth.updatePointer(down, pressed, cursorX, cursorY)) toggleSmooth();
         boolean changed = scale.updatePointer(down, pressed, cursorX, cursorY);
@@ -60,32 +63,41 @@ public final class CrosshairSettingsScreen implements Screen {
         sync();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
             int direction = key == UiKey.NEXT ? 1 : -1;
-            int current = focus < 0 ? (direction > 0 ? -1 : 6) : focus;
-            focus(Math.floorMod(current + direction, 6));
+            int current = focus < 0 ? (direction > 0 ? -1 : 7) : focus;
+            focus(Math.floorMod(current + direction, 7));
         } else {
             switch (focus) {
                 case 0 -> {
-                    if (hide.keyPress(key)) toggleHide();
+                    if (dynamic.keyPress(key)) toggleDynamic();
                 }
                 case 1 -> {
-                    if (smooth.keyPress(key)) toggleSmooth();
+                    if (hide.keyPress(key)) toggleHide();
                 }
                 case 2 -> {
-                    if (scale.keyPress(key)) applySliders();
+                    if (smooth.keyPress(key)) toggleSmooth();
                 }
                 case 3 -> {
-                    if (opacity.keyPress(key)) applySliders();
+                    if (scale.keyPress(key)) applySliders();
                 }
                 case 4 -> {
-                    if (preview.keyPress(key)) cyclePreview();
+                    if (opacity.keyPress(key)) applySliders();
                 }
                 case 5 -> {
+                    if (preview.keyPress(key)) cyclePreview();
+                }
+                case 6 -> {
                     if (back.keyPress(key)) return Action.CLOSE;
                 }
                 default -> {}
             }
         }
         return Action.NONE;
+    }
+
+    private void toggleDynamic() {
+        var c = settings.crosshair();
+        settings.setCrosshair(
+                new CrosshairSettings(!c.dynamic(), c.hideWithoutTarget(), c.smooth(), c.scale(), c.opacity()));
     }
 
     private void toggleHide() {
@@ -114,6 +126,7 @@ public final class CrosshairSettingsScreen implements Screen {
         var c = settings.crosshair();
         scale.setValue(c.scale());
         opacity.setValue(c.opacity());
+        dynamic.setLabel(translations.text(c.dynamic() ? "crosshair.on" : "crosshair.off"));
         hide.setLabel(translations.text(c.hideWithoutTarget() ? "crosshair.on" : "crosshair.off"));
         smooth.setLabel(translations.text(c.smooth() ? "crosshair.on" : "crosshair.off"));
         preview.setLabel(translations.text(
@@ -123,18 +136,20 @@ public final class CrosshairSettingsScreen implements Screen {
 
     private void focus(int index) {
         focus = index;
-        hide.setFocused(index == 0);
-        smooth.setFocused(index == 1);
-        scale.setFocused(index == 2);
-        opacity.setFocused(index == 3);
-        preview.setFocused(index == 4);
-        back.setFocused(index == 5);
+        dynamic.setFocused(index == 0);
+        hide.setFocused(index == 1);
+        smooth.setFocused(index == 2);
+        scale.setFocused(index == 3);
+        opacity.setFocused(index == 4);
+        preview.setFocused(index == 5);
+        back.setFocused(index == 6);
     }
 
     @Override
     public void cancelInteraction() {
         focus = -1;
         pointerReady = false;
+        dynamic.cancelInteraction();
         hide.cancelInteraction();
         smooth.cancelInteraction();
         scale.cancelInteraction();
@@ -150,6 +165,7 @@ public final class CrosshairSettingsScreen implements Screen {
         if (x != nextX || y != nextY) cancelInteraction();
         x = nextX;
         y = nextY;
+        dynamic.setPosition(x + 212, y + 26);
         hide.setPosition(x + 212, y + 52);
         smooth.setPosition(x + 212, y + 78);
         scale.setPosition(x + 148, y + 116);
@@ -164,6 +180,7 @@ public final class CrosshairSettingsScreen implements Screen {
         sync();
         canvas.rectangle(x, y, WIDTH, HEIGHT, .06f, .08f, .11f, .94f);
         label(canvas, "crosshair.title", 8);
+        label(canvas, "crosshair.dynamic", 32);
         label(canvas, "crosshair.hide", 58);
         label(canvas, "crosshair.smooth", 84);
         canvas.textWithShadow(
@@ -179,6 +196,7 @@ public final class CrosshairSettingsScreen implements Screen {
                 1);
         label(canvas, "crosshair.preview", 176);
         renderer.renderAt(canvas, x + 166, y + 200, PREVIEWS[previewIndex], settings.crosshair(), 1);
+        dynamic.render(canvas, BitmapFont.DEFAULT);
         hide.render(canvas, BitmapFont.DEFAULT);
         smooth.render(canvas, BitmapFont.DEFAULT);
         scale.render(canvas);
