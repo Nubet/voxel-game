@@ -25,7 +25,7 @@ final class CloudMesh {
                 while (x < pattern.size() && pattern.filled(x, z)) x++;
                 float left = start * cellSize, right = x * cellSize;
                 float back = z * cellSize, front = back + cellSize;
-                mesh.quad(left, 0, back, right, 0, back, right, 0, front, left, 0, front, .82f);
+                mesh.quad(left, 0, back, right, 0, back, right, 0, front, left, 0, front, .86f);
                 mesh.quad(
                         left, thickness, back, right, thickness, back, right, thickness, front, left, thickness, front,
                         1);
@@ -35,13 +35,13 @@ final class CloudMesh {
                 float left = x * cellSize, right = left + cellSize;
                 float back = z * cellSize, front = back + cellSize;
                 if (!pattern.filled(x - 1, z))
-                    mesh.quad(left, 0, back, left, 0, front, left, thickness, front, left, thickness, back, .9f);
+                    mesh.quad(left, 0, back, left, 0, front, left, thickness, front, left, thickness, back, .8f);
                 if (!pattern.filled(x + 1, z))
-                    mesh.quad(right, 0, back, right, 0, front, right, thickness, front, right, thickness, back, .9f);
+                    mesh.quad(right, 0, back, right, 0, front, right, thickness, front, right, thickness, back, .92f);
                 if (!pattern.filled(x, z - 1))
-                    mesh.quad(left, 0, back, right, 0, back, right, thickness, back, left, thickness, back, .94f);
+                    mesh.quad(left, 0, back, right, 0, back, right, thickness, back, left, thickness, back, .84f);
                 if (!pattern.filled(x, z + 1))
-                    mesh.quad(left, 0, front, right, 0, front, right, thickness, front, left, thickness, front, .94f);
+                    mesh.quad(left, 0, front, right, 0, front, right, thickness, front, left, thickness, front, .96f);
             }
         }
         return Arrays.copyOf(mesh.vertices, mesh.size);

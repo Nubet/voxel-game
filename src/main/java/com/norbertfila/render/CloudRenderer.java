@@ -10,7 +10,8 @@ import org.lwjgl.system.MemoryUtil;
 
 public final class CloudRenderer implements AutoCloseable {
     static final float HEIGHT = 192;
-    static final float CELL_SIZE = 16;
+    static final float CELL_SIZE = 12;
+    static final float THICKNESS = 5;
     static final float RADIUS = 704;
     static final double SPEED = .6;
     private final int program;
@@ -73,7 +74,7 @@ public final class CloudRenderer implements AutoCloseable {
             } finally {
                 MemoryUtil.memFree(pixels);
             }
-            float[] mesh = CloudMesh.build(pattern, CELL_SIZE, 4);
+            float[] mesh = CloudMesh.build(pattern, CELL_SIZE, THICKNESS);
             meshVertices = mesh.length / 4;
             createdMesh = glGenBuffers();
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, createdMesh);

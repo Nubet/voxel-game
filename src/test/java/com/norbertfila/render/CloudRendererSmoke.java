@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.assets.CloudPattern;
 import com.norbertfila.platform.Window;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
@@ -18,6 +19,7 @@ public final class CloudRendererSmoke {
         try (Window window = new Window(SIZE, SIZE, "Cloud regression");
                 CloudRenderer clouds = new CloudRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
+            double period = CloudPattern.loadDefault().size() * (double) CloudRenderer.CELL_SIZE;
             Matrix4f vp = new Matrix4f().ortho(-256, 256, -256, 256, .1f, 800).lookAt(0, 0, 0, 0, 1, 0, 0, 0, -1);
             clear(1);
             clouds.render(vp, 0, 64, 0, 0, 0);
@@ -33,7 +35,7 @@ public final class CloudRendererSmoke {
                     glGetBoolean(GL_DEPTH_WRITEMASK) && !glIsEnabled(GL_BLEND) && glIsEnabled(GL_CULL_FACE),
                     "Leaked render state");
             clear(1);
-            clouds.render(vp, 1024.0 * 1_000_000, 64, -1024.0 * 1_000_000, 0, 0);
+            clouds.render(vp, period * 1_000_000, 64, -period * 1_000_000, 0, 0);
             check(reference.equals(capture()), "Large coordinates changed the pattern");
             clear(0);
             ByteBuffer occluded = capture();
@@ -60,7 +62,7 @@ public final class CloudRendererSmoke {
             check(!disabled.equals(fancy) && !reference.equals(fancy), "Fancy clouds not visible");
             write(fancy, "fancy-clouds-below");
             clear(1);
-            clouds.render(vp, 1024.0 * 1_000_000, 64, -1024.0 * 1_000_000, 0, 0, CloudMode.FANCY);
+            clouds.render(vp, period * 1_000_000, 64, -period * 1_000_000, 0, 0, CloudMode.FANCY);
             check(fancy.equals(capture()), "Large coordinates changed fancy clouds");
             clear(0);
             clouds.render(vp, 0, 64, 0, 0, 0, CloudMode.FANCY);
@@ -78,6 +80,15 @@ public final class CloudRendererSmoke {
             clouds.render(side, 0, 180, 0, 0, 0, CloudMode.FANCY);
             check(!disabled.equals(capture()), "Fancy cloud sides invisible");
             write(capture(), "fancy-clouds-side");
+            Matrix4f sky = new Matrix4f()
+                    .perspective((float) Math.toRadians(70), 1, .1f, 1600)
+                    .lookAt(0, 0, 0, 0, .35f, -1, 0, 1, 0);
+            for (CloudMode mode : new CloudMode[] {CloudMode.FAST, CloudMode.FANCY}) {
+                glClearColor(.55f, .76f, .96f, 1);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                clouds.render(sky, 0, 64, 0, 0, 0, mode);
+                write(capture(), mode == CloudMode.FAST ? "fast-clouds-sky" : "fancy-clouds-sky");
+            }
             check(glGetBoolean(GL_DEPTH_WRITEMASK) && !glIsEnabled(GL_BLEND), "Fancy state leak");
             check(glGetError() == GL_NO_ERROR, "Cloud GL error");
             System.out.println("PASS cloud mask, large coordinates, depth occlusion and GL state; GPU="
