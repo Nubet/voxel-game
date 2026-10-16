@@ -1,5 +1,7 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 
@@ -10,20 +12,49 @@ public record TerrainSummary(
         byte subsurfaceMaterial,
         byte deepMaterial,
         int bedrockHeight,
-        int waterLevel) {
+        int waterLevel,
+        BiomeType biome,
+        ClimateSample climate) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
 
     public TerrainSummary(
             int surfaceHeight, byte surfaceMaterial, byte subsurfaceMaterial, byte deepMaterial, int bedrockHeight) {
-        this(surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, bedrockHeight, NO_WATER);
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                NO_WATER,
+                BiomeType.PLAINS,
+                new ClimateSample(0, 0));
     }
 
     public TerrainSummary(int surfaceHeight, byte surfaceMaterial, byte subsurfaceMaterial, byte deepMaterial) {
         this(surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, NO_BEDROCK);
     }
 
+    public TerrainSummary(
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel) {
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                BiomeType.PLAINS,
+                new ClimateSample(0, 0));
+    }
+
     public TerrainSummary {
+        if (biome == null || climate == null) throw new NullPointerException("Biome data cannot be null");
         if (!BlockId.isValid(surfaceMaterial)
                 || !BlockId.isValid(subsurfaceMaterial)
                 || !BlockId.isValid(deepMaterial)

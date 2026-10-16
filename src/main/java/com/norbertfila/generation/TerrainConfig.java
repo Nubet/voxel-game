@@ -10,13 +10,17 @@ public record TerrainConfig(
         Layer details,
         Mountains mountains,
         Layer warp,
-        int waterLevel) {
+        int waterLevel,
+        Layer temperature,
+        Layer humidity) {
     public TerrainConfig {
         Objects.requireNonNull(continental);
         Objects.requireNonNull(hills);
         Objects.requireNonNull(details);
         Objects.requireNonNull(mountains);
         Objects.requireNonNull(warp);
+        Objects.requireNonNull(temperature);
+        Objects.requireNonNull(humidity);
         if (waterLevel < Integer.MIN_VALUE + Chunk.SIZE || waterLevel > Integer.MAX_VALUE - 2 * Chunk.SIZE)
             throw new IllegalArgumentException("Water level exceeds supported world coordinates");
         double amplitude = continental.amplitude() + hills.amplitude() + details.amplitude();
@@ -25,7 +29,15 @@ public record TerrainConfig(
             throw new IllegalArgumentException("Terrain height range exceeds supported world coordinates");
         double coordinateBound = 0x1p31 + warp.amplitude();
         for (Layer layer : new Layer[] {
-            continental, hills, details, mountains.region(), mountains.ridge(), mountains.ranges(), warp
+            continental,
+            hills,
+            details,
+            mountains.region(),
+            mountains.ridge(),
+            mountains.ranges(),
+            warp,
+            temperature,
+            humidity
         }) {
             double frequency = FractalNoise.validateParameters(
                     layer.frequency(), layer.octaves(), layer.persistence(), layer.lacunarity());
@@ -36,8 +48,36 @@ public record TerrainConfig(
 
     public TerrainConfig(
             int baseHeight, Layer continental, Layer hills, Layer details, Mountains mountains, Layer warp) {
-        this(baseHeight, continental, hills, details, mountains, warp, (int)
-                Math.max(Integer.MIN_VALUE, (long) baseHeight - 4));
+        this(
+                baseHeight,
+                continental,
+                hills,
+                details,
+                mountains,
+                warp,
+                (int) Math.max(Integer.MIN_VALUE, (long) baseHeight - 4),
+                defaultTemperature(),
+                defaultHumidity());
+    }
+
+    public TerrainConfig(
+            int baseHeight,
+            Layer continental,
+            Layer hills,
+            Layer details,
+            Mountains mountains,
+            Layer warp,
+            int waterLevel) {
+        this(
+                baseHeight,
+                continental,
+                hills,
+                details,
+                mountains,
+                warp,
+                waterLevel,
+                defaultTemperature(),
+                defaultHumidity());
     }
 
     public TerrainConfig(int baseHeight, Layer continental, Layer hills, Layer details, Mountains mountains) {
@@ -68,7 +108,10 @@ public record TerrainConfig(
                         3,
                         1.25,
                         true),
-                new Layer(.003, 3, .5, 2, 140));
+                new Layer(.003, 3, .5, 2, 140),
+                28,
+                defaultTemperature(),
+                defaultHumidity());
     }
 
     public static TerrainConfig classic() {
@@ -77,7 +120,11 @@ public record TerrainConfig(
                 new Layer(.002, 4, .5, 2, 25),
                 new Layer(.012, 3, .5, 2, 12),
                 new Layer(.06, 2, .5, 2, 3),
-                new Mountains(new Layer(.0008, 2, .5, 2, 1), new Layer(.007, 4, .5, 2, 75), .56, .66));
+                new Mountains(new Layer(.0008, 2, .5, 2, 1), new Layer(.007, 4, .5, 2, 75), .56, .66),
+                new Layer(.003, 3, .5, 2, 0),
+                28,
+                defaultTemperature(),
+                defaultHumidity());
     }
 
     public TerrainConfig withoutWarp() {
@@ -88,7 +135,9 @@ public record TerrainConfig(
                 details,
                 mountains,
                 new Layer(warp.frequency(), warp.octaves(), warp.persistence(), warp.lacunarity(), 0),
-                waterLevel);
+                waterLevel,
+                temperature,
+                humidity);
     }
 
     public TerrainConfig withoutMountains() {
@@ -108,7 +157,17 @@ public record TerrainConfig(
                         mountains.rangeExponent(),
                         mountains.perOctaveRidges()),
                 warp,
-                waterLevel);
+                waterLevel,
+                temperature,
+                humidity);
+    }
+
+    private static Layer defaultTemperature() {
+        return new Layer(.0012, 4, .5, 2, 1);
+    }
+
+    private static Layer defaultHumidity() {
+        return new Layer(.0015, 4, .5, 2, 1);
     }
 
     public int minHeight() {
@@ -163,7 +222,7 @@ public record TerrainConfig(
                 throw new IllegalArgumentException("Terrain amplitude must be finite and nonnegative");
         }
 
-        Noise2D fractal(Noise2D noise) {
+        public Noise2D fractal(Noise2D noise) {
             return new FractalNoise(noise, frequency, octaves, persistence, lacunarity);
         }
     }

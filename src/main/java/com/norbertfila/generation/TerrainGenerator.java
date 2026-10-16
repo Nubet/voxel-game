@@ -1,5 +1,13 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BiomeProfile;
+import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.generation.biome.BiomeResolver;
+import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.generation.biome.ClimateNoise;
+import com.norbertfila.generation.biome.ClimateSample;
+import com.norbertfila.generation.biome.SurfaceMaterialMapper;
+import com.norbertfila.generation.biome.SurfaceMaterialResolver;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -23,6 +31,10 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D ranges;
     private final Noise2D warpX;
     private final Noise2D warpZ;
+    private final ClimateNoise climate;
+    private final BiomeResolver biomeResolver = new BiomeResolver();
+    private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
+    private final SurfaceMaterialResolver surfaceMaterials = new SurfaceMaterialResolver(new SurfaceMaterialMapper());
     private final TreeGenerator trees;
     private final VegetationGenerator vegetation;
     private final GenerationCache<TerrainColumn> columns = new GenerationCache<>(COLUMN_CACHE_CAPACITY);
@@ -56,6 +68,7 @@ public final class TerrainGenerator implements TerrainSource {
         ranges = config.mountains().ranges().fractal((x, z) -> noise.sample(x - 73.3, z + 29.9));
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
+        climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this);
         vegetation = new VegetationGenerator(seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity);
         cavePlanner = new CavePlanner(seed, config.minHeight() - 1, this::surfaceHeight);
@@ -100,37 +113,27 @@ public final class TerrainGenerator implements TerrainSource {
                 + mountainHeight(x, z);
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
-        double biome = config.continental().amplitude() == 0
-                ? 0
-                : continentalLayer / config.continental().amplitude();
-        return new ColumnSample(height, biome);
+        ClimateSample climateSample = climate.sample(x, z);
+        BiomeType biome = biomeResolver.resolve(climateSample);
+        return new ColumnSample(height, climateSample, biome, biomeRegistry.profile(biome));
     }
 
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
-        long waterDepth = (long) config.waterLevel() - height;
-        byte surface = BlockId.GRASS;
-        if (waterDepth > 3) surface = BlockId.GRAVEL;
-        else if (waterDepth >= -1 || height >= (long) config.baseHeight() + 24) {
-            double slope = surfaceSlope(worldX, worldZ, column.elevation());
-            if (waterDepth > 0) surface = slope <= 1.5 ? BlockId.SAND : BlockId.GRAVEL;
-            else if (slope > 1.5 + .5 * column.biome()) surface = BlockId.STONE;
-            else if (column.elevation() >= (long) config.baseHeight() + 70 + 12 * column.biome() && slope <= 1.25)
-                surface = BlockId.SNOW;
-            else if (column.elevation() >= (long) config.baseHeight() + 40 + 8 * column.biome())
-                surface = BlockId.STONE;
-            else if (column.elevation() <= config.waterLevel() + 1.35 + .35 * column.biome() && slope <= 1.5)
-                surface = BlockId.SAND;
-        }
-        byte subsurface = switch (surface) {
-            case BlockId.SAND, BlockId.GRAVEL, BlockId.STONE -> surface;
-            case BlockId.SNOW -> BlockId.STONE;
-            default -> BlockId.DIRT;
-        };
+        double slope = surfaceSlope(worldX, worldZ, column.elevation());
+        var materials = surfaceMaterials.resolve(
+                height, slope, config.waterLevel(), config.baseHeight(), column.climate(), column.profile());
         return new TerrainSummary(
-                height, surface, subsurface, BlockId.STONE, config.minHeight() - 1, config.waterLevel());
+                height,
+                materials.surface(),
+                materials.subsurface(),
+                BlockId.STONE,
+                config.minHeight() - 1,
+                config.waterLevel(),
+                column.biome(),
+                column.climate());
     }
 
     private double surfaceSlope(int worldX, int worldZ, double elevation) {
@@ -265,5 +268,5 @@ public final class TerrainGenerator implements TerrainSource {
         return origin;
     }
 
-    private record ColumnSample(double elevation, double biome) {}
+    private record ColumnSample(double elevation, ClimateSample climate, BiomeType biome, BiomeProfile profile) {}
 }
