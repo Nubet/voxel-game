@@ -9,7 +9,7 @@ public final class UiAtlas {
     public static final int HEIGHT = 256;
     public static final int ITEM_Y = 128;
     public static final int ITEM_SIZE = 16;
-    public static final int LAST_ITEM = 21;
+    public static final int LAST_ITEM = 22;
     public static final Region HOTBAR = new Region(0, 176, 182, 22);
     public static final Region SELECTION = new Region(0, 200, 24, 23);
     public static final Region CROSSHAIR = new Region(32, 200, 15, 15);

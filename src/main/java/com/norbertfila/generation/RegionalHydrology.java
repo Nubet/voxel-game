@@ -33,6 +33,10 @@ final class RegionalHydrology {
             Sample candidate = reach.sample(x, z, ground, seaLevel);
             if (candidate != null && (result == null || candidate.proximity() < result.proximity())) result = candidate;
         }
+        for (Lake lake : plan.lakes()) {
+            Sample candidate = lake.sample(x, z, ground);
+            if (candidate != null && (result == null || result.kind() != WaterKind.RIVER)) result = candidate;
+        }
         return result == null ? new Sample(ground, seaLevel, WaterKind.OCEAN, Double.POSITIVE_INFINITY) : result;
     }
 
@@ -63,16 +67,31 @@ final class RegionalHydrology {
 
     private Plan plan(int rx, int rz) {
         List<Reach> reaches = new ArrayList<>();
+        List<Lake> lakes = new ArrayList<>();
         for (int cz = rz * 4 - 1; cz <= rz * 4 + 4; cz++)
             for (int cx = rx * 4 - 1; cx <= rx * 4 + 4; cx++) {
                 Node source = node(cx, cz);
                 if (source.level() <= seaLevel) continue;
                 Node target = downstream(source);
-                if (target == null) continue;
                 int incoming = 0;
                 for (int[] d : DIRECTIONS) {
                     Node neighbor = node(cx + d[0], cz + d[1]);
                     if (source.equals(downstream(neighbor))) incoming++;
+                }
+                if (target == null) {
+                    if (incoming > 0) {
+                        long hash = GenerationHash.hash(seed ^ 0xBB67AE8584CAA73BL, cx, cz);
+                        double radius = 28 + 68 * unit(hash);
+                        lakes.add(new Lake(
+                                source.x(),
+                                source.z(),
+                                source.level(),
+                                radius,
+                                radius * (.55 + .4 * unit(Long.rotateLeft(hash, 23))),
+                                4 + 8 * unit(Long.rotateLeft(hash, 41)),
+                                unit(Long.rotateLeft(hash, 11)) * Math.PI * 2));
+                    }
+                    continue;
                 }
                 double width = 3 + 1.5 * incoming;
                 double length = Math.hypot(target.x() - source.x(), target.z() - source.z());
@@ -115,7 +134,7 @@ final class RegionalHydrology {
             for (int z = minZ; z <= maxZ; z++)
                 for (int x = minX; x <= maxX; x++) tiles.get(z * TILES + x).add(reach);
         }
-        return new Plan(tiles.stream().map(List::copyOf).toList());
+        return new Plan(tiles.stream().map(List::copyOf).toList(), List.copyOf(lakes));
     }
 
     private static double unit(long hash) {
@@ -131,7 +150,21 @@ final class RegionalHydrology {
 
     record Sample(double height, int waterLevel, WaterKind kind, double proximity) {}
 
-    private record Plan(List<List<Reach>> tiles) {}
+    private record Plan(List<List<Reach>> tiles, List<Lake> lakes) {}
+
+    private record Lake(double x, double z, int level, double radiusX, double radiusZ, double depth, double phase) {
+        Sample sample(double wx, double wz, double ground) {
+            double dx = (wx - x) / radiusX, dz = (wz - z) / radiusZ;
+            double angle = Math.atan2(dz, dx);
+            double radius =
+                    Math.hypot(dx, dz) / (1 + .12 * Math.sin(angle * 3 + phase) + .06 * Math.sin(angle * 5 - phase));
+            if (radius >= 1.3) return null;
+            double height = radius <= 1
+                    ? level - depth + (depth + 2) * smooth(radius)
+                    : level + 2 + (ground - level - 2) * smooth((radius - 1) / .3);
+            return new Sample(height, level, WaterKind.LAKE, radius);
+        }
+    }
 
     private record Reach(
             double ax,

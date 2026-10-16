@@ -22,12 +22,13 @@ class WaterGenerationTest {
                 assertEquals(height, sample.surfaceHeight());
                 assertEquals(level, sample.waterLevel());
                 assertEquals(height < level, sample.flooded());
-                assertEquals(BlockId.SAND, block(generator, x, height, z));
+                assertEquals(sample.surfaceMaterial(), block(generator, x, height, z));
                 assertEquals(BlockId.BEDROCK, block(generator, x, height - 1, z));
                 assertEquals(BlockId.AIR, block(generator, x, height - 2, z));
                 for (int y = height + 1; y <= Math.max(height, level) + 1; y++) {
                     byte expected = y <= level ? BlockId.WATER : BlockId.AIR;
-                    assertEquals(expected, block(generator, x, y, z));
+                    byte actual = block(generator, x, y, z);
+                    assertTrue(actual == expected || expected == BlockId.AIR && PlantRules.isPlant(actual));
                     assertEquals(expected, sample.materialAt(y));
                 }
             }
@@ -55,7 +56,8 @@ class WaterGenerationTest {
         for (int z = 0; z < tile.cells(); z++)
             for (int x = 0; x < tile.cells(); x++) {
                 assertEquals(15, tile.heightAt(x, z));
-                assertEquals(BlockId.SAND, tile.materialAt(x, z));
+                assertEquals(
+                        generator.sample(-64 + x * 4 + 2, -64 + z * 4 + 2).surfaceMaterial(), tile.materialAt(x, z));
                 assertEquals(17, tile.waterTopAt(x, z));
             }
         TerrainSummary dry = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);

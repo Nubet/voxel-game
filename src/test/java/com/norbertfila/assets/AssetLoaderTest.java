@@ -44,7 +44,7 @@ class AssetLoaderTest {
     @Test
     void loadsAllDefaultImagesInRegistryLayerOrderAsIndependentRgba() {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
-        assertEquals(24, textures.layerCount());
+        assertEquals(BlockRegistry.DEFAULT.textureLayers().size(), textures.layerCount());
         for (TextureSet.Texture texture : textures.layers()) {
             assertEquals(16, texture.width());
             assertEquals(16, texture.height());

@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ShoreMaterialTest {
     @ParameterizedTest
     @CsvSource({
-        "32,-3,0,GRASS", "32,-2,0,GRASS", "30,-2,0,GRASS", "32,-1,0,SAND",
+        "32,-3,0,GRASS", "32,-2,0,GRASS", "30,-2,0,GRASS", "32,-1,0,GRASS",
         "32,0,1.5,SAND", "32,0,1.51,STONE", "32,1,0,SAND", "32,3,0,SAND",
         "32,4,0,GRAVEL", "32,1,2,GRAVEL", "32,-1,2,STONE"
     })

@@ -1,5 +1,7 @@
 package com.norbertfila.generation.biome;
 
+import com.norbertfila.generation.WaterKind;
+
 public final class SurfaceMaterialResolver {
     private final SurfaceMaterialMapper materials;
 
@@ -9,14 +11,41 @@ public final class SurfaceMaterialResolver {
 
     public Result resolve(
             int height, double slope, int waterLevel, int baseHeight, ClimateSample climate, BiomeProfile profile) {
+        return resolve(height, slope, waterLevel, baseHeight, climate, profile, WaterKind.OCEAN, true, 0);
+    }
+
+    public Result resolve(
+            int height,
+            double slope,
+            int waterLevel,
+            int baseHeight,
+            ClimateSample climate,
+            BiomeProfile profile,
+            WaterKind kind,
+            boolean nearWater,
+            double shoreVariation) {
         long waterDepth = (long) waterLevel - height;
         double temperature = climate.temperature() - Math.max(0L, (long) height - baseHeight) * .004;
         if (waterDepth > 3)
             return new Result(materials.surface(SurfaceMaterial.GRAVEL), materials.subsurface(SurfaceMaterial.GRAVEL));
         if (waterDepth > 0 && slope > 1.5)
             return new Result(materials.surface(SurfaceMaterial.GRAVEL), materials.subsurface(SurfaceMaterial.GRAVEL));
-        if (waterDepth >= -1 && slope <= 1.5) {
-            SurfaceMaterial shore = temperature < -.25 ? SurfaceMaterial.GRAVEL : SurfaceMaterial.SAND;
+        if (waterDepth >= -1 && slope <= 1.5 && (waterDepth > 0 || nearWater)) {
+            SurfaceMaterial shore;
+            if (temperature < -.25) shore = SurfaceMaterial.GRAVEL;
+            else if (kind == WaterKind.RIVER || kind == WaterKind.LAKE) {
+                shore = climate.humidity() > .1 && slope < .8
+                        ? SurfaceMaterial.MUD
+                        : shoreVariation < -.1
+                                ? SurfaceMaterial.GRAVEL
+                                : waterDepth > 0 ? SurfaceMaterial.DIRT : SurfaceMaterial.GRASS;
+            } else {
+                shore = shoreVariation < -.15
+                        ? SurfaceMaterial.GRAVEL
+                        : shoreVariation > .2
+                                ? waterDepth > 0 ? SurfaceMaterial.DIRT : SurfaceMaterial.GRASS
+                                : SurfaceMaterial.SAND;
+            }
             return new Result(materials.surface(shore), materials.subsurface(shore));
         }
         if (slope > 1.5)

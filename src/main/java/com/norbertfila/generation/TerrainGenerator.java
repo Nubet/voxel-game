@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 18;
+    private static final int GENERATOR_VERSION = 19;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -33,6 +33,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
     private final RegionalHydrology hydrology;
+    private final Noise2D shores;
     private final ClimateNoise climate;
     private final BiomeResolver biomeResolver = new BiomeResolver();
     private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
@@ -73,6 +74,7 @@ public final class TerrainGenerator implements TerrainSource {
         landforms = new RegionalLandforms(config.landforms(), noise);
         hydrology = new RegionalHydrology(
                 seed, config.waterLevel(), (x, z) -> baseSample(x, z).elevation());
+        shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
         vegetation = new VegetationGenerator(
@@ -139,6 +141,10 @@ public final class TerrainGenerator implements TerrainSource {
                 + region.hills() * layer(hills, config.hills(), x, z)
                 + region.details() * layer(details, config.details(), x, z)
                 + mountainHeight(x, z);
+        if (config.landforms().amplitude() > 0) {
+            double regionalHeight = config.baseHeight() + continentalLayer + region.elevation();
+            height = Math.max(height, Math.min(regionalHeight - 3, config.waterLevel() + 1.0));
+        }
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
         return new GeographySample(height, x, z, config.waterLevel(), WaterKind.OCEAN);
@@ -150,7 +156,15 @@ public final class TerrainGenerator implements TerrainSource {
         int height = (int) Math.floor(column.elevation());
         double slope = surfaceSlope(worldX, worldZ, column.elevation());
         var materials = surfaceMaterials.resolve(
-                height, slope, column.waterLevel(), config.baseHeight(), column.climate(), column.profile());
+                height,
+                slope,
+                column.waterLevel(),
+                config.baseHeight(),
+                column.climate(),
+                column.profile(),
+                column.waterKind(),
+                nearWater(worldX, worldZ, height, column.waterLevel()),
+                shores.sample(worldX * .008, worldZ * .008));
         return new TerrainSummary(
                 height,
                 materials.surface(),
@@ -161,6 +175,16 @@ public final class TerrainGenerator implements TerrainSource {
                 column.biome(),
                 column.climate(),
                 column.waterKind());
+    }
+
+    private boolean nearWater(int x, int z, int height, int level) {
+        if (height < level) return true;
+        if ((long) height - level > 2) return false;
+        for (int[] direction : new int[][] {{-2, 0}, {2, 0}, {0, -2}, {0, 2}}) {
+            var neighbor = geographySample((double) x + direction[0], (double) z + direction[1]);
+            if (neighbor.elevation() < neighbor.waterLevel()) return true;
+        }
+        return false;
     }
 
     private double surfaceSlope(int worldX, int worldZ, double elevation) {

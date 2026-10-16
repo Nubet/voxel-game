@@ -22,7 +22,8 @@ public final class BlockId {
             FERN = 18,
             DANDELION_YELLOW = 19,
             DANDELION_WHITE = 20,
-            POPPY = 21;
+            POPPY = 21,
+            MUD = 22;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -51,7 +52,8 @@ public final class BlockId {
                     FERN,
                     DANDELION_YELLOW,
                     DANDELION_WHITE,
-                    POPPY -> true;
+                    POPPY,
+                    MUD -> true;
             default -> false;
         };
     }

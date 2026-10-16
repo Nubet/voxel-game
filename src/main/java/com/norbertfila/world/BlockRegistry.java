@@ -30,6 +30,7 @@ public final class BlockRegistry {
     public static final int DANDELION_YELLOW_TEXTURE = 21;
     public static final int DANDELION_WHITE_TEXTURE = 22;
     public static final int POPPY_TEXTURE = 23;
+    public static final int MUD_TEXTURE = 24;
     public static final BlockRegistry DEFAULT = defaults();
 
     private final BlockDefinition[] definitions;
@@ -113,6 +114,7 @@ public final class BlockRegistry {
         textures.put("refi_dandelion_yellow", DANDELION_YELLOW_TEXTURE);
         textures.put("refi_dandelion_white", DANDELION_WHITE_TEXTURE);
         textures.put("refi_poppy", POPPY_TEXTURE);
+        textures.put("refi_mud", MUD_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(
@@ -179,7 +181,8 @@ public final class BlockRegistry {
                         plant(BlockId.FERN, "fern", FERN_TEXTURE),
                         plant(BlockId.DANDELION_YELLOW, "dandelion_yellow", DANDELION_YELLOW_TEXTURE),
                         plant(BlockId.DANDELION_WHITE, "dandelion_white", DANDELION_WHITE_TEXTURE),
-                        plant(BlockId.POPPY, "poppy", POPPY_TEXTURE)),
+                        plant(BlockId.POPPY, "poppy", POPPY_TEXTURE),
+                        uniform(BlockId.MUD, "mud", MUD_TEXTURE, true)),
                 textures);
     }
 

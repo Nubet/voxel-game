@@ -69,6 +69,15 @@ tasks.register<JavaExec>("diagnoseLandscapes") {
     args(layout.buildDirectory.dir("landscape-diagnostics/${findProperty("label") ?: "current"}").get().asFile.absolutePath)
 }
 
+tasks.register<JavaExec>("generateHudAtlas") {
+    group = "verification"
+    description = "Regenerates the HUD atlas from registered block textures."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.ui.GenerateHudAtlas")
+    args(layout.projectDirectory.file("src/main/resources/assets/ui/ui.png").asFile.absolutePath)
+}
+
 tasks.register<JavaExec>("smokeTerrainPasses") {
     group = "verification"
     description = "Checks split terrain passes against the combined renderer on OpenGL."
