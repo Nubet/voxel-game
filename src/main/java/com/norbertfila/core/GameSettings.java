@@ -32,7 +32,7 @@ public final class GameSettings {
     /** Block updates such as flowing water run only this many chunks from the player, at most the render distance. */
     public static final int MIN_SIMULATION_DISTANCE = 1;
 
-    public static final int DEFAULT_SIMULATION_DISTANCE = 6;
+    public static final int DEFAULT_SIMULATION_DISTANCE = 8;
     /** Far terrain radius in chunks; 0 or a value not above the render distance turns it off. */
     public static final int MAX_FAR_DISTANCE = 128;
 
@@ -41,7 +41,7 @@ public final class GameSettings {
     public static final int MIN_GUI_SCALE = 1;
     public static final int MAX_GUI_SCALE = 4;
 
-    private int renderDistance = 4;
+    private int renderDistance = 8;
     private int simulationDistance = Math.min(DEFAULT_SIMULATION_DISTANCE, renderDistance);
     private int farDistance = DEFAULT_FAR_DISTANCE;
     private float fieldOfView = DEFAULT_FIELD_OF_VIEW;

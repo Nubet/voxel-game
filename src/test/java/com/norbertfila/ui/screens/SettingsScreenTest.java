@@ -65,10 +65,10 @@ class SettingsScreenTest {
         GameSettings settings = new GameSettings();
         SettingsScreen screen = new SettingsScreen(settings);
         assertFalse(update(screen, true, true, SettingsScreen.PLUS_X + 1, SettingsScreen.BUTTON_Y + 1));
-        assertEquals(4, settings.renderDistance());
+        assertEquals(8, settings.renderDistance());
         assertFalse(update(screen, true, false, SettingsScreen.PLUS_X + 1, SettingsScreen.BUTTON_Y + 1));
         assertTrue(update(screen, false, false, SettingsScreen.PLUS_X + 1, SettingsScreen.BUTTON_Y + 1));
-        assertEquals(5, settings.renderDistance());
+        assertEquals(9, settings.renderDistance());
         assertFalse(update(screen, false, false, SettingsScreen.PLUS_X + 1, SettingsScreen.BUTTON_Y + 1));
         assertTrue(update(screen, true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y));
         assertEquals(GameSettings.MIN_RENDER_DISTANCE, settings.renderDistance());
@@ -122,7 +122,7 @@ class SettingsScreenTest {
         assertEquals(Screen.Action.NONE, screen.updatePointer(true, true, x, y));
         assertEquals(Screen.Action.NONE, screen.updatePointer(true, false, x, y));
         assertEquals(Screen.Action.CLOSE, screen.updatePointer(false, false, x, y));
-        assertEquals(4, screen.renderDistance());
+        assertEquals(8, screen.renderDistance());
         assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
     }
 

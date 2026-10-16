@@ -30,7 +30,7 @@ class LanguageSelectionTest {
         assertEquals(Language.POLISH, settings.translations().language());
         assertEquals("Podaj nazwę świata", form.validationMessage());
         assertNotEquals(englishMenu, render(menu, viewport));
-        assertEquals(4, settings.renderDistance());
+        assertEquals(8, settings.renderDistance());
         assertEquals(GameSettings.DEFAULT_FIELD_OF_VIEW, settings.fieldOfView());
         assertEquals(GameSettings.GUI_SCALE_AUTO, settings.guiScale());
         screen.keyPress(UiKey.ACTIVATE);

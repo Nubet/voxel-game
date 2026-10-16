@@ -55,7 +55,7 @@ class ScreenManagerTest {
         SettingsScreen screen = new SettingsScreen(new GameSettings());
         manager.open(screen);
         manager.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
-        assertEquals(4, screen.renderDistance());
+        assertEquals(8, screen.renderDistance());
         manager.updatePointer(false, false, 0, 0);
         manager.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
         assertTrue(screen.slider().dragging());
