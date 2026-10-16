@@ -29,36 +29,44 @@ public final class CaveGenerationSmoke {
                 var carver = new CaveCarver(terrain);
                 CavePlan.Segment chamber = null;
                 Vector3f entrance = null;
-                for (int rz = -1; rz <= 1; rz++)
-                    for (int rx = -1; rx <= 1; rx++) {
-                        var plan = planner.plan(rx, rz);
-                        for (int cz = rz * 8; cz < rz * 8 + 8; cz++)
-                            for (int cx = rx * 8; cx < rx * 8 + 8; cx++) {
-                                var segments = plan.segments(cx, cz);
-                                for (var segment : segments) {
-                                    int x = (int) Math.floor(segment.x()),
-                                            y = (int) Math.floor(segment.y()),
-                                            z = (int) Math.floor(segment.z());
-                                    if ((chamber == null || segment.radiusXZ() > chamber.radiusXZ())
-                                            && carver.carves(
-                                                    x,
-                                                    y,
-                                                    z,
-                                                    terrain.sample(x, z).materialAt(y),
-                                                    segments)) chamber = segment;
-                                }
-                                if (entrance != null) continue;
-                                for (int z = 0; z < 16; z++)
-                                    for (int x = 0; x < 16; x++) {
-                                        int wx = cx * 16 + x, wz = cz * 16 + z;
-                                        var base = terrain.sample(wx, wz);
-                                        if (carver.carves(
-                                                        wx, base.surfaceHeight(), wz, base.surfaceMaterial(), segments)
-                                                && openSky(terrain, wx, base.surfaceHeight() + 1, wz))
-                                            entrance = new Vector3f(wx + .5f, base.surfaceHeight() + .5f, wz + .5f);
+                search:
+                for (int radius = 0; radius <= 8; radius++)
+                    for (int rz = -radius; rz <= radius; rz++)
+                        for (int rx = -radius; rx <= radius; rx++) {
+                            if (Math.max(Math.abs(rx), Math.abs(rz)) != radius) continue;
+                            var plan = planner.plan(rx, rz);
+                            for (int cz = rz * 8; cz < rz * 8 + 8; cz++)
+                                for (int cx = rx * 8; cx < rx * 8 + 8; cx++) {
+                                    var segments = plan.segments(cx, cz);
+                                    for (var segment : segments) {
+                                        int x = (int) Math.floor(segment.x()),
+                                                y = (int) Math.floor(segment.y()),
+                                                z = (int) Math.floor(segment.z());
+                                        if ((chamber == null || segment.radiusXZ() > chamber.radiusXZ())
+                                                && carver.carves(
+                                                        x,
+                                                        y,
+                                                        z,
+                                                        terrain.sample(x, z).materialAt(y),
+                                                        segments)) chamber = segment;
                                     }
-                            }
-                    }
+                                    if (entrance != null) continue;
+                                    for (int z = 0; z < 16; z++)
+                                        for (int x = 0; x < 16; x++) {
+                                            int wx = cx * 16 + x, wz = cz * 16 + z;
+                                            var base = terrain.sample(wx, wz);
+                                            if (carver.carves(
+                                                            wx,
+                                                            base.surfaceHeight(),
+                                                            wz,
+                                                            base.surfaceMaterial(),
+                                                            segments)
+                                                    && openSky(terrain, wx, base.surfaceHeight() + 1, wz))
+                                                entrance = new Vector3f(wx + .5f, base.surfaceHeight() + .5f, wz + .5f);
+                                        }
+                                }
+                            if (chamber != null && entrance != null) break search;
+                        }
                 if (chamber == null || entrance == null)
                     throw new AssertionError("Missing caves/entrances seed=" + seed);
                 var interior = new Vector3f((float) chamber.x(), (float) chamber.y(), (float) chamber.z());

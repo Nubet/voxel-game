@@ -175,3 +175,13 @@ tasks.register<JavaExec>("benchmarkGame") {
     findProperty("siteZ")?.let { systemProperty("voxel.benchmark.siteZ", it) }
     findProperty("out")?.let { systemProperty("voxel.benchmark.out", it) }
 }
+
+tasks.register<JavaExec>("smokeOres") {
+    group = "verification"
+    description = "Renders the five ore blocks with their REFI textures."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.OreSmoke")
+    args(layout.buildDirectory.dir("ore-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
