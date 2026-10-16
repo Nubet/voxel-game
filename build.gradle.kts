@@ -59,6 +59,18 @@ tasks.register<JavaExec>("smokeChat") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeCrosshair") {
+    group = "verification"
+    description = "Checks crosshair styles, alpha and settings previews across viewport sizes and GUI scales."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.UiViewportSmoke")
+    val output = layout.buildDirectory.dir("crosshair-smoke")
+    doFirst { output.get().asFile.mkdirs() }
+    args(output.get().asFile.absolutePath, "--crosshair-only")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeClouds") {
     group = "verification"
     description = "Checks cloud rendering, depth occlusion and state on OpenGL."

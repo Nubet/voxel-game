@@ -23,7 +23,7 @@ class CrosshairRendererTest {
     }
 
     @Test
-    void allStylesShareTheExactCenterAndApplyOpacityWithoutOverlappingPixels() {
+    void allStylesShareTheExactCenterAndMultiplyOpacityByVisibility() {
         var renderer = new CrosshairRenderer();
         for (int width : new int[] {1280, 1281}) {
             for (int requested = 0; requested <= 4; requested++) {

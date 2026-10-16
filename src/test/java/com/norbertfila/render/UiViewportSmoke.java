@@ -27,8 +27,12 @@ import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.WorldUiFixtures;
+import com.norbertfila.ui.crosshair.CrosshairRenderer;
+import com.norbertfila.ui.crosshair.CrosshairSettings;
+import com.norbertfila.ui.crosshair.CrosshairStyle;
 import com.norbertfila.ui.screens.ChatScreen;
 import com.norbertfila.ui.screens.CreateWorldScreen;
+import com.norbertfila.ui.screens.CrosshairSettingsScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.MainMenuScreen;
 import com.norbertfila.ui.screens.PauseScreen;
@@ -119,6 +123,8 @@ public final class UiViewportSmoke {
                     write(output.resolve("inventory-" + i + "-hud.png"), pixels, viewport);
                     checkDebugOverlay(ui, canvas, hotbar, viewport, output.resolve("debug-f3-" + i + ".png"));
                     checkChat(ui, canvas, viewport, output.resolve("chat-" + i + ".png"));
+                    if (args.length > 1 && args[1].equals("--crosshair-only"))
+                        checkCrosshair(ui, canvas, viewport, output, i);
                     screens.open(panel);
                     screens.layout(viewport);
                     screens.updatePointer(false, false, 0, 0);
@@ -151,8 +157,11 @@ public final class UiViewportSmoke {
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
                 }
-                if (args.length > 1 && (args[1].equals("--debug-only") || args[1].equals("--chat-only"))) {
-                    System.out.println("Chat and F3 overlay GPU smoke PASS: " + cases.length + " viewport/DPI cases");
+                if (args.length > 1
+                        && (args[1].equals("--debug-only")
+                                || args[1].equals("--chat-only")
+                                || args[1].equals("--crosshair-only"))) {
+                    System.out.println(args[1] + " GPU smoke PASS: " + cases.length + " viewport/DPI cases");
                     return;
                 }
                 UiViewport small = new UiViewport(180, 100, 180, 100);
@@ -198,7 +207,7 @@ public final class UiViewportSmoke {
         if (screens.isOpen()) screens.render(canvas, viewport);
         else {
             new Hud().render(canvas, hotbar, viewport);
-            new com.norbertfila.ui.crosshair.CrosshairRenderer().render(canvas, viewport);
+            new CrosshairRenderer().render(canvas, viewport);
         }
         ui.render(canvas, viewport);
     }
@@ -309,7 +318,7 @@ public final class UiViewportSmoke {
         screens.open(screen);
         screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
-        for (int i = 0; i < 11; i++) screens.keyPress(UiKey.NEXT);
+        for (int i = 0; i < 16 && !screen.backButton().focused(); i++) screens.keyPress(UiKey.NEXT);
         check(screen.backButton().focused(), "Back missing from keyboard navigation");
         clear();
         render(ui, canvas, screens, hotbar, viewport);
@@ -486,6 +495,84 @@ public final class UiViewportSmoke {
                 rgb(pixels, viewport, 5 * viewport.scale(), ((int) viewport.height() - 25) * viewport.scale()) != 0,
                 "Chat input missing");
         write(output, pixels, viewport);
+    }
+
+    private static void checkCrosshair(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output, int index)
+            throws Exception {
+        var renderer = new CrosshairRenderer();
+        var pixels = BufferUtils.createByteBuffer(viewport.framebufferWidth() * viewport.framebufferHeight() * 4);
+        for (var style : CrosshairStyle.values()) {
+            for (int scale : new int[] {1, 4}) {
+                for (int opacity : new int[] {0, 50, 100}) {
+                    canvas.clear();
+                    renderer.render(
+                            canvas, viewport, style, new CrosshairSettings(true, true, true, scale, opacity), 1);
+                    clear();
+                    ui.render(canvas, viewport);
+                    glReadPixels(
+                            0,
+                            0,
+                            viewport.framebufferWidth(),
+                            viewport.framebufferHeight(),
+                            GL_RGBA,
+                            GL_UNSIGNED_BYTE,
+                            pixels);
+                    int offset = style == CrosshairStyle.BLOCK ? 3 : 0;
+                    int px = (int) Math.ceil((viewport.width() / 2 + offset * scale) * viewport.scale()) - 1;
+                    int py = (int) Math.ceil(viewport.height() / 2 * viewport.scale()) - 1;
+                    int value = 0;
+                    // Odd-sized shapes centered on an even framebuffer can straddle pixel centers.
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dx = -1; dx <= 1; dx++)
+                            value = Math.max(value, rgb(pixels, viewport, px + dx, py + dy));
+                    int expected = style == CrosshairStyle.HIDDEN ? 0 : Math.round(255 * opacity / 100f);
+                    for (int shift : new int[] {0, 8, 16})
+                        check(
+                                Math.abs(((value >> shift) & 255) - expected) <= 1,
+                                "Crosshair pixel/alpha mismatch: " + style + " scale=" + scale + " opacity=" + opacity
+                                        + " actual=" + Integer.toHexString(value));
+                    if (style == CrosshairStyle.BLOCK)
+                        check(
+                                rgb(pixels, viewport, viewport.framebufferWidth() / 2, viewport.framebufferHeight() / 2)
+                                        == 0,
+                                "Block crosshair center must be empty");
+                    if (opacity == 100 && scale == 1)
+                        write(output.resolve("crosshair-" + index + "-" + style + ".png"), pixels, viewport);
+                    check(glGetError() == GL_NO_ERROR, "Crosshair GL error");
+                }
+            }
+        }
+        if (viewport.width() >= 304 && viewport.height() >= 240) {
+            for (var language : Language.values()) {
+                var settings = new GameSettings();
+                settings.translations().setLanguage(language);
+                settings.setCrosshair(new CrosshairSettings(true, true, true, 4, 100));
+                var screen = new CrosshairSettingsScreen(settings);
+                for (int variant = 0; variant < 4; variant++) {
+                    canvas.clear();
+                    screen.render(canvas, viewport);
+                    clear();
+                    ui.render(canvas, viewport);
+                    glReadPixels(
+                            0,
+                            0,
+                            viewport.framebufferWidth(),
+                            viewport.framebufferHeight(),
+                            GL_RGBA,
+                            GL_UNSIGNED_BYTE,
+                            pixels);
+                    write(
+                            output.resolve("crosshair-settings-" + index + "-" + language + "-" + variant + ".png"),
+                            pixels,
+                            viewport);
+                    if (variant == 0) {
+                        screen.keyPress(UiKey.PREVIOUS);
+                        screen.keyPress(UiKey.PREVIOUS);
+                    }
+                    screen.keyPress(UiKey.ACTIVATE);
+                }
+            }
+        }
     }
 
     private static void checkDebugOverlay(
