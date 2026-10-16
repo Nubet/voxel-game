@@ -10,6 +10,22 @@ import org.junit.jupiter.api.Test;
 
 class SettingsScreenTest {
     @Test
+    void distancesAreSavedWhenLeavingChildAndSettings() {
+        var settings = new GameSettings();
+        int[] saves = {0};
+        var screen = new SettingsScreen(settings, ignored -> {}, () -> saves[0]++);
+        screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.ACTIVATE);
+        screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.INCREASE);
+        assertEquals(0, saves[0]);
+        screen.keyPress(UiKey.BACK);
+        assertEquals(1, saves[0]);
+        assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
+        assertEquals(2, saves[0]);
+    }
+
+    @Test
     void distancesOpenOnReleaseAndBackReturnsToSettingsBeforeClosing() {
         var settings = new GameSettings();
         var screen = new SettingsScreen(settings);

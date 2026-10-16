@@ -18,6 +18,7 @@ public final class SettingsScreen implements Screen {
     private final GameSettings settings;
     private final Translations translations;
     private final Consumer<CrosshairSettings> saveCrosshair;
+    private final Runnable saveDistances;
     private Screen child;
     private final Button distances = new Button(new UiBounds(20, 30, 280, 20), "");
     private final Button crosshair = new Button(new UiBounds(204, 2, 92, 18), "");
@@ -48,8 +49,13 @@ public final class SettingsScreen implements Screen {
     }
 
     public SettingsScreen(GameSettings settings, Consumer<CrosshairSettings> saveCrosshair) {
+        this(settings, saveCrosshair, () -> {});
+    }
+
+    public SettingsScreen(GameSettings settings, Consumer<CrosshairSettings> saveCrosshair, Runnable saveDistances) {
         this.settings = Objects.requireNonNull(settings);
         this.saveCrosshair = Objects.requireNonNull(saveCrosshair);
+        this.saveDistances = Objects.requireNonNull(saveDistances);
         translations = settings.translations();
         syncControls();
     }
@@ -85,14 +91,14 @@ public final class SettingsScreen implements Screen {
         if (distances.updatePointer(down, pressed, x, y)) openChild(new ViewDistanceScreen(settings));
         if (crosshair.updatePointer(down, pressed, x, y)) openChild(new CrosshairSettingsScreen(settings));
         syncControls();
-        return close ? Action.CLOSE : Action.NONE;
+        return close ? closeSettings() : Action.NONE;
     }
 
     @Override
     public Action keyPress(UiKey key) {
         Objects.requireNonNull(key);
         if (child != null) return childAction(child.keyPress(key));
-        if (key == UiKey.BACK) return Action.CLOSE;
+        if (key == UiKey.BACK) return closeSettings();
         syncControls();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
             int direction = key == UiKey.NEXT ? 1 : -1;
@@ -128,7 +134,7 @@ public final class SettingsScreen implements Screen {
                     if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
                 }
                 case 9 -> {
-                    if (back.keyPress(key)) return Action.CLOSE;
+                    if (back.keyPress(key)) return closeSettings();
                 }
                 default -> {}
             }
@@ -282,10 +288,16 @@ public final class SettingsScreen implements Screen {
     private Action childAction(Action action) {
         if (action != Action.CLOSE) return action;
         if (child instanceof CrosshairSettingsScreen) saveCrosshair.accept(settings.crosshair());
+        if (child instanceof ViewDistanceScreen) saveDistances.run();
         child.cancelInteraction();
         child = null;
         cancelInteraction();
         return Action.NONE;
+    }
+
+    private Action closeSettings() {
+        saveDistances.run();
+        return Action.CLOSE;
     }
 
     public Button distancesButton() {
