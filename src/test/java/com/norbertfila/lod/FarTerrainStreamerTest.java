@@ -90,6 +90,29 @@ class FarTerrainStreamerTest {
         assertEquals(8, FarTerrainStreamer.step(5000, 4));
     }
 
+    @Test
+    void changingDistancesDropsInFlightResultsAndDisablesEveryTileEvenAtItsCenter() throws Exception {
+        try (var streamer = new FarTerrainStreamer(new FlatSource(), overlay, 2)) {
+            streamer.update(32, 32, 4, 32);
+            streamer.process();
+            assertTrue(streamer.metrics().inFlight() > 0);
+            streamer.update(32, 32, 4, 0);
+            settle(streamer);
+            assertTrue(streamer.residency().tiles().isEmpty(), "Off must hide the tile under the camera too");
+            assertEquals(0, streamer.metrics().desired());
+            streamer.update(32, 32, 4, 32);
+            settle(streamer);
+            assertTrue(streamer.residency().tiles().size() > 1);
+            streamer.update(32, 32, 4, 8);
+            settle(streamer);
+            for (var mesh : streamer.residency().tiles().values())
+                assertTrue(Math.hypot(mesh.tileX() * 64, mesh.tileZ() * 64) <= 8 * 16);
+            streamer.update(32, 32, 8, 8);
+            settle(streamer);
+            assertTrue(streamer.residency().tiles().isEmpty());
+        }
+    }
+
     private static void settle(FarTerrainStreamer streamer) throws InterruptedException {
         long deadline = System.nanoTime() + 10_000_000_000L;
         do {

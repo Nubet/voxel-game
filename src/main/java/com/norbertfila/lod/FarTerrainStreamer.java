@@ -94,7 +94,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
             for (int dx = -tiles; dx <= tiles; dx++) {
                 int tileX = cameraTileX + dx, tileZ = cameraTileZ + dz;
                 long distance = distance(tileX, tileZ);
-                if (distance > farRadius) continue;
+                if (farRadius == 0 || distance > farRadius) continue;
                 FarTilePos key = new FarTilePos(tileX, tileZ);
                 desired.put(key, step(distance, previous.get(key)));
                 order.add(new Planned(distance, key));

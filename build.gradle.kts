@@ -59,6 +59,16 @@ tasks.register<JavaExec>("smokeChat") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeViewDistances") {
+    group = "verification"
+    description = "Checks distance fog on near/far solids and water, underwater visibility and PL/EN settings."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.lod.ViewDistanceSmoke")
+    args(layout.buildDirectory.dir("view-distance-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeCrosshair") {
     group = "verification"
     description = "Checks crosshair styles, alpha and settings previews across viewport sizes and GUI scales."
