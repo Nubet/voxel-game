@@ -89,6 +89,7 @@ public final class GameBenchmark {
         int width = Integer.getInteger("voxel.benchmark.width", 1280);
         int height = Integer.getInteger("voxel.benchmark.height", 720);
         boolean gpuTimers = Boolean.parseBoolean(System.getProperty("voxel.benchmark.gpuTimers", "true"));
+        long seed = Long.getLong("voxel.benchmark.seed", SEED);
         try (Window window = new Window(width, height, "Voxel Engine | Benchmark");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
@@ -96,11 +97,17 @@ public final class GameBenchmark {
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
             TerrainConfig config = TerrainConfig.defaults();
-            var terrain = new TerrainGenerator(SEED, config);
+            var terrain = new TerrainGenerator(seed, config);
             var catalog = new WorldCatalog(WORLDS, "default", terrain.generatorVersion());
             var session = new GameSession(
-                    io, seed -> new TerrainGenerator(seed, config), new WaterMesher(), Game.terrainDemand(config));
-            var spawn = new SpawnResolver(terrain).resolve(0, 0);
+                    io,
+                    worldSeed -> new TerrainGenerator(worldSeed, config),
+                    new WaterMesher(),
+                    Game.terrainDemand(config));
+            var spawn = new SpawnResolver(terrain)
+                    .resolve(
+                            Integer.getInteger("voxel.benchmark.siteX", 0),
+                            Integer.getInteger("voxel.benchmark.siteZ", 0));
             var site = BenchmarkScene.Site.sample(
                     terrain,
                     (int) Math.floor(spawn.x()),
@@ -111,7 +118,7 @@ public final class GameBenchmark {
             settings.setFarDistance(farDistance);
             settings.setClouds(CloudMode.valueOf(
                     System.getProperty("voxel.benchmark.clouds", "FAST").toUpperCase(Locale.ROOT)));
-            var identity = new WorldIdentity(UUID.randomUUID(), SEED, "default", terrain.generatorVersion());
+            var identity = new WorldIdentity(UUID.randomUUID(), seed, "default", terrain.generatorVersion());
             var entry = io.create(catalog, new WorldMetadata(identity, "benchmark", Instant.now()))
                     .join();
             var loop = new GameLoop();

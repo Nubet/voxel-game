@@ -33,6 +33,7 @@ public final class LandscapeDiagnostics {
                 "seed,version,window,origin_x,origin_z,size,step,min,p10,p50,p90,max,mean,mean_slope,mean_relief_32,water_fraction,shore_fraction,fingerprint\n");
         StringBuilder distribution = new StringBuilder("seed,window,kind,value,count\n");
         StringBuilder timings = new StringBuilder("seed,window,samples,sample_ms,chunks,cold_chunk_ms,warm_chunk_ms\n");
+        StringBuilder sites = new StringBuilder("seed,window,x,z,water_level\n");
         for (long seed : SEEDS) {
             TerrainGenerator terrain = new TerrainGenerator(seed, TerrainConfig.defaults());
             for (Window window : WINDOWS) {
@@ -44,6 +45,24 @@ public final class LandscapeDiagnostics {
                 writeTransect(output.resolve(name + "-transect.csv"), terrain, window);
                 summary.append(survey.summary(seed, terrain.generatorVersion()));
                 survey.distributions(seed, distribution);
+                for (int index = 0; index < survey.samples().length; index++) {
+                    var sample = survey.samples()[index];
+                    if (sample.waterKind() == WaterKind.RIVER
+                            && sample.flooded()
+                            && sample.waterLevel() > TerrainConfig.defaults().waterLevel() + 3) {
+                        sites.append(seed)
+                                .append(',')
+                                .append(window.name())
+                                .append(',')
+                                .append(window.x(index % window.size()))
+                                .append(',')
+                                .append(window.z(index / window.size()))
+                                .append(',')
+                                .append(sample.waterLevel())
+                                .append('\n');
+                        break;
+                    }
+                }
                 int[] heights = survey.heights();
                 int center = window.size() / 2;
                 int x = Math.floorDiv(window.x(center), Chunk.SIZE);
@@ -71,6 +90,7 @@ public final class LandscapeDiagnostics {
         Files.writeString(output.resolve("summary.csv"), summary);
         Files.writeString(output.resolve("distributions.csv"), distribution);
         Files.writeString(output.resolve("timings.csv"), timings);
+        Files.writeString(output.resolve("river-sites.csv"), sites);
     }
 
     static Survey survey(TerrainSource terrain, Window window) {
@@ -107,6 +127,8 @@ public final class LandscapeDiagnostics {
                 if (shore) shores++;
                 distribution.merge("biome," + sample.biome(), 1, Integer::sum);
                 distribution.merge(
+                        "water_kind," + (sample.flooded() ? sample.waterKind() : WaterKind.NONE), 1, Integer::sum);
+                distribution.merge(
                         "material,"
                                 + BlockRegistry.DEFAULT
                                         .definition(sample.surfaceMaterial())
@@ -118,6 +140,7 @@ public final class LandscapeDiagnostics {
                 fingerprint = (fingerprint ^ sample.waterLevel()) * 0x100000001b3L;
                 fingerprint = (fingerprint ^ sample.surfaceMaterial()) * 0x100000001b3L;
                 fingerprint = (fingerprint ^ sample.biome().ordinal()) * 0x100000001b3L;
+                fingerprint = (fingerprint ^ sample.waterKind().ordinal()) * 0x100000001b3L;
             }
         return new Survey(
                 window, samples, heights, slopes, relief, shoreMask, water, shores, fingerprint, distribution);

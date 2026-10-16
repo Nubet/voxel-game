@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 17;
+    private static final int GENERATOR_VERSION = 18;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -32,6 +32,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpX;
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
+    private final RegionalHydrology hydrology;
     private final ClimateNoise climate;
     private final BiomeResolver biomeResolver = new BiomeResolver();
     private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
@@ -70,6 +71,8 @@ public final class TerrainGenerator implements TerrainSource {
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         landforms = new RegionalLandforms(config.landforms(), noise);
+        hydrology = new RegionalHydrology(
+                seed, config.waterLevel(), (x, z) -> baseSample(x, z).elevation());
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
         vegetation = new VegetationGenerator(
@@ -94,14 +97,34 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public int surfaceHeight(int worldX, int worldZ) {
-        return (int) Math.floor(columnSample(worldX, worldZ).elevation());
+        return (int) Math.floor(geographySample(worldX, worldZ).elevation());
     }
 
     double surfaceElevation(double worldX, double worldZ) {
-        return columnSample(worldX, worldZ).elevation();
+        return geographySample(worldX, worldZ).elevation();
     }
 
     private ColumnSample columnSample(double worldX, double worldZ) {
+        GeographySample geography = geographySample(worldX, worldZ);
+        ClimateSample climateSample = climate.sample(geography.x(), geography.z());
+        BiomeType biome = biomeResolver.resolve(climateSample);
+        return new ColumnSample(
+                geography.elevation(),
+                climateSample,
+                biome,
+                biomeRegistry.profile(biome),
+                geography.waterLevel(),
+                geography.waterKind());
+    }
+
+    private GeographySample geographySample(double worldX, double worldZ) {
+        GeographySample base = baseSample(worldX, worldZ);
+        if (config.landforms().amplitude() == 0) return base;
+        var water = hydrology.sample(worldX, worldZ, base.elevation());
+        return new GeographySample(water.height(), base.x(), base.z(), water.waterLevel(), water.kind());
+    }
+
+    private GeographySample baseSample(double worldX, double worldZ) {
         double x = worldX;
         double z = worldZ;
         if (config.warp().amplitude() != 0) {
@@ -118,9 +141,7 @@ public final class TerrainGenerator implements TerrainSource {
                 + mountainHeight(x, z);
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");
-        ClimateSample climateSample = climate.sample(x, z);
-        BiomeType biome = biomeResolver.resolve(climateSample);
-        return new ColumnSample(height, climateSample, biome, biomeRegistry.profile(biome));
+        return new GeographySample(height, x, z, config.waterLevel(), WaterKind.OCEAN);
     }
 
     @Override
@@ -129,16 +150,17 @@ public final class TerrainGenerator implements TerrainSource {
         int height = (int) Math.floor(column.elevation());
         double slope = surfaceSlope(worldX, worldZ, column.elevation());
         var materials = surfaceMaterials.resolve(
-                height, slope, config.waterLevel(), config.baseHeight(), column.climate(), column.profile());
+                height, slope, column.waterLevel(), config.baseHeight(), column.climate(), column.profile());
         return new TerrainSummary(
                 height,
                 materials.surface(),
                 materials.subsurface(),
                 BlockId.STONE,
                 config.minHeight() - 1,
-                config.waterLevel(),
+                column.waterLevel(),
                 column.biome(),
-                column.climate());
+                column.climate(),
+                column.waterKind());
     }
 
     private double surfaceSlope(int worldX, int worldZ, double elevation) {
@@ -273,5 +295,13 @@ public final class TerrainGenerator implements TerrainSource {
         return origin;
     }
 
-    private record ColumnSample(double elevation, ClimateSample climate, BiomeType biome, BiomeProfile profile) {}
+    private record GeographySample(double elevation, double x, double z, int waterLevel, WaterKind waterKind) {}
+
+    private record ColumnSample(
+            double elevation,
+            ClimateSample climate,
+            BiomeType biome,
+            BiomeProfile profile,
+            int waterLevel,
+            WaterKind waterKind) {}
 }

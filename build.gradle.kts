@@ -120,4 +120,7 @@ tasks.register<JavaExec>("benchmarkGame") {
     findProperty("far")?.let { systemProperty("voxel.benchmark.far", it) }
     findProperty("clouds")?.let { systemProperty("voxel.benchmark.clouds", it) }
     findProperty("screenshots")?.let { systemProperty("voxel.benchmark.screenshots", it) }
+    findProperty("seed")?.let { systemProperty("voxel.benchmark.seed", it) }
+    findProperty("siteX")?.let { systemProperty("voxel.benchmark.siteX", it) }
+    findProperty("siteZ")?.let { systemProperty("voxel.benchmark.siteZ", it) }
 }

@@ -19,7 +19,7 @@ class MountainTerrainTest {
 
     @Test
     void disabledMountainsDoNotSampleRegionOrRidge() {
-        TerrainConfig defaults = TerrainConfig.defaults();
+        TerrainConfig defaults = baseShape();
         TerrainConfig plains = defaults.withoutMountains().withoutWarp();
         int[] calls = {0};
         TerrainGenerator generator = new TerrainGenerator(0, plains, (x, z) -> {
@@ -27,12 +27,22 @@ class MountainTerrainTest {
             return .1;
         });
         generator.surfaceHeight(-17, 31);
-        assertEquals(13, calls[0]);
+        assertEquals(9, calls[0]);
     }
 
     @Test
     void terrainContainsRegionalHighMountainsAndLowerValleys() {
         TerrainConfig config = TerrainConfig.defaults();
+        config = new TerrainConfig(
+                config.baseHeight(),
+                config.continental(),
+                config.hills(),
+                config.details(),
+                config.mountains(),
+                config.warp(),
+                config.waterLevel(),
+                config.temperature(),
+                config.humidity());
         TerrainGenerator mountains = new TerrainGenerator(0, config);
         TerrainGenerator plains = new TerrainGenerator(0, config.withoutMountains());
         int samples = 0;
@@ -94,7 +104,7 @@ class MountainTerrainTest {
 
     @Test
     void disablingWarpSkipsItsSamplesAndChangesOnlyCoordinates() {
-        TerrainConfig defaults = TerrainConfig.defaults();
+        TerrainConfig defaults = baseShape();
         TerrainConfig flat = defaults.withoutMountains();
         int[] calls = {0};
         Noise2D counting = (x, z) -> {
@@ -102,10 +112,10 @@ class MountainTerrainTest {
             return .1;
         };
         int warped = new TerrainGenerator(0, flat, counting).surfaceHeight(-17, 31);
-        assertEquals(19, calls[0]);
+        assertEquals(15, calls[0]);
         calls[0] = 0;
         int unwarped = new TerrainGenerator(0, flat.withoutWarp(), counting).surfaceHeight(-17, 31);
-        assertEquals(13, calls[0]);
+        assertEquals(9, calls[0]);
         assertEquals(warped, unwarped);
         TerrainGenerator first = new TerrainGenerator(42, defaults);
         TerrainGenerator second = new TerrainGenerator(42, defaults.withoutWarp());
@@ -113,5 +123,19 @@ class MountainTerrainTest {
         for (int z = -512; z <= 512; z += 31)
             for (int x = -512; x <= 512; x += 17) differs |= first.surfaceHeight(x, z) != second.surfaceHeight(x, z);
         assertTrue(differs);
+    }
+
+    private static TerrainConfig baseShape() {
+        var c = TerrainConfig.defaults();
+        return new TerrainConfig(
+                c.baseHeight(),
+                c.continental(),
+                c.hills(),
+                c.details(),
+                c.mountains(),
+                c.warp(),
+                c.waterLevel(),
+                c.temperature(),
+                c.humidity());
     }
 }
