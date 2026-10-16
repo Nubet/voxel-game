@@ -4,82 +4,44 @@ import com.norbertfila.core.GameSettings;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
 import com.norbertfila.render.CloudMode;
-import com.norbertfila.ui.BitmapFont;
-import com.norbertfila.ui.Button;
-import com.norbertfila.ui.Screen;
-import com.norbertfila.ui.Slider;
-import com.norbertfila.ui.UiBounds;
-import com.norbertfila.ui.UiCanvas;
-import com.norbertfila.ui.UiKey;
-import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.*;
 import com.norbertfila.ui.crosshair.CrosshairSettings;
 import java.util.Objects;
 import java.util.function.Consumer;
 
 public final class SettingsScreen implements Screen {
-    public static final int PANEL_X = 8;
-    public static final int PANEL_Y = 0;
-    public static final int PANEL_WIDTH = 304;
-    public static final int PANEL_HEIGHT = 240;
-    public static final int SLIDER_X = 84;
-    public static final int SLIDER_Y = 40;
-    public static final int SLIDER_WIDTH = 180;
-    public static final int SLIDER_HEIGHT = 12;
-    public static final int BUTTON_Y = 38;
-    public static final int BUTTON_SIZE = 20;
-    public static final int MINUS_X = 56;
-    public static final int PLUS_X = 272;
+    public static final int PANEL_X = 8, PANEL_Y = 0, PANEL_WIDTH = 304, PANEL_HEIGHT = 240;
+    public static final int CAMERA_X = 144, CAMERA_WIDTH = 152;
+    public static final int FOV_Y = 88, ZOOM_FOV_Y = 112, SENSITIVITY_Y = 136, ZOOM_SPEED_Y = 160;
+    public static final int GUI_SCALE_Y = 184, LANGUAGE_Y = 208;
     public static final UiBounds BACK_BOUNDS = new UiBounds(220, 208, 76, 20);
-
-    public static final int CAMERA_X = 144;
-    public static final int CAMERA_WIDTH = 152;
-    public static final int SIMULATION_Y = 64;
-    public static final int FOV_Y = 88;
-    public static final int ZOOM_FOV_Y = 112;
-    public static final int SENSITIVITY_Y = 136;
-    public static final int ZOOM_SPEED_Y = 160;
-    public static final int GUI_SCALE_Y = 184;
-    public static final int LANGUAGE_Y = 208;
-
     private final GameSettings settings;
-    private final Consumer<CrosshairSettings> saveCrosshair;
-    private CrosshairSettingsScreen crosshairScreen;
-    private final Button crosshair = new Button(new UiBounds(204, 2, 92, 18), "");
     private final Translations translations;
-    private final Button language = new Button(new UiBounds(CAMERA_X, LANGUAGE_Y, 72, 20), "");
-    private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
-    private final Button increase = new Button(new UiBounds(PLUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "+");
-    private final Slider renderDistance;
-    private final Slider simulationDistance = new Slider(
-            new UiBounds(CAMERA_X, SIMULATION_Y, CAMERA_WIDTH, SLIDER_HEIGHT),
-            GameSettings.MIN_SIMULATION_DISTANCE,
-            GameSettings.MAX_RENDER_DISTANCE,
-            1,
-            GameSettings.MIN_SIMULATION_DISTANCE);
+    private final Consumer<CrosshairSettings> saveCrosshair;
+    private Screen child;
+    private final Button distances = new Button(new UiBounds(20, 30, 280, 20), "");
+    private final Button crosshair = new Button(new UiBounds(204, 2, 92, 18), "");
     private final Slider fieldOfView = new Slider(
-            new UiBounds(CAMERA_X, FOV_Y, CAMERA_WIDTH, SLIDER_HEIGHT),
+            new UiBounds(CAMERA_X, FOV_Y, CAMERA_WIDTH, 12),
             (int) GameSettings.MIN_FIELD_OF_VIEW,
             (int) GameSettings.MAX_FIELD_OF_VIEW,
             1,
             (int) GameSettings.DEFAULT_FIELD_OF_VIEW);
     private final Slider zoomFieldOfView = new Slider(
-            new UiBounds(CAMERA_X, ZOOM_FOV_Y, CAMERA_WIDTH, SLIDER_HEIGHT),
+            new UiBounds(CAMERA_X, ZOOM_FOV_Y, CAMERA_WIDTH, 12),
             (int) GameSettings.MIN_ZOOM_FIELD_OF_VIEW,
             (int) GameSettings.DEFAULT_FIELD_OF_VIEW,
             1,
             (int) GameSettings.DEFAULT_ZOOM_FIELD_OF_VIEW);
     private final Slider mouseSensitivity =
-            new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 100, 1, 11);
-    private final Slider zoomSpeed =
-            new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 30, 1, 12);
-    private static final int GUI_SCALE_X = 100;
-    private final Button guiScale = new Button(new UiBounds(GUI_SCALE_X, GUI_SCALE_Y, 100, 20), "");
+            new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, 12), 1, 100, 1, 11);
+    private final Slider zoomSpeed = new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, 12), 1, 30, 1, 12);
+    private final Button guiScale = new Button(new UiBounds(100, GUI_SCALE_Y, 100, 20), "");
     private final Button clouds = new Button(new UiBounds(208, GUI_SCALE_Y, 88, 20), "");
+    private final Button language = new Button(new UiBounds(CAMERA_X, LANGUAGE_Y, 72, 20), "");
     private final Button back = new Button(BACK_BOUNDS, "");
-    private int focusIndex = -1;
+    private int focusIndex = -1, panelX = PANEL_X, panelY = PANEL_Y;
     private boolean pointerReady = true;
-    private int panelX = PANEL_X;
-    private int panelY = PANEL_Y;
 
     public SettingsScreen(GameSettings settings) {
         this(settings, ignored -> {});
@@ -89,143 +51,98 @@ public final class SettingsScreen implements Screen {
         this.settings = Objects.requireNonNull(settings);
         this.saveCrosshair = Objects.requireNonNull(saveCrosshair);
         translations = settings.translations();
-        renderDistance = new Slider(
-                new UiBounds(SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT),
-                GameSettings.MIN_RENDER_DISTANCE,
-                GameSettings.MAX_RENDER_DISTANCE,
-                1,
-                settings.renderDistance());
         syncControls();
     }
 
     @Override
-    public Action updatePointer(boolean mouseDown, boolean mousePressed, double cursorX, double cursorY) {
-        if (crosshairScreen != null)
-            return childAction(crosshairScreen.updatePointer(mouseDown, mousePressed, cursorX, cursorY));
+    public Action updatePointer(boolean down, boolean pressed, double x, double y) {
+        if (child != null) return childAction(child.updatePointer(down, pressed, x, y));
         syncControls();
-        if (!mouseDown) pointerReady = true;
+        if (!down) pointerReady = true;
         if (!pointerReady) return Action.NONE;
-        if (mousePressed) focusAt(cursorX, cursorY);
-        boolean minus = decrease.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean plus = increase.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean renderDistanceChanged = renderDistance.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean simulationChanged = simulationDistance.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean fovChanged = fieldOfView.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean zoomFovChanged = zoomFieldOfView.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean sensitivityChanged = mouseSensitivity.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean zoomSpeedChanged = zoomSpeed.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        boolean scaleChanged = guiScale.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        if (language.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleLanguage();
-        if (clouds.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleClouds();
-        boolean close = back.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
-        if (crosshair.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) openCrosshair();
-        if (scaleChanged) cycleGuiScale();
-        applyControls(
-                minus,
-                plus,
-                renderDistanceChanged,
-                simulationChanged,
-                fovChanged,
-                zoomFovChanged,
-                sensitivityChanged,
-                zoomSpeedChanged);
+        if (pressed) {
+            if (distances.bounds().contains(x, y)) focus(0);
+            else if (fieldOfView.bounds().contains(x, y)) focus(1);
+            else if (zoomFieldOfView.bounds().contains(x, y)) focus(2);
+            else if (mouseSensitivity.bounds().contains(x, y)) focus(3);
+            else if (zoomSpeed.bounds().contains(x, y)) focus(4);
+            else if (guiScale.bounds().contains(x, y)) focus(5);
+            else if (clouds.bounds().contains(x, y)) focus(6);
+            else if (language.bounds().contains(x, y)) focus(7);
+            else if (crosshair.bounds().contains(x, y)) focus(8);
+            else if (back.bounds().contains(x, y)) focus(9);
+            else focus(-1);
+        }
+        if (fieldOfView.updatePointer(down, pressed, x, y)) settings.setFieldOfView(fieldOfView.value());
+        if (zoomFieldOfView.updatePointer(down, pressed, x, y)) settings.setZoomFieldOfView(zoomFieldOfView.value());
+        if (mouseSensitivity.updatePointer(down, pressed, x, y))
+            settings.setMouseSensitivity(mouseSensitivity.value() / 100f);
+        if (zoomSpeed.updatePointer(down, pressed, x, y)) settings.setZoomSpeed(zoomSpeed.value());
+        if (guiScale.updatePointer(down, pressed, x, y)) cycleGuiScale();
+        if (clouds.updatePointer(down, pressed, x, y)) cycleClouds();
+        if (language.updatePointer(down, pressed, x, y)) cycleLanguage();
+        boolean close = back.updatePointer(down, pressed, x, y);
+        if (distances.updatePointer(down, pressed, x, y)) openChild(new ViewDistanceScreen(settings));
+        if (crosshair.updatePointer(down, pressed, x, y)) openChild(new CrosshairSettingsScreen(settings));
+        syncControls();
         return close ? Action.CLOSE : Action.NONE;
     }
 
     @Override
     public Action keyPress(UiKey key) {
         Objects.requireNonNull(key);
-        if (crosshairScreen != null) return childAction(crosshairScreen.keyPress(key));
+        if (child != null) return childAction(child.keyPress(key));
         if (key == UiKey.BACK) return Action.CLOSE;
         syncControls();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
-            focusNext(key == UiKey.NEXT ? 1 : -1);
-            return Action.NONE;
-        }
-        boolean changed = false;
-        boolean minus = false;
-        boolean plus = false;
-        boolean distanceChanged = false;
-        boolean simulationChanged = false;
-        boolean fovChanged = false;
-        boolean zoomFovChanged = false;
-        boolean sensitivityChanged = false;
-        boolean zoomSpeedChanged = false;
-        boolean close = false;
-        switch (focusIndex) {
-            case 0 -> {
-                changed = decrease.keyPress(key);
-                minus = changed;
-            }
-            case 1 -> {
-                changed = renderDistance.keyPress(key);
-                distanceChanged = changed;
-            }
-            case 2 -> {
-                changed = increase.keyPress(key);
-                plus = changed;
-            }
-            case 3 -> {
-                changed = simulationDistance.keyPress(key);
-                simulationChanged = changed;
-            }
-            case 4 -> {
-                changed = fieldOfView.keyPress(key);
-                fovChanged = changed;
-            }
-            case 5 -> {
-                changed = zoomFieldOfView.keyPress(key);
-                zoomFovChanged = changed;
-            }
-            case 6 -> {
-                changed = mouseSensitivity.keyPress(key);
-                sensitivityChanged = changed;
-            }
-            case 7 -> {
-                changed = zoomSpeed.keyPress(key);
-                zoomSpeedChanged = changed;
-            }
-            case 8 -> {
-                if (key == UiKey.ACTIVATE) {
-                    cycleGuiScale();
-                    changed = true;
+            int direction = key == UiKey.NEXT ? 1 : -1;
+            int current = focusIndex < 0 ? (direction > 0 ? -1 : 10) : focusIndex;
+            focus(Math.floorMod(current + direction, 10));
+        } else {
+            switch (focusIndex) {
+                case 0 -> {
+                    if (distances.keyPress(key)) openChild(new ViewDistanceScreen(settings));
                 }
+                case 1 -> {
+                    if (fieldOfView.keyPress(key)) settings.setFieldOfView(fieldOfView.value());
+                }
+                case 2 -> {
+                    if (zoomFieldOfView.keyPress(key)) settings.setZoomFieldOfView(zoomFieldOfView.value());
+                }
+                case 3 -> {
+                    if (mouseSensitivity.keyPress(key)) settings.setMouseSensitivity(mouseSensitivity.value() / 100f);
+                }
+                case 4 -> {
+                    if (zoomSpeed.keyPress(key)) settings.setZoomSpeed(zoomSpeed.value());
+                }
+                case 5 -> {
+                    if (guiScale.keyPress(key)) cycleGuiScale();
+                }
+                case 6 -> {
+                    if (clouds.keyPress(key)) cycleClouds();
+                }
+                case 7 -> {
+                    if (language.keyPress(key)) cycleLanguage();
+                }
+                case 8 -> {
+                    if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
+                }
+                case 9 -> {
+                    if (back.keyPress(key)) return Action.CLOSE;
+                }
+                default -> {}
             }
-            case 9 -> {
-                if (clouds.keyPress(key)) cycleClouds();
-            }
-            case 10 -> {
-                if (language.keyPress(key)) cycleLanguage();
-            }
-            case 11 -> {
-                if (crosshair.keyPress(key)) openCrosshair();
-            }
-            case 12 -> close = back.keyPress(key);
-            default -> {}
         }
-        if (changed)
-            applyControls(
-                    minus,
-                    plus,
-                    distanceChanged,
-                    simulationChanged,
-                    fovChanged,
-                    zoomFovChanged,
-                    sensitivityChanged,
-                    zoomSpeedChanged);
-        return close ? Action.CLOSE : Action.NONE;
+        return Action.NONE;
     }
 
     @Override
     public void cancelInteraction() {
-        if (crosshairScreen != null) crosshairScreen.cancelInteraction();
-        crosshair.cancelInteraction();
+        if (child != null) child.cancelInteraction();
         focusIndex = -1;
         pointerReady = false;
-        decrease.cancelInteraction();
-        increase.cancelInteraction();
-        renderDistance.cancelInteraction();
-        simulationDistance.cancelInteraction();
+        distances.cancelInteraction();
+        crosshair.cancelInteraction();
         fieldOfView.cancelInteraction();
         zoomFieldOfView.cancelInteraction();
         mouseSensitivity.cancelInteraction();
@@ -238,68 +155,43 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public void layout(UiViewport viewport) {
-        if (crosshairScreen != null) {
-            crosshairScreen.layout(viewport);
+        if (child != null) {
+            child.layout(viewport);
             return;
         }
-        int width = (int) Math.ceil(viewport.width());
-        int height = (int) Math.ceil(viewport.height());
-        int nextPanelX = Math.max(0, (width - PANEL_WIDTH) / 2);
-        int nextPanelY = Math.max(0, (height - PANEL_HEIGHT) / 2);
-        boolean moved = panelX != nextPanelX || panelY != nextPanelY;
-        panelX = nextPanelX;
-        panelY = nextPanelY;
-        int offsetX = panelX - PANEL_X;
-        int offsetY = panelY - PANEL_Y;
-        decrease.setPosition(MINUS_X + offsetX, BUTTON_Y + offsetY);
-        increase.setPosition(PLUS_X + offsetX, BUTTON_Y + offsetY);
-        renderDistance.setPosition(SLIDER_X + offsetX, SLIDER_Y + offsetY);
-        simulationDistance.setPosition(CAMERA_X + offsetX, SIMULATION_Y + offsetY);
-        fieldOfView.setPosition(CAMERA_X + offsetX, FOV_Y + offsetY);
-        zoomFieldOfView.setPosition(CAMERA_X + offsetX, ZOOM_FOV_Y + offsetY);
-        mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
-        zoomSpeed.setPosition(CAMERA_X + offsetX, ZOOM_SPEED_Y + offsetY);
-        guiScale.setPosition(GUI_SCALE_X + offsetX, GUI_SCALE_Y + offsetY);
-        clouds.setPosition(208 + offsetX, GUI_SCALE_Y + offsetY);
-        language.setPosition(CAMERA_X + offsetX, LANGUAGE_Y + offsetY);
-        back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
+        int nextX = Math.max(0, ((int) Math.ceil(viewport.width()) - PANEL_WIDTH) / 2);
+        int nextY = Math.max(0, ((int) Math.ceil(viewport.height()) - PANEL_HEIGHT) / 2);
+        if (panelX != nextX || panelY != nextY) cancelInteraction();
+        panelX = nextX;
+        panelY = nextY;
+        int dx = panelX - PANEL_X, dy = panelY - PANEL_Y;
+        distances.setPosition(panelX + 12, panelY + 30);
         crosshair.setPosition(panelX + 204, panelY + 2);
-        if (moved) cancelInteraction();
-    }
-
-    private void applyControls(
-            boolean minus,
-            boolean plus,
-            boolean distanceChanged,
-            boolean simulationChanged,
-            boolean fovChanged,
-            boolean zoomFovChanged,
-            boolean sensitivityChanged,
-            boolean zoomSpeedChanged) {
-        if (minus || plus || distanceChanged) {
-            settings.setRenderDistance(
-                    minus ? renderDistance() - 1 : plus ? renderDistance() + 1 : renderDistance.value());
-        }
-        if (simulationChanged) settings.setSimulationDistance(simulationDistance.value());
-        if (fovChanged) settings.setFieldOfView(fieldOfView.value());
-        if (zoomFovChanged) settings.setZoomFieldOfView(zoomFieldOfView.value());
-        if (sensitivityChanged) settings.setMouseSensitivity(mouseSensitivity.value() / 100f);
-        if (zoomSpeedChanged) settings.setZoomSpeed(zoomSpeed.value());
-        syncControls();
+        fieldOfView.setPosition(CAMERA_X + dx, FOV_Y + dy);
+        zoomFieldOfView.setPosition(CAMERA_X + dx, ZOOM_FOV_Y + dy);
+        mouseSensitivity.setPosition(CAMERA_X + dx, SENSITIVITY_Y + dy);
+        zoomSpeed.setPosition(CAMERA_X + dx, ZOOM_SPEED_Y + dy);
+        guiScale.setPosition(100 + dx, GUI_SCALE_Y + dy);
+        clouds.setPosition(208 + dx, GUI_SCALE_Y + dy);
+        language.setPosition(CAMERA_X + dx, LANGUAGE_Y + dy);
+        back.setPosition(BACK_BOUNDS.x() + dx, BACK_BOUNDS.y() + dy);
     }
 
     private void syncControls() {
-        renderDistance.setValue(settings.renderDistance());
-        simulationDistance.setRange(GameSettings.MIN_SIMULATION_DISTANCE, settings.renderDistance(), 1);
-        simulationDistance.setValue(settings.simulationDistance());
         fieldOfView.setValue(Math.round(settings.fieldOfView()));
         zoomFieldOfView.setRange((int) GameSettings.MIN_ZOOM_FIELD_OF_VIEW, Math.round(settings.fieldOfView()), 1);
         zoomFieldOfView.setValue(Math.round(settings.zoomFieldOfView()));
         mouseSensitivity.setValue(Math.round(settings.mouseSensitivity() * 100));
         zoomSpeed.setValue(Math.round(settings.zoomSpeed()));
-        decrease.setEnabled(canDecrease());
-        increase.setEnabled(canIncrease());
-        guiScale.setLabel(guiScaleLabel());
+        guiScale.setLabel(translations.text(
+                switch (settings.guiScale()) {
+                    case 1 -> "settings.size.small";
+                    case 2 -> "settings.size.medium";
+                    case 3 -> "settings.size.large";
+                    case 4 -> "settings.size.extraLarge";
+                    default -> "settings.auto";
+                }));
+        distances.setLabel(translations.text("distance.title"));
         clouds.setLabel(
                 translations.text("settings.clouds." + settings.clouds().name().toLowerCase(java.util.Locale.ROOT)));
         language.setLabel(translations.language().displayName());
@@ -307,64 +199,26 @@ public final class SettingsScreen implements Screen {
         crosshair.setLabel(translations.text("crosshair.title"));
     }
 
-    private void focusAt(double x, double y) {
-        if (decrease.enabled() && decrease.bounds().contains(x, y)) focus(0);
-        else if (renderDistance.bounds().contains(x, y)) focus(1);
-        else if (increase.enabled() && increase.bounds().contains(x, y)) focus(2);
-        else if (simulationDistance.bounds().contains(x, y)) focus(3);
-        else if (fieldOfView.bounds().contains(x, y)) focus(4);
-        else if (zoomFieldOfView.bounds().contains(x, y)) focus(5);
-        else if (mouseSensitivity.bounds().contains(x, y)) focus(6);
-        else if (zoomSpeed.bounds().contains(x, y)) focus(7);
-        else if (guiScale.bounds().contains(x, y)) focus(8);
-        else if (clouds.bounds().contains(x, y)) focus(9);
-        else if (language.bounds().contains(x, y)) focus(10);
-        else if (crosshair.bounds().contains(x, y)) focus(11);
-        else if (back.bounds().contains(x, y)) focus(12);
-        else focus(-1);
-    }
-
-    private void focusNext(int direction) {
-        int next = focusIndex < 0 ? (direction > 0 ? -1 : 13) : focusIndex;
-        do next = Math.floorMod(next + direction, 13);
-        while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
-        focus(next);
-    }
-
     private void focus(int index) {
         focusIndex = index;
-        decrease.setFocused(index == 0);
-        renderDistance.setFocused(index == 1);
-        increase.setFocused(index == 2);
-        simulationDistance.setFocused(index == 3);
-        fieldOfView.setFocused(index == 4);
-        zoomFieldOfView.setFocused(index == 5);
-        mouseSensitivity.setFocused(index == 6);
-        zoomSpeed.setFocused(index == 7);
-        guiScale.setFocused(index == 8);
-        clouds.setFocused(index == 9);
-        language.setFocused(index == 10);
-        crosshair.setFocused(index == 11);
-        back.setFocused(index == 12);
+        distances.setFocused(index == 0);
+        fieldOfView.setFocused(index == 1);
+        zoomFieldOfView.setFocused(index == 2);
+        mouseSensitivity.setFocused(index == 3);
+        zoomSpeed.setFocused(index == 4);
+        guiScale.setFocused(index == 5);
+        clouds.setFocused(index == 6);
+        language.setFocused(index == 7);
+        crosshair.setFocused(index == 8);
+        back.setFocused(index == 9);
     }
 
     private void cycleGuiScale() {
-        int next = settings.guiScale() == GameSettings.MAX_GUI_SCALE
-                ? GameSettings.GUI_SCALE_AUTO
-                : settings.guiScale() + 1;
-        settings.setGuiScale(next);
+        settings.setGuiScale(
+                settings.guiScale() == GameSettings.MAX_GUI_SCALE
+                        ? GameSettings.GUI_SCALE_AUTO
+                        : settings.guiScale() + 1);
         syncControls();
-    }
-
-    private String guiScaleLabel() {
-        return translations.text(
-                switch (settings.guiScale()) {
-                    case 1 -> "settings.size.small";
-                    case 2 -> "settings.size.medium";
-                    case 3 -> "settings.size.large";
-                    case 4 -> "settings.size.extraLarge";
-                    default -> "settings.auto";
-                });
     }
 
     private void cycleLanguage() {
@@ -379,20 +233,75 @@ public final class SettingsScreen implements Screen {
         syncControls();
     }
 
+    @Override
+    public void render(UiCanvas canvas, UiViewport viewport) {
+        if (child != null) {
+            child.render(canvas, viewport);
+            return;
+        }
+        layout(viewport);
+        syncControls();
+        canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
+        label(canvas, translations.text("settings.title"), 4);
+        label(
+                canvas,
+                translations.text(
+                        "distance.summary",
+                        settings.renderDistance(),
+                        settings.simulationDistance(),
+                        settings.farDistance()),
+                60);
+        label(canvas, translations.text("settings.fov", Math.round(settings.fieldOfView())), FOV_Y - 4);
+        label(canvas, translations.text("settings.zoomFov", Math.round(settings.zoomFieldOfView())), ZOOM_FOV_Y - 4);
+        label(canvas, translations.text("settings.sensitivity", settings.mouseSensitivity()), SENSITIVITY_Y - 4);
+        label(canvas, translations.text("settings.zoomSpeed", Math.round(settings.zoomSpeed())), ZOOM_SPEED_Y - 4);
+        label(canvas, translations.text("settings.guiScale"), GUI_SCALE_Y + 3);
+        label(canvas, translations.text("settings.language"), LANGUAGE_Y + 3);
+        distances.render(canvas, BitmapFont.DEFAULT);
+        crosshair.render(canvas, BitmapFont.DEFAULT);
+        fieldOfView.render(canvas);
+        zoomFieldOfView.render(canvas);
+        mouseSensitivity.render(canvas);
+        zoomSpeed.render(canvas);
+        guiScale.render(canvas, BitmapFont.DEFAULT);
+        clouds.render(canvas, BitmapFont.DEFAULT);
+        language.render(canvas, BitmapFont.DEFAULT);
+        back.render(canvas, BitmapFont.DEFAULT);
+    }
+
+    private void label(UiCanvas canvas, String value, int offsetY) {
+        canvas.textWithShadow(BitmapFont.DEFAULT, value, panelX + 8, panelY + offsetY, 1, 1, 1, 1);
+    }
+
+    private void openChild(Screen screen) {
+        cancelInteraction();
+        child = screen;
+        child.cancelInteraction();
+    }
+
+    private Action childAction(Action action) {
+        if (action != Action.CLOSE) return action;
+        if (child instanceof CrosshairSettingsScreen) saveCrosshair.accept(settings.crosshair());
+        child.cancelInteraction();
+        child = null;
+        cancelInteraction();
+        return Action.NONE;
+    }
+
+    public Button distancesButton() {
+        return distances;
+    }
+
+    public Button crosshairButton() {
+        return crosshair;
+    }
+
     public Button cloudsButton() {
         return clouds;
     }
 
     public Button languageButton() {
         return language;
-    }
-
-    public Slider slider() {
-        return renderDistance;
-    }
-
-    public Slider simulationDistanceSlider() {
-        return simulationDistance;
     }
 
     public Slider fieldOfViewSlider() {
@@ -415,134 +324,11 @@ public final class SettingsScreen implements Screen {
         return guiScale;
     }
 
-    public Button decreaseButton() {
-        return decrease;
-    }
-
-    public Button increaseButton() {
-        return increase;
-    }
-
     public Button backButton() {
         return back;
     }
 
     public UiBounds panelBounds() {
         return new UiBounds(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
-    }
-
-    public int renderDistance() {
-        return settings.renderDistance();
-    }
-
-    public boolean canDecrease() {
-        return settings.renderDistance() > GameSettings.MIN_RENDER_DISTANCE;
-    }
-
-    public boolean canIncrease() {
-        return settings.renderDistance() < GameSettings.MAX_RENDER_DISTANCE;
-    }
-
-    @Override
-    public void render(UiCanvas canvas, UiViewport viewport) {
-        if (crosshairScreen != null) {
-            crosshairScreen.render(canvas, viewport);
-            return;
-        }
-        layout(viewport);
-        syncControls();
-        canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
-        BitmapFont font = BitmapFont.DEFAULT;
-        canvas.textWithShadow(font, translations.text("settings.title"), panelX + 12, panelY + 4, 1, 1, 1, 1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.renderDistance", renderDistance()),
-                panelX + 12,
-                panelY + 22,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.simulation", settings.simulationDistance()),
-                panelX + 8,
-                panelY + SIMULATION_Y - 4,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.fov", Math.round(settings.fieldOfView())),
-                panelX + 8,
-                panelY + FOV_Y - 4,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.zoomFov", Math.round(settings.zoomFieldOfView())),
-                panelX + 8,
-                panelY + ZOOM_FOV_Y - 4,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.sensitivity", settings.mouseSensitivity()),
-                panelX + 8,
-                panelY + SENSITIVITY_Y - 4,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font,
-                translations.text("settings.zoomSpeed", Math.round(settings.zoomSpeed())),
-                panelX + 8,
-                panelY + ZOOM_SPEED_Y - 4,
-                1,
-                1,
-                1,
-                1);
-        canvas.textWithShadow(
-                font, translations.text("settings.guiScale"), panelX + 8, panelY + GUI_SCALE_Y + 3, 1, 1, 1, 1);
-        canvas.textWithShadow(
-                font, translations.text("settings.language"), panelX + 8, panelY + LANGUAGE_Y + 3, 1, 1, 1, 1);
-        renderDistance.render(canvas);
-        simulationDistance.render(canvas);
-        fieldOfView.render(canvas);
-        zoomFieldOfView.render(canvas);
-        mouseSensitivity.render(canvas);
-        zoomSpeed.render(canvas);
-        decrease.render(canvas, font);
-        increase.render(canvas, font);
-        guiScale.render(canvas, font);
-        clouds.render(canvas, font);
-        language.render(canvas, font);
-        back.render(canvas, font);
-        crosshair.render(canvas, font);
-    }
-
-    private void openCrosshair() {
-        cancelInteraction();
-        crosshairScreen = new CrosshairSettingsScreen(settings);
-        crosshairScreen.cancelInteraction();
-    }
-
-    private Action childAction(Action action) {
-        if (action != Action.CLOSE) return action;
-        crosshairScreen.cancelInteraction();
-        crosshairScreen = null;
-        cancelInteraction();
-        saveCrosshair.accept(settings.crosshair());
-        return Action.NONE;
-    }
-
-    public Button crosshairButton() {
-        return crosshair;
     }
 }

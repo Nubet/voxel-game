@@ -54,19 +54,20 @@ class ScreenManagerTest {
         ScreenManager manager = new ScreenManager();
         SettingsScreen screen = new SettingsScreen(new GameSettings());
         manager.open(screen);
-        manager.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
-        assertEquals(8, screen.renderDistance());
+        manager.updatePointer(true, true, SettingsScreen.CAMERA_X, SettingsScreen.FOV_Y);
+        assertEquals(
+                GameSettings.DEFAULT_FIELD_OF_VIEW, screen.fieldOfViewSlider().value());
         manager.updatePointer(false, false, 0, 0);
-        manager.updatePointer(true, true, SettingsScreen.SLIDER_X, SettingsScreen.SLIDER_Y);
-        assertTrue(screen.slider().dragging());
+        manager.updatePointer(true, true, SettingsScreen.CAMERA_X, SettingsScreen.FOV_Y);
+        assertTrue(screen.fieldOfViewSlider().dragging());
         manager.close();
         manager.open(screen);
-        assertFalse(screen.slider().dragging());
-        assertFalse(screen.slider().focused());
+        assertFalse(screen.fieldOfViewSlider().dragging());
+        assertFalse(screen.fieldOfViewSlider().focused());
         manager.keyPress(UiKey.BACK);
         manager.beginFrame();
         manager.keyPress(UiKey.INCREASE);
-        assertEquals(GameSettings.MIN_RENDER_DISTANCE, screen.renderDistance());
+        assertEquals(GameSettings.MIN_FIELD_OF_VIEW, screen.fieldOfViewSlider().value());
         assertFalse(manager.blocksGameplay());
     }
 

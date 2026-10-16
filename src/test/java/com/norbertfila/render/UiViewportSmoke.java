@@ -129,9 +129,9 @@ public final class UiViewportSmoke {
                     screens.open(panel);
                     screens.layout(viewport);
                     screens.updatePointer(false, false, 0, 0);
-                    var sliderBounds = panel.slider().bounds();
+                    var sliderBounds = panel.fieldOfViewSlider().bounds();
                     screens.updatePointer(true, true, sliderBounds.x() + .25, sliderBounds.y() + 1);
-                    check(panel.renderDistance() == GameSettings.MIN_RENDER_DISTANCE, "Wrong slider value");
+                    check(panel.fieldOfViewSlider().value() == GameSettings.MIN_FIELD_OF_VIEW, "Wrong slider value");
                     clear();
                     render(ui, canvas, screens, hotbar, viewport);
                     pixels = capture(viewport);
@@ -350,13 +350,13 @@ public final class UiViewportSmoke {
         screens.open(screen);
         screens.layout(viewport);
         screens.updatePointer(false, false, 0, 0);
-        var settingsSlider = screen.slider().bounds();
+        var settingsSlider = screen.fieldOfViewSlider().bounds();
         screens.updatePointer(true, true, settingsSlider.x(), settingsSlider.y() + 1);
-        check(screen.slider().dragging(), "Settings slider did not capture");
+        check(screen.fieldOfViewSlider().dragging(), "Settings slider did not capture");
         screens.cancelInteraction();
         screens.updatePointer(true, true, settingsSlider.x() + settingsSlider.width(), settingsSlider.y() + 1);
         check(
-                !screen.slider().dragging() && settings.renderDistance() == GameSettings.MIN_RENDER_DISTANCE,
+                !screen.fieldOfViewSlider().dragging() && settings.fieldOfView() == GameSettings.MIN_FIELD_OF_VIEW,
                 "Cancelled screen reacquired held pointer");
         screens.keyPress(UiKey.BACK);
         check(!screens.isOpen() && screens.blocksGameplay(), "Escape did not close settings");

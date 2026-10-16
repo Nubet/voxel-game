@@ -37,7 +37,7 @@ public final class GameSettings {
     /** Far terrain radius in chunks; 0 or a value not above the render distance turns it off. */
     public static final int MAX_FAR_DISTANCE = 128;
 
-    public static final int DEFAULT_FAR_DISTANCE = 64;
+    public static final int DEFAULT_FAR_DISTANCE = 32;
     public static final int GUI_SCALE_AUTO = 0;
     public static final int MIN_GUI_SCALE = 1;
     public static final int MAX_GUI_SCALE = 4;
