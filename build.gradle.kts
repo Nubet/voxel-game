@@ -60,6 +60,15 @@ tasks.register<JavaExec>("debugBiomes") {
     mainClass.set("com.norbertfila.generation.BiomeDebugMap")
 }
 
+tasks.register<JavaExec>("diagnoseLandscapes") {
+    group = "verification"
+    description = "Writes repeatable multi-seed landscape maps, distributions, transects and timings."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.LandscapeDiagnostics")
+    args(layout.buildDirectory.dir("landscape-diagnostics/${findProperty("label") ?: "current"}").get().asFile.absolutePath)
+}
+
 tasks.register<JavaExec>("smokeTerrainPasses") {
     group = "verification"
     description = "Checks split terrain passes against the combined renderer on OpenGL."

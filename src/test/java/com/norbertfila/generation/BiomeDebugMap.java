@@ -33,7 +33,7 @@ public final class BiomeDebugMap {
         if (!ImageIO.write(image, "png", output.toFile())) throw new IOException("PNG writer is unavailable");
     }
 
-    private static Color color(BiomeType biome) {
+    static Color color(BiomeType biome) {
         return switch (biome) {
             case PLAINS -> new Color(145, 205, 95);
             case FOREST -> new Color(35, 125, 55);

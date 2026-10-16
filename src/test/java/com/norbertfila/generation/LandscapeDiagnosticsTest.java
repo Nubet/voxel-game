@@ -1,0 +1,63 @@
+package com.norbertfila.generation;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.ChunkPos;
+import java.nio.file.Path;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class LandscapeDiagnosticsTest {
+    @TempDir
+    Path output;
+
+    @Test
+    void measuresKnownRampAndWaterBoundaryWithoutDependingOnMapSpacing() throws Exception {
+        TerrainSource ramp = new TerrainSource() {
+            public long seed() {
+                return 0;
+            }
+
+            public int generatorVersion() {
+                return 1;
+            }
+
+            public ChunkData generate(ChunkPos position) {
+                throw new UnsupportedOperationException();
+            }
+
+            public int surfaceHeight(int x, int z) {
+                return x;
+            }
+
+            public TerrainSummary sample(int x, int z) {
+                return new TerrainSummary(x, BlockId.GRASS, BlockId.DIRT, BlockId.STONE, TerrainSummary.NO_BEDROCK, 0);
+            }
+        };
+        var window = new LandscapeDiagnostics.Window("ramp", -1, -2, 3, 1);
+        var survey = LandscapeDiagnostics.survey(ramp, window);
+        assertEquals(3, survey.water());
+        assertEquals(6, survey.shores());
+        assertEquals("-1,-1,0,1,1", survey.heightDistribution());
+        for (double slope : survey.slopes()) assertEquals(1, slope);
+        for (int relief : survey.relief()) assertEquals(64, relief);
+        assertEquals(9, survey.distribution().get("material,grass"));
+        assertEquals(
+                survey.summary(0, 1), LandscapeDiagnostics.survey(ramp, window).summary(0, 1));
+        LandscapeDiagnostics.writeMaps(output.resolve("ramp.png"), survey);
+        var image = ImageIO.read(output.resolve("ramp.png").toFile());
+        assertEquals(9, image.getWidth());
+        assertEquals(46, image.getHeight());
+        assertNotEquals(image.getRGB(6, 43), image.getRGB(8, 43));
+    }
+
+    @Test
+    void rejectsInvalidOrOverflowingWindows() {
+        assertThrows(IllegalArgumentException.class, () -> new LandscapeDiagnostics.Window("bad", 0, 0, 0, 1));
+        assertThrows(IllegalArgumentException.class, () -> new LandscapeDiagnostics.Window("bad", 0, 0, 1, 0));
+        assertThrows(
+                ArithmeticException.class, () -> new LandscapeDiagnostics.Window("bad", Integer.MAX_VALUE, 0, 2, 1));
+    }
+}
