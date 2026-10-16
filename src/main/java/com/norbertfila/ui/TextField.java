@@ -24,6 +24,25 @@ public final class TextField {
         return caret;
     }
 
+    public void setText(String value) {
+        Objects.requireNonNull(value);
+        if (value.codePointCount(0, value.length()) > maximumCodePoints
+                || value.codePoints()
+                        .anyMatch(cp -> Character.isISOControl(cp)
+                                || cp >= 0xD800 && cp <= 0xDFFF
+                                || Character.getType(cp) == Character.LINE_SEPARATOR
+                                || Character.getType(cp) == Character.PARAGRAPH_SEPARATOR))
+            throw new IllegalArgumentException("Invalid field text");
+        text = value;
+        caret = value.length();
+        first = 0;
+    }
+
+    public void setWidth(int width) {
+        if (width < 12) throw new IllegalArgumentException("Invalid field width");
+        bounds = new UiBounds(bounds.x(), bounds.y(), width, bounds.height());
+    }
+
     public UiBounds bounds() {
         return bounds;
     }

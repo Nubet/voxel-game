@@ -2,6 +2,7 @@ package com.norbertfila.core;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
@@ -28,6 +29,7 @@ import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.screens.ChatScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SaveErrorScreen;
@@ -159,6 +161,7 @@ public final class GameLoop {
         var loading = new SessionStatusScreen(settings.translations().text("status.loading"));
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
+        var chat = new ChatHistory();
         var dropKeys = new ArrayDeque<Boolean>();
         long placePressId = 0;
         boolean inventoryInitialized = false;
@@ -242,6 +245,14 @@ public final class GameLoop {
                         if (runtime.state() == WorldRuntime.State.LOADING) return Exit.BACK_TO_MENU;
                         if (!screens.isOpen()) screens.open(pauseScreen);
                         else screens.input(event);
+                    } else if (event instanceof UiEvent.Character(var codePoint)
+                            && !screens.blocksGameplay()
+                            && runtime.state() == WorldRuntime.State.PLAYING
+                            && ChatScreen.initialText(codePoint) != null) {
+                        screens.open(new ChatScreen(
+                                chat,
+                                ChatScreen.initialText(codePoint),
+                                text -> chat.add(text, ChatHistory.Kind.PLAYER, window.time())));
                     } else if (event instanceof UiEvent.Key(var key)
                             && (key == UiKey.DROP_ONE || key == UiKey.DROP_STACK)
                             && !screens.blocksGameplay()) dropKeys.addLast(key == UiKey.DROP_STACK);
