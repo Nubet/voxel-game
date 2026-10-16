@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class LakeAndShoreTest {
     @Test
     void inlandDepressionsCollectTributariesIntoBoundedLakes() {
-        var water = new RegionalHydrology(42, 28, (x, z) -> 120 + 30 * (Math.sin(x * .004) + Math.cos(z * .004)));
+        var water = new RegionalHydrology(42, 28, 256, (x, z) -> 120 + 30 * (Math.sin(x * .004) + Math.cos(z * .004)));
         int lakes = 0;
         for (int z = -2048; z < 2048; z += 16)
             for (int x = -2048; x < 2048; x += 16) {

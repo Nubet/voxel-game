@@ -12,8 +12,28 @@ class RegionalHydrologyTest {
     private static final DoubleBinaryOperator GROUND = (x, z) -> 120 + .015 * x + .025 * z;
 
     @Test
+    void riversCutDepressionsWithoutRaisingStoneWallsOrPerchedWater() {
+        DoubleBinaryOperator terrain = (x, z) -> 100 + .01 * x + .02 * z + 45 * Math.sin(x * .012) * Math.cos(z * .009);
+        var water = new RegionalHydrology(42, 28, 256, terrain);
+        int channels = 0;
+        for (int z = -512; z <= 512; z += 4)
+            for (int x = -512; x <= 512; x += 4) {
+                double ground = terrain.applyAsDouble(x, z);
+                var sample = water.sample(x, z, ground);
+                assertTrue(sample.height() <= ground, "Hydrology must never build an embankment");
+                if (sample.kind() == WaterKind.RIVER) {
+                    assertTrue(sample.waterLevel() <= ground, "Water must not sit above the original hillside");
+                    if (sample.height() < sample.waterLevel()) channels++;
+                }
+                var adjacent = water.sample(x + .001, z, terrain.applyAsDouble(x + .001, z));
+                assertEquals(sample.height(), adjacent.height(), .05, "Overlapping valleys must blend continuously");
+            }
+        assertTrue(channels > 100, "The fixture must contain wet river channels");
+    }
+
+    @Test
     void riverMouthsStopAtTheCoastInsteadOfBuildingCausewaysAcrossTheSea() {
-        var water = new RegionalHydrology(42, 28, (x, z) -> x < 0 ? 80 : 0);
+        var water = new RegionalHydrology(42, 28, 256, (x, z) -> x < 0 ? 80 : 0);
         for (int x = 128; x <= 1024; x += 16)
             for (int z = -1024; z <= 1024; z += 32) {
                 var sample = water.sample(x, z, 0);
@@ -27,7 +47,7 @@ class RegionalHydrologyTest {
     void wetChannelsStayConnectedThroughOverlappingValleySegments() {
         DoubleBinaryOperator corrugated =
                 (x, z) -> GROUND.applyAsDouble(x, z) + 24 * Math.sin(x * .03) * Math.cos(z * .02);
-        var water = new RegionalHydrology(42, 28, corrugated);
+        var water = new RegionalHydrology(42, 28, 256, corrugated);
         for (int cx = -1; cx <= 1; cx++) {
             var start = water.node(cx, 0);
             var end = water.downstream(start);
@@ -66,7 +86,7 @@ class RegionalHydrologyTest {
 
     @Test
     void drainageAlwaysDescendsAndChannelsMeetAtSharedNodes() {
-        var water = new RegionalHydrology(42, 28, GROUND);
+        var water = new RegionalHydrology(42, 28, 256, GROUND);
         int tributaries = 0;
         for (int cz = -4; cz <= 4; cz++)
             for (int cx = -4; cx <= 4; cx++) {
@@ -78,7 +98,7 @@ class RegionalHydrologyTest {
                 assertEquals(WaterKind.RIVER, sample.kind());
                 assertTrue(sample.height() < sample.waterLevel());
                 var end = water.sample(target.x(), target.z(), GROUND.applyAsDouble(target.x(), target.z()));
-                assertEquals(target.level(), end.waterLevel());
+                assertEquals(water.waterLevel(target), end.waterLevel());
                 assertTrue(end.height() < end.waterLevel());
                 tributaries++;
                 int steps = 0;
@@ -94,7 +114,7 @@ class RegionalHydrologyTest {
 
     @Test
     void plansAreContinuousAcrossPositiveAndNegativeRegionBoundaries() {
-        var water = new RegionalHydrology(-918273, 28, GROUND);
+        var water = new RegionalHydrology(-918273, 28, 256, GROUND);
         int crossings = 0;
         for (boolean xAxis : new boolean[] {true, false})
             for (int boundary : new int[] {-2048, 0, 2048})
@@ -114,8 +134,8 @@ class RegionalHydrologyTest {
 
     @Test
     void workerOrderDoesNotAffectTheRegionalNetwork() throws Exception {
-        var expected = new RegionalHydrology(42, 28, GROUND);
-        var parallel = new RegionalHydrology(42, 28, GROUND);
+        var expected = new RegionalHydrology(42, 28, 256, GROUND);
+        var parallel = new RegionalHydrology(42, 28, 256, GROUND);
         try (var workers = Executors.newFixedThreadPool(4)) {
             var tasks = new ArrayList<java.util.concurrent.Future<RegionalHydrology.Sample>>();
             for (int i = 0; i < 64; i++) {

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 22;
+    private static final int GENERATOR_VERSION = 23;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -75,7 +75,10 @@ public final class TerrainGenerator implements TerrainSource {
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         landforms = new RegionalLandforms(config.landforms(), noise);
         hydrology = new RegionalHydrology(
-                seed, config.waterLevel(), (x, z) -> baseSample(x, z).elevation());
+                seed,
+                config.waterLevel(),
+                config.maxHeight(),
+                (x, z) -> baseSample(x, z).elevation());
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
