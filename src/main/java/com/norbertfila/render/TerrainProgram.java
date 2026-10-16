@@ -17,6 +17,7 @@ final class TerrainProgram implements AutoCloseable {
     private final int renderLayer;
     private final int waterTime;
     private final int waterFog;
+    private final int distanceFogRange;
     private final int coverageOrigin;
     private final int coverageSize;
 
@@ -30,6 +31,8 @@ final class TerrainProgram implements AutoCloseable {
             // Solid and far shaders have zero flow, so drivers can optimize away the water clock.
             waterTime = glGetUniformLocation(linked, "uWaterTime");
             waterFog = uniform(linked, "uWaterFog");
+            distanceFogRange = uniform(linked, "uDistanceFogRange");
+            int distanceFogColor = uniform(linked, "uDistanceFogColor");
             coverageOrigin = uniform(linked, "uCoverageOrigin");
             coverageSize = uniform(linked, "uCoverageSize");
             int sampler = uniform(linked, "uBlockTextures");
@@ -37,6 +40,11 @@ final class TerrainProgram implements AutoCloseable {
             glUseProgram(linked);
             glUniform1i(sampler, 0);
             glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
+            glUniform3f(
+                    distanceFogColor,
+                    UnderwaterVisibility.SKY_RED,
+                    UnderwaterVisibility.SKY_GREEN,
+                    UnderwaterVisibility.SKY_BLUE);
             id = linked;
         } catch (RuntimeException | Error failure) {
             glDeleteProgram(linked);
@@ -67,6 +75,10 @@ final class TerrainProgram implements AutoCloseable {
 
     void renderLayer(RenderLayer layer) {
         glUniform1i(renderLayer, layer.ordinal());
+    }
+
+    void distanceFog(DistanceFog fog) {
+        glProgramUniform2f(id, distanceFogRange, fog.start(), fog.end());
     }
 
     /**

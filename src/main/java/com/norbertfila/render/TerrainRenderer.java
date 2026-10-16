@@ -60,6 +60,13 @@ public final class TerrainRenderer implements AutoCloseable {
         this(blockTextures, 8, DEFAULT_GPU_BUDGET_BYTES);
     }
 
+    public void viewDistances(int detailChunks, int landscapeChunks) {
+        var fog = DistanceFog.forDistances(detailChunks, landscapeChunks);
+        solidProgram.distanceFog(fog);
+        waterProgram.distanceFog(fog);
+        far.distanceFog(fog);
+    }
+
     public TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
         this.blockTextures = Objects.requireNonNull(blockTextures);
         regionIndex = new RegionIndex(regionEdge);

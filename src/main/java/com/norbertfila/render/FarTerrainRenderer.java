@@ -64,6 +64,10 @@ public final class FarTerrainRenderer implements AutoCloseable {
         program = new TerrainProgram("/shaders/terrain_far.vert");
     }
 
+    void distanceFog(DistanceFog fog) {
+        program.distanceFog(fog);
+    }
+
     /**
      * Matches the GPU tiles to a newly published residency: dropped tiles are released, new ones queued so the tile
      * nearest the camera uploads first.

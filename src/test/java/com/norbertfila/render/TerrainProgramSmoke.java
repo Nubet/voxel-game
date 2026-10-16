@@ -13,6 +13,7 @@ public final class TerrainProgramSmoke {
             for (String variant : new String[] {"solid", "water", "far"}) {
                 String vertex = "/shaders/terrain_" + variant + ".vert";
                 try (TerrainProgram program = new TerrainProgram(vertex)) {
+                    program.distanceFog(DistanceFog.forDistances(4, 32));
                     program.use(new Matrix4f(), 0.5f, 1.0f, 0, 0, 0);
                     for (RenderLayer layer : RenderLayer.values()) program.renderLayer(layer);
                     program.coverage(0, 0, 0);
@@ -21,6 +22,8 @@ public final class TerrainProgramSmoke {
                 int linked = ShaderPrograms.create(vertex, "/shaders/terrain.frag");
                 try {
                     if (variant.equals("water")) ShaderPrograms.uniform(linked, "uWaterTime");
+                    ShaderPrograms.uniform(linked, "uDistanceFogRange");
+                    ShaderPrograms.uniform(linked, "uDistanceFogColor");
                     System.out.println("PASS " + variant + " waterTime=" + glGetUniformLocation(linked, "uWaterTime"));
                 } finally {
                     glDeleteProgram(linked);

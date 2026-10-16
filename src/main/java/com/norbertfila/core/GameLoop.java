@@ -444,6 +444,7 @@ public final class GameLoop {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             var viewProjection =
                     camera.relativeViewProjection(width[0], height[0], .1f, farPlane(settings.farDistance()));
+            renderer.viewDistances(settings.renderDistance(), settings.farDistance());
             if (state != null) {
                 renderer.far()
                         .renderOpaque(

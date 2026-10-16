@@ -12,6 +12,8 @@ uniform sampler2DArray uBlockTextures;
 uniform float uWaterTime;
 uniform vec4 uWaterFog;
 uniform vec2 uWaterFogRange;
+uniform vec2 uDistanceFogRange;
+uniform vec3 uDistanceFogColor;
 // Chunk columns that near terrain fully draws, one bit each, row-major over uCoverageSize columns. Far terrain hides
 // there. uCoverageOrigin is the first column's corner relative to the camera; near terrain passes size 0.
 layout(std430, binding = 2) readonly buffer Coverage {
@@ -51,6 +53,12 @@ void main() {
     }
     if (uRenderLayer == 1 && texel.a < 0.5) discard;
     fragColor = vec4(texel.rgb * vShade, uRenderLayer == 2 ? 0.55 : 1.0);
+    if (uDistanceFogRange.y > 0.0) {
+        float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));
+        haze *= 1.0 - uWaterFog.a;
+        fragColor.rgb = mix(fragColor.rgb, uDistanceFogColor, haze);
+        fragColor.a = mix(fragColor.a, 1.0, haze);
+    }
     if (uWaterFog.a > 0.0) {
         float distanceInWater = max(length(vCameraOffset) - uWaterFogRange.x, 0.0);
         float haze = (1.0 - exp(-distanceInWater * uWaterFogRange.y)) * uWaterFog.a;

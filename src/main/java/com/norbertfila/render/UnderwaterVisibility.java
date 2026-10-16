@@ -1,6 +1,9 @@
 package com.norbertfila.render;
 
 public final class UnderwaterVisibility {
+    static final float SKY_RED = .55f;
+    static final float SKY_GREEN = .76f;
+    static final float SKY_BLUE = .96f;
     static final float FOG_RED = .035f;
     static final float FOG_GREEN = .20f;
     static final float FOG_BLUE = .27f;
@@ -24,15 +27,15 @@ public final class UnderwaterVisibility {
     }
 
     public float backgroundRed() {
-        return blend(.55f, FOG_RED);
+        return blend(SKY_RED, FOG_RED);
     }
 
     public float backgroundGreen() {
-        return blend(.76f, FOG_GREEN);
+        return blend(SKY_GREEN, FOG_GREEN);
     }
 
     public float backgroundBlue() {
-        return blend(.96f, FOG_BLUE);
+        return blend(SKY_BLUE, FOG_BLUE);
     }
 
     private float blend(float dry, float wet) {
