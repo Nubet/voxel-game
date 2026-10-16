@@ -9,8 +9,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class WorldWaterStateTest {
     @ParameterizedTest
-    @CsvSource({"-2147483648,2147483647,-2147483648", "2147483647,-2147483648,2147483647"})
-    void preservesWaterStateAtFullIntegerCoordinateLimits(int x, int y, int z) {
+    @CsvSource({"-2147483648,255,-2147483648", "2147483647,-64,2147483647"})
+    void preservesWaterStateAtHorizontalIntegerAndVerticalWorldLimits(int x, int y, int z) {
         World world = new World();
         BlockPos position = new BlockPos(x, y, z);
         ChunkPos chunk = Coordinates.worldToChunk(position);

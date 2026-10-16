@@ -8,7 +8,8 @@ public record BlockChangeResult(Status status, OptionalInt previous, List<ChunkP
     public enum Status {
         CHANGED,
         UNCHANGED,
-        UNAVAILABLE
+        UNAVAILABLE,
+        OUT_OF_BOUNDS
     }
 
     public BlockChangeResult {

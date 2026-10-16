@@ -8,6 +8,7 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
+import com.norbertfila.world.WorldBounds;
 import com.norbertfila.world.WorldEdit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -352,7 +353,7 @@ public final class WaterSimulator {
     }
 
     private void schedule(BlockPos position, long tick, boolean dependenciesChanged) {
-        if (position == null) return;
+        if (position == null || !WorldBounds.containsY(position.y())) return;
         var parked = deferred.get(position);
         if (parked != null) {
             if (!dependenciesChanged || !world.hasChunk(Coordinates.worldToChunk(position))) return;

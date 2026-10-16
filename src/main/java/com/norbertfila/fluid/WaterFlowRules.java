@@ -7,6 +7,7 @@ import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.PlantRules;
 import com.norbertfila.world.WaterState;
 import com.norbertfila.world.World;
+import com.norbertfila.world.WorldBounds;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -132,7 +133,7 @@ final class WaterFlowRules {
     }
 
     private static int state(World world, BlockPos position) {
-        if (position == null) return BLOCKED;
+        if (position == null || !WorldBounds.containsY(position.y())) return BLOCKED;
         ChunkPos chunk = Coordinates.worldToChunk(position);
         if (!world.hasChunk(chunk)) return UNAVAILABLE;
         int block = world.getBlock(position).orElseThrow();

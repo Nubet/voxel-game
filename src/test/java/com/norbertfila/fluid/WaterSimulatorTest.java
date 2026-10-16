@@ -369,7 +369,7 @@ class WaterSimulatorTest {
     @Test
     void coordinateLimitsBlockFlowWithoutWrappingToTheOtherEndOfTheWorld() {
         World world = new World();
-        BlockPos source = new BlockPos(Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        BlockPos source = new BlockPos(Integer.MAX_VALUE, WorldBounds.MIN_Y, Integer.MAX_VALUE);
         world.putChunk(Coordinates.worldToChunk(source), new Chunk());
         new WorldEdit(world, 64).setBlock(source, BlockId.WATER);
         WaterSimulator simulator = new WaterSimulator(world, 64);
@@ -378,10 +378,10 @@ class WaterSimulatorTest {
         assertEquals(0, simulator.pendingUpdates());
         assertEquals(
                 7,
-                world.getWaterState(new BlockPos(Integer.MAX_VALUE - 7, Integer.MIN_VALUE, Integer.MAX_VALUE))
+                world.getWaterState(new BlockPos(Integer.MAX_VALUE - 7, WorldBounds.MIN_Y, Integer.MAX_VALUE))
                         .orElseThrow());
         assertEquals(1, world.residentCount());
-        assertTrue(world.getBlock(new BlockPos(Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE))
+        assertTrue(world.getBlock(new BlockPos(Integer.MIN_VALUE, WorldBounds.MIN_Y, Integer.MAX_VALUE))
                 .isEmpty());
     }
 

@@ -118,6 +118,8 @@ public final class World {
         Objects.requireNonNull(worldPosition);
         WaterState.validate(value, waterState);
         if (farTileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
+        if (!WorldBounds.containsY(worldPosition.y()))
+            throw new IllegalArgumentException("Block Y is outside world bounds");
         OptionalInt previous = getBlock(worldPosition);
         if (previous.isPresent()
                 && previous.getAsInt() == BlockId.toUnsignedInt(value)

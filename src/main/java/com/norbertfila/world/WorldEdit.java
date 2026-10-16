@@ -28,6 +28,8 @@ public final class WorldEdit {
     public BlockChangeResult setBlock(BlockPos position, byte value, byte waterState) {
         Objects.requireNonNull(position);
         WaterState.validate(value, waterState);
+        if (!WorldBounds.containsY(position.y()))
+            return new BlockChangeResult(BlockChangeResult.Status.OUT_OF_BOUNDS, OptionalInt.empty(), List.of(), -1);
         ChunkPos chunk = Coordinates.worldToChunk(position);
         if (!world.hasChunk(chunk))
             return new BlockChangeResult(BlockChangeResult.Status.UNAVAILABLE, OptionalInt.empty(), List.of(), -1);
