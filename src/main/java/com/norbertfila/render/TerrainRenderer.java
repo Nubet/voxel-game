@@ -192,6 +192,14 @@ public final class TerrainRenderer implements AutoCloseable {
      */
     public RenderStats render(
             Matrix4f viewProjection, double cameraX, double cameraY, double cameraZ, float underwater) {
+        RenderStats opaque = renderOpaque(viewProjection, cameraX, cameraY, cameraZ, underwater);
+        int waterCalls = renderWater(viewProjection, cameraX, cameraY, cameraZ, underwater);
+        return new RenderStats(
+                opaque.visible(), opaque.culled(), opaque.drawCalls() + waterCalls, opaque.draws(), opaque.cullNanos());
+    }
+
+    public RenderStats renderOpaque(
+            Matrix4f viewProjection, double cameraX, double cameraY, double cameraZ, float underwater) {
         if (!Double.isFinite(cameraX) || !Double.isFinite(cameraY) || !Double.isFinite(cameraZ))
             throw new IllegalArgumentException("Camera position must be finite");
         if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
@@ -228,23 +236,39 @@ public final class TerrainRenderer implements AutoCloseable {
             calls += indirect.submit(commands, RenderLayer.OPAQUE.ordinal());
             solidProgram.renderLayer(RenderLayer.CUTOUT);
             calls += indirect.submit(commands, RenderLayer.CUTOUT.ordinal());
+        } finally {
+            restoreTerrainState();
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+            glBindVertexArray(0);
+        }
+        int visible = visibleChunks.size();
+        return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws(), cullNanos);
+    }
+
+    /** Draws water prepared by the preceding opaque pass, after the scene background is complete. */
+    public int renderWater(Matrix4f viewProjection, double cameraX, double cameraY, double cameraZ, float underwater) {
+        try {
             if (!visibleWater.isEmpty()) {
+                blockTextures.bind(0);
+                glBindVertexArray(emptyVertexArray);
+                indirect.bind(commands);
+                restoreTerrainState();
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
+                float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
                 waterProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
                 waterProgram.renderLayer(RenderLayer.TRANSLUCENT);
-                calls += indirect.submit(commands, RenderLayer.TRANSLUCENT.ordinal());
+                return indirect.submit(commands, RenderLayer.TRANSLUCENT.ordinal());
             }
+            return 0;
         } finally {
             restoreTerrainState();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
             glBindVertexArray(0);
             endFrame();
         }
-        int visible = visibleChunks.size();
-        return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws(), cullNanos);
     }
 
     /** Opaque and cutout order does not matter for blending, so draws are grouped to make one run per arena. */

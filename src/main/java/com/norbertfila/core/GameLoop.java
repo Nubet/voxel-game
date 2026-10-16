@@ -45,7 +45,6 @@ public final class GameLoop {
     private static final long FAR_UPLOAD_NANOS = 1_000_000;
     // Far terrain is clipped inside the near area, which is at least two chunks wide, so its near plane can sit far
     // out for depth precision.
-    private static final float FAR_NEAR_PLANE = 8f;
 
     public enum Exit {
         BACK_TO_MENU,
@@ -401,22 +400,37 @@ public final class GameLoop {
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            var viewProjection =
+                    camera.relativeViewProjection(width[0], height[0], .1f, farPlane(settings.farDistance()));
             if (state != null) {
                 renderer.far()
-                        .render(
-                                camera.relativeViewProjection(
-                                        width[0], height[0], FAR_NEAR_PLANE, farPlane(settings.farDistance())),
+                        .renderOpaque(
+                                viewProjection,
                                 camera.x(),
                                 camera.y(),
                                 camera.z(),
                                 visibility.amount(),
                                 state.coverage());
-                // Near terrain draws over far terrain; far terrain only shows where near terrain is missing.
-                glClear(GL_DEPTH_BUFFER_BIT);
             }
             if (gpuTimer != null) gpuTimer.stamp();
-            var viewProjection = camera.relativeViewProjection(width[0], height[0]);
-            var stats = renderer.render(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            var opaque = renderer.renderOpaque(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            if (state != null)
+                renderer.far()
+                        .renderWater(
+                                viewProjection,
+                                camera.x(),
+                                camera.y(),
+                                camera.z(),
+                                visibility.amount(),
+                                state.coverage());
+            int waterCalls =
+                    renderer.renderWater(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            var stats = new TerrainRenderer.RenderStats(
+                    opaque.visible(),
+                    opaque.culled(),
+                    opaque.drawCalls() + waterCalls,
+                    opaque.draws(),
+                    opaque.cullNanos());
             Optional<BlockBreaking.Progress> mining = Optional.empty();
             if (!editingBlocked && input.leftMouseDown() && state.target().isPresent()) {
                 var selected = state.target().orElseThrow();

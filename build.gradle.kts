@@ -34,6 +34,15 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("smokeTerrainPasses") {
+    group = "verification"
+    description = "Checks split terrain passes against the combined renderer on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.TerrainPassSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("profileCaves") {
     group = "verification"
     description = "Measures cold/warm cave generation time and allocation with a determinism check."

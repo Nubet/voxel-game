@@ -28,9 +28,7 @@ import org.lwjgl.system.MemoryUtil;
  * tile's previous mesh is drawn until its replacement is on the GPU, and far terrain stays visible in every chunk
  * column near terrain does not fully draw yet, so loading and unloading near chunks never opens a hole.
  *
- * <p>Far terrain is drawn before near terrain with its own depth range and the caller clears depth afterwards. Near
- * terrain therefore always covers far terrain; while columns are still loading, a near column seen through a far
- * column that is closer to the camera can show in front of it until that far column is replaced.
+ * <p>Near and far terrain share a depth range. Coverage hides far geometry in fully drawn near columns.
  */
 public final class FarTerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(FarTerrainRenderer.class.getName());
@@ -128,6 +126,17 @@ public final class FarTerrainRenderer implements AutoCloseable {
             double cameraZ,
             float underwater,
             ChunkManager.Coverage coverage) {
+        int calls = renderOpaque(viewProjection, cameraX, cameraY, cameraZ, underwater, coverage);
+        return calls + renderWater(viewProjection, cameraX, cameraY, cameraZ, underwater, coverage);
+    }
+
+    public int renderOpaque(
+            Matrix4f viewProjection,
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            float underwater,
+            ChunkManager.Coverage coverage) {
         frustum.set(viewProjection);
         commands.clear();
         visibleWater.clear();
@@ -146,7 +155,6 @@ public final class FarTerrainRenderer implements AutoCloseable {
         visibleWater.sort(waterOrder);
         for (Tile tile : visibleWater) add(WATER_PASS, tile, RenderLayer.TRANSLUCENT);
         if (commands.draws() == 0) {
-            endFrame();
             return 0;
         }
         int calls = 0;
@@ -163,14 +171,43 @@ public final class FarTerrainRenderer implements AutoCloseable {
                     coverage.size());
             program.renderLayer(RenderLayer.OPAQUE);
             calls += indirect.submit(commands, SOLID_PASS);
+        } finally {
+            TerrainRenderer.restoreTerrainState();
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, 0);
+            glBindVertexArray(0);
+        }
+        return calls;
+    }
+
+    /** Draws water prepared by the opaque pass using the same projection and coverage. */
+    public int renderWater(
+            Matrix4f viewProjection,
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            float underwater,
+            ChunkManager.Coverage coverage) {
+        try {
             if (!visibleWater.isEmpty()) {
+                blockTextures.bind(0);
+                glBindVertexArray(emptyVertexArray);
+                indirect.bind(commands);
+                TerrainRenderer.restoreTerrainState();
+                program.use(viewProjection, underwater, 0, cameraX, cameraY, cameraZ);
+                bindCoverage(coverage);
+                program.coverage(
+                        (float) ((double) coverage.minChunkX() * Chunk.SIZE - cameraX),
+                        (float) ((double) coverage.minChunkZ() * Chunk.SIZE - cameraZ),
+                        coverage.size());
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
                 program.renderLayer(RenderLayer.TRANSLUCENT);
-                calls += indirect.submit(commands, WATER_PASS);
+                return indirect.submit(commands, WATER_PASS);
             }
+            return 0;
         } finally {
             TerrainRenderer.restoreTerrainState();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
@@ -178,7 +215,6 @@ public final class FarTerrainRenderer implements AutoCloseable {
             glBindVertexArray(0);
             endFrame();
         }
-        return calls;
     }
 
     /** Uploads the coverage bits when they changed; a long holds 64 columns, low int first. */
