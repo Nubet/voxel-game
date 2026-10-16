@@ -117,9 +117,15 @@ class AssetLoaderTest {
         TextureSet.Texture dirt = textures.layer(BlockRegistry.DIRT_TEXTURE);
         assertEquals(255, grassSide.rgbaAt(0, 0, 3));
         for (int channel = 0; channel < 3; channel++)
-            assertEquals(dirt.rgbaAt(0, 0, channel), grassSide.rgbaAt(0, 0, channel));
+            assertEquals(dirt.rgbaAt(0, 0, channel), grassSide.rgbaAt(0, 15, channel));
         assertEquals(255, grassSide.rgbaAt(0, 15, 3));
         var overlay = textures.layer(BlockRegistry.DEFAULT.textureLayer("refi_grass_side_overlay"));
+        assertEquals(0, overlay.rgbaAt(8, 0, 3));
+        assertEquals(255, overlay.rgbaAt(8, 15, 3));
+        for (int layer : new int[] {BlockRegistry.DRY_GRASS_SIDE_TEXTURE, BlockRegistry.PODZOL_SIDE_TEXTURE})
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                    assertEquals(255, textures.layer(layer).rgbaAt(x, y, 3));
         int covered = 0;
         for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) if (overlay.rgbaAt(x, y, 3) > 128) covered++;
         assertTrue(covered > 0 && covered < 256);

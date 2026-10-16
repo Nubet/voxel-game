@@ -63,6 +63,14 @@ public final class GenerateHudAtlas {
                                 | (int) ((pixel >> 8 & 255) * grass[1]) << 8
                                 | (int) ((pixel & 255) * grass[2]));
             }
+        for (int layer : new int[] {
+            BlockRegistry.GRASS_SIDE_TEXTURE, BlockRegistry.DRY_GRASS_SIDE_TEXTURE, BlockRegistry.PODZOL_SIDE_TEXTURE
+        }) {
+            var image = textures.get(layer);
+            var upright = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) upright.setRGB(x, y, image.getRGB(x, 15 - y));
+            textures.put(layer, upright);
+        }
         var fallback = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
         for (int y = 1; y < 15; y++)
             for (int x = 1; x < 15; x++) fallback.setRGB(x, y, (x / 4 + y / 4) % 2 == 0 ? 0xffff00ff : 0xff181818);

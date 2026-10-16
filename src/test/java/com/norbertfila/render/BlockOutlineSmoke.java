@@ -57,6 +57,7 @@ public final class BlockOutlineSmoke {
                 precision(textures, outline, effects, output);
                 particles(effects, output);
                 items(textures, output);
+                itemSideOrientation(output);
                 effectCleanup(textures);
                 cleanup();
                 check(glGetError() == GL_NO_ERROR, "Block feedback GL error");
@@ -361,6 +362,63 @@ public final class BlockOutlineSmoke {
         check(glGetError() == GL_NO_ERROR, "Item renderer GL error");
         System.out.println(
                 "PASS dropped items: cube/cross textures, culling, occlusion, GL state/cleanup and large coordinates");
+    }
+
+    private static void itemSideOrientation(Path output) throws Exception {
+        try (var textures = new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures());
+                var renderer = new ItemEntityRenderer(textures)) {
+            textures.bind(0);
+            var pattern = BufferUtils.createByteBuffer(16 * 16 * 4);
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                    pattern.put((byte) (y < 8 ? 255 : 0))
+                            .put((byte) (y < 8 ? 0 : 255))
+                            .put((byte) 0)
+                            .put((byte) 255);
+            pattern.flip();
+            glTexSubImage3D(
+                    GL_TEXTURE_2D_ARRAY,
+                    0,
+                    0,
+                    0,
+                    BlockRegistry.PODZOL_SIDE_TEXTURE,
+                    16,
+                    16,
+                    1,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    pattern);
+            var projection = new Matrix4f().perspective((float) Math.toRadians(60), WIDTH / (float) HEIGHT, .1f, 100);
+            for (int age : new int[] {0, 63, 126, 189}) {
+                glDepthMask(true);
+                glClearColor(.4f, .6f, .8f, 1);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                var item = new ItemSnapshot(1, BlockId.PODZOL, 1, .5, .5, .5, 0, 0, 0, 0, age, true);
+                double bob = .12 + Math.sin(age / 60d * 3 + .37) * .035;
+                check(
+                        renderer.render(
+                                        projection,
+                                        List.of(new ItemRenderState(item, .5, .5, .5, false)),
+                                        0,
+                                        .5,
+                                        .5 + bob,
+                                        1.5)
+                                == 1,
+                        "Orientation fixture was culled");
+                byte[] image = pixels();
+                int top = rgb(image, (HEIGHT / 2 + 12) * WIDTH + WIDTH / 2);
+                int bottom = rgb(image, (HEIGHT / 2 - 12) * WIDTH + WIDTH / 2);
+                check(
+                        (top >> 8 & 255) > 100 && (top >> 16 & 255) == 0,
+                        "Dropped block side top is vertically inverted at age " + age);
+                check(
+                        (bottom >> 16 & 255) > 100 && (bottom >> 8 & 255) == 0,
+                        "Dropped block side bottom is vertically inverted at age " + age);
+                write(output.resolve("item-side-orientation-" + age + ".png"), image);
+            }
+            check(glGetError() == GL_NO_ERROR, "Item side orientation GL error");
+            System.out.println("PASS dropped block side UV orientation through four quarter turns");
+        }
     }
 
     private static int differences(byte[] first, byte[] second) {

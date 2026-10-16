@@ -27,7 +27,7 @@ void main() {
     point.y *= uHeight;
     float c = cos(uAngle), s = sin(uAngle);
     point.xz = mat2(c, s, -s, c) * point.xz;
-    vUv = vec2(uv.x, 1 - uv.y);
+    vUv = uCross || face == 2 || face == 3 ? vec2(uv.x, 1 - uv.y) : uv;
     vLayer = uCross ? uLayers.x : face == 2 ? uLayers.y : face == 3 ? uLayers.z : uLayers.x;
     vLight = uCross ? 1 : face == 2 ? 1 : face == 3 ? .55 : face < 2 ? .8 : .65;
     gl_Position = uVP * vec4(uOffset + point, 1);
