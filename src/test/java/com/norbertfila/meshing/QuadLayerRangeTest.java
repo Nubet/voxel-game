@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.TerrainConfig;
 import com.norbertfila.generation.TerrainGenerator;
+import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.RenderLayer;
@@ -22,6 +24,7 @@ class QuadLayerRangeTest {
                     ChunkPos position = new ChunkPos(x - 40, y, z + 11);
                     world.putChunk(position, generator.generate(position).toChunk());
                 }
+        world.setBlock(new BlockPos(-40 * 16 + 8, 94, 11 * 16 + 8), BlockId.FERN, 64);
         int cutout = 0;
         for (int x = -2; x <= 2; x++)
             for (int z = -2; z <= 2; z++)

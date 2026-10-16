@@ -128,8 +128,8 @@ public record TerrainConfig(
                 new Mountains(
                         new Layer(.0004, 2, .5, 2, 1),
                         new Layer(.005, 5, .5, 2, 218),
-                        .49,
-                        .63,
+                        .52,
+                        .66,
                         new Layer(.0018, 3, .5, 2, 1),
                         3,
                         1.25,

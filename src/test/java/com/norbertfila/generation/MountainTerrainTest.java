@@ -6,6 +6,56 @@ import org.junit.jupiter.api.Test;
 
 class MountainTerrainTest {
     @Test
+    void highMassifsAreRareWhileOrdinaryHillsAndPeakHeightArePreserved() {
+        TerrainConfig current = baseShape();
+        var m = current.mountains();
+        TerrainConfig previous = new TerrainConfig(
+                current.baseHeight(),
+                current.continental(),
+                current.hills(),
+                current.details(),
+                new TerrainConfig.Mountains(
+                        m.region(),
+                        m.ridge(),
+                        .49,
+                        .63,
+                        m.ranges(),
+                        m.ridgeExponent(),
+                        m.rangeExponent(),
+                        m.perOctaveRidges()),
+                current.warp(),
+                current.waterLevel(),
+                current.temperature(),
+                current.humidity());
+        int oldMassifs = 0, newMassifs = 0, ordinary = 0, total = 0;
+        double highest = Double.NEGATIVE_INFINITY;
+        for (long seed : new long[] {0, 1, 42, 7340215, -1, -918273, 987654321, Long.MAX_VALUE}) {
+            var before = new TerrainGenerator(seed, previous);
+            var after = new TerrainGenerator(seed, current);
+            var hills = new TerrainGenerator(seed, current.withoutMountains());
+            for (int z = -4096; z < 4096; z += 64)
+                for (int x = -4096; x < 4096; x += 64) {
+                    double base = hills.surfaceElevation(x, z);
+                    double height = after.surfaceElevation(x, z);
+                    double oldRise = before.surfaceElevation(x, z) - base;
+                    double newRise = height - base;
+                    assertTrue(newRise >= -1e-9 && newRise <= oldRise + 1e-9);
+                    if (oldRise >= 80) oldMassifs++;
+                    if (newRise >= 80) newMassifs++;
+                    if (newRise < 1) ordinary++;
+                    highest = Math.max(highest, height);
+                    total++;
+                }
+        }
+        System.out.printf(
+                "Massifs rising >=80 blocks: before=%d after=%d total=%d ordinary=%d highest=%.1f%n",
+                oldMassifs, newMassifs, total, ordinary, highest);
+        assertTrue(newMassifs > oldMassifs * .25 && newMassifs < oldMassifs * .4);
+        assertTrue(ordinary > total * 2 / 3);
+        assertTrue(highest >= 200);
+    }
+
+    @Test
     void maskHasSmoothClampedTransitions() {
         assertEquals(0, TerrainGenerator.mountainMask(-1, .25, .65));
         assertEquals(0, TerrainGenerator.mountainMask(.25, .25, .65));
