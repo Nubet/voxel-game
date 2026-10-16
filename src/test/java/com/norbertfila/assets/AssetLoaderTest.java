@@ -12,6 +12,28 @@ import org.junit.jupiter.api.Test;
 
 class AssetLoaderTest {
     @Test
+    void shippedOreTexturesDecodeExactlyWithoutFallback() throws IOException {
+        var textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
+        for (String ore : java.util.List.of("coal", "iron", "gold", "diamond", "lapis")) {
+            String name = "refi_" + ore + "_ore";
+            var texture = textures.layer(BlockRegistry.DEFAULT.textureLayer(name));
+            try (var input = getClass().getResourceAsStream("/assets/textures/blocks/" + name + ".png")) {
+                assertNotNull(input);
+                var image = ImageIO.read(input);
+                assertEquals(16, image.getWidth());
+                assertEquals(16, image.getHeight());
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++) {
+                        int pixel = image.getRGB(x, y);
+                        assertEquals(255, pixel >>> 24);
+                        for (int c = 0; c < 4; c++)
+                            assertEquals((pixel >>> (c == 3 ? 24 : 16 - c * 8)) & 255, texture.rgbaAt(x, y, c));
+                    }
+            }
+        }
+    }
+
+    @Test
     void plantAssetsAreColoredCutoutsAndDecodeExactlyWithoutFallback() throws IOException {
         TextureSet textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
         for (String name : java.util.List.of(

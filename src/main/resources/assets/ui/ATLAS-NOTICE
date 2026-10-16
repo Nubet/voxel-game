@@ -1,7 +1,7 @@
 UI atlas layout (256x256 RGBA; coordinates have top-left origin):
 - font.png copied unchanged at (0,0), occupying 256x128 including white texel.
 - Item cells 16x16 start at y=128; cell number is unsigned block ID.
-  Cell 0 is an original magenta/black fallback; cells 1..21 cover current blocks.
+  Cell 0 is an original magenta/black fallback; cells 1..46 cover current blocks.
 - Hotbar 182x22 at (0,176), selection 24x23 at (0,200), crosshair15x15 at (32,200).
 - Dynamic Crosshair sprites 15x15 at x=32,48,64,80,96, y=200;
   default, block, entity, ranged and center dot respectively.

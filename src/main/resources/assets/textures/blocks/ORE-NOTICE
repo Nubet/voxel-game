@@ -1,0 +1,11 @@
+Ore textures by MysticTempest, from REFI_Textures:
+https://github.com/MysticTempest/REFI_Textures
+Licensed under Creative Commons Attribution-ShareAlike 4.0 International.
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Unchanged copies from textures/default_mcl_core/minerals_ores/:
+refi_coal_ore.png: mcl_core_coal_ore.png
+refi_iron_ore.png: mcl_core_iron_ore.png
+refi_gold_ore.png: mcl_core_gold_ore.png
+refi_diamond_ore.png: mcl_core_diamond_ore.png
+refi_lapis_ore.png: mcl_core_lapis_ore.png

@@ -42,6 +42,11 @@ public final class BlockRegistry {
     public static final int DRY_GRASS_TOP_TEXTURE = 33;
     public static final int DRY_GRASS_SIDE_TEXTURE = 34;
     public static final int GRASS_SIDE_OVERLAY_TEXTURE = 49;
+    public static final int COAL_ORE_TEXTURE = 50,
+            IRON_ORE_TEXTURE = 51,
+            GOLD_ORE_TEXTURE = 52,
+            DIAMOND_ORE_TEXTURE = 53,
+            LAPIS_ORE_TEXTURE = 54;
     public static final int CACTUS_TOP_TEXTURE = 35,
             CACTUS_SIDE_TEXTURE = 36,
             CACTUS_BOTTOM_TEXTURE = 37,
@@ -120,6 +125,11 @@ public final class BlockRegistry {
         textures.put("refi_dirt", DIRT_TEXTURE);
         textures.put("refi_grass_side", GRASS_SIDE_TEXTURE);
         textures.put("refi_stone", STONE_TEXTURE);
+        textures.put("refi_coal_ore", COAL_ORE_TEXTURE);
+        textures.put("refi_iron_ore", IRON_ORE_TEXTURE);
+        textures.put("refi_gold_ore", GOLD_ORE_TEXTURE);
+        textures.put("refi_diamond_ore", DIAMOND_ORE_TEXTURE);
+        textures.put("refi_lapis_ore", LAPIS_ORE_TEXTURE);
         textures.put("refi_sand", SAND_TEXTURE);
         textures.put("refi_gravel", GRAVEL_TEXTURE);
         textures.put("refi_bedrock", BEDROCK_TEXTURE);
@@ -196,6 +206,11 @@ public final class BlockRegistry {
                                 true,
                                 true,
                                 RenderLayer.OPAQUE),
+                        uniform(BlockId.COAL_ORE, "coal_ore", COAL_ORE_TEXTURE, true),
+                        uniform(BlockId.IRON_ORE, "iron_ore", IRON_ORE_TEXTURE, true),
+                        uniform(BlockId.GOLD_ORE, "gold_ore", GOLD_ORE_TEXTURE, true),
+                        uniform(BlockId.DIAMOND_ORE, "diamond_ore", DIAMOND_ORE_TEXTURE, true),
+                        uniform(BlockId.LAPIS_ORE, "lapis_ore", LAPIS_ORE_TEXTURE, true),
                         uniform(BlockId.SAND, "sand", SAND_TEXTURE, true),
                         uniform(BlockId.GRAVEL, "gravel", GRAVEL_TEXTURE, true),
                         uniform(BlockId.BEDROCK, "bedrock", BEDROCK_TEXTURE, true),

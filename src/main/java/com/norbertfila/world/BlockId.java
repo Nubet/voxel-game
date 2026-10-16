@@ -42,7 +42,12 @@ public final class BlockId {
             PINE_NEEDLES = 38,
             SWAMP_LOG = 39,
             SWAMP_LEAVES = 40,
-            SNOW_LAYER = 41;
+            SNOW_LAYER = 41,
+            COAL_ORE = 42,
+            IRON_ORE = 43,
+            GOLD_ORE = 44,
+            DIAMOND_ORE = 45,
+            LAPIS_ORE = 46;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
@@ -91,7 +96,12 @@ public final class BlockId {
                     PINE_NEEDLES,
                     SWAMP_LOG,
                     SWAMP_LEAVES,
-                    SNOW_LAYER -> true;
+                    SNOW_LAYER,
+                    COAL_ORE,
+                    IRON_ORE,
+                    GOLD_ORE,
+                    DIAMOND_ORE,
+                    LAPIS_ORE -> true;
             default -> false;
         };
     }
