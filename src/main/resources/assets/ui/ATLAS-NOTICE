@@ -3,6 +3,8 @@ UI atlas layout (256x256 RGBA; coordinates have top-left origin):
 - Item cells 16x16 start at y=128; cell number is unsigned block ID.
   Cell 0 is an original magenta/black fallback; cells 1..21 cover current blocks.
 - Hotbar 182x22 at (0,176), selection 24x23 at (0,200), crosshair15x15 at (32,200).
+- Dynamic Crosshair sprites 15x15 at x=32,48,64,80,96, y=200;
+  default, block, entity, ranged and center dot respectively.
 - Original compact numeric glyphs 3x7 at (digit*4,224), digit0..9.
 
 GenerateHudAtlas (test-source, opt-in tool) builds ui.png from existing resources.
@@ -13,7 +15,7 @@ https://creativecommons.org/licenses/by-sa/4.0/legalcode
 See ../textures/blocks/REFI_LICENSE.txt and REFI_ATTRIBUTION.txt for original notices.
 Cube faces are nearest-sampled into shaded 16x16 isometric icons;
 plant sprites are copied without modification. These derivatives are CC BY-SA 4.0.
-The original hotbar, selection, crosshair, fallback and compact digits in this
+The original hotbar, selection, fallback and compact digits in this
 atlas are also distributed under CC BY-SA 4.0.
 
 Font portion: Minecraftia Regular by Andrew Tyler; see FONT-NOTICE.

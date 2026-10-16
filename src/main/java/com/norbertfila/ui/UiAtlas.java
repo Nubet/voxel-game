@@ -13,6 +13,10 @@ public final class UiAtlas {
     public static final Region HOTBAR = new Region(0, 176, 182, 22);
     public static final Region SELECTION = new Region(0, 200, 24, 23);
     public static final Region CROSSHAIR = new Region(32, 200, 15, 15);
+    public static final Region CROSSHAIR_BLOCK = new Region(48, 200, 15, 15);
+    public static final Region CROSSHAIR_ENTITY = new Region(64, 200, 15, 15);
+    public static final Region CROSSHAIR_RANGED = new Region(80, 200, 15, 15);
+    public static final Region CROSSHAIR_DOT = new Region(96, 200, 15, 15);
     private final byte[] pixels;
 
     private UiAtlas(byte[] pixels) {

@@ -3,6 +3,7 @@ package com.norbertfila.ui;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerState;
 import java.nio.FloatBuffer;
 import java.util.List;
@@ -15,6 +16,7 @@ class DebugOverlayTest {
     void displaysNegativeBlockAndChunkCoordinatesAndActualSimulationTarget() {
         var lines = lines(data(false, -90));
         assertTrue(lines.contains("Block: -1 -17 16"));
+        assertTrue(lines.contains("Biome: TAIGA"));
         assertTrue(lines.contains("Chunk: -1 -2 1"));
         assertTrue(lines.contains("XYZ: -0.25 / -16.50 / 16.00"));
         assertTrue(lines.stream().anyMatch(line -> line.contains("TPS: 30.0 / 60")));
@@ -59,7 +61,8 @@ class DebugOverlayTest {
                 3,
                 8,
                 32,
-                4);
+                4,
+                BiomeType.TAIGA);
     }
 
     @ParameterizedTest

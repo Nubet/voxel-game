@@ -1,6 +1,7 @@
 package com.norbertfila.ui;
 
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.Chunk;
@@ -13,7 +14,7 @@ public final class DebugOverlay {
     private static final int PADDING = 10;
     private static final int PANEL_WIDTH = 300;
     private static final int ROW_HEIGHT = 18;
-    private static final int FULL_LAYOUT_HEIGHT = 270;
+    private static final int FULL_LAYOUT_HEIGHT = 288;
     private static final int VALUE = 0xE3EAF0;
     private static final int MUTED = 0x93A4B5;
     private static final int ACCENT = 0x87CEC7;
@@ -42,7 +43,8 @@ public final class DebugOverlay {
             int uploadQueue,
             int nearDistance,
             int farDistance,
-            int simulationDistance) {}
+            int simulationDistance,
+            BiomeType biome) {}
 
     public void render(UiCanvas canvas, UiViewport viewport, Data data, double nowSeconds) {
         if (sections.isEmpty() || nowSeconds >= nextRefresh || paused != data.paused()) {
@@ -140,7 +142,8 @@ public final class DebugOverlay {
                                 new Row("Draw calls", Integer.toString(data.drawCalls()), VALUE),
                                 new Row("Uploads", data.uploadQueue() + " queued", VALUE),
                                 new Row("Near / far", data.nearDistance() + " / " + data.farDistance(), VALUE),
-                                new Row("Simulation", data.simulationDistance() + " chunks", VALUE))),
+                                new Row("Simulation", data.simulationDistance() + " chunks", VALUE),
+                                new Row("Biome", data.biome().name(), VALUE))),
                 new Section(
                         "PLAYER",
                         List.of(

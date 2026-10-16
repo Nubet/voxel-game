@@ -96,19 +96,31 @@ public final class GenerateHudAtlas {
             atlas.setRGB(selection.x() + i + 1, selection.y() + 1, 0xffffe39a);
             atlas.setRGB(selection.x() + selection.width() - i - 2, selection.y() + selection.height() - 2, 0xffaa8734);
         }
-        var cross = UiAtlas.CROSSHAIR;
-        for (int y = 0; y < 15; y++)
-            for (int x = 0; x < 15; x++) {
-                if (Math.abs(x - 7) <= 1 || Math.abs(y - 7) <= 1)
-                    atlas.setRGB(cross.x() + x, cross.y() + y, 0xcc000000);
-                if (x == 7 || y == 7) atlas.setRGB(cross.x() + x, cross.y() + y, 0xffffffff);
-            }
+        crosshair(atlas, UiAtlas.CROSSHAIR, "crosshair");
+        crosshair(atlas, UiAtlas.CROSSHAIR_BLOCK, "square");
+        crosshair(atlas, UiAtlas.CROSSHAIR_ENTITY, "cross-open-diagonal");
+        crosshair(atlas, UiAtlas.CROSSHAIR_RANGED, "cross-open");
+        crosshair(atlas, UiAtlas.CROSSHAIR_DOT, "dot");
         for (int digit = 0; digit <= 9; digit++) {
             var region = UiAtlas.digit(digit);
             for (int i = 0; i < 21; i++)
                 if (DIGITS[digit].charAt(i) == '1') atlas.setRGB(region.x() + i % 3, region.y() + i / 3, 0xffffffff);
         }
         return atlas;
+    }
+
+    private static void crosshair(BufferedImage atlas, UiAtlas.Region region, String name) throws IOException {
+        var sprite = read("/assets/ui/crosshair/" + name + ".png", 15, 15);
+        for (int y = 0; y < 15; y++)
+            for (int x = 0; x < 15; x++) {
+                int alpha = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                        if (x + dx >= 0 && x + dx < 15 && y + dy >= 0 && y + dy < 15)
+                            alpha = Math.max(alpha, sprite.getRGB(x + dx, y + dy) >>> 24);
+                int pixel = sprite.getRGB(x, y);
+                atlas.setRGB(region.x() + x, region.y() + y, (pixel >>> 24) > 0 ? pixel : alpha << 24 | 0x141414);
+            }
     }
 
     private static void drawHotbar(BufferedImage image) {

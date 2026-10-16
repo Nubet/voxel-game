@@ -7,6 +7,7 @@ import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
 import com.norbertfila.generation.TerrainSource;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.interaction.BlockBreakEvent;
 import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
@@ -557,7 +558,16 @@ public final class WorldRuntime implements AutoCloseable {
                                     target,
                                     breaking.progress(),
                                     List.copyOf(brokenBlocks),
-                                    items.renderSnapshot(world)));
+                                    items.renderSnapshot(world),
+                                    generator
+                                            .sample(
+                                                    (int) Math.floor(player.state()
+                                                            .position()
+                                                            .x()),
+                                                    (int) Math.floor(player.state()
+                                                            .position()
+                                                            .z()))
+                                            .biome()));
                             publishNanos[0] = System.nanoTime() - publishStarted;
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -975,7 +985,8 @@ public final class WorldRuntime implements AutoCloseable {
             Optional<VoxelRaycaster.Hit> target,
             Optional<BlockBreaking.Progress> breaking,
             List<BlockBreakEvent> brokenBlocks,
-            List<ItemRenderState> items) {
+            List<ItemRenderState> items,
+            BiomeType biome) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);

@@ -7,6 +7,7 @@ import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.diagnostics.FrameMetrics;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.Inventory;
@@ -517,14 +518,14 @@ public final class UiViewportSmoke {
                             GL_RGBA,
                             GL_UNSIGNED_BYTE,
                             pixels);
-                    int offset = style == CrosshairStyle.BLOCK ? 3 : 0;
-                    int px = (int) Math.ceil((viewport.width() / 2 + offset * scale) * viewport.scale()) - 1;
-                    int py = (int) Math.ceil(viewport.height() / 2 * viewport.scale()) - 1;
+                    int px = viewport.framebufferWidth() / 2;
+                    int py = viewport.framebufferHeight() / 2;
+                    int radius = 8 * scale * viewport.scale();
                     int value = 0;
-                    // Odd-sized shapes centered on an even framebuffer can straddle pixel centers.
-                    for (int dy = -1; dy <= 1; dy++)
-                        for (int dx = -1; dx <= 1; dx++)
-                            value = Math.max(value, rgb(pixels, viewport, px + dx, py + dy));
+                    for (int y = Math.max(0, py - radius); y < Math.min(viewport.framebufferHeight(), py + radius); y++)
+                        for (int x = Math.max(0, px - radius);
+                                x < Math.min(viewport.framebufferWidth(), px + radius);
+                                x++) value = Math.max(value, rgb(pixels, viewport, x, y));
                     int expected = style == CrosshairStyle.HIDDEN ? 0 : Math.round(255 * opacity / 100f);
                     for (int shift : new int[] {0, 8, 16})
                         check(
@@ -598,7 +599,8 @@ public final class UiViewportSmoke {
                                 3,
                                 8,
                                 32,
-                                4),
+                                4,
+                                BiomeType.TAIGA),
                         0);
         var geometry = FloatBuffer.allocate(canvas.floatCount());
         canvas.writeTo(geometry);

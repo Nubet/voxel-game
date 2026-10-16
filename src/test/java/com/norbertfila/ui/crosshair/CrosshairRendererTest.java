@@ -39,6 +39,7 @@ class CrosshairRendererTest {
                         }
                         var data = FloatBuffer.allocate(canvas.floatCount());
                         canvas.writeTo(data);
+                        assertEquals(style == CrosshairStyle.RANGED ? 12 : 6, canvas.vertexCount());
                         float minX = Float.POSITIVE_INFINITY, maxX = Float.NEGATIVE_INFINITY;
                         float minY = minX, maxY = maxX;
                         for (int i = 0; i < data.position(); i += 8) {
@@ -57,5 +58,24 @@ class CrosshairRendererTest {
         var canvas = new UiCanvas();
         renderer.renderAt(canvas, 50, 50, CrosshairStyle.BLOCK, new CrosshairSettings(true, true, true, 1, 0), 1);
         assertEquals(0, canvas.vertexCount());
+    }
+
+    @Test
+    void rendersBothSidesOfAStyleTransitionWithTheirOwnAlpha() {
+        var transition = new CrosshairTransition();
+        transition.update(CrosshairStyle.DEFAULT, false, 0);
+        transition.update(CrosshairStyle.BLOCK, true, .04);
+        var canvas = new UiCanvas();
+        new CrosshairRenderer()
+                .render(
+                        canvas,
+                        new UiViewport(1280, 720, 1280, 720),
+                        transition,
+                        new CrosshairSettings(true, true, true, 1, 50));
+        assertEquals(12, canvas.vertexCount());
+        var vertices = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(vertices);
+        for (int i = 0; i < canvas.floatCount(); i += 8) assertEquals(.25f, vertices.get(i + 5));
+        assertNotEquals(vertices.get(6), vertices.get(6 * 8 + 6));
     }
 }

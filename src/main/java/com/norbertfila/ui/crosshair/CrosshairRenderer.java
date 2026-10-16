@@ -7,6 +7,16 @@ import com.norbertfila.ui.UiViewport;
 import java.util.Objects;
 
 public final class CrosshairRenderer {
+    private static final CrosshairStyle[] STYLES = CrosshairStyle.values();
+
+    public void render(
+            UiCanvas canvas, UiViewport viewport, CrosshairTransition transition, CrosshairSettings settings) {
+        for (var style : STYLES) {
+            float visibility = transition.visibility(style);
+            if (visibility > 0) render(canvas, viewport, style, settings, visibility);
+        }
+    }
+
     public void render(UiCanvas canvas, UiViewport viewport) {
         render(canvas, viewport, CrosshairStyle.DEFAULT, CrosshairSettings.DEFAULT, 1);
     }
@@ -32,36 +42,14 @@ public final class CrosshairRenderer {
         int scale = settings.scale();
         float size = HudMetrics.CROSSHAIR_SIZE * scale;
         float left = centerX - size / 2, top = centerY - size / 2;
-        if (style == CrosshairStyle.DEFAULT) {
-            canvas.sprite(UiAtlas.CROSSHAIR, left, top, size, size, alpha);
-            return;
-        }
-        for (int y = -7; y <= 7; y++) {
-            for (int x = -7; x <= 7; x++) {
-                boolean foreground = filled(style, x, y);
-                if (!foreground && !border(style, x, y)) continue;
-                float shade = foreground ? 1 : .08f;
-                canvas.rectangle(
-                        left + (x + 7) * scale, top + (y + 7) * scale, scale, scale, shade, shade, shade, alpha);
-            }
-        }
-    }
-
-    private static boolean filled(CrosshairStyle style, int x, int y) {
-        return switch (style) {
-            case BLOCK -> Math.max(Math.abs(x), Math.abs(y)) == 3;
-            case ENTITY -> (x == 0 && Math.abs(y) <= 5) || (y == 0 && Math.abs(x) <= 5);
-            case RANGED ->
-                (x == 0 && y == 0)
-                        || (x == 0 && Math.abs(y) >= 3 && Math.abs(y) <= 5)
-                        || (y == 0 && Math.abs(x) >= 3 && Math.abs(x) <= 5);
-            default -> false;
+        var region = switch (style) {
+            case DEFAULT -> UiAtlas.CROSSHAIR;
+            case BLOCK -> UiAtlas.CROSSHAIR_BLOCK;
+            case ENTITY -> UiAtlas.CROSSHAIR_ENTITY;
+            case RANGED -> UiAtlas.CROSSHAIR_RANGED;
+            case HIDDEN -> throw new IllegalStateException("Hidden crosshair has no sprite");
         };
-    }
-
-    private static boolean border(CrosshairStyle style, int x, int y) {
-        for (int dy = -1; dy <= 1; dy++)
-            for (int dx = -1; dx <= 1; dx++) if (filled(style, x + dx, y + dy)) return true;
-        return false;
+        canvas.sprite(region, left, top, size, size, alpha);
+        if (style == CrosshairStyle.RANGED) canvas.sprite(UiAtlas.CROSSHAIR_DOT, left, top, size, size, alpha);
     }
 }

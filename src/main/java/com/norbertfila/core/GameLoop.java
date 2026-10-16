@@ -536,7 +536,8 @@ public final class GameLoop {
                                 uploads.queueDepth(),
                                 settings.renderDistance(),
                                 settings.farDistance(),
-                                settings.simulationDistance()),
+                                settings.simulationDistance(),
+                                state.biome()),
                         now);
             }
             if (runtime.state() == WorldRuntime.State.PLAYING) {
@@ -560,12 +561,7 @@ public final class GameLoop {
                         CrosshairPolicy.select(settings.crosshair(), state.target()),
                         settings.crosshair().smooth(),
                         delta);
-            crosshair.render(
-                    canvas,
-                    viewport,
-                    crosshairTransition.style(),
-                    settings.crosshair(),
-                    crosshairTransition.visibility());
+            crosshair.render(canvas, viewport, crosshairTransition, settings.crosshair());
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
