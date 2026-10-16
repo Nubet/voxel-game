@@ -14,6 +14,9 @@ public final class SurfaceMaterialMapper {
             case MUD, PODZOL -> BlockId.GRASS;
             case COARSE_DIRT -> BlockId.DIRT;
             case ICE -> BlockId.SNOW;
+            case CLAY -> BlockId.STONE;
+            case TERRACOTTA_RED -> BlockId.GRAVEL;
+            case TERRACOTTA_ORANGE -> BlockId.SANDSTONE;
         };
     }
 
@@ -25,6 +28,9 @@ public final class SurfaceMaterialMapper {
             case STONE, SNOW -> BlockId.STONE;
             case MUD, PODZOL, COARSE_DIRT -> BlockId.DIRT;
             case ICE -> BlockId.STONE;
+            case CLAY -> BlockId.STONE;
+            case TERRACOTTA_RED -> BlockId.GRAVEL;
+            case TERRACOTTA_ORANGE -> BlockId.SANDSTONE;
         };
     }
 }

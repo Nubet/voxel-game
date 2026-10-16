@@ -10,5 +10,8 @@ public enum SurfaceMaterial {
     MUD,
     PODZOL,
     COARSE_DIRT,
-    ICE
+    ICE,
+    CLAY,
+    TERRACOTTA_RED,
+    TERRACOTTA_ORANGE
 }
