@@ -3,6 +3,7 @@ package com.norbertfila.ui.screens;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.core.GameSettings;
+import com.norbertfila.i18n.Language;
 import com.norbertfila.render.CloudMode;
 import com.norbertfila.ui.*;
 import java.nio.FloatBuffer;
@@ -12,6 +13,32 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SettingsScreenTest {
+    @Test
+    void descriptiveGuiSizesFitInEnglishAndPolishWithoutOverlappingClouds() {
+        var settings = new GameSettings();
+        var screen = new SettingsScreen(settings);
+        for (Language language : Language.values()) {
+            settings.translations().setLanguage(language);
+            assertTrue(BitmapFont.DEFAULT.width(settings.translations().text("settings.guiScale")) + 16
+                    <= screen.guiScaleButton().bounds().x());
+            for (String key : new String[] {
+                "settings.auto",
+                "settings.size.small",
+                "settings.size.medium",
+                "settings.size.large",
+                "settings.size.extraLarge"
+            }) {
+                assertTrue(
+                        BitmapFont.DEFAULT.width(settings.translations().text(key)) + 8
+                                <= screen.guiScaleButton().bounds().width(),
+                        language + ": " + settings.translations().text(key));
+            }
+        }
+        assertTrue(screen.guiScaleButton().bounds().x()
+                        + screen.guiScaleButton().bounds().width()
+                < screen.cloudsButton().bounds().x());
+    }
+
     @ParameterizedTest
     @CsvSource({"1280,720,1280,720", "640,360,1280,720", "1280,720,1920,1080", "640,480,1280,720", "853,601,1281,903"})
     void sliderHitTestingMatchesRenderingAcrossDpi(int ww, int wh, int fw, int fh) {

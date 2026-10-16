@@ -25,6 +25,15 @@ public final class UiCanvas {
         target.put(vertices, 0, floatCount);
     }
 
+    public void scaleFrom(int firstVertex, double scale) {
+        if (firstVertex < 0 || firstVertex > vertexCount() || !Double.isFinite(scale) || scale <= 0)
+            throw new IllegalArgumentException("Invalid canvas scaling range or factor");
+        for (int offset = firstVertex * FLOATS_PER_VERTEX; offset < floatCount; offset += FLOATS_PER_VERTEX) {
+            vertices[offset] *= (float) scale;
+            vertices[offset + 1] *= (float) scale;
+        }
+    }
+
     public void rectangle(int x, int y, int width, int height, float r, float g, float b, float a) {
         float u = .5f / UiAtlas.WIDTH, v = .5f / UiAtlas.HEIGHT;
         quad(x, y, width, height, r, g, b, a, u, v, u, v);

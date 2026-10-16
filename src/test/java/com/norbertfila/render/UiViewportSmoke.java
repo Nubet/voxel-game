@@ -5,11 +5,14 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
+import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.Inventory;
+import com.norbertfila.player.PlayerState;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
+import com.norbertfila.ui.DebugOverlay;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.ItemIcons;
 import com.norbertfila.ui.Screen;
@@ -34,6 +37,7 @@ import com.norbertfila.ui.screens.WorldSelectionScreen;
 import com.norbertfila.world.BlockId;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
@@ -77,11 +81,18 @@ public final class UiViewportSmoke {
                     {640, 360, 1280, 720},
                     {1280, 720, 1920, 1080},
                     {640, 480, 1280, 720},
+                    {2560, 1440, 2560, 1440},
+                    {3840, 2160, 3840, 2160},
+                    {1280, 720, 1280, 720, 1},
+                    {1280, 720, 1280, 720, 2},
+                    {1280, 720, 1280, 720, 3},
+                    {1280, 720, 1280, 720, 4},
                     {180, 100, 180, 100}
                 };
                 for (int i = 0; i < cases.length; i++) {
                     int[] size = cases[i];
-                    UiViewport viewport = new UiViewport(size[0], size[1], size[2], size[3]);
+                    UiViewport viewport =
+                            new UiViewport(size[0], size[1], size[2], size[3], size.length > 4 ? size[4] : 0);
                     glBindTexture(GL_TEXTURE_2D, texture);
                     glTexImage2D(
                             GL_TEXTURE_2D, 0, GL_RGBA8, size[2], size[3], 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer)
@@ -103,6 +114,7 @@ public final class UiViewportSmoke {
                     check(rgb(pixels, viewport, centerX, centerY) == 0xffffff, "Crosshair missing");
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
                     write(output.resolve("inventory-" + i + "-hud.png"), pixels, viewport);
+                    checkDebugOverlay(ui, canvas, hotbar, viewport, output.resolve("debug-f3-" + i + ".png"));
                     screens.open(panel);
                     screens.layout(viewport);
                     screens.updatePointer(false, false, 0, 0);
@@ -134,6 +146,10 @@ public final class UiViewportSmoke {
                     check(glGetError() == GL_NO_ERROR, "Offscreen GL error");
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
+                }
+                if (args.length > 1 && args[1].equals("--debug-only")) {
+                    System.out.println("F3 overlay GPU smoke PASS: " + cases.length + " viewport/DPI cases");
+                    return;
                 }
                 UiViewport small = new UiViewport(180, 100, 180, 100);
                 canvas.clear();
@@ -436,6 +452,48 @@ public final class UiViewportSmoke {
     private static void clear() {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
+    }
+
+    private static void checkDebugOverlay(
+            UiRenderer ui, UiCanvas canvas, Hotbar hotbar, UiViewport viewport, Path output) throws Exception {
+        clear();
+        canvas.clear();
+        canvas.rectangle(0, 0, (int) viewport.width(), (int) viewport.height(), 0, 0, 1, 1);
+        new DebugOverlay()
+                .render(
+                        canvas,
+                        viewport,
+                        new DebugOverlay.Data(
+                                new FrameMetrics.OverlaySnapshot(120, 8.33, 12, 60),
+                                new PlayerState.Position(-.25, 72, 16),
+                                -90,
+                                -25,
+                                "CREATIVE",
+                                false,
+                                2.5,
+                                100,
+                                40,
+                                12,
+                                3,
+                                8,
+                                32,
+                                4),
+                        0);
+        var geometry = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(geometry);
+        int panelX = (int) Math.floor(geometry.get(6 * UiCanvas.FLOATS_PER_VERTEX) * viewport.scale());
+        int panelY = (int) Math.floor(geometry.get(6 * UiCanvas.FLOATS_PER_VERTEX + 1) * viewport.scale());
+        int panels = 0;
+        for (int i = 0; i < geometry.capacity(); i += 6 * UiCanvas.FLOATS_PER_VERTEX)
+            if (Math.abs(geometry.get(i + 5) - .82f) < .001f) panels++;
+        if (viewport.framebufferWidth() >= 640) check(panels == 4, "F3 must show all four sections");
+        new Hud().render(canvas, hotbar, viewport);
+        ui.render(canvas, viewport);
+        var pixels = capture(viewport);
+        int background = rgb(pixels, viewport, panelX + 1, panelY + 1);
+        check((background & 255) < 100 && (background >> 16) > 0, "Debug panel background missing");
+        check(glGetError() == GL_NO_ERROR, "Debug overlay GL error");
+        write(output, pixels, viewport);
     }
 
     private static ByteBuffer capture(UiViewport viewport) {

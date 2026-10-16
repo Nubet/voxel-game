@@ -8,6 +8,25 @@ import org.junit.jupiter.api.Test;
 
 class UiCanvasTest {
     @Test
+    void scalingOnlyChangesPositionsInTheRequestedSuffix() {
+        var canvas = new UiCanvas();
+        canvas.rectangle(10, 20, 30, 40, .1f, .2f, .3f, .4f);
+        canvas.rectangle(20, 40, 60, 80, .1f, .2f, .3f, .4f);
+        var before = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(before);
+        canvas.scaleFrom(6, .5);
+        var after = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(after);
+        for (int i = 0; i < after.capacity(); i++) {
+            boolean position = i >= 6 * UiCanvas.FLOATS_PER_VERTEX && i % UiCanvas.FLOATS_PER_VERTEX < 2;
+            assertEquals(before.get(i) * (position ? .5f : 1), after.get(i));
+        }
+        assertThrows(IllegalArgumentException.class, () -> canvas.scaleFrom(-1, 1));
+        assertThrows(IllegalArgumentException.class, () -> canvas.scaleFrom(13, 1));
+        assertThrows(IllegalArgumentException.class, () -> canvas.scaleFrom(0, Double.NaN));
+    }
+
+    @Test
     void growsWithoutLosingOrderAndCanBeClearedAndReused() {
         UiCanvas canvas = new UiCanvas();
         for (int i = 0; i < 3000; i++) canvas.rectangle(i, i + 1, 2, 3, .1f, .2f, .3f, .4f);

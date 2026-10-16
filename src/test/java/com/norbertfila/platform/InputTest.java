@@ -11,6 +11,21 @@ import org.junit.jupiter.api.Test;
 
 class InputTest {
     @Test
+    void debugTapIsConsumedOnceAndDiscardedAcrossSessionTransitions() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_F3, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_F3, GLFW_RELEASE, 0, 2);
+        assertTrue(input.debugPressed());
+        assertFalse(input.debugPressed());
+        input.keyEvent(GLFW_KEY_F3, GLFW_REPEAT, 0, 3);
+        assertFalse(input.debugPressed());
+        input.keyEvent(GLFW_KEY_F3, GLFW_PRESS, 0, 4);
+        input.discardTransientInput();
+        assertFalse(input.debugPressed());
+        assertEquals(null, input.pollUiEvent());
+    }
+
+    @Test
     void dropKeysCaptureControlAtPressTimeAndIgnoreRepeatsAndRelease() {
         var input = new Input();
         input.keyEvent(GLFW_KEY_Q, GLFW_PRESS, 0, 1);

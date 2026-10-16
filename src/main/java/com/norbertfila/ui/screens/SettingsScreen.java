@@ -67,7 +67,8 @@ public final class SettingsScreen implements Screen {
             new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 100, 1, 11);
     private final Slider zoomSpeed =
             new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, SLIDER_HEIGHT), 1, 30, 1, 12);
-    private final Button guiScale = new Button(new UiBounds(CAMERA_X, GUI_SCALE_Y, 56, 20), "");
+    private static final int GUI_SCALE_X = 100;
+    private final Button guiScale = new Button(new UiBounds(GUI_SCALE_X, GUI_SCALE_Y, 100, 20), "");
     private final Button clouds = new Button(new UiBounds(208, GUI_SCALE_Y, 88, 20), "");
     private final Button back = new Button(BACK_BOUNDS, "");
     private int focusIndex = -1;
@@ -235,7 +236,7 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.setPosition(CAMERA_X + offsetX, ZOOM_FOV_Y + offsetY);
         mouseSensitivity.setPosition(CAMERA_X + offsetX, SENSITIVITY_Y + offsetY);
         zoomSpeed.setPosition(CAMERA_X + offsetX, ZOOM_SPEED_Y + offsetY);
-        guiScale.setPosition(CAMERA_X + offsetX, GUI_SCALE_Y + offsetY);
+        guiScale.setPosition(GUI_SCALE_X + offsetX, GUI_SCALE_Y + offsetY);
         clouds.setPosition(208 + offsetX, GUI_SCALE_Y + offsetY);
         language.setPosition(CAMERA_X + offsetX, LANGUAGE_Y + offsetY);
         back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
@@ -329,9 +330,14 @@ public final class SettingsScreen implements Screen {
     }
 
     private String guiScaleLabel() {
-        return settings.guiScale() == GameSettings.GUI_SCALE_AUTO
-                ? translations.text("settings.auto")
-                : settings.guiScale() + "x";
+        return translations.text(
+                switch (settings.guiScale()) {
+                    case 1 -> "settings.size.small";
+                    case 2 -> "settings.size.medium";
+                    case 3 -> "settings.size.large";
+                    case 4 -> "settings.size.extraLarge";
+                    default -> "settings.auto";
+                });
     }
 
     private void cycleLanguage() {

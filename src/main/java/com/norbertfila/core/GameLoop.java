@@ -20,6 +20,7 @@ import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.ui.DebugOverlay;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.Screen;
 import com.norbertfila.ui.ScreenManager;
@@ -147,6 +148,8 @@ public final class GameLoop {
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
+        DebugOverlay debugOverlay = new DebugOverlay();
+        boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(settings);
         PauseScreen pauseScreen = new PauseScreen(settings.translations());
@@ -170,9 +173,11 @@ public final class GameLoop {
             Screen previousScreen = screens.current();
             int previousDistance = settings.renderDistance();
             window.pollEvents();
-            double now = window.time(), delta = clampDelta(now - previous);
+            double now = window.time(), frameDelta = Math.max(0, now - previous), delta = clampDelta(frameDelta);
             previous = now;
             input.update();
+            boolean debugPressed = input.debugPressed();
+            if (input.focused() && debugPressed) debugVisible = !debugVisible;
             if (!input.leftMouseDown() && !input.rightMouseDown()) pointerReady = true;
             WorldRuntime.Frame state = runtime.frame();
             if (state != null) {
@@ -477,6 +482,27 @@ public final class GameLoop {
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);
             canvas.clear();
+            if (debugVisible && state != null && runtime.state() == WorldRuntime.State.PLAYING) {
+                debugOverlay.render(
+                        canvas,
+                        viewport,
+                        new DebugOverlay.Data(
+                                metrics.overlaySnapshot(),
+                                state.playerState().position(),
+                                camera.yaw(),
+                                camera.pitch(),
+                                state.mode().name(),
+                                state.paused(),
+                                state.metrics().tickNanos() / 1_000_000.0,
+                                residents.size(),
+                                stats.visible(),
+                                stats.drawCalls(),
+                                uploads.queueDepth(),
+                                settings.renderDistance(),
+                                settings.farDistance(),
+                                settings.simulationDistance()),
+                        now);
+            }
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
             else hud.render(canvas, hotbar, viewport);
@@ -491,7 +517,8 @@ public final class GameLoop {
             long frameEnded = System.nanoTime();
             profiler.endFrame(frameEnded - frameStarted);
             frameStarted = frameEnded;
-            metrics.recordFrame(delta);
+            metrics.recordFrame(frameDelta);
+            if (state != null) metrics.recordSimulation(state.tick(), state.paused(), now);
             metrics.reportIfDue(now, width[0], height[0], hardware);
             if (driver != null && driver.frameCompleted(runtime, state, stats, uploads.queueDepth()))
                 return Exit.BACK_TO_MENU;

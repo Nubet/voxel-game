@@ -26,6 +26,14 @@ public final class FrameMetrics {
     private long workerNanos;
     private long workerCount;
     private int workerQueueDepth;
+    private long previousTick = -1;
+    private double previousSimulationSeconds;
+    private boolean previouslyPaused;
+    private long observedTicks;
+    private double simulationSeconds;
+    private OverlaySnapshot overlaySnapshot = new OverlaySnapshot(0, 0, 0, 0);
+
+    public record OverlaySnapshot(double fps, double frameMillis, double p95Millis, double tps) {}
 
     public FrameMetrics(int chunks, int vertices, long meshBytes, boolean debug, double startSeconds) {
         this(chunks, vertices, meshBytes, debug, startSeconds, DEFAULT_WINDOW_SIZE);
@@ -52,6 +60,20 @@ public final class FrameMetrics {
 
     public double averageFps() {
         return frameSeconds == 0.0 ? 0.0 : frameCount / frameSeconds;
+    }
+
+    public void recordSimulation(long tick, boolean paused, double nowSeconds) {
+        if (previousTick >= 0 && tick >= previousTick && !paused && !previouslyPaused) {
+            observedTicks += tick - previousTick;
+            simulationSeconds += nowSeconds - previousSimulationSeconds;
+        }
+        previousTick = tick;
+        previousSimulationSeconds = nowSeconds;
+        previouslyPaused = paused;
+    }
+
+    public OverlaySnapshot overlaySnapshot() {
+        return overlaySnapshot;
     }
 
     public double averageFrameTimeMillis() {
@@ -115,6 +137,13 @@ public final class FrameMetrics {
         double elapsedSeconds = nowSeconds - reportStartSeconds;
         if (elapsedSeconds < REPORT_INTERVAL_SECONDS) return;
         PerformanceReport report = snapshot(width, height, hardware);
+        overlaySnapshot = new OverlaySnapshot(
+                report.averageFps(),
+                averageFrameTimeMillis(),
+                report.p95FrameMillis(),
+                simulationSeconds == 0 ? 0 : observedTicks / simulationSeconds);
+        observedTicks = 0;
+        simulationSeconds = 0;
         if (debug) {
             System.out.printf(
                     "[debug] FPS: %.0f | p50: %.2f ms | p95: %.2f ms | p99: %.2f ms | 1%% low: %.0f | sections: %d | visible: %d | culled: %d | draws: %d | worker: %.2f ms | worker queue: %d | GPU upload: %d bytes / %.2f ms | upload queue: %d%n",
