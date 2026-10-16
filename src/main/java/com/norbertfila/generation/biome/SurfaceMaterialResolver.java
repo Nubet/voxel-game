@@ -12,12 +12,14 @@ public final class SurfaceMaterialResolver {
         long waterDepth = (long) waterLevel - height;
         if (waterDepth > 3)
             return new Result(materials.surface(SurfaceMaterial.GRAVEL), materials.subsurface(SurfaceMaterial.GRAVEL));
+        if (waterDepth > 0 && slope > 1.5)
+            return new Result(materials.surface(SurfaceMaterial.GRAVEL), materials.subsurface(SurfaceMaterial.GRAVEL));
         if (waterDepth >= -1 && slope <= 1.5)
             return new Result(materials.surface(SurfaceMaterial.SAND), materials.subsurface(SurfaceMaterial.SAND));
         if (slope > 1.5)
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
         if (profile.surface().surface() == SurfaceMaterial.SNOW
-                || height >= (long) baseHeight + 70 && climate.temperature() < -.35f)
+                || height >= (long) baseHeight + 70 && climate.temperature() < .5f)
             return new Result(materials.surface(SurfaceMaterial.SNOW), materials.subsurface(SurfaceMaterial.SNOW));
         SurfaceProfile surface = profile.surface();
         return new Result(materials.surface(surface.surface()), materials.subsurface(surface.subsurface()));

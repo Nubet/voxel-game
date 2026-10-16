@@ -17,7 +17,7 @@ public final class SurfaceMaterialMapper {
     public byte subsurface(SurfaceMaterial material) {
         return switch (material) {
             case GRASS, DIRT -> BlockId.DIRT;
-            case SAND -> BlockId.SANDSTONE;
+            case SAND -> BlockId.SAND;
             case GRAVEL -> BlockId.GRAVEL;
             case STONE, SNOW -> BlockId.STONE;
         };

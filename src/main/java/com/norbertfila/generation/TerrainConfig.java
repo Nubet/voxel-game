@@ -162,6 +162,11 @@ public record TerrainConfig(
                 humidity);
     }
 
+    public TerrainConfig withClimate(Layer temperature, Layer humidity) {
+        return new TerrainConfig(
+                baseHeight, continental, hills, details, mountains, warp, waterLevel, temperature, humidity);
+    }
+
     private static Layer defaultTemperature() {
         return new Layer(.0012, 4, .5, 2, 1);
     }

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 12;
+    private static final int GENERATOR_VERSION = 13;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;

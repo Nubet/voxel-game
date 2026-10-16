@@ -30,7 +30,7 @@ public final class BiomeRegistry {
                                 .35f,
                                 SurfaceMaterial.GRASS,
                                 SurfaceMaterial.DIRT,
-                                Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)),
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER)),
                 BiomeType.FOREST,
                         profile(
                                 .65f,
@@ -57,7 +57,7 @@ public final class BiomeRegistry {
                                 SurfaceMaterial.DIRT,
                                 Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
                 BiomeType.BADLANDS, profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of()),
-                BiomeType.ALPINE, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE, Set.of())));
+                BiomeType.ALPINE, profile(0, 0, 0, SurfaceMaterial.SNOW, SurfaceMaterial.STONE, Set.of())));
     }
 
     private static BiomeProfile profile(

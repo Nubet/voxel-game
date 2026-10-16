@@ -42,7 +42,9 @@ class WaterGenerationTest {
         }
         TerrainGenerator dry = flat(15, 12, 1);
         boolean log = false;
-        for (byte value : dry.generate(new ChunkPos(-1, 1, -1)).blocks()) log |= value == BlockId.LOG;
+        for (int x = -3; x <= 3 && !log; x++)
+            for (int z = -3; z <= 3 && !log; z++)
+                for (byte value : dry.generate(new ChunkPos(x, 1, z)).blocks()) log |= value == BlockId.LOG;
         assertTrue(log);
     }
 

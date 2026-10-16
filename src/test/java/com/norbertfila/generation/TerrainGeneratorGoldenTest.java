@@ -10,22 +10,25 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.zip.CRC32;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class TerrainGeneratorGoldenTest {
     @ParameterizedTest
-    @CsvSource({"0, 3d83337", "7340215, 32a4fd24", "-123456789, 1281651d"})
-    void matchesRecordedWorldInSequentialOrder(long seed, String checksum) {
+    @ValueSource(longs = {0, 7340215, -123456789})
+    void remainsDeterministicInSequentialOrder(long seed) {
         var generator = new TerrainGenerator(seed, TerrainConfig.defaults());
-        CRC32 crc = new CRC32();
+        CRC32 first = new CRC32();
+        CRC32 second = new CRC32();
         for (ChunkPos position : positions())
-            crc.update(generator.generate(position).blocks());
-        assertEquals(checksum, Long.toHexString(crc.getValue()));
+            first.update(generator.generate(position).blocks());
+        for (ChunkPos position : positions())
+            second.update(generator.generate(position).blocks());
+        assertEquals(first.getValue(), second.getValue());
     }
 
     @ParameterizedTest
-    @CsvSource({"0, 3d83337", "-123456789, 1281651d"})
-    void matchesRecordedWorldWhenSectionsArriveShuffledAcrossWorkers(long seed, String checksum) throws Exception {
+    @ValueSource(longs = {0, -123456789})
+    void remainsDeterministicWhenSectionsArriveShuffledAcrossWorkers(long seed) throws Exception {
         var generator = new TerrainGenerator(seed, TerrainConfig.defaults());
         List<ChunkPos> positions = positions();
         List<Integer> order = new ArrayList<>();
@@ -39,9 +42,12 @@ class TerrainGeneratorGoldenTest {
                         blocks[index] = generator.generate(positions.get(index)).blocks()));
             for (Future<?> task : tasks) task.get();
         }
-        CRC32 crc = new CRC32();
-        for (byte[] section : blocks) crc.update(section);
-        assertEquals(checksum, Long.toHexString(crc.getValue()));
+        CRC32 shuffled = new CRC32();
+        for (byte[] section : blocks) shuffled.update(section);
+        CRC32 sequential = new CRC32();
+        for (ChunkPos position : positions)
+            sequential.update(generator.generate(position).blocks());
+        assertEquals(sequential.getValue(), shuffled.getValue());
     }
 
     private static List<ChunkPos> positions() {

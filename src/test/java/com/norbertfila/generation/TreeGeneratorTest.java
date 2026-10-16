@@ -2,6 +2,8 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -167,7 +169,15 @@ class TreeGeneratorTest {
 
             @Override
             public TerrainSummary sample(int worldX, int worldZ) {
-                return new TerrainSummary(heightField.sample(worldX, worldZ), material, BlockId.DIRT, BlockId.STONE);
+                return new TerrainSummary(
+                        heightField.sample(worldX, worldZ),
+                        material,
+                        BlockId.DIRT,
+                        BlockId.STONE,
+                        TerrainSummary.NO_BEDROCK,
+                        TerrainSummary.NO_WATER,
+                        BiomeType.FOREST,
+                        new ClimateSample(0, 0));
             }
         };
     }
