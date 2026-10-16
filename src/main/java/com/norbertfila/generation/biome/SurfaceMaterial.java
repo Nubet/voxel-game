@@ -6,5 +6,8 @@ public enum SurfaceMaterial {
     SAND,
     GRAVEL,
     STONE,
-    SNOW
+    SNOW,
+    MUD,
+    PODZOL,
+    COARSE_DIRT
 }

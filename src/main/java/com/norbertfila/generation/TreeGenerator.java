@@ -5,6 +5,7 @@ import static com.norbertfila.generation.GenerationHash.hash;
 import com.norbertfila.generation.biome.BiomeRegistry;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
+import com.norbertfila.world.PlantRules;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -122,7 +123,7 @@ final class TreeGenerator {
     }
 
     private boolean suitable(int x, int z, TerrainSummary terrainSample) {
-        if (terrainSample.surfaceMaterial() != BlockId.GRASS
+        if (!PlantRules.supports(terrainSample.surfaceMaterial())
                 || terrainSample.surfaceHeight() <= terrainSample.waterLevel()
                 || x < Integer.MIN_VALUE + SLOPE_SAMPLE_DISTANCE
                 || x > Integer.MAX_VALUE - SLOPE_SAMPLE_DISTANCE
