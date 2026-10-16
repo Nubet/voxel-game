@@ -1,5 +1,7 @@
 package com.norbertfila.meshing;
 
+import com.norbertfila.generation.biome.BiomeTint;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.BlockShape;
@@ -9,7 +11,7 @@ import java.util.Arrays;
 
 public final class VisibleFaceMesher implements ChunkMesher {
     public static final int[][] NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
-    private static final float[] GRASS_TOP = {.32f, .69f, .22f};
+    private static final float[] GRASS_TOP = BiomeTint.grass(BiomeType.PLAINS);
     private static final float[] GRASS_SIDE = {.50f, .46f, .27f};
     private static final float[] DIRT = {.46f, .29f, .16f};
     private static final float[] STONE = {.48f, .49f, .51f};
@@ -18,7 +20,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
     private static final float[] BEDROCK = {.2f, .2f, .19f};
     private static final float[] SNOW = {.92f, .94f, .98f};
     private static final float[] LOG = {.44f, .28f, .14f};
-    private static final float[] LEAVES = {.3f, .55f, .22f};
+    private static final float[] LEAVES = BiomeTint.foliage(BiomeType.PLAINS);
     private static final float[] PLANKS = {.64f, .45f, .25f};
     private static final float[] COBBLE = {.43f, .44f, .46f};
     private static final float[] BRICKS = {.58f, .32f, .25f};
