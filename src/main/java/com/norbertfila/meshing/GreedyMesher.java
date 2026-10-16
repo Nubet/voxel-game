@@ -34,8 +34,8 @@ public final class GreedyMesher implements ChunkMesher {
             byte block = (byte) id;
             if (!BlockId.isValid(block)) continue;
             BlockDefinition definition = BlockRegistry.DEFAULT.definition(block);
-            CUBE[id] = definition.shape() == BlockShape.CUBE;
-            CROSS[id] = definition.shape() == BlockShape.CROSS;
+            CUBE[id] = definition.model().shape() == BlockShape.CUBE;
+            CROSS[id] = definition.model().shape() == BlockShape.CROSS;
             OCCLUDES[id] = definition.occludesFullFace();
             LAYER[id] = definition.renderLayer().ordinal();
             for (int face = 0; face < 6; face++) {

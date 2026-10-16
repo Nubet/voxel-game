@@ -112,4 +112,8 @@ public record BlockDefinition(
             default -> throw new IllegalArgumentException("Face index must be in [0, 6)");
         };
     }
+
+    public BlockModel model() {
+        return BlockModel.full(shape);
+    }
 }

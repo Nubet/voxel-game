@@ -37,6 +37,18 @@ class BlockRegistryTest {
     }
 
     @Test
+    void defaultDefinitionsExposeNativeModels() {
+        assertEquals(
+                BlockShape.CUBE,
+                BlockRegistry.DEFAULT.definition(BlockId.STONE).model().shape());
+        assertEquals(
+                BlockShape.CROSS,
+                BlockRegistry.DEFAULT.definition(BlockId.FERN).model().shape());
+        assertEquals(0, BlockRegistry.DEFAULT.definition(BlockId.STONE).model().minY());
+        assertEquals(1, BlockRegistry.DEFAULT.definition(BlockId.STONE).model().maxY());
+    }
+
+    @Test
     void definitionsSeparateCollisionOcclusionAndRenderLayers() {
         BlockRegistry registry = BlockRegistry.DEFAULT;
         assertFalse(registry.isCollidable(BlockId.AIR));
