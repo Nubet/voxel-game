@@ -209,7 +209,7 @@ public final class BlockRegistry {
                                 true,
                                 true,
                                 RenderLayer.OPAQUE),
-                        uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false),
+                        uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false, .3),
                         uniform(BlockId.PLANKS, "planks", PLANKS_TEXTURE, true),
                         uniform(BlockId.COBBLE, "cobble", COBBLE_TEXTURE, true),
                         uniform(BlockId.BRICKS, "bricks", BRICKS_TEXTURE, true),
@@ -288,7 +288,7 @@ public final class BlockRegistry {
                                 true,
                                 true,
                                 RenderLayer.OPAQUE),
-                        uniform(BlockId.PINE_NEEDLES, "pine_needles", PINE_NEEDLES_TEXTURE, false),
+                        uniform(BlockId.PINE_NEEDLES, "pine_needles", PINE_NEEDLES_TEXTURE, false, .3),
                         new BlockDefinition(
                                 BlockId.SWAMP_LOG,
                                 "swamp_log",
@@ -298,7 +298,7 @@ public final class BlockRegistry {
                                 true,
                                 true,
                                 RenderLayer.OPAQUE),
-                        uniform(BlockId.SWAMP_LEAVES, "swamp_leaves", SWAMP_LEAVES_TEXTURE, false),
+                        uniform(BlockId.SWAMP_LEAVES, "swamp_leaves", SWAMP_LEAVES_TEXTURE, false, .3),
                         new BlockDefinition(
                                 BlockId.SNOW_LAYER,
                                 "snow_layer",
@@ -333,6 +333,11 @@ public final class BlockRegistry {
     }
 
     private static BlockDefinition uniform(byte id, String name, int texture, boolean occludesFullFace) {
+        return uniform(id, name, texture, occludesFullFace, 1);
+    }
+
+    private static BlockDefinition uniform(
+            byte id, String name, int texture, boolean occludesFullFace, double breakSeconds) {
         return new BlockDefinition(
                 Byte.toUnsignedInt(id),
                 name,
@@ -341,6 +346,11 @@ public final class BlockRegistry {
                 texture,
                 true,
                 occludesFullFace,
-                occludesFullFace ? RenderLayer.OPAQUE : RenderLayer.CUTOUT);
+                occludesFullFace ? RenderLayer.OPAQUE : RenderLayer.CUTOUT,
+                true,
+                true,
+                BlockShape.CUBE,
+                false,
+                breakSeconds);
     }
 }

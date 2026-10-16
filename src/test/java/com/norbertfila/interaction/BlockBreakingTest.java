@@ -126,6 +126,20 @@ class BlockBreakingTest {
         assertTrue(breaking.tick(Mode.CREATIVE, water, true, true, 0));
     }
 
+    @Test
+    void leavesAreBreakableInSurvivalFasterThanDirtButNotInstantly() {
+        for (byte leaves : new byte[] {BlockId.LEAVES, BlockId.PINE_NEEDLES, BlockId.SWAMP_LEAVES}) {
+            var target = hit(position, leaves);
+            assertFalse(breaking.tick(Mode.SURVIVAL, target, true, true, .29));
+            assertEquals(.29 / .3, breaking.progress().orElseThrow().fraction(), 1e-12);
+            assertTrue(breaking.tick(Mode.SURVIVAL, target, true, false, .01));
+        }
+        assertTrue(BlockRegistry.DEFAULT.definition(BlockId.BERRY_BUSH).breakSeconds()
+                < BlockRegistry.DEFAULT.definition(BlockId.LEAVES).breakSeconds());
+        assertTrue(BlockRegistry.DEFAULT.definition(BlockId.LEAVES).breakSeconds()
+                < BlockRegistry.DEFAULT.definition(BlockId.DIRT).breakSeconds());
+    }
+
     @ParameterizedTest
     @ValueSource(doubles = {-1, Double.NaN, Double.POSITIVE_INFINITY})
     void rejectsInvalidSimulationTime(double seconds) {
