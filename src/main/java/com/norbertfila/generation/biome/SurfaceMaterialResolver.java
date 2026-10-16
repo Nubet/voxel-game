@@ -19,7 +19,10 @@ public final class SurfaceMaterialResolver {
         if (slope > 1.5)
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
         if (profile.surface().surface() == SurfaceMaterial.SNOW
-                || height >= (long) baseHeight + 70 && climate.temperature() < .5f)
+                || height >= (long) baseHeight + 70 && climate.temperature() < .5f
+                || profile.surface().surface() == SurfaceMaterial.PODZOL
+                        && height >= (long) baseHeight + 20
+                        && climate.temperature() < -.15f)
             return new Result(materials.surface(SurfaceMaterial.SNOW), materials.subsurface(SurfaceMaterial.SNOW));
         SurfaceProfile surface = profile.surface();
         return new Result(materials.surface(surface.surface()), materials.subsurface(surface.subsurface()));

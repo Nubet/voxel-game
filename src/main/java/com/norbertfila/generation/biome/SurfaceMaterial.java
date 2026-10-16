@@ -9,5 +9,6 @@ public enum SurfaceMaterial {
     SNOW,
     MUD,
     PODZOL,
-    COARSE_DIRT
+    COARSE_DIRT,
+    ICE
 }
