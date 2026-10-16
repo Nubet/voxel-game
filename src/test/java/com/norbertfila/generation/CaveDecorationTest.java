@@ -30,8 +30,8 @@ class CaveDecorationTest {
         var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
         Map<ChunkPos, ChunkData> sections = new HashMap<>();
         int entrances = 0;
-        for (int cz = -12; cz < 12; cz++)
-            for (int cx = -12; cx < 12; cx++)
+        for (int cz = -24; cz < 24; cz++)
+            for (int cx = -24; cx < 24; cx++)
                 for (int z = 0; z < 16; z++)
                     for (int x = 0; x < 16; x++) {
                         int wx = cx * 16 + x, wz = cz * 16 + z;

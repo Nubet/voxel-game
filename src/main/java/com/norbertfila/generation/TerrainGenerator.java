@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 15;
+    private static final int GENERATOR_VERSION = 16;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -31,6 +31,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D ranges;
     private final Noise2D warpX;
     private final Noise2D warpZ;
+    private final RegionalLandforms landforms;
     private final ClimateNoise climate;
     private final BiomeResolver biomeResolver = new BiomeResolver();
     private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
@@ -68,6 +69,7 @@ public final class TerrainGenerator implements TerrainSource {
         ranges = config.mountains().ranges().fractal((x, z) -> noise.sample(x - 73.3, z + 29.9));
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
+        landforms = new RegionalLandforms(config.landforms(), noise);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
         vegetation = new VegetationGenerator(
@@ -107,10 +109,12 @@ public final class TerrainGenerator implements TerrainSource {
             z += layer(warpZ, config.warp(), worldX, worldZ);
         }
         double continentalLayer = layer(continental, config.continental(), x, z);
+        RegionalLandforms.Sample region = landforms.sample(x, z);
         double height = config.baseHeight()
                 + continentalLayer
-                + layer(hills, config.hills(), x, z)
-                + layer(details, config.details(), x, z)
+                + region.elevation()
+                + region.hills() * layer(hills, config.hills(), x, z)
+                + region.details() * layer(details, config.details(), x, z)
                 + mountainHeight(x, z);
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");

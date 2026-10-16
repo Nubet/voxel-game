@@ -69,18 +69,19 @@ class WaterGenerationTest {
     @Test
     void wetReferenceChunksAreDeterministicAcrossOrderAndConcurrency() {
         long[] seeds = {0, 42, -7, 1234};
-        ChunkPos[] positions = {
-            new ChunkPos(-3, 1, -9), new ChunkPos(-1, 1, -2), new ChunkPos(-2, 1, 5), new ChunkPos(2, 1, 7)
-        };
-        int[] hashes = {1833740391, 1805324019, 502885598, 2081593966};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator g = new TerrainGenerator(seeds[i], TerrainConfig.defaults());
-            byte[] reference = g.generate(positions[i]).blocks();
-            assertEquals(hashes[i], Arrays.hashCode(reference));
+            ChunkPos position = wetChunk(g);
+            byte[] reference = g.generate(position).blocks();
+            assertArrayEquals(
+                    reference,
+                    new TerrainGenerator(seeds[i], TerrainConfig.defaults())
+                            .generate(position)
+                            .blocks());
             boolean water = false;
             for (byte b : reference) water |= b == BlockId.WATER;
             assertTrue(water);
-            List<ChunkPos> batch = List.of(positions[i], new ChunkPos(-1, 0, -1), new ChunkPos(0, 2, 0));
+            List<ChunkPos> batch = List.of(position, new ChunkPos(-1, 0, -1), new ChunkPos(0, 2, 0));
             var expected = batch.stream()
                     .map(p -> Arrays.hashCode(g.generate(p).blocks()))
                     .toList();
@@ -94,6 +95,17 @@ class WaterGenerationTest {
                         expected.get(j).intValue(),
                         Arrays.hashCode(g.generate(batch.get(j)).blocks()));
         }
+    }
+
+    private static ChunkPos wetChunk(TerrainGenerator terrain) {
+        for (int z = -2048; z <= 2048; z += 32)
+            for (int x = -2048; x <= 2048; x += 32) {
+                var sample = terrain.sample(x, z);
+                if (sample.surfaceHeight() < sample.waterLevel() - 2)
+                    return new ChunkPos(
+                            Math.floorDiv(x, 16), Math.floorDiv(sample.waterLevel(), 16), Math.floorDiv(z, 16));
+            }
+        throw new AssertionError("No wet column found");
     }
 
     static TerrainGenerator flat(int height, int level, double forestDensity) {

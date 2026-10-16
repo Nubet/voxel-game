@@ -16,14 +16,24 @@ class TerrainGeneratorTest {
     @Test
     void highMountainSurfaceAndLodShareTheSameGlobalHeight() {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
-        int height = generator.surfaceHeight(-272, 240);
+        int wx = 0, wz = 0;
+        search:
+        for (int z = -2048; z <= 2048; z += 16)
+            for (int x = -2048; x <= 2048; x += 16)
+                if (generator.surfaceHeight(x, z) >= 200) {
+                    wx = x;
+                    wz = z;
+                    break search;
+                }
+        int height = generator.surfaceHeight(wx, wz);
         assertTrue(height >= 200);
-        assertEquals(generator.sample(-272, 240).surfaceMaterial(), blockAt(generator, -272, height, 240));
-        assertEquals(BlockId.AIR, blockAt(generator, -272, height + 1, 240));
-        assertEquals(BlockId.STONE, blockAt(generator, -272, height - 3, 240));
-        assertEquals(BlockId.STONE, blockAt(generator, -272, height - 4, 240));
-        var tile = new FarTerrainGenerator(generator).generate(-5, 3, 1, AreaEdits.none(-320, 192, 64));
-        assertEquals(height, tile.heightAt(48, 48));
+        assertEquals(generator.sample(wx, wz).surfaceMaterial(), blockAt(generator, wx, height, wz));
+        assertEquals(BlockId.AIR, blockAt(generator, wx, height + 1, wz));
+        assertEquals(BlockId.STONE, blockAt(generator, wx, height - 3, wz));
+        assertEquals(BlockId.STONE, blockAt(generator, wx, height - 4, wz));
+        int tx = Math.floorDiv(wx, 64), tz = Math.floorDiv(wz, 64);
+        var tile = new FarTerrainGenerator(generator).generate(tx, tz, 1, AreaEdits.none(tx * 64, tz * 64, 64));
+        assertEquals(height, tile.heightAt(Math.floorMod(wx, 64), Math.floorMod(wz, 64)));
     }
 
     @Test
@@ -57,15 +67,19 @@ class TerrainGeneratorTest {
     void deterministicTreesUseLogAndLeafBlocksAcrossChunkGeneration() {
         TerrainGenerator generator = new TerrainGenerator(0, TerrainConfig.defaults());
         boolean log = false, leaves = false;
-        for (int z = -4; z <= 4; z++)
-            for (int x = -4; x <= 4; x++)
-                for (int y = 0; y <= 4; y++) {
+        search:
+        for (int z = -32; z <= 32; z += 4)
+            for (int x = -32; x <= 32; x += 4) {
+                int surfaceSection = Math.floorDiv(generator.surfaceHeight(x * Chunk.SIZE, z * Chunk.SIZE), Chunk.SIZE);
+                for (int y = surfaceSection - 1; y <= surfaceSection + 2; y++) {
                     byte[] blocks = generator.generate(new ChunkPos(x, y, z)).blocks();
                     for (byte block : blocks) {
                         log |= block == BlockId.LOG;
                         leaves |= block == BlockId.LEAVES;
                     }
+                    if (log && leaves) break search;
                 }
+            }
         assertTrue(log);
         assertTrue(leaves);
     }
@@ -76,7 +90,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(15, generator.generatorVersion());
+            assertEquals(16, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -165,7 +179,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(15, generator.generatorVersion());
+        assertEquals(16, generator.generatorVersion());
     }
 
     @Test

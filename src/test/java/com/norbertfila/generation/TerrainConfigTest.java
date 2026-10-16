@@ -8,8 +8,8 @@ class TerrainConfigTest {
     @Test
     void declaresConservativeHeightBounds() {
         TerrainConfig config = TerrainConfig.defaults();
-        assertEquals(-18, config.minHeight());
-        assertEquals(300, config.maxHeight());
+        assertEquals(-70, config.minHeight());
+        assertEquals(404, config.maxHeight());
         TerrainGenerator generator = new TerrainGenerator(42, config);
         for (int z = -2048; z < 2048; z += 17)
             for (int x = -2048; x < 2048; x += 31) {

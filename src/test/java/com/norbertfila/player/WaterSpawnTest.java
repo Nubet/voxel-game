@@ -10,21 +10,28 @@ class WaterSpawnTest {
     @Test
     void findsDeterministicDryClearSpawnsNearFloodedCoordinatesForSeveralSeeds() {
         long[] seeds = {0, 42, -7, 1234};
-        int[][] wet = {{-48, -144}, {-16, -32}, {-32, 80}, {32, 112}};
         for (int i = 0; i < seeds.length; i++) {
             TerrainGenerator terrain = new TerrainGenerator(seeds[i], TerrainConfig.defaults());
-            assertTrue(terrain.sample(wet[i][0], wet[i][1]).flooded());
+            int[] wet = wetShore(terrain);
+            assertTrue(terrain.sample(wet[0], wet[1]).flooded());
             SpawnResolver resolver = new SpawnResolver(terrain);
-            var spawn = resolver.resolve(wet[i][0], wet[i][1]);
-            assertEquals(spawn, resolver.resolve(wet[i][0], wet[i][1]));
+            var spawn = resolver.resolve(wet[0], wet[1]);
+            assertEquals(spawn, resolver.resolve(wet[0], wet[1]));
             int x = (int) Math.floor(spawn.x()), z = (int) Math.floor(spawn.z());
             assertFalse(terrain.sample(x, z).flooded());
-            assertTrue(Math.abs((long) x - wet[i][0]) <= 1024 && Math.abs((long) z - wet[i][1]) <= 1024);
+            assertTrue(Math.abs((long) x - wet[0]) <= 1024 && Math.abs((long) z - wet[1]) <= 1024);
             int feetY = (int) spawn.y();
             assertTrue(BlockRegistry.DEFAULT.isCollidable(block(terrain, x, feetY - 1, z)));
             assertEquals(BlockId.AIR, block(terrain, x, feetY, z));
             assertEquals(BlockId.AIR, block(terrain, x, feetY + 1, z));
         }
+    }
+
+    private static int[] wetShore(TerrainSource terrain) {
+        for (int z = -2048; z <= 2048; z += 32)
+            for (int x = -2048; x <= 2048; x += 16)
+                if (terrain.sample(x, z).flooded() && !terrain.sample(x + 32, z).flooded()) return new int[] {x, z};
+        throw new AssertionError("No wet shore found");
     }
 
     @Test

@@ -16,13 +16,14 @@ class CaveGenerationTest {
         int carved = 0, uniform = 0;
         for (int z = -3; z <= 3; z++)
             for (int x = -3; x <= 3; x++) {
-                var data = generator.generate(new ChunkPos(x, 0, z));
+                var data = generator.generate(new ChunkPos(x, -4, z));
                 if (data.isUniform()) uniform++;
                 for (int lz = 0; lz < 16; lz++)
                     for (int lx = 0; lx < 16; lx++) {
                         var base = generator.sample(x * 16 + lx, z * 16 + lz);
                         for (int y = 0; y < 16; y++)
-                            if (base.materialAt(y) == BlockId.STONE && data.get(lx, y, lz) == BlockId.AIR) carved++;
+                            if (base.materialAt(y - 64) == BlockId.STONE && data.get(lx, y, lz) == BlockId.AIR)
+                                carved++;
                     }
             }
         assertTrue(carved > 100, "Caves must also cut sections formerly returned as uniform stone");

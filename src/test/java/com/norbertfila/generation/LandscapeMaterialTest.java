@@ -69,10 +69,16 @@ class LandscapeMaterialTest {
 
     @Test
     void terrainHeightsRemainIndependentFromBiomeResolution() {
-        assertEquals(26, new TerrainGenerator(0, TerrainConfig.defaults()).surfaceHeight(-48, -144));
-        assertEquals(220, new TerrainGenerator(42, TerrainConfig.defaults()).surfaceHeight(-272, 240));
-        assertEquals(26, new TerrainGenerator(-7, TerrainConfig.defaults()).surfaceHeight(-512, 512));
-        assertEquals(44, new TerrainGenerator(1234, TerrainConfig.defaults()).surfaceHeight(-48, -144));
+        var config = TerrainConfig.defaults();
+        var alteredClimate = config.withClimate(
+                new TerrainConfig.Layer(.03, 2, .5, 2, 1), new TerrainConfig.Layer(.01, 1, .5, 2, 1));
+        for (long seed : new long[] {0, 42, -7, 1234}) {
+            var terrain = new TerrainGenerator(seed, config);
+            var altered = new TerrainGenerator(seed, alteredClimate);
+            for (int z = -512; z <= 512; z += 64)
+                for (int x = -512; x <= 512; x += 64)
+                    assertEquals(terrain.surfaceHeight(x, z), altered.surfaceHeight(x, z));
+        }
     }
 
     @Test
