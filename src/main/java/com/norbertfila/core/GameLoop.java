@@ -21,6 +21,7 @@ import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.ui.ChatOverlay;
 import com.norbertfila.ui.DebugOverlay;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.Screen;
@@ -162,6 +163,7 @@ public final class GameLoop {
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
         var chat = new ChatHistory();
+        var chatOverlay = new ChatOverlay();
         var dropKeys = new ArrayDeque<Boolean>();
         long placePressId = 0;
         boolean inventoryInitialized = false;
@@ -192,7 +194,11 @@ public final class GameLoop {
                 }
             }
             int previousSlot = hotbar.selectedSlot();
-            int scroll = input.hotbarScrollSteps();
+            int scroll;
+            if (screens.current() instanceof ChatScreen) {
+                screens.scroll(input.consumeScroll(), 0, 0);
+                scroll = 0;
+            } else scroll = input.hotbarScrollSteps();
             if (input.focused() && input.settingsPressed()) {
                 if (screens.isOpen()) screens.close();
                 else screens.open(settingsScreen);
@@ -518,6 +524,17 @@ public final class GameLoop {
                                 settings.farDistance(),
                                 settings.simulationDistance()),
                         now);
+            }
+            if (runtime.state() == WorldRuntime.State.PLAYING) {
+                var chatScreen = screens.current() instanceof ChatScreen currentChat ? currentChat : null;
+                int offset = chatOverlay.render(
+                        canvas,
+                        viewport,
+                        chat,
+                        chatScreen != null,
+                        chatScreen == null ? 0 : chatScreen.scrollOffset(),
+                        now);
+                if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);

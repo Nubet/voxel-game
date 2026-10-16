@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 public final class ChatScreen implements Screen {
     private final ChatHistory history;
     private final Consumer<String> submit;
+    private int scroll;
     private final TextField field = new TextField(new UiBounds(4, 4, 280, 22), ChatHistory.MAX_INPUT);
 
     public ChatScreen(ChatHistory history, String initial, Consumer<String> submit) {
@@ -28,6 +29,20 @@ public final class ChatScreen implements Screen {
 
     public TextField field() {
         return field;
+    }
+
+    public int scrollOffset() {
+        return scroll;
+    }
+
+    public void setScrollOffset(int value) {
+        scroll = Math.max(0, value);
+    }
+
+    @Override
+    public Action scroll(double amount, double x, double y) {
+        scroll = (int) Math.clamp(scroll + amount * 3, 0, 51200);
+        return Action.NONE;
     }
 
     @Override
