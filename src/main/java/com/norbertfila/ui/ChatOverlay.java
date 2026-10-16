@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class ChatOverlay {
-    private static final int ROW_HEIGHT = 12;
+    private static final int ROW_HEIGHT = BitmapFont.LINE_HEIGHT + 2;
 
     record Line(String text, ChatHistory.Kind kind, double time) {}
 

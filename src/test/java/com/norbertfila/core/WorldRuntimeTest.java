@@ -28,6 +28,33 @@ import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
     @Test
+    void chatCommandsExecuteOnceWhileInputIsBlockedAndPersistOnlyGameState() throws Exception {
+        Path save = directory.resolve("chat-commands.vxl");
+        try (var runtime = start(new Flat(), save)) {
+            await(runtime, f -> f.tick() >= 2);
+            runtime.controls(controls(true, false));
+            await(runtime, f -> f.target().isEmpty());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/give @s stone 64")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/gamemode creative")));
+            var executed = await(
+                    runtime,
+                    f -> f.mode() == PlayerController.Mode.CREATIVE
+                            && f.inventory().count(0) == 64);
+            assertFalse(runtime.pollCommandReply().error());
+            assertFalse(runtime.pollCommandReply().error());
+            await(runtime, f -> f.tick() > executed.tick() + 2);
+            assertNull(runtime.pollCommandReply());
+            assertEquals(64, runtime.frame().inventory().count(0));
+        }
+        try (var runtime = start(new Flat(), save)) {
+            var restored = await(runtime, f -> f.tick() >= 2);
+            assertEquals(PlayerController.Mode.CREATIVE, restored.mode());
+            assertEquals(64, restored.inventory().count(0));
+            assertNull(runtime.pollCommandReply());
+        }
+    }
+
+    @Test
     void thrownStacksAndTheirRemainingPickupDelaySurviveRestartWithoutDuplication() throws Exception {
         Path save = directory.resolve("throw-restart.vxl");
         var inventory = new Inventory();

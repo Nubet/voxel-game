@@ -253,7 +253,7 @@ public final class GameLoop {
                 if (!minimized && input.focused()) {
                     if (event instanceof UiEvent.Key(var key) && key == UiKey.BACK) {
                         if (runtime.state() == WorldRuntime.State.LOADING) return Exit.BACK_TO_MENU;
-                        if (!screens.isOpen()) screens.open(pauseScreen);
+                        if (!screens.blocksGameplay()) screens.open(pauseScreen);
                         else screens.input(event);
                     } else if (event instanceof UiEvent.Character(var codePoint)
                             && !screens.blocksGameplay()
@@ -544,6 +544,7 @@ public final class GameLoop {
                         now);
                 if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
+            if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
             else hud.render(canvas, hotbar, viewport);

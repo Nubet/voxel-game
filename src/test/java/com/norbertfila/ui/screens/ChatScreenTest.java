@@ -9,6 +9,20 @@ import org.junit.jupiter.api.Test;
 
 class ChatScreenTest {
     @Test
+    void emptyInputClosesWithoutSendingAndTextHasCodePointLimit() {
+        var screen = new ChatScreen(new ChatHistory(), "", text -> fail("Unexpected submission"));
+        screen.textInput(' ');
+        assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.ACTIVATE));
+        screen.field().setText("😀".repeat(ChatHistory.MAX_INPUT));
+        screen.textInput('x');
+        assertEquals(
+                ChatHistory.MAX_INPUT,
+                screen.field().text().codePointCount(0, screen.field().text().length()));
+        assertThrows(IllegalArgumentException.class, () -> screen.field().setText("x\ny"));
+        assertThrows(IllegalArgumentException.class, () -> screen.field().setText("x".repeat(257)));
+    }
+
+    @Test
     void submitsOnceAndConsumesClosingKeys() {
         var sent = new ArrayList<String>();
         var screen = new ChatScreen(new ChatHistory(), "/", sent::add);

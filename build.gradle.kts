@@ -47,6 +47,18 @@ tasks.register<JavaExec>("smokeTerrainUniforms") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeChat") {
+    group = "verification"
+    description = "Checks chat and debug overlays across viewport sizes and GUI scales."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.UiViewportSmoke")
+    val output = layout.buildDirectory.dir("chat-smoke")
+    doFirst { output.get().asFile.mkdirs() }
+    args(output.get().asFile.absolutePath, "--chat-only")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeClouds") {
     group = "verification"
     description = "Checks cloud rendering, depth occlusion and state on OpenGL."

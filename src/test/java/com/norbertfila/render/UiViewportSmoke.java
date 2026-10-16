@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSize;
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.diagnostics.FrameMetrics;
@@ -12,6 +13,7 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.Button;
+import com.norbertfila.ui.ChatOverlay;
 import com.norbertfila.ui.DebugOverlay;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.ItemIcons;
@@ -25,6 +27,7 @@ import com.norbertfila.ui.UiEvent;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
 import com.norbertfila.ui.WorldUiFixtures;
+import com.norbertfila.ui.screens.ChatScreen;
 import com.norbertfila.ui.screens.CreateWorldScreen;
 import com.norbertfila.ui.screens.InventoryScreen;
 import com.norbertfila.ui.screens.MainMenuScreen;
@@ -115,6 +118,7 @@ public final class UiViewportSmoke {
                     if (viewport.width() >= 480) checkSlots(pixels, viewport);
                     write(output.resolve("inventory-" + i + "-hud.png"), pixels, viewport);
                     checkDebugOverlay(ui, canvas, hotbar, viewport, output.resolve("debug-f3-" + i + ".png"));
+                    checkChat(ui, canvas, viewport, output.resolve("chat-" + i + ".png"));
                     screens.open(panel);
                     screens.layout(viewport);
                     screens.updatePointer(false, false, 0, 0);
@@ -147,8 +151,8 @@ public final class UiViewportSmoke {
                     System.out.println("PASS window=" + size[0] + "x" + size[1] + " framebuffer=" + size[2] + "x"
                             + size[3] + " scale=" + s + " GUI=" + viewport.width() + "x" + viewport.height());
                 }
-                if (args.length > 1 && args[1].equals("--debug-only")) {
-                    System.out.println("F3 overlay GPU smoke PASS: " + cases.length + " viewport/DPI cases");
+                if (args.length > 1 && (args[1].equals("--debug-only") || args[1].equals("--chat-only"))) {
+                    System.out.println("Chat and F3 overlay GPU smoke PASS: " + cases.length + " viewport/DPI cases");
                     return;
                 }
                 UiViewport small = new UiViewport(180, 100, 180, 100);
@@ -452,6 +456,33 @@ public final class UiViewportSmoke {
     private static void clear() {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
+    }
+
+    private static void checkChat(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output) throws Exception {
+        var history = new ChatHistory();
+        history.add("Zażółć gęślą jaźń: chat wrapping across narrow viewports.", ChatHistory.Kind.PLAYER, 0);
+        history.add("Unknown command. Try /help.", ChatHistory.Kind.ERROR, 0);
+        var overlay = new ChatOverlay();
+        canvas.clear();
+        overlay.render(canvas, viewport, history, false, 0, 20);
+        check(canvas.vertexCount() == 0, "Expired chat is still visible");
+        var screen = new ChatScreen(history, "/give @s stone 64", text -> {});
+        overlay.render(canvas, viewport, history, true, 0, 20);
+        screen.render(canvas, viewport);
+        var geometry = FloatBuffer.allocate(canvas.floatCount());
+        canvas.writeTo(geometry);
+        for (int i = 0; i < geometry.position(); i += UiCanvas.FLOATS_PER_VERTEX) {
+            check(geometry.get(i) >= 0 && geometry.get(i) <= viewport.width(), "Chat exceeds viewport width");
+            check(geometry.get(i + 1) >= 0 && geometry.get(i + 1) <= viewport.height(), "Chat exceeds viewport height");
+        }
+        clear();
+        ui.render(canvas, viewport);
+        check(glGetError() == GL_NO_ERROR, "Chat GL error");
+        var pixels = capture(viewport);
+        check(
+                rgb(pixels, viewport, 5 * viewport.scale(), ((int) viewport.height() - 25) * viewport.scale()) != 0,
+                "Chat input missing");
+        write(output, pixels, viewport);
     }
 
     private static void checkDebugOverlay(
