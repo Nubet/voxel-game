@@ -79,7 +79,10 @@ final class VegetationGenerator {
                 }
                 boolean ordinary = profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
                         || profile.vegetation().plants().contains(PlantType.FERN);
-                PlantType special = specialPlant(profile, hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z));
+                PlantType special = specialPlant(
+                        profile,
+                        hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z),
+                        columns.surfaceMaterial(column));
                 if (special != null) {
                     boolean nearWater = special == PlantType.REED && nearWater(ox + x, oz + z, columns, column);
                     byte plant = block(special);
@@ -124,7 +127,7 @@ final class VegetationGenerator {
         return columns.surfaceSupported(column) && columns.surfaceHeight(column) >= columns.waterLevel(column);
     }
 
-    private static PlantType specialPlant(BiomeProfile profile, long value) {
+    private static PlantType specialPlant(BiomeProfile profile, long value, byte ground) {
         var plants = profile.vegetation().plants();
         double roll = unit(value);
         for (PlantType type : PlantType.values()) {
@@ -136,7 +139,7 @@ final class VegetationGenerator {
                 case ALPINE_GRASS -> .12;
                 default -> 0;
             };
-            if (!plants.contains(type)) continue;
+            if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
             if (roll < weight) return type;
             roll -= weight;
         }

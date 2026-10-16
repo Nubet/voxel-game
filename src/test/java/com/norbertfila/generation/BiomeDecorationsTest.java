@@ -59,6 +59,32 @@ class BiomeDecorationsTest {
     }
 
     @Test
+    void reedsGenerateOnSandInEveryBiomeOnlyNearWater() {
+        var generator = new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1);
+        for (BiomeType biome : BiomeType.values()) {
+            for (int waterLevel : new int[] {0, TerrainSummary.NO_WATER}) {
+                var summaries = new TerrainSummary[Chunk.SIZE * Chunk.SIZE];
+                Arrays.fill(
+                        summaries,
+                        new TerrainSummary(
+                                0,
+                                BlockId.SAND,
+                                BlockId.SAND,
+                                BlockId.STONE,
+                                TerrainSummary.NO_BEDROCK,
+                                waterLevel,
+                                biome,
+                                new ClimateSample(0, 0)));
+                byte[] blocks = new byte[4096];
+                generator.generate(0, 0, 0, blocks, TerrainColumn.of(summaries, List.of()));
+                boolean foundReed = false;
+                for (byte block : blocks) foundReed |= block == BlockId.REED;
+                assertEquals(waterLevel == 0, foundReed, "Reeds in " + biome + " with water level " + waterLevel);
+            }
+        }
+    }
+
+    @Test
     void conifersTaperAndUsePineTextures() {
         var tree = new TreeGenerator.Tree(8, 8, 1, 7, 2, 42, TreeType.CONIFER);
         byte[] blocks = new byte[4096];
