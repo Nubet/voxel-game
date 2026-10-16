@@ -3,6 +3,7 @@ package com.norbertfila.core;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.commands.GameCommands;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
@@ -185,6 +186,9 @@ public final class GameLoop {
             if (input.focused() && debugPressed) debugVisible = !debugVisible;
             if (!input.leftMouseDown() && !input.rightMouseDown()) pointerReady = true;
             WorldRuntime.Frame state = runtime.frame();
+            GameCommands.Reply reply;
+            while ((reply = runtime.pollCommandReply()) != null)
+                chat.add(reply.text(), reply.error() ? ChatHistory.Kind.ERROR : ChatHistory.Kind.SYSTEM, now);
             if (state != null) {
                 hotbar.inventory(state.inventory());
                 if (!inventoryInitialized) {
@@ -255,10 +259,14 @@ public final class GameLoop {
                             && !screens.blocksGameplay()
                             && runtime.state() == WorldRuntime.State.PLAYING
                             && ChatScreen.initialText(codePoint) != null) {
-                        screens.open(new ChatScreen(
-                                chat,
-                                ChatScreen.initialText(codePoint),
-                                text -> chat.add(text, ChatHistory.Kind.PLAYER, window.time())));
+                        screens.open(new ChatScreen(chat, ChatScreen.initialText(codePoint), text -> {
+                            if (!text.startsWith("/")) chat.add(text, ChatHistory.Kind.PLAYER, window.time());
+                            else if (!runtime.offer(new WorldRuntime.ChatCommand(text)))
+                                chat.add(
+                                        "Command queue full or session closing.",
+                                        ChatHistory.Kind.ERROR,
+                                        window.time());
+                        }));
                     } else if (event instanceof UiEvent.Key(var key)
                             && (key == UiKey.DROP_ONE || key == UiKey.DROP_STACK)
                             && !screens.blocksGameplay()) dropKeys.addLast(key == UiKey.DROP_STACK);

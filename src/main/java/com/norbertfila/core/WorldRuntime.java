@@ -1,5 +1,8 @@
 package com.norbertfila.core;
 
+import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.commands.CommandSource;
+import com.norbertfila.commands.GameCommands;
 import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.WaterSimulator;
@@ -47,6 +50,7 @@ public final class WorldRuntime implements AutoCloseable {
     private static final double COLLISION_LOOKAHEAD_SECONDS = .5;
     private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
     private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
+    private final ArrayBlockingQueue<GameCommands.Reply> commandReplies = new ArrayBlockingQueue<>(CAPACITY);
     private final ArrayBlockingQueue<Acknowledgement> acknowledgements = new ArrayBlockingQueue<>(CAPACITY);
     private final ArrayBlockingQueue<SessionMesh> meshes = new ArrayBlockingQueue<>(CAPACITY);
     private final AtomicReference<Controls> controls =
@@ -197,6 +201,21 @@ public final class WorldRuntime implements AutoCloseable {
             WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
             long[] estimatedChunkBytes = {0}, publishNanos = {0};
             BlockBreaking breaking = new BlockBreaking(world);
+            var commands = new GameCommands();
+            CommandSource commandSource = new CommandSource() {
+                @Override
+                public boolean setMode(PlayerController.Mode mode) {
+                    if (player.modeChangePending()) return false;
+                    if (!player.setMode(world, mode)) return false;
+                    inventory.returnCarried();
+                    return true;
+                }
+
+                @Override
+                public int give(byte block, int count) {
+                    return inventory.insert(BlockId.toUnsignedInt(block), count);
+                }
+            };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
             BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
                 water.onBlockChanged(position, tick[0]);
@@ -284,7 +303,11 @@ public final class WorldRuntime implements AutoCloseable {
                             Action action;
                             boolean interactionBlocked = false;
                             Edit breakPress = null;
-                            for (int count = 0; count < CAPACITY && (action = actions.poll()) != null; count++) {
+                            for (int count = 0;
+                                    count < CAPACITY
+                                            && commandReplies.remainingCapacity() > 0
+                                            && (action = actions.poll()) != null;
+                                    count++) {
                                 if (!activated && !(action instanceof ResetInput)) continue;
                                 if ((state.blocked() || state.paused())
                                         && !(action instanceof ResetInput)
@@ -292,6 +315,13 @@ public final class WorldRuntime implements AutoCloseable {
                                         && !(action instanceof Command)
                                         && !(action instanceof SelectSlot)) continue;
                                 switch (action) {
+                                    case ChatCommand command -> {
+                                        interactionBlocked = true;
+                                        input.clear();
+                                        player.clearInputGestures();
+                                        breaking.cancel();
+                                        commandReplies.add(commands.execute(command.text(), commandSource));
+                                    }
                                     case ResetInput ignored -> {
                                         interactionBlocked = true;
                                         input.clear();
@@ -599,6 +629,10 @@ public final class WorldRuntime implements AutoCloseable {
         return sessionId;
     }
 
+    public GameCommands.Reply pollCommandReply() {
+        return commandReplies.poll();
+    }
+
     /** The world-owner thread, for per-thread diagnostics such as allocation sampling. */
     public long threadId() {
         return thread.threadId();
@@ -824,7 +858,17 @@ public final class WorldRuntime implements AutoCloseable {
     public sealed interface Action permits Jump, NextMode, Edit, ResetInput, SelectSlot, InventoryAction, Command {}
 
     /** Scripted world commands; accepted even while gameplay input is blocked. */
-    public sealed interface Command extends Action permits Teleport, Fill {}
+    public sealed interface Command extends Action permits Teleport, Fill, ChatCommand {}
+
+    public record ChatCommand(String text) implements Command {
+        public ChatCommand {
+            if (text == null
+                    || !text.startsWith("/")
+                    || text.codePointCount(0, text.length()) > ChatHistory.MAX_INPUT
+                    || text.codePoints().anyMatch(Character::isISOControl))
+                throw new IllegalArgumentException("Invalid command text");
+        }
+    }
 
     /** Moves the player to a position in spectator mode. */
     public record Teleport(double x, double y, double z) implements Command {

@@ -4,7 +4,10 @@ plugins {
     id("com.diffplug.spotless") version "8.10.4"
 }
 
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    maven("https://libraries.minecraft.net") { content { includeModule("com.mojang", "brigadier") } }
+}
 
 val lwjglVersion = "3.4.3"
 val jomlVersion = "1.10.8"
@@ -17,6 +20,7 @@ val natives = when {
 }
 
 dependencies {
+    implementation("com.mojang:brigadier:1.0.500")
     implementation(platform("org.lwjgl:lwjgl-bom:$lwjglVersion"))
     listOf("lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-stb").forEach {
         implementation("org.lwjgl:$it")
