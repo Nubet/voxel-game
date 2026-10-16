@@ -34,6 +34,15 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("smokeClouds") {
+    group = "verification"
+    description = "Checks cloud rendering, depth occlusion and state on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.CloudRendererSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeTerrainPasses") {
     group = "verification"
     description = "Checks split terrain passes against the combined renderer on OpenGL."

@@ -12,6 +12,7 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
+import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.TerrainRenderer;
@@ -98,7 +99,8 @@ public final class GameLoop {
                         profiler.gpuTiming() ? new GpuFrameTimer(FrameProfiler.GpuPass.values().length) : null;
                 BlockOutlineRenderer outline = new BlockOutlineRenderer();
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
-                ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures())) {
+                ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
+                CloudRenderer clouds = new CloudRenderer()) {
             return run(
                     window,
                     input,
@@ -113,7 +115,8 @@ public final class GameLoop {
                     gpuTimer,
                     outline,
                     effects,
-                    items);
+                    items,
+                    clouds);
         }
     }
 
@@ -131,7 +134,8 @@ public final class GameLoop {
             GpuFrameTimer gpuTimer,
             BlockOutlineRenderer outline,
             BlockEffectsRenderer effects,
-            ItemEntityRenderer items) {
+            ItemEntityRenderer items,
+            CloudRenderer clouds) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -414,6 +418,7 @@ public final class GameLoop {
             }
             if (gpuTimer != null) gpuTimer.stamp();
             var opaque = renderer.renderOpaque(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            clouds.render(viewProjection, camera.x(), camera.y(), camera.z(), now);
             if (state != null)
                 renderer.far()
                         .renderWater(
