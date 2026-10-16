@@ -14,6 +14,20 @@ class LandscapeDiagnosticsTest {
     Path output;
 
     @Test
+    void comparesMatchingWindowsAndRejectsDifferentSamplingCoordinates() throws Exception {
+        String header = "seed,version,window,origin_x,origin_z,size,step,min,fingerprint\n";
+        var baseline = output.resolve("baseline.csv");
+        var current = output.resolve("current.csv");
+        var comparison = output.resolve("comparison.csv");
+        java.nio.file.Files.writeString(baseline, header + "42,15,detail,-32,-32,16,4,20,abc\n");
+        java.nio.file.Files.writeString(current, header + "42,22,detail,-32,-32,16,4,30,def\n");
+        LandscapeDiagnostics.compare(baseline, current, comparison);
+        assertTrue(java.nio.file.Files.readString(comparison).contains("42,detail,min,20,30,10.000000"));
+        java.nio.file.Files.writeString(current, header + "42,22,detail,-64,-32,16,4,30,def\n");
+        assertThrows(java.io.IOException.class, () -> LandscapeDiagnostics.compare(baseline, current, comparison));
+    }
+
+    @Test
     void measuresKnownRampAndWaterBoundaryWithoutDependingOnMapSpacing() throws Exception {
         TerrainSource ramp = new TerrainSource() {
             public long seed() {
@@ -44,6 +58,8 @@ class LandscapeDiagnosticsTest {
         for (double slope : survey.slopes()) assertEquals(1, slope);
         for (int relief : survey.relief()) assertEquals(64, relief);
         assertEquals(9, survey.distribution().get("material,grass"));
+        assertEquals(1, survey.distribution().get("sampled_water_component,OCEAN:3"));
+        assertEquals(1, survey.distribution().get("sampled_biome_component,PLAINS:9"));
         assertEquals(
                 survey.summary(0, 1), LandscapeDiagnostics.survey(ramp, window).summary(0, 1));
         LandscapeDiagnostics.writeMaps(output.resolve("ramp.png"), survey);

@@ -100,23 +100,28 @@ final class RegionalHydrology {
                 long hash = GenerationHash.hash(seed, cx, cz);
                 double phase = unit(hash) * Math.PI * 2;
                 double px = source.x(), pz = source.z();
+                double previousLevel = source.level();
                 for (int step = 1; step <= 24; step++) {
                     double t = step / 24.0;
                     double offset = meander * Math.sin(Math.PI * t) * Math.sin(2 * Math.PI * t + phase);
                     double x = source.x() + (target.x() - source.x()) * t - (target.z() - source.z()) / length * offset;
                     double z = source.z() + (target.z() - source.z()) * t + (target.x() - source.x()) / length * offset;
+                    boolean coast = elevation.applyAsDouble(x, z) <= seaLevel + 1.0;
+                    double level = coast ? seaLevel : source.level() + (target.level() - (double) source.level()) * t;
                     reaches.add(new Reach(
                             px,
                             pz,
                             x,
                             z,
-                            source.level() + (target.level() - (double) source.level()) * (step - 1) / 24,
-                            source.level() + (target.level() - (double) source.level()) * t,
+                            previousLevel,
+                            level,
                             width,
                             3 + incoming * .5,
                             width * 5 + 24 * Math.clamp(1 - slope * 8, 0, 1)));
                     px = x;
                     pz = z;
+                    previousLevel = level;
+                    if (coast) break;
                 }
             }
         List<List<Reach>> tiles = new ArrayList<>();
@@ -191,7 +196,12 @@ final class RegionalHydrology {
             double level = startLevel + (endLevel - startLevel) * t;
             double height = distance <= width + 2
                     ? level - depth + (depth + 2) * smooth(distance / (width + 2))
-                    : level + 2 + (ground - level - 2) * smooth((distance - width - 2) / (valleyWidth - width - 2));
+                    : Math.min(
+                            ground,
+                            level
+                                    + 2
+                                    + (ground - level - 2)
+                                            * smooth((distance - width - 2) / (valleyWidth - width - 2)));
             boolean channel = distance <= width + 2;
             return new Sample(
                     height,

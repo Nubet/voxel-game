@@ -291,7 +291,7 @@ public final class BlockOutlineSmoke {
             byte[] reference = null;
             for (int origin : new int[] {0, 30_000_000}) {
                 var view = view(new BlockPos(origin, 0, origin), 0, 0, 1);
-                for (int id : new int[] {BlockId.COBBLE, BlockId.POPPY}) {
+                for (int id : new int[] {BlockId.COBBLE, BlockId.POPPY, BlockId.SNOW_LAYER, BlockId.PINE_LOG}) {
                     glDepthMask(true);
                     glClearColor(.4f, .6f, .8f, 1);
                     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

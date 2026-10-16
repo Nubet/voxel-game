@@ -1,14 +1,20 @@
 package com.norbertfila.generation.biome;
 
+import com.norbertfila.world.BlockRegistry;
+
 public final class BiomeTint {
     private BiomeTint() {}
 
     public static boolean tintedTexture(int layer) {
-        return layer == 1 || layer == 3 || layer == 11 || layer == 45 || layer == 48;
+        return layer == BlockRegistry.GRASS_TOP_TEXTURE
+                || layer == BlockRegistry.GRASS_SIDE_TEXTURE
+                || foliageTexture(layer);
     }
 
     public static boolean foliageTexture(int layer) {
-        return layer == 11 || layer == 45 || layer == 48;
+        return layer == BlockRegistry.LEAVES_TEXTURE
+                || layer == BlockRegistry.PINE_NEEDLES_TEXTURE
+                || layer == BlockRegistry.SWAMP_LEAVES_TEXTURE;
     }
 
     public static int style(BiomeType biome) {

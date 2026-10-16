@@ -26,7 +26,8 @@ public final class LandscapeDiagnostics {
     private LandscapeDiagnostics() {}
 
     public static void main(String[] args) throws IOException {
-        if (args.length != 1) throw new IllegalArgumentException("Expected output directory");
+        if (args.length < 1 || args.length > 2)
+            throw new IllegalArgumentException("Expected output directory and optional baseline directory");
         Path output = Path.of(args[0]);
         Files.createDirectories(output);
         StringBuilder summary = new StringBuilder(
@@ -34,6 +35,8 @@ public final class LandscapeDiagnostics {
         StringBuilder distribution = new StringBuilder("seed,window,kind,value,count\n");
         StringBuilder timings = new StringBuilder("seed,window,samples,sample_ms,chunks,cold_chunk_ms,warm_chunk_ms\n");
         StringBuilder sites = new StringBuilder("seed,window,x,z,water_level\n");
+        StringBuilder biomeSites = new StringBuilder("seed,window,biome,x,z,height\n");
+        StringBuilder blocks = new StringBuilder("seed,window,block,count\n");
         for (long seed : SEEDS) {
             TerrainGenerator terrain = new TerrainGenerator(seed, TerrainConfig.defaults());
             for (Window window : WINDOWS) {
@@ -45,6 +48,24 @@ public final class LandscapeDiagnostics {
                 writeTransect(output.resolve(name + "-transect.csv"), terrain, window);
                 summary.append(survey.summary(seed, terrain.generatorVersion()));
                 survey.distributions(seed, distribution);
+                var seenBiomes = java.util.EnumSet.noneOf(com.norbertfila.generation.biome.BiomeType.class);
+                for (int index = 0; index < survey.samples().length; index++) {
+                    var sample = survey.samples()[index];
+                    if (!sample.flooded() && seenBiomes.add(sample.biome()))
+                        biomeSites
+                                .append(seed)
+                                .append(',')
+                                .append(window.name())
+                                .append(',')
+                                .append(sample.biome())
+                                .append(',')
+                                .append(window.x(index % window.size()))
+                                .append(',')
+                                .append(window.z(index / window.size()))
+                                .append(',')
+                                .append(sample.surfaceHeight())
+                                .append('\n');
+                }
                 for (int index = 0; index < survey.samples().length; index++) {
                     var sample = survey.samples()[index];
                     if (sample.waterKind() == WaterKind.RIVER
@@ -70,11 +91,24 @@ public final class LandscapeDiagnostics {
                 int y = Math.floorDiv(heights[center * window.size() + center], Chunk.SIZE);
                 TerrainGenerator chunkTerrain = new TerrainGenerator(seed, TerrainConfig.defaults());
                 start = System.nanoTime();
-                long fingerprint = chunks(chunkTerrain, x, y, z);
+                int[] blockCounts = new int[256];
+                long fingerprint = chunks(chunkTerrain, x, y, z, blockCounts);
                 double coldMs = elapsed(start);
                 start = System.nanoTime();
-                if (fingerprint != chunks(chunkTerrain, x, y, z))
+                if (fingerprint != chunks(chunkTerrain, x, y, z, null))
                     throw new IllegalStateException("Chunk cache changed generated blocks");
+                for (int id = 0; id < blockCounts.length; id++)
+                    if (blockCounts[id] > 0)
+                        blocks.append(seed)
+                                .append(',')
+                                .append(window.name())
+                                .append(',')
+                                .append(BlockRegistry.DEFAULT
+                                        .definition((byte) id)
+                                        .name())
+                                .append(',')
+                                .append(blockCounts[id])
+                                .append('\n');
                 timings.append(String.format(
                         Locale.ROOT,
                         "%d,%s,%d,%.3f,27,%.3f,%.3f%n",
@@ -91,6 +125,13 @@ public final class LandscapeDiagnostics {
         Files.writeString(output.resolve("distributions.csv"), distribution);
         Files.writeString(output.resolve("timings.csv"), timings);
         Files.writeString(output.resolve("river-sites.csv"), sites);
+        Files.writeString(output.resolve("biome-sites.csv"), biomeSites);
+        Files.writeString(output.resolve("generated-blocks.csv"), blocks);
+        if (args.length == 2)
+            compare(
+                    Path.of(args[1]).resolve("summary.csv"),
+                    output.resolve("summary.csv"),
+                    output.resolve("comparison.csv"));
     }
 
     static Survey survey(TerrainSource terrain, Window window) {
@@ -142,11 +183,47 @@ public final class LandscapeDiagnostics {
                 fingerprint = (fingerprint ^ sample.biome().ordinal()) * 0x100000001b3L;
                 fingerprint = (fingerprint ^ sample.waterKind().ordinal()) * 0x100000001b3L;
             }
+        components(samples, window.size(), distribution, true);
+        components(samples, window.size(), distribution, false);
         return new Survey(
                 window, samples, heights, slopes, relief, shoreMask, water, shores, fingerprint, distribution);
     }
 
-    private static long chunks(TerrainGenerator terrain, int cx, int cy, int cz) {
+    private static void components(
+            TerrainSummary[] samples, int size, Map<String, Integer> distribution, boolean water) {
+        boolean[] seen = new boolean[samples.length];
+        int[] queue = new int[samples.length];
+        for (int start = 0; start < samples.length; start++) {
+            if (seen[start] || water && !samples[start].flooded()) continue;
+            int head = 0, tail = 1;
+            queue[0] = start;
+            seen[start] = true;
+            while (head < tail) {
+                int index = queue[head++], x = index % size, z = index / size;
+                for (int[] d : DIRECTIONS) {
+                    int nx = x + d[0], nz = z + d[1];
+                    if (nx < 0 || nx >= size || nz < 0 || nz >= size) continue;
+                    int next = nz * size + nx;
+                    if (seen[next]) continue;
+                    boolean same = water
+                            ? samples[next].flooded() && samples[next].waterKind() == samples[start].waterKind()
+                            : samples[next].biome() == samples[start].biome();
+                    if (!same) continue;
+                    seen[next] = true;
+                    queue[tail++] = next;
+                }
+            }
+            String type = water
+                    ? samples[start].waterKind().name()
+                    : samples[start].biome().name();
+            distribution.merge(
+                    (water ? "sampled_water_component," : "sampled_biome_component,") + type + ":" + tail,
+                    1,
+                    Integer::sum);
+        }
+    }
+
+    private static long chunks(TerrainGenerator terrain, int cx, int cy, int cz, int[] counts) {
         long fingerprint = 1;
         for (int z = cz - 1; z <= cz + 1; z++)
             for (int x = cx - 1; x <= cx + 1; x++)
@@ -154,10 +231,44 @@ public final class LandscapeDiagnostics {
                     ChunkData chunk = terrain.generate(new ChunkPos(x, y, z));
                     for (int bz = 0; bz < Chunk.SIZE; bz++)
                         for (int bx = 0; bx < Chunk.SIZE; bx++)
-                            for (int by = 0; by < Chunk.SIZE; by++)
-                                fingerprint = fingerprint * 31 + chunk.get(bx, by, bz);
+                            for (int by = 0; by < Chunk.SIZE; by++) {
+                                byte block = chunk.get(bx, by, bz);
+                                fingerprint = fingerprint * 31 + block;
+                                if (counts != null) counts[Byte.toUnsignedInt(block)]++;
+                            }
                 }
         return fingerprint;
+    }
+
+    static void compare(Path baseline, Path current, Path output) throws IOException {
+        Map<String, String[]> previous = new TreeMap<>();
+        var before = Files.readAllLines(baseline);
+        var after = Files.readAllLines(current);
+        if (before.isEmpty() || after.isEmpty() || !before.getFirst().equals(after.getFirst()))
+            throw new IOException("Landscape report schemas differ");
+        String[] columns = before.getFirst().split(",");
+        for (int i = 1; i < before.size(); i++) {
+            String[] row = before.get(i).split(",");
+            previous.put(row[0] + "," + row[2], row);
+        }
+        StringBuilder result = new StringBuilder("seed,window,metric,baseline,current,delta\n");
+        for (int i = 1; i < after.size(); i++) {
+            String[] row = after.get(i).split(",");
+            String key = row[0] + "," + row[2];
+            String[] old = previous.get(key);
+            if (old == null || !Arrays.equals(Arrays.copyOfRange(old, 3, 7), Arrays.copyOfRange(row, 3, 7)))
+                throw new IOException("Landscape windows differ: " + key);
+            for (int column = 7; column < columns.length - 1; column++)
+                result.append(String.format(
+                        Locale.ROOT,
+                        "%s,%s,%s,%s,%.6f%n",
+                        key,
+                        columns[column],
+                        old[column],
+                        row[column],
+                        Double.parseDouble(row[column]) - Double.parseDouble(old[column])));
+        }
+        Files.writeString(output, result);
     }
 
     private static double elapsed(long start) {

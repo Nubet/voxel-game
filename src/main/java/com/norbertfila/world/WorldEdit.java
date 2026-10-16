@@ -83,6 +83,10 @@ public final class WorldEdit {
                 continue;
             var neighbor = new ChunkPos((int) x, loaded.y(), (int) z);
             if (world.hasChunk(neighbor)) validatePlantsIn(neighbor, false, dirty);
+            if (loaded.y() < Integer.MAX_VALUE) {
+                var aboveNeighbor = new ChunkPos((int) x, loaded.y() + 1, (int) z);
+                if (world.hasChunk(aboveNeighbor)) validatePlantsIn(aboveNeighbor, true, dirty);
+            }
         }
         if (loaded.y() < Integer.MAX_VALUE) {
             ChunkPos above = new ChunkPos(loaded.x(), loaded.y() + 1, loaded.z());

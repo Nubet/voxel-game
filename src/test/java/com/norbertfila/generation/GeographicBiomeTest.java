@@ -28,7 +28,7 @@ class GeographicBiomeTest {
                 BlockId.TERRACOTTA_RED,
                 -70,
                 TerrainSummary.NO_WATER);
-        for (int y = 32; y <= 80; y++) assertEquals(TerrainGenerator.badlandsMaterial(y), summary.materialAt(y));
+        for (int y = 32; y <= 80; y++) assertEquals(SurfaceMaterialMapper.badlands(y), summary.materialAt(y));
         assertEquals(BlockId.STONE, summary.materialAt(31));
         var summaries = new TerrainSummary[256];
         java.util.Arrays.fill(summaries, summary);

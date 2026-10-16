@@ -12,6 +12,38 @@ class PlantRulesTest {
     Path temporary;
 
     @Test
+    void reedsKeepUnknownWaterNeighborsAndRevalidateAcrossHorizontalAndVerticalSeams() {
+        for (boolean waterPresent : new boolean[] {false, true}) {
+            var world = new World();
+            var lower = new ChunkPos(0, 0, 0);
+            var upper = new ChunkPos(0, 1, 0);
+            var neighbor = new ChunkPos(1, 0, 0);
+            var ground = new Chunk();
+            ground.set(15, 15, 2, BlockId.MUD);
+            var plants = new Chunk();
+            plants.set(15, 0, 2, BlockId.REED);
+            world.putChunk(lower, ground);
+            world.putChunk(upper, plants);
+            var edit = new WorldEdit(world, 64);
+            edit.validatePlants(upper);
+            var reed = new BlockPos(15, 16, 2);
+            assertEquals(BlockId.REED, world.getBlock(reed).orElseThrow());
+            var water = new Chunk();
+            if (waterPresent) water.set(0, 15, 2, BlockId.WATER);
+            world.putChunk(neighbor, water);
+            edit.validatePlants(neighbor);
+            assertEquals(
+                    waterPresent ? BlockId.REED : BlockId.AIR,
+                    world.getBlock(reed).orElseThrow());
+            if (waterPresent) {
+                assertTrue(PlantRules.canPlace(world, reed, BlockId.REED));
+                edit.setBlock(new BlockPos(16, 15, 2), BlockId.AIR);
+                assertEquals(BlockId.AIR, world.getBlock(reed).orElseThrow());
+            }
+        }
+    }
+
+    @Test
     void removingSupportAcrossNegativeVerticalSeamInvalidatesBothSectionsAndPersists() throws Exception {
         World world = new World();
         ChunkPos lower = new ChunkPos(-1, -1, -1), upper = new ChunkPos(-1, 0, -1);

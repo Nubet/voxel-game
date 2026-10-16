@@ -81,7 +81,7 @@ final class VegetationGenerator {
                         || profile.vegetation().plants().contains(PlantType.FERN);
                 PlantType special = specialPlant(profile, hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z));
                 if (special != null) {
-                    boolean nearWater = nearWater(ox + x, oz + z, columns, column);
+                    boolean nearWater = special == PlantType.REED && nearWater(ox + x, oz + z, columns, column);
                     byte plant = block(special);
                     if (PlantRules.supports(plant, columns.surfaceMaterial(column), nearWater))
                         place(x, z, oy, blocks, columns, plant, nearWater);

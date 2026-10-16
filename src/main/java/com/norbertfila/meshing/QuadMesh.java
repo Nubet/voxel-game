@@ -12,7 +12,8 @@ import java.util.Objects;
  *   <li>word 0: bits 0-4, 5-9, 10-14 first corner x, y, z in 0..16; bits 15-17 face (0..5 cube faces in {@link
  *       VisibleFaceMesher#NORMALS} order, 6 and 7 the two cross-plant planes); bits 18-21 width - 1; bits 22-25
  *       height - 1; bit 26 back side of a cross plane.
- *   <li>word 1: bits 0-15 texture layer; bits 16-23 block ID.
+ *   <li>word 1: bits 0-7 texture layer; bits 8-12 biome tint; bits 16-23 block ID;
+ *       bits 24-26 model top in eighths (zero denotes full height).
  * </ul>
  *
  * <p>Water records ({@link Format#WATER}, four ints):
@@ -30,7 +31,7 @@ import java.util.Objects;
  *   <li>word 0: bits 0-6 and 7-13 first corner x and z in 0..64; bits 14-16 cube face; bit 17 water surface;
  *       bits 18-23 width - 1.
  *   <li>word 1: world y of the first corner.
- *   <li>word 2: bits 0-15 height - 1; bits 16-31 texture layer.
+ *   <li>word 2: bits 0-15 height - 1; bits 16-23 texture layer; bits 24-28 biome tint.
  * </ul>
  */
 public record QuadMesh(Format format, int[] records, QuadRanges ranges) {

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 21;
+    private static final int GENERATOR_VERSION = 22;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -143,20 +143,19 @@ public final class TerrainGenerator implements TerrainSource {
         GeographySample geography = geographySample(worldX, worldZ);
         ClimateSample climateSample = climate.sample(geography.x(), geography.z());
         int height = (int) Math.floor(geography.elevation());
+        double slope = surfaceSlope((int) worldX, (int) worldZ, geography.elevation());
+        boolean nearWater = nearWater((int) worldX, (int) worldZ, height, geography.waterLevel());
         BiomeType biome = biomeResolver.resolve(
-                climateSample,
-                height,
-                config.baseHeight(),
-                surfaceSlope((int) worldX, (int) worldZ, geography.elevation()),
-                nearWater((int) worldX, (int) worldZ, height, geography.waterLevel()),
-                geography.waterLevel());
+                climateSample, height, config.baseHeight(), slope, nearWater, geography.waterLevel());
         return new ColumnSample(
                 geography.elevation(),
                 climateSample,
                 biome,
                 biomeRegistry.profile(biome),
                 geography.waterLevel(),
-                geography.waterKind());
+                geography.waterKind(),
+                slope,
+                nearWater);
     }
 
     private GeographySample geographySample(double worldX, double worldZ) {
@@ -202,7 +201,7 @@ public final class TerrainGenerator implements TerrainSource {
     public TerrainSummary sample(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
-        double slope = surfaceSlope(worldX, worldZ, column.elevation());
+        double slope = column.slope();
         var materials = surfaceMaterials.resolve(
                 height,
                 slope,
@@ -211,14 +210,14 @@ public final class TerrainGenerator implements TerrainSource {
                 column.climate(),
                 column.profile(),
                 column.waterKind(),
-                nearWater(worldX, worldZ, height, column.waterLevel()),
+                column.nearWater(),
                 shores.sample(worldX * .008, worldZ * .008));
         boolean badlands = column.biome() == BiomeType.BADLANDS;
         byte subsurface = column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
         byte deep = badlands ? BlockId.TERRACOTTA_RED : BlockId.STONE;
         return new TerrainSummary(
                 height,
-                badlands ? badlandsMaterial(height) : materials.surface(),
+                badlands ? SurfaceMaterialMapper.badlands(height) : materials.surface(),
                 subsurface,
                 deep,
                 config.minHeight() - 1,
@@ -226,14 +225,6 @@ public final class TerrainGenerator implements TerrainSource {
                 column.biome(),
                 column.climate(),
                 column.waterKind());
-    }
-
-    static byte badlandsMaterial(int y) {
-        return switch (Math.floorMod(y, 24) / 8) {
-            case 0 -> BlockId.TERRACOTTA_RED;
-            case 1 -> BlockId.TERRACOTTA_ORANGE;
-            default -> BlockId.CLAY;
-        };
     }
 
     private boolean nearWater(int x, int z, int height, int level) {
@@ -386,5 +377,7 @@ public final class TerrainGenerator implements TerrainSource {
             BiomeType biome,
             BiomeProfile profile,
             int waterLevel,
-            WaterKind waterKind) {}
+            WaterKind waterKind,
+            double slope,
+            boolean nearWater) {}
 }

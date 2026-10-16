@@ -41,6 +41,7 @@ public final class BlockRegistry {
     public static final int PACKED_ICE_TEXTURE = 32;
     public static final int DRY_GRASS_TOP_TEXTURE = 33;
     public static final int DRY_GRASS_SIDE_TEXTURE = 34;
+    public static final int GRASS_SIDE_OVERLAY_TEXTURE = 49;
     public static final int CACTUS_TOP_TEXTURE = 35,
             CACTUS_SIDE_TEXTURE = 36,
             CACTUS_BOTTOM_TEXTURE = 37,
@@ -163,7 +164,7 @@ public final class BlockRegistry {
         textures.put("refi_swamp_log_top", SWAMP_LOG_TOP_TEXTURE);
         textures.put("refi_swamp_log_side", SWAMP_LOG_SIDE_TEXTURE);
         textures.put("refi_swamp_leaves", SWAMP_LEAVES_TEXTURE);
-        textures.put("refi_grass_side_overlay", 49);
+        textures.put("refi_grass_side_overlay", GRASS_SIDE_OVERLAY_TEXTURE);
         return new BlockRegistry(
                 java.util.List.of(
                         new BlockDefinition(

@@ -12,6 +12,18 @@ class RegionalHydrologyTest {
     private static final DoubleBinaryOperator GROUND = (x, z) -> 120 + .015 * x + .025 * z;
 
     @Test
+    void riverMouthsStopAtTheCoastInsteadOfBuildingCausewaysAcrossTheSea() {
+        var water = new RegionalHydrology(42, 28, (x, z) -> x < 0 ? 80 : 0);
+        for (int x = 128; x <= 1024; x += 16)
+            for (int z = -1024; z <= 1024; z += 32) {
+                var sample = water.sample(x, z, 0);
+                assertEquals(0, sample.height());
+                assertEquals(28, sample.waterLevel());
+                assertEquals(WaterKind.OCEAN, sample.kind());
+            }
+    }
+
+    @Test
     void wetChannelsStayConnectedThroughOverlappingValleySegments() {
         DoubleBinaryOperator corrugated =
                 (x, z) -> GROUND.applyAsDouble(x, z) + 24 * Math.sin(x * .03) * Math.cos(z * .02);

@@ -108,8 +108,8 @@ public record TerrainSummary(
             if (worldY == bedrockHeight) return BlockId.BEDROCK;
         }
         if (worldY > surfaceHeight) return worldY <= waterLevel ? BlockId.WATER : BlockId.AIR;
-        if (deepMaterial == BlockId.TERRACOTTA_RED && worldY >= surfaceHeight - 48)
-            return TerrainGenerator.badlandsMaterial(worldY);
+        if (deepMaterial == BlockId.TERRACOTTA_RED && worldY >= (long) surfaceHeight - 48)
+            return com.norbertfila.generation.biome.SurfaceMaterialMapper.badlands(worldY);
         if (worldY == surfaceHeight) return surfaceMaterial;
         return worldY >= surfaceHeight - 3
                 ? subsurfaceMaterial

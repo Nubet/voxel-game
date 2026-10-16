@@ -13,12 +13,18 @@ public final class ChunkData {
     private final ChunkPos position;
     private final byte[] blocks;
     private final byte uniformBlock;
-    private byte[] tints;
+    private final byte[] tints;
 
     ChunkData withTints(byte[] tints) {
         if (tints.length != Chunk.SIZE * Chunk.SIZE) throw new IllegalArgumentException("Invalid tint grid");
+        return new ChunkData(this, tints);
+    }
+
+    private ChunkData(ChunkData data, byte[] tints) {
+        position = data.position;
+        blocks = data.blocks;
+        uniformBlock = data.uniformBlock;
         this.tints = tints.clone();
-        return this;
     }
 
     public ChunkData(ChunkPos position, byte[] blocks) {
@@ -32,6 +38,7 @@ public final class ChunkData {
         }
         this.blocks = blocks.clone();
         uniformBlock = BlockId.AIR;
+        tints = null;
     }
 
     private ChunkData(ChunkPos position, byte uniformBlock) {
@@ -40,6 +47,7 @@ public final class ChunkData {
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(uniformBlock));
         blocks = null;
         this.uniformBlock = uniformBlock;
+        tints = null;
     }
 
     public static ChunkData uniform(ChunkPos position, byte block) {

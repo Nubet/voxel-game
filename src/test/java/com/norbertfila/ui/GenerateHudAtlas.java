@@ -49,7 +49,7 @@ public final class GenerateHudAtlas {
                 }
         }
         var side = textures.get(BlockRegistry.GRASS_SIDE_TEXTURE);
-        var overlay = textures.get(49);
+        var overlay = textures.get(BlockRegistry.GRASS_SIDE_OVERLAY_TEXTURE);
         float[] grass = com.norbertfila.generation.biome.BiomeTint.color(0, false);
         for (int y = 0; y < 16; y++)
             for (int x = 0; x < 16; x++) {

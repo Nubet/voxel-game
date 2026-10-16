@@ -28,7 +28,8 @@ class TerrainGeneratorTest {
         int height = generator.surfaceHeight(wx, wz);
         assertTrue(height >= 200);
         assertEquals(generator.sample(wx, wz).surfaceMaterial(), blockAt(generator, wx, height, wz));
-        assertEquals(BlockId.AIR, blockAt(generator, wx, height + 1, wz));
+        byte cover = blockAt(generator, wx, height + 1, wz);
+        assertTrue(cover == BlockId.AIR || cover == BlockId.SNOW_LAYER);
         assertEquals(generator.sample(wx, wz).subsurfaceMaterial(), blockAt(generator, wx, height - 3, wz));
         assertEquals(BlockId.STONE, blockAt(generator, wx, height - 4, wz));
         int tx = Math.floorDiv(wx, 64), tz = Math.floorDiv(wz, 64);
@@ -90,7 +91,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(21, generator.generatorVersion());
+            assertEquals(22, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -179,7 +180,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(21, generator.generatorVersion());
+        assertEquals(22, generator.generatorVersion());
     }
 
     @Test

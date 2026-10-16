@@ -60,6 +60,18 @@ tasks.register<JavaExec>("debugBiomes") {
     mainClass.set("com.norbertfila.generation.BiomeDebugMap")
 }
 
+tasks.register<JavaExec>("smokeBlockModels") {
+    group = "verification"
+    description = "Checks outlines, mining effects and dropped-item rendering on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.BlockOutlineSmoke")
+    val output = layout.buildDirectory.dir("block-model-smoke")
+    doFirst { output.get().asFile.mkdirs() }
+    args(output.get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("diagnoseLandscapes") {
     group = "verification"
     description = "Writes repeatable multi-seed landscape maps, distributions, transects and timings."
@@ -67,6 +79,7 @@ tasks.register<JavaExec>("diagnoseLandscapes") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.norbertfila.generation.LandscapeDiagnostics")
     args(layout.buildDirectory.dir("landscape-diagnostics/${findProperty("label") ?: "current"}").get().asFile.absolutePath)
+    findProperty("baseline")?.let { args(it) }
 }
 
 tasks.register<JavaExec>("generateHudAtlas") {
@@ -132,4 +145,5 @@ tasks.register<JavaExec>("benchmarkGame") {
     findProperty("seed")?.let { systemProperty("voxel.benchmark.seed", it) }
     findProperty("siteX")?.let { systemProperty("voxel.benchmark.siteX", it) }
     findProperty("siteZ")?.let { systemProperty("voxel.benchmark.siteZ", it) }
+    findProperty("out")?.let { systemProperty("voxel.benchmark.out", it) }
 }

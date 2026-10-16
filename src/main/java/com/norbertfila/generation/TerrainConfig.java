@@ -136,8 +136,8 @@ public record TerrainConfig(
                         true),
                 new Layer(.003, 3, .5, 2, 140),
                 28,
-                defaultTemperature(),
-                defaultHumidity(),
+                new Layer(.00045, 2, .5, 2, 2),
+                new Layer(.00055, 2, .5, 2, 2),
                 new Layer(.0003, 2, .5, 2, 96));
     }
 
