@@ -152,6 +152,7 @@ public final class GameLoop {
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
+        var crosshair = new com.norbertfila.ui.crosshair.CrosshairRenderer();
         DebugOverlay debugOverlay = new DebugOverlay();
         boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
@@ -544,6 +545,7 @@ public final class GameLoop {
                         now);
                 if (chatScreen != null) chatScreen.setScrollOffset(offset);
             }
+            if (!editingBlocked) crosshair.render(canvas, viewport);
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);

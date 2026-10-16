@@ -5,13 +5,6 @@ import com.norbertfila.core.Hotbar;
 public final class Hud {
     public void render(UiCanvas canvas, Hotbar hotbar, UiViewport viewport) {
         int width = (int) viewport.width(), height = (int) viewport.height();
-        int radius = HudMetrics.CROSSHAIR_SIZE / 2;
-        canvas.sprite(
-                UiAtlas.CROSSHAIR,
-                width / 2 - radius,
-                height / 2 - radius,
-                HudMetrics.CROSSHAIR_SIZE,
-                HudMetrics.CROSSHAIR_SIZE);
         int spacing = Math.max(1, Math.min(HudMetrics.SLOT_SPACING, (width - 4) / Hotbar.SLOTS));
         int barWidth = spacing == HudMetrics.SLOT_SPACING ? HudMetrics.HOTBAR_WIDTH : Hotbar.SLOTS * spacing + 2;
         int startX = (width - barWidth) / 2;

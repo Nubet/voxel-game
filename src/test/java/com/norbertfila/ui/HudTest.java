@@ -23,9 +23,9 @@ class HudTest {
             new Hud().render(canvas, hotbar, new UiViewport(1280, 720, 1280, 720));
             float[] data = vertices(canvas);
             var region = UiAtlas.item((byte) id);
-            assertEquals(region.x() / (float) UiAtlas.WIDTH, data[2 * 48 + 6]);
-            assertEquals(region.y() / (float) UiAtlas.HEIGHT, data[2 * 48 + 7]);
-            assertEquals(HudMetrics.ITEM_SIZE, data[2 * 48 + 8] - data[2 * 48]);
+            assertEquals(region.x() / (float) UiAtlas.WIDTH, data[48 + 6]);
+            assertEquals(region.y() / (float) UiAtlas.HEIGHT, data[48 + 7]);
+            assertEquals(HudMetrics.ITEM_SIZE, data[48 + 8] - data[48]);
         }
     }
 
@@ -55,16 +55,14 @@ class HudTest {
         var hotbar = new Hotbar();
         new Hud().render(canvas, hotbar, viewport);
         float[] data = vertices(canvas);
-        assertEquals(HudMetrics.CROSSHAIR_SIZE, data[8] - data[0]);
-        assertEquals(HudMetrics.CROSSHAIR_SIZE, data[17] - data[1]);
-        int bar = 48;
+        int bar = 0;
         assertEquals(HudMetrics.HOTBAR_WIDTH, data[bar + 8] - data[bar]);
         assertEquals(HudMetrics.HOTBAR_HEIGHT, data[bar + 17] - data[bar + 1]);
         assertEquals((int) viewport.height(), data[bar + 17]);
         int frame = data.length - 48;
         assertEquals(HudMetrics.SLOT_FRAME_WIDTH, data[frame + 8] - data[frame]);
         assertEquals(HudMetrics.SLOT_FRAME_HEIGHT, data[frame + 17] - data[frame + 1]);
-        assertEquals(21 * 6, canvas.vertexCount());
+        assertEquals(20 * 6, canvas.vertexCount());
         float firstFrameX = data[frame];
         hotbar.select(8);
         canvas.clear();

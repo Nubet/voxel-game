@@ -196,7 +196,10 @@ public final class UiViewportSmoke {
             UiRenderer ui, UiCanvas canvas, ScreenManager screens, Hotbar hotbar, UiViewport viewport) {
         canvas.clear();
         if (screens.isOpen()) screens.render(canvas, viewport);
-        else new Hud().render(canvas, hotbar, viewport);
+        else {
+            new Hud().render(canvas, hotbar, viewport);
+            new com.norbertfila.ui.crosshair.CrosshairRenderer().render(canvas, viewport);
+        }
         ui.render(canvas, viewport);
     }
 
