@@ -49,7 +49,7 @@ public final class GameSettings {
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private float zoomSpeed = DEFAULT_ZOOM_SPEED;
     private int guiScale = GUI_SCALE_AUTO;
-    private CloudMode clouds = CloudMode.FAST;
+    private CloudMode clouds = CloudMode.FANCY;
 
     public CloudMode clouds() {
         return clouds;

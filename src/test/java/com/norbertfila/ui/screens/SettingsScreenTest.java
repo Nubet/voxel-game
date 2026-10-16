@@ -228,15 +228,15 @@ class SettingsScreenTest {
         assertTrue(bounds.x()
                 >= screen.guiScaleButton().bounds().x()
                         + screen.guiScaleButton().bounds().width());
-        assertEquals(CloudMode.FAST, settings.clouds());
-        screen.updatePointer(true, true, bounds.x() + 1, bounds.y() + 1);
-        assertEquals(CloudMode.FAST, settings.clouds());
-        screen.updatePointer(false, false, bounds.x() + 1, bounds.y() + 1);
         assertEquals(CloudMode.FANCY, settings.clouds());
-        screen.keyPress(UiKey.ACTIVATE);
+        screen.updatePointer(true, true, bounds.x() + 1, bounds.y() + 1);
+        assertEquals(CloudMode.FANCY, settings.clouds());
+        screen.updatePointer(false, false, bounds.x() + 1, bounds.y() + 1);
         assertEquals(CloudMode.OFF, settings.clouds());
         screen.keyPress(UiKey.ACTIVATE);
         assertEquals(CloudMode.FAST, settings.clouds());
+        screen.keyPress(UiKey.ACTIVATE);
+        assertEquals(CloudMode.FANCY, settings.clouds());
         assertThrows(NullPointerException.class, () -> settings.setClouds(null));
     }
 
