@@ -27,6 +27,7 @@ public final class TerrainRenderer implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(TerrainRenderer.class.getName());
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
     private static final long ARENA_BYTES = 1024L * 1024;
+    private static final int TRANSLUCENT_SOLID_PASS = 3;
     private final GpuMemoryBudget memoryBudget;
     private final GpuMemoryBudget arenaBudget;
     private final QuadArenas solidArenas;
@@ -35,11 +36,11 @@ public final class TerrainRenderer implements AutoCloseable {
     private final GpuMeshPool solidMeshes;
     private final GpuMeshPool waterMeshes;
     private final Frustum frustum = new Frustum();
-    private final BackToFront waterOrder = new BackToFront();
+    private final BackToFront translucentOrder = new BackToFront();
     private final List<ChunkPos> visibleChunks = new ArrayList<>();
     private long cullNanos;
     private final List<ChunkPos> visibleSolids = new ArrayList<>();
-    private final List<ChunkPos> visibleWater = new ArrayList<>();
+    private final List<ChunkPos> visibleTranslucent = new ArrayList<>();
     private final UploadQueue uploads = new UploadQueue();
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
@@ -209,21 +210,27 @@ public final class TerrainRenderer implements AutoCloseable {
         visibleChunks.clear();
         regionCuller.cull(frustum, regionIndex, cameraX, cameraY, cameraZ, visibleChunks);
         visibleSolids.clear();
-        visibleWater.clear();
+        visibleTranslucent.clear();
         for (ChunkPos position : visibleChunks) {
             if (solidMeshes.get(position) != null) visibleSolids.add(position);
-            if (waterMeshes.get(position) != null) visibleWater.add(position);
+            GpuMesh solid = solidMeshes.get(position);
+            if (waterMeshes.get(position) != null
+                    || solid != null && solid.ranges().translucent() > 0) visibleTranslucent.add(position);
         }
-        // Chunk-center ordering approximates back-to-front blending; overlapping water inside one chunk can still sort
+        // Chunk-center ordering approximates back-to-front blending; overlapping translucent faces inside one chunk can
+        // still sort
         // incorrectly.
-        waterOrder.camera(cameraX, cameraY, cameraZ);
-        visibleWater.sort(waterOrder);
+        translucentOrder.camera(cameraX, cameraY, cameraZ);
+        visibleTranslucent.sort(translucentOrder);
         cullNanos = System.nanoTime() - cullStarted;
         commands.clear();
         addGroupedByBuffer(RenderLayer.OPAQUE, solidMeshes, visibleSolids);
         addGroupedByBuffer(RenderLayer.CUTOUT, solidMeshes, visibleSolids);
-        // Water keeps its back-to-front order; a new run starts only where the arena buffer changes.
-        for (ChunkPos position : visibleWater) add(RenderLayer.TRANSLUCENT, waterMeshes.get(position), position);
+        for (ChunkPos position : visibleTranslucent) {
+            GpuMesh water = waterMeshes.get(position), solid = solidMeshes.get(position);
+            if (water != null) add(RenderLayer.TRANSLUCENT, water, position);
+            if (solid != null) add(TRANSLUCENT_SOLID_PASS, RenderLayer.TRANSLUCENT, solid, position);
+        }
         float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
         blockTextures.bind(0);
         glBindVertexArray(emptyVertexArray);
@@ -245,10 +252,10 @@ public final class TerrainRenderer implements AutoCloseable {
         return new RenderStats(visible, regionIndex.size() - visible, calls, commands.draws(), cullNanos);
     }
 
-    /** Draws water prepared by the preceding opaque pass, after the scene background is complete. */
+    /** Draws translucent terrain after the scene background is complete. */
     public int renderWater(Matrix4f viewProjection, double cameraX, double cameraY, double cameraZ, float underwater) {
         try {
-            if (!visibleWater.isEmpty()) {
+            if (!visibleTranslucent.isEmpty()) {
                 blockTextures.bind(0);
                 glBindVertexArray(emptyVertexArray);
                 indirect.bind(commands);
@@ -258,9 +265,19 @@ public final class TerrainRenderer implements AutoCloseable {
                 glDepthMask(false);
                 glDisable(GL_CULL_FACE);
                 float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
-                waterProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
-                waterProgram.renderLayer(RenderLayer.TRANSLUCENT);
-                return indirect.submit(commands, RenderLayer.TRANSLUCENT.ordinal());
+                int calls = 0, activePass = -1;
+                for (int run = 0; run < commands.runs(); run++) {
+                    int pass = commands.runPass(run);
+                    if (pass != RenderLayer.TRANSLUCENT.ordinal() && pass != TRANSLUCENT_SOLID_PASS) continue;
+                    if (activePass != pass) {
+                        TerrainProgram program = pass == TRANSLUCENT_SOLID_PASS ? solidProgram : waterProgram;
+                        program.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+                        program.renderLayer(RenderLayer.TRANSLUCENT);
+                        activePass = pass;
+                    }
+                    calls += indirect.submitRun(commands, run);
+                }
+                return calls;
             }
             return 0;
         } finally {
@@ -292,10 +309,14 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     private void add(RenderLayer layer, GpuMesh mesh, ChunkPos position) {
+        add(layer.ordinal(), layer, mesh, position);
+    }
+
+    private void add(int pass, RenderLayer layer, GpuMesh mesh, ChunkPos position) {
         int quads = mesh.ranges().count(layer);
         if (quads == 0) return;
         commands.add(
-                layer.ordinal(),
+                pass,
                 mesh.buffer(),
                 (mesh.firstRecord() + mesh.ranges().first(layer)) * QuadMesh.VERTICES_PER_QUAD,
                 quads * QuadMesh.VERTICES_PER_QUAD,

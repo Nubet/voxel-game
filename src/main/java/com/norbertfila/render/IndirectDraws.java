@@ -44,25 +44,26 @@ final class IndirectDraws implements AutoCloseable {
     /** Issues every run of {@code pass}; returns the number of GL draw calls. */
     int submit(DrawCommands commands, int pass) {
         int calls = 0;
-        int[] data = commands.commands();
         for (int run = 0; run < commands.runs(); run++) {
             if (commands.runPass(run) != pass) continue;
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, commands.runBuffer(run));
-            int start = commands.runStart(run), count = commands.runCount(run);
-            if (multiDraw) {
-                glMultiDrawArraysIndirect(
-                        GL_TRIANGLES, (long) start * DrawCommands.COMMAND_INTS * Integer.BYTES, count, 0);
-                calls++;
-            } else {
-                for (int draw = start; draw < start + count; draw++) {
-                    int command = draw * DrawCommands.COMMAND_INTS;
-                    glDrawArraysInstancedBaseInstance(
-                            GL_TRIANGLES, data[command + 2], data[command], 1, data[command + 3]);
-                    calls++;
-                }
-            }
+            calls += submitRun(commands, run);
         }
         return calls;
+    }
+
+    int submitRun(DrawCommands commands, int run) {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, commands.runBuffer(run));
+        int start = commands.runStart(run), count = commands.runCount(run);
+        if (multiDraw) {
+            glMultiDrawArraysIndirect(GL_TRIANGLES, (long) start * DrawCommands.COMMAND_INTS * Integer.BYTES, count, 0);
+            return 1;
+        }
+        int[] data = commands.commands();
+        for (int draw = start; draw < start + count; draw++) {
+            int command = draw * DrawCommands.COMMAND_INTS;
+            glDrawArraysInstancedBaseInstance(GL_TRIANGLES, data[command + 2], data[command], 1, data[command + 3]);
+        }
+        return count;
     }
 
     @Override
