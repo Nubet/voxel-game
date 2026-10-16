@@ -20,6 +20,7 @@ public final class CloudRenderer implements AutoCloseable {
     private final int height;
     private final int phase;
     private final int periodUniform;
+    private final int visibility;
     private final double period;
     private boolean closed;
 
@@ -33,6 +34,7 @@ public final class CloudRenderer implements AutoCloseable {
             height = uniform(createdProgram, "uHeight");
             phase = uniform(createdProgram, "uPhase");
             periodUniform = uniform(createdProgram, "uPeriod");
+            visibility = uniform(createdProgram, "uVisibility");
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uClouds"), 0);
             glProgramUniform1f(createdProgram, uniform(createdProgram, "uRadius"), RADIUS);
             createdVao = glGenVertexArrays();
@@ -78,13 +80,16 @@ public final class CloudRenderer implements AutoCloseable {
         texture = createdTexture;
     }
 
-    public void render(Matrix4f vp, double cameraX, double cameraY, double cameraZ, double seconds) {
+    public void render(Matrix4f vp, double cameraX, double cameraY, double cameraZ, double seconds, float underwater) {
         if (closed) throw new IllegalStateException("Cloud renderer is closed");
         if (!Double.isFinite(cameraX)
                 || !Double.isFinite(cameraY)
                 || !Double.isFinite(cameraZ)
                 || !Double.isFinite(seconds)
                 || seconds < 0) throw new IllegalArgumentException("Invalid cloud view");
+        if (!Float.isFinite(underwater) || underwater < 0 || underwater > 1)
+            throw new IllegalArgumentException("Underwater visibility must be in [0, 1]");
+        if (underwater == 1) return;
         glEnable(GL_DEPTH_TEST);
         glDepthMask(false);
         glDisable(GL_CULL_FACE);
@@ -95,7 +100,8 @@ public final class CloudRenderer implements AutoCloseable {
             glUniformMatrix4fv(viewProjection, false, vp.get(stack.mallocFloat(16)));
             glUniform1f(height, (float) (HEIGHT - cameraY));
             glUniform1f(periodUniform, (float) period);
-            glUniform2f(phase, phase(cameraX - seconds * SPEED, period), phase(cameraZ, period));
+            glUniform2f(phase, movingPhase(cameraX, seconds, period), phase(cameraZ, period));
+            glUniform1f(visibility, 1 - underwater);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
             glBindVertexArray(vao);
@@ -111,6 +117,10 @@ public final class CloudRenderer implements AutoCloseable {
     static float phase(double position, double period) {
         double remainder = position % period;
         return (float) (remainder < 0 ? remainder + period : remainder);
+    }
+
+    static float movingPhase(double position, double seconds, double period) {
+        return phase(phase(position, period) - (seconds % (period / SPEED)) * SPEED, period);
     }
 
     @Override

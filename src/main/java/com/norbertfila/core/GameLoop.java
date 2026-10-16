@@ -418,7 +418,12 @@ public final class GameLoop {
             }
             if (gpuTimer != null) gpuTimer.stamp();
             var opaque = renderer.renderOpaque(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
-            clouds.render(viewProjection, camera.x(), camera.y(), camera.z(), now);
+            if (gpuTimer != null) gpuTimer.stamp();
+            double effectSeconds = state == null
+                    ? 0
+                    : animationSeconds(state.tick(), state.publishedAt(), state.paused(), System.nanoTime());
+            clouds.render(viewProjection, camera.x(), camera.y(), camera.z(), effectSeconds, visibility.amount());
+            if (gpuTimer != null) gpuTimer.stamp();
             if (state != null)
                 renderer.far()
                         .renderWater(
@@ -449,10 +454,6 @@ public final class GameLoop {
                         : Math.clamp(
                                 (System.nanoTime() - state.publishedAt()) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
                 items.render(viewProjection, state.items(), itemAlpha, camera.x(), camera.y(), camera.z());
-                double effectSeconds = state.tick() * FixedSimulation.TICK_SECONDS;
-                if (!state.paused())
-                    effectSeconds += Math.clamp(
-                            (System.nanoTime() - state.publishedAt()) * 1e-9, 0, FixedSimulation.TICK_SECONDS);
                 effects.render(
                         viewProjection,
                         mining,
@@ -494,6 +495,11 @@ public final class GameLoop {
     /** Far clip plane covering far terrain diagonally across its radius, with margin for tall terrain. */
     static float farPlane(int farDistanceChunks) {
         return Math.max(800f, (farDistanceChunks + 4) * Chunk.SIZE * 1.5f);
+    }
+
+    static double animationSeconds(long tick, long publishedAt, boolean paused, long now) {
+        return tick * FixedSimulation.TICK_SECONDS
+                + (paused ? 0 : Math.clamp((now - publishedAt) * 1e-9, 0, FixedSimulation.TICK_SECONDS));
     }
 
     public Screen.Action runMenu(Window window, Input input, UiRenderer renderer, GameSettings settings, Screen menu) {

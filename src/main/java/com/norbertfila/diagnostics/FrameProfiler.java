@@ -16,10 +16,12 @@ public final class FrameProfiler {
         SWAP
     }
 
-    /** GPU passes in submission order: far terrain, near terrain, then UI. */
+    /** GPU passes in submission order; terrain passes contain only opaque and cutout geometry. */
     public enum GpuPass {
         FAR_TERRAIN,
         TERRAIN,
+        CLOUDS,
+        TRANSLUCENT_AND_EFFECTS,
         UI
     }
 

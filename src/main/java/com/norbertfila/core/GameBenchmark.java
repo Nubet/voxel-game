@@ -454,7 +454,7 @@ public final class GameBenchmark {
         private Counters start, end;
         private double retainedHeapMb, profilerOverheadUs;
         private long nvxStartKb = -1, nvxEndKb = -1;
-        private Distribution frameTimes, gpuTerrain, gpuUi, gpuFar;
+        private Distribution frameTimes, gpuTerrain, gpuUi, gpuFar, gpuClouds, gpuTranslucent;
 
         Measurement(BenchmarkScene scene) {
             this.scene = scene;
@@ -500,6 +500,8 @@ public final class GameBenchmark {
             gpuTerrain = profiler.gpuDistribution(FrameProfiler.GpuPass.TERRAIN);
             gpuUi = profiler.gpuDistribution(FrameProfiler.GpuPass.UI);
             gpuFar = profiler.gpuDistribution(FrameProfiler.GpuPass.FAR_TERRAIN);
+            gpuClouds = profiler.gpuDistribution(FrameProfiler.GpuPass.CLOUDS);
+            gpuTranslucent = profiler.gpuDistribution(FrameProfiler.GpuPass.TRANSLUCENT_AND_EFFECTS);
             over16 = profiler.framesOver(16_666_667);
             over33 = profiler.framesOver(33_333_333);
             int recorded = Math.max(1, profiler.frames());
@@ -537,7 +539,10 @@ public final class GameBenchmark {
                     .put("gpuTerrainP95Ms", gpuTerrain.p95Millis())
                     .put("gpuUiP50Ms", gpuUi.p50Millis())
                     .put("gpuFarP50Ms", gpuFar.p50Millis())
-                    .put("gpuFarP95Ms", gpuFar.p95Millis());
+                    .put("gpuFarP95Ms", gpuFar.p95Millis())
+                    .put("gpuCloudsP50Ms", gpuClouds.p50Millis())
+                    .put("gpuCloudsP95Ms", gpuClouds.p95Millis())
+                    .put("gpuTranslucentP50Ms", gpuTranslucent.p50Millis());
             var f0 = start.far();
             var f1 = end.far();
             long farBuilt = f1.built() - f0.built();
