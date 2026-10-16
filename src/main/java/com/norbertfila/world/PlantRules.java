@@ -15,6 +15,10 @@ public final class PlantRules {
         return ground == BlockId.GRASS;
     }
 
+    public static boolean supportsDry(byte ground) {
+        return ground == BlockId.SAND || ground == BlockId.GRAVEL || ground == BlockId.STONE;
+    }
+
     public static boolean canPlace(World world, BlockPos position) {
         if (position.y() == Integer.MIN_VALUE) return false;
         BlockPos below = new BlockPos(position.x(), position.y() - 1, position.z());

@@ -39,7 +39,14 @@ public final class BiomeRegistry {
                                 SurfaceMaterial.GRASS,
                                 SurfaceMaterial.DIRT,
                                 Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
-                BiomeType.DESERT, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of()),
+                BiomeType.DESERT,
+                        profile(
+                                0,
+                                0,
+                                0,
+                                SurfaceMaterial.SAND,
+                                SurfaceMaterial.SAND,
+                                Set.of(PlantType.CACTUS, PlantType.DEAD_BUSH)),
                 BiomeType.TAIGA,
                         profile(
                                 .55f,
@@ -47,7 +54,11 @@ public final class BiomeRegistry {
                                 .05f,
                                 SurfaceMaterial.PODZOL,
                                 SurfaceMaterial.COARSE_DIRT,
-                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
+                                Set.of(
+                                        PlantType.SHORT_GRASS,
+                                        PlantType.FERN,
+                                        PlantType.BERRY_BUSH,
+                                        PlantType.ALPINE_GRASS)),
                 BiomeType.SWAMP,
                         profile(
                                 .35f,
@@ -55,9 +66,17 @@ public final class BiomeRegistry {
                                 .2f,
                                 SurfaceMaterial.MUD,
                                 SurfaceMaterial.DIRT,
-                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
-                BiomeType.BADLANDS, profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of()),
-                BiomeType.ALPINE, profile(0, 0, 0, SurfaceMaterial.SNOW, SurfaceMaterial.STONE, Set.of())));
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.REED, PlantType.MUSHROOM)),
+                BiomeType.BADLANDS,
+                        profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of(PlantType.DEAD_BUSH)),
+                BiomeType.ALPINE,
+                        profile(
+                                0,
+                                0,
+                                0,
+                                SurfaceMaterial.SNOW,
+                                SurfaceMaterial.STONE,
+                                Set.of(PlantType.ALPINE_GRASS, PlantType.FLOWER))));
     }
 
     private static BiomeProfile profile(
