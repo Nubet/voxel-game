@@ -2,6 +2,9 @@ package com.norbertfila.generation;
 
 import static com.norbertfila.generation.GenerationHash.hash;
 
+import com.norbertfila.generation.biome.BiomeProfile;
+import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.generation.biome.PlantType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.PlantRules;
@@ -16,11 +19,17 @@ final class VegetationGenerator {
     private final long seed;
     private final Noise2D density;
     private final Noise2D forest;
+    private final BiomeRegistry biomes;
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest) {
+        this(seed, density, forest, BiomeRegistry.defaults());
+    }
+
+    VegetationGenerator(long seed, Noise2D density, Noise2D forest, BiomeRegistry biomes) {
         this.seed = seed;
         this.density = density;
         this.forest = forest;
+        this.biomes = biomes;
     }
 
     void generate(int ox, int oy, int oz, byte[] blocks, TerrainColumn columns) {
@@ -40,6 +49,9 @@ final class VegetationGenerator {
                     long z = centerZ + bounded(patch, 5 + attempt * 2, 2 * PATCH_RADIUS + 1) - PATCH_RADIUS;
                     long lx = x - ox, lz = z - oz;
                     if (lx < 0 || lx >= Chunk.SIZE || lz < 0 || lz >= Chunk.SIZE) continue;
+                    int column = (int) (lz * Chunk.SIZE + lx);
+                    BiomeProfile profile = biomes.profile(columns.biome(column));
+                    if (!profile.vegetation().plants().contains(PlantType.FLOWER)) continue;
                     place((int) lx, (int) lz, oy, blocks, columns, flower);
                 }
             }
@@ -49,13 +61,21 @@ final class VegetationGenerator {
                 long y = (long) columns.surfaceHeight(column) + 1 - oy;
                 if (y < 0 || y >= Chunk.SIZE || !suitable(columns, column)) continue;
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
+                BiomeProfile profile = biomes.profile(columns.biome(column));
+                if (!profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
+                        && !profile.vegetation().plants().contains(PlantType.FERN)) continue;
                 double t =
                         Math.clamp((sample(density, ((long) ox + x) * .012, ((long) oz + z) * .012) + .4) / .9, 0, 1);
-                if (unit(hash(seed ^ GRASS_SALT, (long) ox + x, (long) oz + z)) >= .3 * t * t * (3 - 2 * t)) continue;
+                if (unit(hash(seed ^ GRASS_SALT, (long) ox + x, (long) oz + z))
+                        >= .3 * profile.vegetation().grassDensity() * t * t * (3 - 2 * t)) continue;
                 double woodland = sample(forest, ((long) ox + x) * .003, ((long) oz + z) * .003);
-                byte plant = woodland > .1 && unit(hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z)) < .2
+                byte plant = woodland > .1
+                                && profile.vegetation().plants().contains(PlantType.FERN)
+                                && unit(hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z)) < .2
                         ? BlockId.FERN
                         : BlockId.SHORT_GRASS;
+                if (plant == BlockId.SHORT_GRASS
+                        && !profile.vegetation().plants().contains(PlantType.SHORT_GRASS)) plant = BlockId.FERN;
                 place(x, z, oy, blocks, columns, plant);
             }
     }

@@ -69,8 +69,9 @@ public final class TerrainGenerator implements TerrainSource {
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         climate = new ClimateNoise(seed, config);
-        trees = new TreeGenerator(seed, forestDensity, this);
-        vegetation = new VegetationGenerator(seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity);
+        trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
+        vegetation = new VegetationGenerator(
+                seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry);
         cavePlanner = new CavePlanner(seed, config.minHeight() - 1, this::surfaceHeight);
         caveCarver = new CaveCarver(this);
     }

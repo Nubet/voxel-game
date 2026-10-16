@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import static com.norbertfila.generation.GenerationHash.hash;
 
+import com.norbertfila.generation.biome.BiomeRegistry;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import java.util.ArrayList;
@@ -20,11 +21,17 @@ final class TreeGenerator {
     private final long seed;
     private final Noise2D forestDensity;
     private final TerrainSource terrain;
+    private final BiomeRegistry biomes;
 
     TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain) {
+        this(seed, forestDensity, terrain, BiomeRegistry.defaults());
+    }
+
+    TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain, BiomeRegistry biomes) {
         this.seed = seed;
         this.forestDensity = forestDensity;
         this.terrain = terrain;
+        this.biomes = biomes;
     }
 
     void generate(int originX, int originY, int originZ, byte[] blocks) {
@@ -95,7 +102,8 @@ final class TreeGenerator {
         if (!Double.isFinite(densityNoise) || densityNoise < -1 || densityNoise > 1)
             throw new IllegalStateException("Forest noise must be finite and within [-1, 1]");
         double t = Math.clamp((densityNoise + .1) / .5, 0, 1);
-        double density = .65 * t * t * (3 - 2 * t);
+        double density =
+                biomes.profile(terrain.sample((int) x, (int) z).biome()).trees().density() * t * t * (3 - 2 * t);
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }
 

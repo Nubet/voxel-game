@@ -1,5 +1,6 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import java.util.BitSet;
@@ -17,6 +18,7 @@ final class TerrainColumn {
     private final int[] surfaceHeights;
     private final byte[] surfaceMaterials;
     private final byte[] subsurfaceMaterials;
+    private final BiomeType[] biomes;
     private final byte deepMaterial;
     private final int bedrockHeight;
     private final int waterLevel;
@@ -30,6 +32,7 @@ final class TerrainColumn {
             int[] surfaceHeights,
             byte[] surfaceMaterials,
             byte[] subsurfaceMaterials,
+            BiomeType[] biomes,
             byte deepMaterial,
             int bedrockHeight,
             int waterLevel,
@@ -39,6 +42,7 @@ final class TerrainColumn {
         this.surfaceHeights = surfaceHeights;
         this.surfaceMaterials = surfaceMaterials;
         this.subsurfaceMaterials = subsurfaceMaterials;
+        this.biomes = biomes;
         this.deepMaterial = deepMaterial;
         this.bedrockHeight = bedrockHeight;
         this.waterLevel = waterLevel;
@@ -91,6 +95,7 @@ final class TerrainColumn {
         TerrainSummary first = Objects.requireNonNull(summaries[0]);
         int[] heights = new int[AREA];
         byte[] surface = new byte[AREA], subsurface = new byte[AREA];
+        BiomeType[] biomes = new BiomeType[AREA];
         for (int index = 0; index < AREA; index++) {
             TerrainSummary summary = summaries[index];
             if (summary.deepMaterial() != first.deepMaterial()
@@ -100,11 +105,13 @@ final class TerrainColumn {
             heights[index] = summary.surfaceHeight();
             surface[index] = summary.surfaceMaterial();
             subsurface[index] = summary.subsurfaceMaterial();
+            biomes[index] = summary.biome();
         }
         return new TerrainColumn(
                 heights,
                 surface,
                 subsurface,
+                biomes,
                 first.deepMaterial(),
                 first.bedrockHeight(),
                 first.waterLevel(),
@@ -119,6 +126,10 @@ final class TerrainColumn {
 
     byte surfaceMaterial(int index) {
         return surfaceMaterials[index];
+    }
+
+    BiomeType biome(int index) {
+        return biomes[index];
     }
 
     int waterLevel() {

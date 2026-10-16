@@ -3,6 +3,7 @@ package com.norbertfila.generation.biome;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 
 public final class BiomeRegistry {
     private final Map<BiomeType, BiomeProfile> profiles;
@@ -22,23 +23,56 @@ public final class BiomeRegistry {
 
     public static BiomeRegistry defaults() {
         return new BiomeRegistry(Map.of(
-                BiomeType.PLAINS, profile(.05f, .65f, .35f, SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
-                BiomeType.FOREST, profile(.65f, .8f, .15f, SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
-                BiomeType.DESERT, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND),
-                BiomeType.TAIGA, profile(.55f, .65f, .05f, SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
-                BiomeType.SWAMP, profile(.35f, .9f, .2f, SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
-                BiomeType.BADLANDS, profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE),
-                BiomeType.ALPINE, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE)));
+                BiomeType.PLAINS,
+                        profile(
+                                .05f,
+                                .65f,
+                                .35f,
+                                SurfaceMaterial.GRASS,
+                                SurfaceMaterial.DIRT,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)),
+                BiomeType.FOREST,
+                        profile(
+                                .65f,
+                                .8f,
+                                .15f,
+                                SurfaceMaterial.GRASS,
+                                SurfaceMaterial.DIRT,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
+                BiomeType.DESERT, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of()),
+                BiomeType.TAIGA,
+                        profile(
+                                .55f,
+                                .65f,
+                                .05f,
+                                SurfaceMaterial.GRASS,
+                                SurfaceMaterial.DIRT,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
+                BiomeType.SWAMP,
+                        profile(
+                                .35f,
+                                .9f,
+                                .2f,
+                                SurfaceMaterial.GRASS,
+                                SurfaceMaterial.DIRT,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
+                BiomeType.BADLANDS, profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of()),
+                BiomeType.ALPINE, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE, Set.of())));
     }
 
     private static BiomeProfile profile(
-            float trees, float grass, float flowers, SurfaceMaterial surface, SurfaceMaterial subsurface) {
+            float trees,
+            float grass,
+            float flowers,
+            SurfaceMaterial surface,
+            SurfaceMaterial subsurface,
+            Set<PlantType> plants) {
         return new BiomeProfile(
                 trees,
                 grass,
                 flowers,
                 new SurfaceProfile(surface, subsurface),
-                new VegetationProfile(grass, flowers, java.util.Set.of(PlantType.SHORT_GRASS)),
+                new VegetationProfile(grass, flowers, plants),
                 new TreeProfile(trees, TreeType.GENERIC));
     }
 }
