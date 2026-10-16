@@ -62,7 +62,7 @@ final class VegetationGenerator {
                 if (y < 0
                         || y >= Chunk.SIZE
                         || !columns.surfaceSupported(column)
-                        || columns.surfaceHeight(column) < columns.waterLevel()) continue;
+                        || columns.surfaceHeight(column) < columns.waterLevel(column)) continue;
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
                 BiomeProfile profile = biomes.profile(columns.biome(column));
                 boolean ordinary = profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
@@ -104,7 +104,7 @@ final class VegetationGenerator {
     private static boolean suitable(TerrainColumn columns, int column) {
         return PlantRules.supports(columns.surfaceMaterial(column))
                 && columns.surfaceSupported(column)
-                && columns.surfaceHeight(column) >= columns.waterLevel();
+                && columns.surfaceHeight(column) >= columns.waterLevel(column);
     }
 
     private static PlantType specialPlant(BiomeProfile profile, long value) {

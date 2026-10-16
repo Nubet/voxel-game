@@ -14,9 +14,31 @@ public record TerrainSummary(
         int bedrockHeight,
         int waterLevel,
         BiomeType biome,
-        ClimateSample climate) {
+        ClimateSample climate,
+        WaterKind waterKind) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
+
+    public TerrainSummary(
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel,
+            BiomeType biome,
+            ClimateSample climate) {
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                biome,
+                climate,
+                waterLevel == NO_WATER ? WaterKind.NONE : WaterKind.OCEAN);
+    }
 
     public TerrainSummary(
             int surfaceHeight, byte surfaceMaterial, byte subsurfaceMaterial, byte deepMaterial, int bedrockHeight) {
@@ -54,7 +76,10 @@ public record TerrainSummary(
     }
 
     public TerrainSummary {
-        if (biome == null || climate == null) throw new NullPointerException("Biome data cannot be null");
+        if (biome == null || climate == null || waterKind == null)
+            throw new NullPointerException("Terrain data cannot be null");
+        if ((waterLevel == NO_WATER) != (waterKind == WaterKind.NONE))
+            throw new IllegalArgumentException("Water kind and level disagree");
         if (!BlockId.isValid(surfaceMaterial)
                 || !BlockId.isValid(subsurfaceMaterial)
                 || !BlockId.isValid(deepMaterial)

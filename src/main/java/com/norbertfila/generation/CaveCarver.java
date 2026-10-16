@@ -68,32 +68,41 @@ final class CaveCarver {
         return surfaces.get(chunkX, chunkZ, () -> {
             int ox = Math.multiplyExact(chunkX, Chunk.SIZE), oz = Math.multiplyExact(chunkZ, Chunk.SIZE);
             int[] heights = new int[18 * 18];
+            int[] water = new int[18 * 18];
             for (int z = 0; z < 18; z++)
                 for (int x = 0; x < 18; x++) {
                     long wx = (long) ox + x - 1, wz = (long) oz + z - 1;
-                    heights[z * 18 + x] = wx < Integer.MIN_VALUE
-                                    || wx > Integer.MAX_VALUE
-                                    || wz < Integer.MIN_VALUE
-                                    || wz > Integer.MAX_VALUE
-                            ? Integer.MAX_VALUE
-                            : terrain.sample((int) wx, (int) wz).surfaceHeight();
+                    int index = z * 18 + x;
+                    if (wx < Integer.MIN_VALUE
+                            || wx > Integer.MAX_VALUE
+                            || wz < Integer.MIN_VALUE
+                            || wz > Integer.MAX_VALUE) {
+                        heights[index] = Integer.MAX_VALUE;
+                        water[index] = TerrainSummary.NO_WATER;
+                    } else {
+                        var sample = terrain.sample((int) wx, (int) wz);
+                        heights[index] = sample.surfaceHeight();
+                        water[index] = sample.waterLevel();
+                    }
                 }
-            return new Surface(heights, terrain.sample(ox, oz).waterLevel());
+            return new Surface(heights, water);
         });
     }
 
-    private record Surface(int[] heights, int waterLevel) {
+    private record Surface(int[] heights, int[] water) {
         boolean allows(int x, int y, int z) {
-            if (waterLevel == TerrainSummary.NO_WATER || y > (long) waterLevel + 1) return true;
             int index = (z + 1) * 18 + x + 1;
             int height = heights[index];
-            // Keep three seabed layers and a side wall, including water in not-yet-generated neighboring chunks.
-            if (height < waterLevel && y > (long) height - 3) return false;
-            return y > waterLevel
-                    || heights[index - 1] >= y
-                            && heights[index + 1] >= y
-                            && heights[index - 18] >= y
-                            && heights[index + 18] >= y;
+            // Preserve the bed and side walls even when the adjacent water chunk has not been generated yet.
+            if (height < water[index] && y > (long) height - 3 && y <= (long) water[index] + 1) return false;
+            return !waterAt(index - 1, y)
+                    && !waterAt(index + 1, y)
+                    && !waterAt(index - 18, y)
+                    && !waterAt(index + 18, y);
+        }
+
+        private boolean waterAt(int index, int y) {
+            return heights[index] < y && y <= water[index];
         }
     }
 
