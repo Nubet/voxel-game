@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.i18n.Translations;
+import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.ui.*;
 import com.norbertfila.ui.screens.*;
@@ -153,7 +154,8 @@ public final class WorldMenu implements Screen {
                 }
                 default -> {}
             }
-        } else if (state == State.MAIN && action == Action.OPTIONS) show(State.SETTINGS, new SettingsScreen(settings));
+        } else if (state == State.MAIN && action == Action.OPTIONS)
+            show(State.SETTINGS, new SettingsScreen(settings, new CrosshairPreferences()::save));
         else if (state == State.MAIN && action == Action.PLAY) scan();
         else if (state == State.SELECTING && action instanceof Action.ShowCreateWorld) {
             form = new CreateWorldScreen(translations);

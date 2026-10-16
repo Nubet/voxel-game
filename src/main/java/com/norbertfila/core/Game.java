@@ -5,6 +5,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
 import com.norbertfila.i18n.Translations;
 import com.norbertfila.meshing.WaterMesher;
+import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.LanguagePreferences;
 import com.norbertfila.persistence.world.WorldCatalog;
 import com.norbertfila.persistence.world.WorldIo;
@@ -26,6 +27,8 @@ public final class Game {
     public void run() {
         var languagePreferences = new LanguagePreferences();
         var settings = new GameSettings(new Translations(languagePreferences.load()));
+        var crosshairPreferences = new CrosshairPreferences();
+        settings.setCrosshair(crosshairPreferences.load());
         try (Window window = new Window(1280, 720, "Voxel Engine");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
@@ -58,6 +61,7 @@ public final class Game {
             }
         } finally {
             languagePreferences.save(settings.translations().language());
+            crosshairPreferences.save(settings.crosshair());
         }
     }
 

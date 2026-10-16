@@ -12,7 +12,9 @@ import com.norbertfila.ui.UiBounds;
 import com.norbertfila.ui.UiCanvas;
 import com.norbertfila.ui.UiKey;
 import com.norbertfila.ui.UiViewport;
+import com.norbertfila.ui.crosshair.CrosshairSettings;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public final class SettingsScreen implements Screen {
     public static final int PANEL_X = 8;
@@ -40,6 +42,9 @@ public final class SettingsScreen implements Screen {
     public static final int LANGUAGE_Y = 208;
 
     private final GameSettings settings;
+    private final Consumer<CrosshairSettings> saveCrosshair;
+    private CrosshairSettingsScreen crosshairScreen;
+    private final Button crosshair = new Button(new UiBounds(204, 2, 92, 18), "");
     private final Translations translations;
     private final Button language = new Button(new UiBounds(CAMERA_X, LANGUAGE_Y, 72, 20), "");
     private final Button decrease = new Button(new UiBounds(MINUS_X, BUTTON_Y, BUTTON_SIZE, BUTTON_SIZE), "-");
@@ -77,7 +82,12 @@ public final class SettingsScreen implements Screen {
     private int panelY = PANEL_Y;
 
     public SettingsScreen(GameSettings settings) {
+        this(settings, ignored -> {});
+    }
+
+    public SettingsScreen(GameSettings settings, Consumer<CrosshairSettings> saveCrosshair) {
         this.settings = Objects.requireNonNull(settings);
+        this.saveCrosshair = Objects.requireNonNull(saveCrosshair);
         translations = settings.translations();
         renderDistance = new Slider(
                 new UiBounds(SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT),
@@ -90,6 +100,8 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public Action updatePointer(boolean mouseDown, boolean mousePressed, double cursorX, double cursorY) {
+        if (crosshairScreen != null)
+            return childAction(crosshairScreen.updatePointer(mouseDown, mousePressed, cursorX, cursorY));
         syncControls();
         if (!mouseDown) pointerReady = true;
         if (!pointerReady) return Action.NONE;
@@ -106,6 +118,7 @@ public final class SettingsScreen implements Screen {
         if (language.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleLanguage();
         if (clouds.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) cycleClouds();
         boolean close = back.updatePointer(mouseDown, mousePressed, cursorX, cursorY);
+        if (crosshair.updatePointer(mouseDown, mousePressed, cursorX, cursorY)) openCrosshair();
         if (scaleChanged) cycleGuiScale();
         applyControls(
                 minus,
@@ -122,6 +135,7 @@ public final class SettingsScreen implements Screen {
     @Override
     public Action keyPress(UiKey key) {
         Objects.requireNonNull(key);
+        if (crosshairScreen != null) return childAction(crosshairScreen.keyPress(key));
         if (key == UiKey.BACK) return Action.CLOSE;
         syncControls();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
@@ -183,7 +197,10 @@ public final class SettingsScreen implements Screen {
             case 10 -> {
                 if (language.keyPress(key)) cycleLanguage();
             }
-            case 11 -> close = back.keyPress(key);
+            case 11 -> {
+                if (crosshair.keyPress(key)) openCrosshair();
+            }
+            case 12 -> close = back.keyPress(key);
             default -> {}
         }
         if (changed)
@@ -201,6 +218,8 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public void cancelInteraction() {
+        if (crosshairScreen != null) crosshairScreen.cancelInteraction();
+        crosshair.cancelInteraction();
         focusIndex = -1;
         pointerReady = false;
         decrease.cancelInteraction();
@@ -219,6 +238,10 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public void layout(UiViewport viewport) {
+        if (crosshairScreen != null) {
+            crosshairScreen.layout(viewport);
+            return;
+        }
         int width = (int) Math.ceil(viewport.width());
         int height = (int) Math.ceil(viewport.height());
         int nextPanelX = Math.max(0, (width - PANEL_WIDTH) / 2);
@@ -240,6 +263,7 @@ public final class SettingsScreen implements Screen {
         clouds.setPosition(208 + offsetX, GUI_SCALE_Y + offsetY);
         language.setPosition(CAMERA_X + offsetX, LANGUAGE_Y + offsetY);
         back.setPosition(BACK_BOUNDS.x() + offsetX, BACK_BOUNDS.y() + offsetY);
+        crosshair.setPosition(panelX + 204, panelY + 2);
         if (moved) cancelInteraction();
     }
 
@@ -280,6 +304,7 @@ public final class SettingsScreen implements Screen {
                 translations.text("settings.clouds." + settings.clouds().name().toLowerCase(java.util.Locale.ROOT)));
         language.setLabel(translations.language().displayName());
         back.setLabel(translations.text("action.back"));
+        crosshair.setLabel(translations.text("crosshair.title"));
     }
 
     private void focusAt(double x, double y) {
@@ -294,13 +319,14 @@ public final class SettingsScreen implements Screen {
         else if (guiScale.bounds().contains(x, y)) focus(8);
         else if (clouds.bounds().contains(x, y)) focus(9);
         else if (language.bounds().contains(x, y)) focus(10);
-        else if (back.bounds().contains(x, y)) focus(11);
+        else if (crosshair.bounds().contains(x, y)) focus(11);
+        else if (back.bounds().contains(x, y)) focus(12);
         else focus(-1);
     }
 
     private void focusNext(int direction) {
-        int next = focusIndex;
-        do next = Math.floorMod(next + direction, 12);
+        int next = focusIndex < 0 ? (direction > 0 ? -1 : 13) : focusIndex;
+        do next = Math.floorMod(next + direction, 13);
         while ((next == 0 && !decrease.enabled()) || (next == 2 && !increase.enabled()));
         focus(next);
     }
@@ -318,7 +344,8 @@ public final class SettingsScreen implements Screen {
         guiScale.setFocused(index == 8);
         clouds.setFocused(index == 9);
         language.setFocused(index == 10);
-        back.setFocused(index == 11);
+        crosshair.setFocused(index == 11);
+        back.setFocused(index == 12);
     }
 
     private void cycleGuiScale() {
@@ -418,6 +445,10 @@ public final class SettingsScreen implements Screen {
 
     @Override
     public void render(UiCanvas canvas, UiViewport viewport) {
+        if (crosshairScreen != null) {
+            crosshairScreen.render(canvas, viewport);
+            return;
+        }
         layout(viewport);
         syncControls();
         canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .06f, .08f, .11f, .94f);
@@ -493,5 +524,25 @@ public final class SettingsScreen implements Screen {
         clouds.render(canvas, font);
         language.render(canvas, font);
         back.render(canvas, font);
+        crosshair.render(canvas, font);
+    }
+
+    private void openCrosshair() {
+        cancelInteraction();
+        crosshairScreen = new CrosshairSettingsScreen(settings);
+        crosshairScreen.cancelInteraction();
+    }
+
+    private Action childAction(Action action) {
+        if (action != Action.CLOSE) return action;
+        crosshairScreen.cancelInteraction();
+        crosshairScreen = null;
+        cancelInteraction();
+        saveCrosshair.accept(settings.crosshair());
+        return Action.NONE;
+    }
+
+    public Button crosshairButton() {
+        return crosshair;
     }
 }

@@ -8,6 +8,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
 import com.norbertfila.interaction.BlockBreaking;
+import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
@@ -160,7 +161,7 @@ public final class GameLoop {
         DebugOverlay debugOverlay = new DebugOverlay();
         boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
-        SettingsScreen settingsScreen = new SettingsScreen(settings);
+        SettingsScreen settingsScreen = new SettingsScreen(settings, new CrosshairPreferences()::save);
         PauseScreen pauseScreen = new PauseScreen(settings.translations());
         boolean settingsFromPause = false;
         input.discardTransientInput();

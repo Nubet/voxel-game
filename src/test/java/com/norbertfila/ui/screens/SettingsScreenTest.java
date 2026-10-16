@@ -108,6 +108,9 @@ class SettingsScreenTest {
         settings.setRenderDistance(GameSettings.MAX_RENDER_DISTANCE);
         screen.keyPress(UiKey.PREVIOUS);
         screen.keyPress(UiKey.PREVIOUS);
+        assertTrue(screen.crosshairButton().focused());
+        screen.keyPress(UiKey.PREVIOUS);
+        screen.keyPress(UiKey.PREVIOUS);
         assertTrue(screen.cloudsButton().focused());
         screen.keyPress(UiKey.PREVIOUS);
         assertTrue(screen.guiScaleButton().focused());
