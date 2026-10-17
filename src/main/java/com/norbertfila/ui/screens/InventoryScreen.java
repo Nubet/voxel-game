@@ -12,12 +12,12 @@ import java.util.Objects;
 
 public final class InventoryScreen implements Screen {
     private final Translations translations;
-    public static final int CELL = 28, PANEL_WIDTH = 268, PANEL_HEIGHT = 192;
+    public static final int CELL = 28, PANEL_WIDTH = 268, PANEL_HEIGHT = 208;
     private static final BitmapFont FONT = BitmapFont.DEFAULT;
     private static final List<Byte> CATALOG = catalog();
     private final boolean creative;
     private InventorySnapshot inventory = InventorySnapshot.EMPTY;
-    private int selectedSlot, panelX, panelY, focus;
+    private int selectedSlot, panelX, panelY, focus, page;
     private double pointerX = -1, pointerY = -1;
     private boolean pointerReady;
     private boolean keyboardFocus;
@@ -43,7 +43,7 @@ public final class InventoryScreen implements Screen {
         this.inventory = Objects.requireNonNull(inventory);
         this.selectedSlot = selectedSlot;
         panelX = Math.max(0, ((int) viewport.width() - PANEL_WIDTH) / 2);
-        panelY = Math.max(0, ((int) viewport.height() - panelHeight()) / 2);
+        panelY = Math.max(0, ((int) viewport.height() - PANEL_HEIGHT) / 2);
     }
 
     private static List<Byte> catalog() {
@@ -59,23 +59,28 @@ public final class InventoryScreen implements Screen {
     public UiBounds bounds(int cell) {
         int row = cell / 9, column = cell % 9;
         return new UiBounds(
-                panelX + 8 + column * CELL, panelY + 36 + row * CELL + (row == rows() ? 12 : 0), CELL - 2, CELL - 2);
-    }
-
-    private int rows() {
-        return creative ? Math.max(3, (CATALOG.size() + 8) / 9) : 3;
+                panelX + 8 + column * CELL, panelY + 36 + row * CELL + (row == 3 ? 12 : 0), CELL - 2, CELL - 2);
     }
 
     private int catalogCells() {
-        return rows() * 9;
+        return 27;
     }
 
     private int cells() {
         return catalogCells() + 9;
     }
 
-    private int panelHeight() {
-        return PANEL_HEIGHT + (rows() - 3) * CELL;
+    private int pages() {
+        return (CATALOG.size() + catalogCells() - 1) / catalogCells();
+    }
+
+    UiBounds pageBounds(boolean next) {
+        return new UiBounds(panelX + (next ? 240 : 176), panelY + 7, 20, 20);
+    }
+
+    private void changePage(int delta) {
+        page = Math.clamp(page + delta, 0, pages() - 1);
+        focus = 0;
     }
 
     @Override
@@ -90,6 +95,13 @@ public final class InventoryScreen implements Screen {
         pointerY = pointer.y();
         if (!pointer.leftDown() && !pointer.rightDown()) pointerReady = true;
         if (!pointerReady || (!pointer.leftPressed() && !pointer.rightPressed())) return Action.NONE;
+        if (creative && pointer.leftPressed()) {
+            for (boolean next : new boolean[] {false, true})
+                if (pageBounds(next).contains(pointerX, pointerY)) {
+                    changePage(next ? 1 : -1);
+                    return Action.NONE;
+                }
+        }
         for (int cell = 0; cell < cells(); cell++)
             if (bounds(cell).contains(pointerX, pointerY)) {
                 focus = cell;
@@ -100,8 +112,10 @@ public final class InventoryScreen implements Screen {
     }
 
     private Action activate(int cell, boolean right, boolean quick) {
-        if (creative && cell < catalogCells())
-            return cell < CATALOG.size() ? new Action.CreativePick(CATALOG.get(cell), selectedSlot) : Action.NONE;
+        if (creative && cell < catalogCells()) {
+            int index = page * catalogCells() + cell;
+            return index < CATALOG.size() ? new Action.CreativePick(CATALOG.get(index), selectedSlot) : Action.NONE;
+        }
         return new Action.SlotClick(inventorySlot(cell), right, quick);
     }
 
@@ -136,6 +150,13 @@ public final class InventoryScreen implements Screen {
                 yield Action.NONE;
             }
             case ACTIVATE -> activate(focus, false, false);
+            case PAGE_UP, PAGE_DOWN -> {
+                if (creative) {
+                    changePage(key == UiKey.PAGE_DOWN ? 1 : -1);
+                    keyboardFocus = true;
+                }
+                yield Action.NONE;
+            }
             case DROP_ONE -> drop(false);
             case DROP_STACK -> drop(true);
             default -> Action.NONE;
@@ -152,7 +173,7 @@ public final class InventoryScreen implements Screen {
     @Override
     public void render(UiCanvas canvas, UiViewport viewport) {
         canvas.rectangle(0, 0, (int) viewport.width(), (int) viewport.height(), 0, 0, 0, .5f);
-        canvas.rectangle(panelX, panelY, PANEL_WIDTH, panelHeight(), .16f, .18f, .21f, 1);
+        canvas.rectangle(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, .16f, .18f, .21f, 1);
         canvas.textWithShadow(
                 FONT,
                 creative
@@ -164,6 +185,22 @@ public final class InventoryScreen implements Screen {
                 1,
                 1,
                 1);
+        if (creative) {
+            for (boolean next : new boolean[] {false, true}) {
+                var button = pageBounds(next);
+                canvas.rectangle(button.x(), button.y(), button.width(), button.height(), .28f, .3f, .34f, 1);
+                canvas.textWithShadow(FONT, next ? ">" : "<", button.x() + 7, button.y() + 5, 1, 1, 1, 1);
+            }
+            canvas.textWithShadow(
+                    FONT,
+                    translations.text("inventory.page", page + 1, pages()),
+                    panelX + 201,
+                    panelY + 12,
+                    1,
+                    1,
+                    1,
+                    1);
+        }
         String hovered = null;
         for (int cell = 0; cell < cells(); cell++) {
             var box = bounds(cell);
@@ -181,8 +218,9 @@ public final class InventoryScreen implements Screen {
                     .1f,
                     .13f,
                     1);
+            int index = page * catalogCells() + cell;
             byte block = creative && cell < catalogCells()
-                    ? (cell < CATALOG.size() ? CATALOG.get(cell) : BlockId.AIR)
+                    ? (index < CATALOG.size() ? CATALOG.get(index) : BlockId.AIR)
                     : inventory.block(slot);
             int count = creative && cell < catalogCells() ? 0 : inventory.count(slot);
             ItemIcons.render(canvas, box.x(), box.y(), CELL - 2, block, count);
@@ -194,13 +232,13 @@ public final class InventoryScreen implements Screen {
                 FONT,
                 hovered == null ? translations.text(creative ? "inventory.creativeHint" : "inventory.hint") : hovered,
                 panelX + 8,
-                panelY + panelHeight() - 22,
+                panelY + PANEL_HEIGHT - 38,
                 1,
                 1,
                 1,
                 1);
         canvas.textWithShadow(
-                FONT, translations.text("inventory.dropHint"), panelX + 8, panelY + panelHeight() - 12, 1, 1, 1, 1);
+                FONT, translations.text("inventory.dropHint"), panelX + 8, panelY + PANEL_HEIGHT - 20, 1, 1, 1, 1);
         if (inventory.count(Inventory.CARRIED) > 0
                 && Double.isFinite(pointerX)
                 && Double.isFinite(pointerY)

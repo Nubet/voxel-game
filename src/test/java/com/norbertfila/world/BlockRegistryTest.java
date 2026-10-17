@@ -121,7 +121,7 @@ class BlockRegistryTest {
 
     @Test
     void rejectsUnknownIdsAndInvalidFaceIndexes() {
-        assertThrows(IllegalArgumentException.class, () -> BlockRegistry.DEFAULT.definition((byte) 99));
+        assertThrows(IllegalArgumentException.class, () -> BlockRegistry.DEFAULT.definition((byte) 255));
         assertThrows(IllegalArgumentException.class, () -> BlockRegistry.DEFAULT.textureLayer("missing-file"));
         assertThrows(
                 IllegalArgumentException.class,
@@ -153,7 +153,7 @@ class BlockRegistryTest {
                 () -> new BlockRegistry(
                         List.of(
                                 BlockRegistry.DEFAULT.definition(BlockId.AIR),
-                                new BlockDefinition(1, "invalid-layer", 99, 99, 99, true, true, RenderLayer.OPAQUE)),
+                                new BlockDefinition(1, "invalid-layer", 256, 256, 256, true, true, RenderLayer.OPAQUE)),
                         textures));
     }
 

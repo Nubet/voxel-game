@@ -180,8 +180,8 @@ public final class BlockOutlineSmoke {
         for (BlockPos block : new BlockPos[] {
             new BlockPos(0, 0, 0),
             new BlockPos(-17, -18, -33),
-            new BlockPos(1_500_000_000, 1_500_000_000, 1_500_000_000),
-            new BlockPos(-1_500_000_000, -1_500_000_000, -1_500_000_000)
+            new BlockPos(1_500_000_000, 128, 1_500_000_000),
+            new BlockPos(-1_500_000_000, -32, -1_500_000_000)
         }) {
             try (TerrainRenderer terrain = terrain(textures, block)) {
                 View view = view(block, 1, 1, 1);

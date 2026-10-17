@@ -64,7 +64,10 @@ public final class GenerateHudAtlas {
                                 | (int) ((pixel & 255) * grass[2]));
             }
         for (int layer : new int[] {
-            BlockRegistry.GRASS_SIDE_TEXTURE, BlockRegistry.DRY_GRASS_SIDE_TEXTURE, BlockRegistry.PODZOL_SIDE_TEXTURE
+            BlockRegistry.GRASS_SIDE_TEXTURE,
+            BlockRegistry.DRY_GRASS_SIDE_TEXTURE,
+            BlockRegistry.PODZOL_SIDE_TEXTURE,
+            BlockRegistry.DEFAULT.textureLayer("refi_mycelium_side")
         }) {
             var image = textures.get(layer);
             var upright = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);

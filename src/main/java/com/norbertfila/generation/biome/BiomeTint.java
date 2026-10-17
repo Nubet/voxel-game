@@ -14,7 +14,11 @@ public final class BiomeTint {
     public static boolean foliageTexture(int layer) {
         return layer == BlockRegistry.LEAVES_TEXTURE
                 || layer == BlockRegistry.PINE_NEEDLES_TEXTURE
-                || layer == BlockRegistry.SWAMP_LEAVES_TEXTURE;
+                || layer == BlockRegistry.SWAMP_LEAVES_TEXTURE
+                || layer == BlockRegistry.BIRCH_LEAVES_TEXTURE
+                || layer == BlockRegistry.DARK_OAK_LEAVES_TEXTURE
+                || layer == BlockRegistry.ACACIA_LEAVES_TEXTURE
+                || layer == BlockRegistry.JUNGLE_LEAVES_TEXTURE;
     }
 
     public static int style(BiomeType biome) {
