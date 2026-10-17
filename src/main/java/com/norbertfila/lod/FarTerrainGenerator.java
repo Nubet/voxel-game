@@ -34,6 +34,7 @@ public final class FarTerrainGenerator {
         int[] heights = new int[cells * cells];
         byte[] materials = new byte[heights.length];
         byte[] wallMaterials = new byte[heights.length];
+        var wallColumns = new FarTerrainTile.WallColumn[heights.length];
         int[] waterTops = new int[heights.length];
         byte[] tints = new byte[heights.length];
         Arrays.fill(waterTops, FarTerrainTile.NO_WATER);
@@ -51,6 +52,8 @@ public final class FarTerrainGenerator {
                 materials[index] = (byte) surface;
                 wallMaterials[index] =
                         materials[index] == BlockId.SNOW_LAYER ? terrain.surfaceMaterial() : materials[index];
+                if (terrain.badlands() != null)
+                    wallColumns[index] = new FarTerrainTile.WallColumn(terrain, edits, column);
                 waterTops[index] = waterTop(terrain, edits, column, heights[index]);
             }
         for (int column = 0; column < edits.columnCount(); column++) {
@@ -65,13 +68,24 @@ public final class FarTerrainGenerator {
                     heights[index] = y;
                     materials[index] = block;
                     wallMaterials[index] = block == BlockId.SNOW_LAYER ? BlockId.DIRT : block;
+                    if (wallColumns[index] != null)
+                        wallColumns[index] = new FarTerrainTile.WallColumn(wallColumns[index].terrain(), edits, column);
                     if (waterTops[index] <= y) waterTops[index] = FarTerrainTile.NO_WATER;
                 }
                 break;
             }
         }
         return new FarTerrainTile(
-                tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops, tints, wallMaterials);
+                tileX,
+                tileZ,
+                sampleStep,
+                edits.revision(),
+                heights,
+                materials,
+                waterTops,
+                tints,
+                wallMaterials,
+                wallColumns);
     }
 
     /**

@@ -155,13 +155,57 @@ public final class FarTileMesher {
                     }
                 }
             }
-            boolean continues = present && start >= 0 && bottom == runBottom && top == runTop && texture == runTexture;
+            boolean continues = present
+                    && start >= 0
+                    && bottom == runBottom
+                    && top == runTop
+                    && texture == runTexture
+                    && sameWallLayers(tile, line, face, start, along, bottom, top);
             if (continues) continue;
-            if (start >= 0) emitWall(records, line, face, start, along, runBottom, runTop, runTexture, step);
+            if (start >= 0)
+                emitLayeredWall(tile, records, line, face, start, along, runBottom, runTop, runTexture, step);
             start = present ? along : -1;
             runBottom = bottom;
             runTop = top;
             runTexture = texture;
+        }
+    }
+
+    private static boolean sameWallLayers(
+            FarTerrainTile tile, int line, int face, int start, int along, int bottom, int top) {
+        boolean xFace = face == FACE_POSITIVE_X || face == FACE_NEGATIVE_X;
+        int x = xFace ? line : start, z = xFace ? start : line;
+        int nextX = xFace ? line : along, nextZ = xFace ? along : line;
+        if (!tile.layeredWallAt(x, z) && !tile.layeredWallAt(nextX, nextZ)) return true;
+        for (int y = bottom; y < top; y++)
+            if (tile.wallMaterialAt(x, z, y) != tile.wallMaterialAt(nextX, nextZ, y)) return false;
+        return true;
+    }
+
+    private static void emitLayeredWall(
+            FarTerrainTile tile,
+            IntList records,
+            int line,
+            int face,
+            int start,
+            int end,
+            int bottom,
+            int top,
+            int texture,
+            int step) {
+        boolean xFace = face == FACE_POSITIVE_X || face == FACE_NEGATIVE_X;
+        int x = xFace ? line : start, z = xFace ? start : line;
+        if (!tile.layeredWallAt(x, z)) {
+            emitWall(records, line, face, start, end, bottom, top, texture, step);
+            return;
+        }
+        for (int y = bottom; y < top; ) {
+            byte material = tile.wallMaterialAt(x, z, y);
+            int bandTop = y + 1;
+            while (bandTop < top && tile.wallMaterialAt(x, z, bandTop) == material) bandTop++;
+            int bandTexture = BlockRegistry.DEFAULT.definition(material).textureLayer(face) | tile.tintAt(x, z) << 8;
+            emitWall(records, line, face, start, end, y, bandTop, bandTexture, step);
+            y = bandTop;
         }
     }
 
