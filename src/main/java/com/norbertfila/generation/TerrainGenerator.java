@@ -7,6 +7,7 @@ import com.norbertfila.generation.biome.BiomeResolver;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.ClimateNoise;
 import com.norbertfila.generation.biome.ClimateSample;
+import com.norbertfila.generation.biome.JungleRules;
 import com.norbertfila.generation.biome.SurfaceMaterialMapper;
 import com.norbertfila.generation.biome.SurfaceMaterialResolver;
 import com.norbertfila.world.BlockId;
@@ -200,7 +201,7 @@ public final class TerrainGenerator implements TerrainSource {
                 + region.elevation()
                 + region.hills() * layer(hills, config.hills(), x, z)
                 + region.details() * layer(details, config.details(), x, z)
-                + mountainHeight(x, z);
+                + mountainHeight(x, z) * (1 - .85 * JungleRules.climateWeight(climate.sample(x, z)));
         if (config.landforms().amplitude() > 0) {
             var weather = climate.sample(x, z);
             double aridity = mountainMask((weather.temperature() - .1) / .4, 0, 1)

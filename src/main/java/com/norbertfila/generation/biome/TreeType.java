@@ -4,5 +4,8 @@ public enum TreeType {
     GENERIC,
     BROADLEAF,
     CONIFER,
-    SWAMP
+    SWAMP,
+    JUNGLE,
+    GIANT_JUNGLE,
+    MAHOGANY
 }
