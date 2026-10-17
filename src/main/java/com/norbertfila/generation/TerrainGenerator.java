@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 35;
+    private static final int GENERATOR_VERSION = 36;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -34,6 +34,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpX;
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
+    private final BadlandsLandforms badlandsLandforms;
     private final RegionalHydrology hydrology;
     private final SmallWaterBodyClassifier waterBodies;
     private final GenerationCache<BiomeType> tintBiomes = new GenerationCache<>(4096);
@@ -81,6 +82,7 @@ public final class TerrainGenerator implements TerrainSource {
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         landforms = new RegionalLandforms(config.landforms(), noise);
+        badlandsLandforms = new BadlandsLandforms(seed);
         hydrology = new RegionalHydrology(
                 seed,
                 waterLevel(),
@@ -210,6 +212,16 @@ public final class TerrainGenerator implements TerrainSource {
                             - region.details() * layer(details, config.details(), x, z);
             double regionalHeight = config.baseHeight() + continentalLayer + region.elevation();
             height = Math.max(height, Math.min(regionalHeight - 3, config.waterLevel() + 1.0));
+            double badlandsWeight = BadlandsLandforms.weight(weather)
+                    * mountainMask(regionalHeight, waterLevel() + 2.0, waterLevel() + 18.0);
+            if (badlandsWeight > 0) {
+                double eroded = Math.max(
+                        waterLevel() + 2.0,
+                        config.baseHeight()
+                                + continentalLayer
+                                + config.landforms().amplitude() * badlandsLandforms.sample(x, z));
+                height += badlandsWeight * (eroded - height);
+            }
         }
         if (!Double.isFinite(height) || height < config.minHeight() || height > config.maxHeight())
             throw new IllegalStateException("Noise must produce finite values within [-1, 1]");

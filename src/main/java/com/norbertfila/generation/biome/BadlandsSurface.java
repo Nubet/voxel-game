@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.Random;
 
 public final class BadlandsSurface {
-    public static final int TERRACOTTA_DEPTH = 48;
+    public static final int TERRACOTTA_DEPTH = 96;
     private static final int BAND_COUNT = 192;
     private final byte[] bands = new byte[BAND_COUNT];
     private final Noise2D offsetNoise;

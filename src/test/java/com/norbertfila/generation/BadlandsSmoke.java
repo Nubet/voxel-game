@@ -27,6 +27,8 @@ public final class BadlandsSmoke {
                 var textures = new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
             scene(source, textures, -1408, -1440, output, "lowlands");
             scene(source, textures, -2016, -1472, output, "highlands");
+            scene(source, textures, 3072, -3136, output, "eroded-mesas");
+            scene(source, textures, -1664, 2560, output, "eroded-pillars");
             scene(new BadlandsCliffScene(), textures, 0, 0, output, "cliff-fixture");
             if (glGetError() != GL_NO_ERROR) throw new AssertionError("Badlands OpenGL error");
             System.out.println("PASS Badlands near/far rendering, GPU=" + glGetString(GL_RENDERER));
