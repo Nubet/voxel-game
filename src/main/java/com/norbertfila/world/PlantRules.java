@@ -51,6 +51,7 @@ public final class PlantRules {
         return switch (plant) {
             case BlockId.SNOW_LAYER ->
                 BlockRegistry.DEFAULT.occludesFullFace(ground)
+                        || ground == BlockId.MAHOGANY_LEAVES
                         || ground == BlockId.LEAVES
                         || ground == BlockId.PINE_NEEDLES
                         || ground == BlockId.SWAMP_LEAVES

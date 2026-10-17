@@ -1,5 +1,8 @@
 Jungle decorations use REFI Textures assets under the accompanying REFI_LICENSE.txt.
 The grayscale tall grass and fern textures have a baked grass tint.
+Mahogany bark, end grain and planks are warm recolors of refi_dark_oak_log_side,
+refi_dark_oak_log_top and refi_dark_oak_planks. Mahogany foliage uses the dark oak
+leaf pattern with a baked tropical tint, distinct from Jungle foliage.
 
 refi_vine: textures/default_mcl_core/plants/mcl_core_vine.png
 refi_cocoa: textures/farming_mcl_farming/mcl_cocoas/mcl_cocoas_cocoa_stage_2.png

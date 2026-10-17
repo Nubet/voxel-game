@@ -121,6 +121,36 @@ public final class TerrainGenerator implements TerrainSource {
     }
 
     @Override
+    public List<Canopy> canopies(int originX, int originZ, int size) {
+        if (size < 1 || size > 1024) throw new IllegalArgumentException("Invalid canopy query size");
+        long endX = (long) originX + size - 1, endZ = (long) originZ + size - 1;
+        if (endX > Integer.MAX_VALUE || endZ > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Canopy query overflow");
+        var trees = new java.util.LinkedHashSet<TreeGenerator.Tree>();
+        for (int z = Math.floorDiv(originZ, 16); z <= Math.floorDiv((int) endZ, 16); z++)
+            for (int x = Math.floorDiv(originX, 16); x <= Math.floorDiv((int) endX, 16); x++)
+                trees.addAll(forestAt(x, z));
+        var result = new ArrayList<Canopy>();
+        for (var tree : trees) {
+            if (tree.plan() == null) continue;
+            for (var crown : tree.plan().crowns())
+                if ((long) crown.x() + crown.radius() >= originX
+                        && (long) crown.x() - crown.radius() <= endX
+                        && (long) crown.z() + crown.radius() >= originZ
+                        && (long) crown.z() - crown.radius() <= endZ)
+                    result.add(new Canopy(
+                            crown.x(),
+                            crown.y(),
+                            crown.z(),
+                            crown.radius(),
+                            crown.height(),
+                            crown.seed(),
+                            tree.plan().leaves()));
+        }
+        return List.copyOf(result);
+    }
+
+    @Override
     public int tintIndex(int x, int z) {
         int gx = Math.floorDiv(x, 64), gz = Math.floorDiv(z, 64);
         return com.norbertfila.generation.biome.BiomeTint.blend(

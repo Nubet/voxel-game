@@ -6,6 +6,10 @@ public interface TerrainSource extends WorldGenerator {
 
     TerrainSummary sample(int worldX, int worldZ);
 
+    default java.util.List<Canopy> canopies(int originX, int originZ, int size) {
+        return java.util.List.of();
+    }
+
     default int tintIndex(int worldX, int worldZ) {
         return 0;
     }

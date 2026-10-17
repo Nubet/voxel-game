@@ -3,9 +3,11 @@ package com.norbertfila.generation;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
+import com.norbertfila.lod.*;
 import com.norbertfila.meshing.*;
 import com.norbertfila.platform.Window;
 import com.norbertfila.render.*;
+import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.world.*;
 import java.nio.file.*;
 import java.util.*;
@@ -70,6 +72,41 @@ public final class JungleSmoke {
                         .lookAt(eye, target, new Vector3f(0, 1, 0));
                 VegetationSmoke.write(
                         output.resolve(name + "-" + view + ".png"), VegetationSmoke.draw(renderer, vp, eye));
+            }
+        }
+        var generator = new FarTerrainGenerator(source);
+        for (int step : new int[] {1, 4, 8, 16}) {
+            var tiles = new HashMap<FarTilePos, FarTileMesh>();
+            for (int z = -1; z <= 0; z++)
+                for (int x = -1; x <= 0; x++) {
+                    var tile = generator.generate(x, z, step, AreaEdits.none(x * 64, z * 64, 64));
+                    var mesh = new FarTileMesh(
+                            x,
+                            z,
+                            step,
+                            0,
+                            FarTileMesher.mesh(tile, generator.border(x, z, step)),
+                            tile.minHeight(),
+                            tile.maxHeight() + 1);
+                    tiles.put(mesh.position(), mesh);
+                }
+            try (var renderer = new FarTerrainRenderer(textures)) {
+                var eye = new Vector3f(90, 100, 90);
+                renderer.reconcile(new FarTerrainStreamer.Residency(1, tiles), eye.x, eye.z);
+                while (renderer.pendingUploads() > 0) renderer.upload(Long.MAX_VALUE, Long.MAX_VALUE);
+                var vp = new Matrix4f()
+                        .perspective((float) Math.toRadians(65), 960f / 540, .1f, 500)
+                        .lookAt(eye, new Vector3f(0, 43, 0), new Vector3f(0, 1, 0));
+                glClearColor(32 / 255f, 64 / 255f, 96 / 255f, 1);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (renderer.render(
+                                new Matrix4f(vp).translate(eye), eye.x, eye.y, eye.z, 0, ChunkManager.Coverage.EMPTY)
+                        == 0) throw new AssertionError("Missing Jungle far draws");
+                var pixels = org.lwjgl.BufferUtils.createByteBuffer(960 * 540 * 4);
+                glReadPixels(0, 0, 960, 540, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+                byte[] image = new byte[pixels.remaining()];
+                pixels.get(image);
+                VegetationSmoke.write(output.resolve(name + "-far-" + step + ".png"), image);
             }
         }
     }

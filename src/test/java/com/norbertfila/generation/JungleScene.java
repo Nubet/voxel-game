@@ -32,6 +32,24 @@ final class JungleScene implements TerrainSource {
         return 42;
     }
 
+    public java.util.List<Canopy> canopies(int ox, int oz, int size) {
+        var selected = new java.util.LinkedHashSet<TreeGenerator.Tree>();
+        for (int z = oz; z < oz + size; z += 16)
+            for (int x = ox; x < ox + size; x += 16) selected.addAll(trees.trees(x, z));
+        return selected.stream()
+                .filter(t -> t.plan() != null)
+                .flatMap(t -> t.plan().crowns().stream()
+                        .map(c -> new Canopy(
+                                c.x(),
+                                c.y(),
+                                c.z(),
+                                c.radius(),
+                                c.height(),
+                                c.seed(),
+                                t.plan().leaves())))
+                .toList();
+    }
+
     public int generatorVersion() {
         return 0;
     }

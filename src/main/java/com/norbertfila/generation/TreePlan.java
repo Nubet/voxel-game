@@ -66,12 +66,7 @@ record TreePlan(List<Branch> branches, List<Crown> crowns, byte log, byte leaves
 
     record Crown(int x, int y, int z, int radius, int height, long seed) {
         boolean contains(int wx, int wy, int wz) {
-            double dx = (wx - (long) x) / (double) radius;
-            double dz = (wz - (long) z) / (double) radius;
-            double dy = (wy - (long) y) / (height + .4);
-            double distance = dx * dx + dz * dz + dy * dy;
-            return distance <= .72
-                    || distance <= 1 && Math.floorMod(GenerationHash.hash(seed, wx, wz * 31L + wy), 7) != 0;
+            return Canopy.contains(x, y, z, radius, height, seed, wx, wy, wz);
         }
     }
 

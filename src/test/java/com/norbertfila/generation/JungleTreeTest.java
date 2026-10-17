@@ -9,6 +9,48 @@ import org.junit.jupiter.api.Test;
 
 class JungleTreeTest {
     @Test
+    void mahoganyRegionsChangeSpeciesWithoutChangingGroundHeight() {
+        var jungle = new JungleVegetation(42);
+        int lowX = 0, lowZ = 0, highX = 0, highZ = 0;
+        double low = 1, high = 0;
+        for (int z = -1024; z <= 1024; z += 64)
+            for (int x = -1024; x <= 1024; x += 64) {
+                double value = jungle.mahogany(x, z);
+                if (value < low) {
+                    low = value;
+                    lowX = x;
+                    lowZ = z;
+                }
+                if (value > high) {
+                    high = value;
+                    highX = x;
+                    highZ = z;
+                }
+            }
+        assertEquals(0, low);
+        assertEquals(1, high);
+        GroundSampler ground = (x, z) -> new TerrainSummary(
+                32,
+                BlockId.GRASS,
+                BlockId.DIRT,
+                BlockId.STONE,
+                TerrainSummary.NO_BEDROCK,
+                TerrainSummary.NO_WATER,
+                com.norbertfila.generation.biome.BiomeType.JUNGLE,
+                new com.norbertfila.generation.biome.ClimateSample(.6f, .6f));
+        var generator =
+                new TreeGenerator(42, (x, z) -> 1, ground, com.norbertfila.generation.biome.BiomeRegistry.defaults());
+        var ordinary = generator.trees(lowX, lowZ);
+        var mahogany = generator.trees(highX, highZ);
+        assertTrue(mahogany.stream().filter(t -> t.type() == TreeType.MAHOGANY).count()
+                > ordinary.stream().filter(t -> t.type() == TreeType.MAHOGANY).count());
+        assertTrue(mahogany.stream().allMatch(t -> t.baseY() == 33));
+        assertTrue(mahogany.stream()
+                .filter(t -> t.type() == TreeType.MAHOGANY)
+                .allMatch(t -> t.plan().log() == BlockId.MAHOGANY_LOG));
+    }
+
+    @Test
     void plansHaveCorrectHeightsAndConnectedWood() {
         for (var type : List.of(TreeType.JUNGLE, TreeType.GIANT_JUNGLE, TreeType.MAHOGANY))
             for (int seed = 0; seed < 30; seed++) {
