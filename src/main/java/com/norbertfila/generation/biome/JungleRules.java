@@ -4,7 +4,7 @@ public final class JungleRules {
     private JungleRules() {}
 
     public static double climateWeight(ClimateSample climate) {
-        return smooth(climate.temperature(), .22, .4) * smooth(climate.humidity(), .22, .4);
+        return smooth(climate.temperature(), .12, .28) * smooth(climate.humidity(), .22, .4);
     }
 
     public static double smooth(double value, double start, double end) {

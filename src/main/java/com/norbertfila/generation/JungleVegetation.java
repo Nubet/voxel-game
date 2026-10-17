@@ -34,7 +34,7 @@ final class JungleVegetation {
         double patch = soil.sample(x / 22d, z / 22d);
         if (ground.surfaceHeight() <= (long) ground.waterLevel() + 5 && patch < -.18) return BlockId.MUD;
         boolean shaded = TreeGenerator.canopyHeight(trees, x, z) != Long.MIN_VALUE;
-        return shaded && patch > .12 - .12 * mahogany(x, z) ? BlockId.PODZOL : BlockId.GRASS;
+        return shaded && patch > .20 - .05 * mahogany(x, z) ? BlockId.PODZOL : BlockId.GRASS;
     }
 
     void generate(

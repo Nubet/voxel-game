@@ -50,7 +50,7 @@ class UiAtlasTest {
             assertTrue(visible > 0, "Empty icon: " + block);
             assertTrue(transparent > 0, "Icon has no transparent background: " + block);
         }
-        assertEquals(UiAtlas.LAST_ITEM, regions.size());
+        assertEquals(InventoryScreen.catalogBlocks().size(), regions.size());
         assertEquals(UiAtlas.item((byte) 0), UiAtlas.item((byte) 255));
     }
 

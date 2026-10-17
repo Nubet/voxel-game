@@ -41,7 +41,7 @@ public final class BiomeResolver {
         if (temperature < -.2f) return BiomeType.TAIGA;
         if (temperature > .35f && humidity < -.05f) return BiomeType.DESERT;
         if (temperature > .2f && humidity < .25f) return BiomeType.BADLANDS;
-        if (temperature > .3f && humidity > .3f) return BiomeType.JUNGLE;
+        if (temperature > .2f && humidity > .3f) return BiomeType.JUNGLE;
         if (humidity > .35f) return temperature < .4f ? BiomeType.SWAMP : BiomeType.FOREST;
         if (humidity > -.1f) return BiomeType.FOREST;
         return BiomeType.PLAINS;

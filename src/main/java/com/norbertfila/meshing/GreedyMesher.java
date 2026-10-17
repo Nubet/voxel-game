@@ -27,6 +27,7 @@ public final class GreedyMesher implements ChunkMesher {
     private static final boolean[] CROSS = new boolean[256];
     private static final boolean[] OCCLUDES = new boolean[256];
     private static final int[] LAYER = new int[256];
+    private static final int[] GEOMETRY = new int[256];
     private static final int[][] TEXTURE = new int[256][6];
 
     static {
@@ -39,6 +40,7 @@ public final class GreedyMesher implements ChunkMesher {
             CROSS[id] = definition.model().shape() == BlockShape.CROSS;
             OCCLUDES[id] = definition.occludesFullFace();
             LAYER[id] = definition.renderLayer().ordinal();
+            GEOMETRY[id] = definition.shape().geometryIndex();
             for (int face = 0; face < 6; face++) {
                 TEXTURE[id][face] = definition.textureLayer(face);
             }
@@ -184,9 +186,9 @@ public final class GreedyMesher implements ChunkMesher {
             for (int z = 0; z < S; z++)
                 for (int x = 0; x < S; x++) {
                     byte block = scratch.grid[padded(x, y, z)];
-                    var definition = BlockRegistry.DEFAULT.definition(block);
-                    int geometry = definition.shape().geometryIndex();
+                    int geometry = GEOMETRY[Byte.toUnsignedInt(block)];
                     if (geometry == 0) continue;
+                    var definition = BlockRegistry.DEFAULT.definition(block);
                     for (int face = 0; face < 6; face++) {
                         if (geometry <= 4 && (geometry <= 2 ? face >= 2 : face < 4)) continue;
                         int[] corner = VisibleFaceMesher.FACES[face][0];

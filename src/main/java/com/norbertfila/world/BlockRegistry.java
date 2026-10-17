@@ -448,14 +448,20 @@ public final class BlockRegistry {
             var vine = BlockShape.values()[BlockShape.VINE_EAST.ordinal() + i];
             var cocoa = BlockShape.values()[BlockShape.COCOA_EAST.ordinal() + i];
             blocks.add(decoration(
-                    (byte) (Byte.toUnsignedInt(BlockId.VINE_EAST) + i), "vine", texture(textures, "vine"), vine));
+                    (byte) (Byte.toUnsignedInt(BlockId.VINE_EAST) + i),
+                    vine.name().toLowerCase(java.util.Locale.ROOT),
+                    texture(textures, "vine"),
+                    vine));
             blocks.add(decoration(
-                    (byte) (Byte.toUnsignedInt(BlockId.COCOA_EAST) + i), "cocoa", texture(textures, "cocoa"), cocoa));
+                    (byte) (Byte.toUnsignedInt(BlockId.COCOA_EAST) + i),
+                    cocoa.name().toLowerCase(java.util.Locale.ROOT),
+                    texture(textures, "cocoa"),
+                    cocoa));
         }
         blocks.add(plant(BlockId.TALL_GRASS, "tall_grass", texture(textures, "tall_grass_bottom")));
-        blocks.add(plant(BlockId.TALL_GRASS_TOP, "tall_grass", texture(textures, "tall_grass_top")));
+        blocks.add(plant(BlockId.TALL_GRASS_TOP, "tall_grass_top", texture(textures, "tall_grass_top")));
         blocks.add(plant(BlockId.LARGE_FERN, "large_fern", texture(textures, "large_fern_bottom")));
-        blocks.add(plant(BlockId.LARGE_FERN_TOP, "large_fern", texture(textures, "large_fern_top")));
+        blocks.add(plant(BlockId.LARGE_FERN_TOP, "large_fern_top", texture(textures, "large_fern_top")));
         blocks.add(material(textures, BlockId.MELON, "melon", "melon_top", "melon_top", "melon_side"));
         blocks.add(log(textures, BlockId.MAHOGANY_LOG, "mahogany_log"));
         blocks.add(leaves(textures, BlockId.MAHOGANY_LEAVES, "mahogany_leaves"));
