@@ -17,12 +17,22 @@ public final class PlayerAnimator {
         }
     }
 
-    public record Frame(double phase, double intensity, double bodyYaw, double time) {}
+    public record Frame(
+            double phase,
+            double intensity,
+            double bodyYaw,
+            double time,
+            double airborne,
+            double rise,
+            double impact,
+            double lean) {}
 
     public record Animation(Frame previous, Frame current, Swing swing) {}
 
     private Frame last;
     private Swing swing = Swing.NONE;
+    private boolean grounded;
+    private double velocityY;
 
     public void swing(long tick, boolean restart) {
         if (restart || swing.sequence() == 0 || tick - swing.startTick() >= SWING_TICKS)
@@ -34,8 +44,16 @@ public final class PlayerAnimator {
         var to = player.state().position();
         double distance = Math.hypot(to.x() - from.x(), to.z() - from.z());
         boolean flying = player.flying() || player.mode() == PlayerController.Mode.SPECTATOR;
-        double intensity = !reset && player.state().grounded() && !flying ? Math.min(1, distance * 60 / 5.6) : 0;
-        double phase = reset || intensity == 0 ? 0 : last.phase() + distance * 2.5;
+        double target = !flying ? Math.min(1, distance * 60 / 5.6) : 0;
+        double intensity = reset ? 0 : approach(last.intensity(), target, .22);
+        double phase = reset ? 0 : last.phase() + (flying ? 0 : distance * 2.5);
+        double airborne = reset ? 0 : approach(last.airborne(), !player.state().grounded() && !flying ? 1 : 0, .25);
+        double rise =
+                reset ? 0 : approach(last.rise(), Math.clamp(player.state().velocityY() / 9.6, -1, 1), .2);
+        double landing =
+                !reset && !grounded && player.state().grounded() && !flying ? Math.clamp(-velocityY / 12, 0, 1) : 0;
+        double impact = reset ? 0 : Math.max(landing, last.impact() * .8);
+        double lean = reset ? 0 : approach(last.lean(), player.sprinting() && !flying ? target : 0, .15);
         double body = reset ? yaw : last.bodyYaw();
         if (!reset) {
             double turn = angle(yaw - body);
@@ -43,9 +61,11 @@ public final class PlayerAnimator {
             body = yaw - Math.clamp(angle(yaw - body), -60, 60);
         }
         double time = frozen && last != null ? last.time() : tick;
-        var current = new Frame(phase, intensity, body, time);
-        var previous = reset ? current : intensity == 0 ? new Frame(0, 0, last.bodyYaw(), last.time()) : last;
+        var current = new Frame(phase, intensity, body, time, airborne, rise, impact, lean);
+        var previous = reset ? current : last;
         last = current;
+        grounded = player.state().grounded();
+        velocityY = player.state().velocityY();
         return new Animation(previous, current, swing);
     }
 
@@ -66,19 +86,28 @@ public final class PlayerAnimator {
         double body = a.bodyYaw() + angle(b.bodyYaw() - a.bodyYaw()) * alpha;
         float rootYaw = radians(-angle(body - sample.yaw()));
         float headYaw = radians(-Math.clamp(angle(lookYaw - body), -60, 60));
-        float bend = state.crouching() ? -.5f : 0;
+        double air = lerp(a.airborne(), b.airborne(), alpha);
+        double rise = lerp(a.rise(), b.rise(), alpha);
+        double impact = lerp(a.impact(), b.impact(), alpha);
+        float bend = state.crouching()
+                ? -.5f
+                : (float) (-Math.toRadians(10) * lerp(a.lean(), b.lean(), alpha) - impact * .12);
+        float sway = (float) (Math.sin(phase) * intensity * .025 * (1 - air));
         float leg = (float) (Math.sin(phase) * intensity * (state.sprinting() ? 1.1 : .75));
-        float rightArm = -leg, leftArm = leg, rightLeg = leg, leftLeg = -leg;
+        float arm = (float) (Math.sin(phase - .3) * intensity * (state.sprinting() ? 1.1 : .75));
+        float rightArm = -arm, leftArm = arm, rightLeg = leg, leftLeg = -leg;
         boolean flying = state.flying() || state.mode() == PlayerController.Mode.SPECTATOR;
         if (flying) {
             rightArm = leftArm = -.8f;
             rightLeg = .15f;
             leftLeg = -.15f;
-        } else if (!state.grounded()) {
-            boolean rising = state.velocityY() > 0;
-            rightArm = leftArm = rising ? -.45f : .25f;
-            rightLeg = rising ? -.35f : .12f;
-            leftLeg = rising ? .35f : -.12f;
+        } else {
+            float balance = (float) (-.35 * Math.max(rise, 0) + .25 * Math.max(-rise, 0));
+            float tuck = (float) (-.4 * Math.max(rise, 0) + .12 * Math.max(-rise, 0));
+            rightArm = (float) (rightArm * (1 - air * .65) + balance * air);
+            leftArm = (float) (leftArm * (1 - air * .65) + balance * air);
+            rightLeg = (float) (rightLeg * (1 - air * .6) + tuck * air - impact * .25);
+            leftLeg = (float) (leftLeg * (1 - air * .6) - tuck * air - impact * .25);
         }
         double age = time - state.animation().swing().startTick();
         if (state.animation().swing().sequence() > 0 && age >= 0 && age < SWING_TICKS)
@@ -87,23 +116,44 @@ public final class PlayerAnimator {
         var parts = new EnumMap<Part, PartTransform>(Part.class);
         parts.put(
                 Part.BODY,
-                new PartTransform(0, state.crouching() ? -2 : 0, state.crouching() ? 2 : 0, bend, rootYaw, 0));
+                new PartTransform(
+                        0,
+                        (state.crouching() ? -2 : 0) - (float) impact * 1.5f,
+                        state.crouching() ? 2 : 0,
+                        bend,
+                        rootYaw,
+                        sway));
         parts.put(Part.HEAD, new PartTransform(0, 0, 0, radians(Math.clamp(lookPitch, -90, 90)) - bend, headYaw, 0));
         parts.put(Part.RIGHT_ARM, new PartTransform(0, 0, 0, rightArm - bend, 0, .04f + idle));
         parts.put(Part.LEFT_ARM, new PartTransform(0, 0, 0, leftArm - bend, 0, -.04f - idle));
         parts.put(
                 Part.RIGHT_LEG,
                 new PartTransform(
-                        0, state.crouching() ? -1 : 0, state.crouching() ? 2 : 0, rightLeg - bend * .4f, rootYaw, 0));
+                        0,
+                        (state.crouching() ? -1 : 0) - (float) impact * 1.5f,
+                        state.crouching() ? 2 : 0,
+                        rightLeg - bend * .4f,
+                        rootYaw,
+                        0));
         parts.put(
                 Part.LEFT_LEG,
                 new PartTransform(
-                        0, state.crouching() ? -1 : 0, state.crouching() ? 2 : 0, leftLeg - bend * .4f, rootYaw, 0));
+                        0,
+                        (state.crouching() ? -1 : 0) - (float) impact * 1.5f,
+                        state.crouching() ? 2 : 0,
+                        leftLeg - bend * .4f,
+                        rootYaw,
+                        0));
         return new PlayerPose(parts);
     }
 
     private static double lerp(double a, double b, double alpha) {
         return a + (b - a) * alpha;
+    }
+
+    private static double approach(double value, double target, double rate) {
+        double result = lerp(value, target, rate);
+        return Math.abs(result - target) < .0001 ? target : result;
     }
 
     private static float radians(double degrees) {
