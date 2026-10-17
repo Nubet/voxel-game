@@ -9,6 +9,46 @@ import org.junit.jupiter.api.Test;
 
 class BiomeDecorationsTest {
     @Test
+    void aridBiomesHaveSparseCactiAndDeadBushes() {
+        for (long seed : new long[] {0, 42, -123456789}) {
+            for (BiomeType biome : List.of(BiomeType.DESERT, BiomeType.BADLANDS)) {
+                byte ground = biome == BiomeType.DESERT ? BlockId.SAND : BlockId.GRAVEL;
+                var summaries = new TerrainSummary[Chunk.SIZE * Chunk.SIZE];
+                Arrays.fill(
+                        summaries,
+                        new TerrainSummary(
+                                0,
+                                ground,
+                                ground,
+                                BlockId.STONE,
+                                TerrainSummary.NO_BEDROCK,
+                                TerrainSummary.NO_WATER,
+                                biome,
+                                new ClimateSample(0, 0)));
+                var column = TerrainColumn.of(summaries, List.of());
+                var generator = new VegetationGenerator(seed, (x, z) -> 1, (x, z) -> 1);
+                int cacti = 0, bushes = 0;
+                for (int z = -4; z < 4; z++)
+                    for (int x = -4; x < 4; x++) {
+                        byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+                        generator.generate(x * Chunk.SIZE, 0, z * Chunk.SIZE, blocks, column);
+                        for (byte block : blocks) {
+                            if (block == BlockId.CACTUS) cacti++;
+                            if (block == BlockId.DEAD_BUSH) bushes++;
+                        }
+                    }
+                double cactusDensity = cacti / (64d * Chunk.SIZE * Chunk.SIZE);
+                double bushDensity = bushes / (64d * Chunk.SIZE * Chunk.SIZE);
+                String context = biome + " seed=" + seed;
+                if (biome == BiomeType.DESERT)
+                    assertTrue(cactusDensity > .0008 && cactusDensity < .004, context + " cacti=" + cactusDensity);
+                else assertEquals(0, cacti, context);
+                assertTrue(bushDensity > .005 && bushDensity < .015, context + " dead bushes=" + bushDensity);
+            }
+        }
+    }
+
+    @Test
     void everySpecialPlantIsReachableAndUsesItsOwnBlock() {
         var registry = BiomeRegistry.defaults();
         Map<PlantType, Byte> expected = Map.of(

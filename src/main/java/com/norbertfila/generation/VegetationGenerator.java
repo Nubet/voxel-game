@@ -132,8 +132,9 @@ final class VegetationGenerator {
         double roll = unit(value);
         for (PlantType type : PlantType.values()) {
             double weight = switch (type) {
-                case CACTUS -> .04;
-                case DEAD_BUSH, MUSHROOM -> .06;
+                case CACTUS -> .002;
+                case DEAD_BUSH -> .01;
+                case MUSHROOM -> .06;
                 case REED -> .08;
                 case BERRY_BUSH -> .005;
                 case ALPINE_GRASS -> .12;
