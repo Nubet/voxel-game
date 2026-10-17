@@ -219,6 +219,11 @@ public final class WorldRuntime implements AutoCloseable {
             var commands = new GameCommands();
             CommandSource commandSource = new CommandSource() {
                 @Override
+                public long seed() {
+                    return identity.seed();
+                }
+
+                @Override
                 public boolean setMode(PlayerController.Mode mode) {
                     if (player.modeChangePending()) return false;
                     if (!player.setMode(world, mode)) return false;

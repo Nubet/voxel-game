@@ -6,6 +6,8 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.world.BlockId;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class GameCommandsTest {
     private final GameCommands commands = new GameCommands();
@@ -15,6 +17,12 @@ class GameCommandsTest {
         final Inventory inventory = new Inventory();
         PlayerController.Mode mode = PlayerController.Mode.SURVIVAL;
         boolean allowMode = true;
+        long seed;
+
+        @Override
+        public long seed() {
+            return seed;
+        }
 
         @Override
         public boolean setMode(PlayerController.Mode value) {
@@ -42,6 +50,16 @@ class GameCommandsTest {
         assertFalse(help.error());
         assertTrue(help.text().contains("gamemode creative"));
         assertTrue(help.text().contains("give @s <item>"));
+        assertTrue(help.text().contains("seed"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 7340215, -123456789, Long.MIN_VALUE, Long.MAX_VALUE})
+    void seedReportsTheFullSignedWorldSeed(long seed) {
+        source.seed = seed;
+        var reply = commands.execute("/seed", source);
+        assertFalse(reply.error());
+        assertEquals("Seed: " + seed, reply.text());
     }
 
     @Test
@@ -49,6 +67,7 @@ class GameCommandsTest {
         for (String text : new String[] {
             "/",
             "/kill",
+            "/seed extra",
             "/gamemode adventure",
             "/gamemode creative extra",
             "/give @a stone",

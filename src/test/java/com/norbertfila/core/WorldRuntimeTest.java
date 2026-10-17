@@ -34,12 +34,16 @@ class WorldRuntimeTest {
             await(runtime, f -> f.tick() >= 2);
             runtime.controls(controls(true, false));
             await(runtime, f -> f.target().isEmpty());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/seed")));
             assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/give @s stone 64")));
             assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/gamemode creative")));
             var executed = await(
                     runtime,
                     f -> f.mode() == PlayerController.Mode.CREATIVE
                             && f.inventory().count(0) == 64);
+            var seedReply = runtime.pollCommandReply();
+            assertFalse(seedReply.error());
+            assertEquals("Seed: 42", seedReply.text());
             assertFalse(runtime.pollCommandReply().error());
             assertFalse(runtime.pollCommandReply().error());
             await(runtime, f -> f.tick() > executed.tick() + 2);
