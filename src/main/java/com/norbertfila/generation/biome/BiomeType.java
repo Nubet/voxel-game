@@ -11,5 +11,6 @@ public enum BiomeType {
     OCEAN,
     LAKE,
     RIVER,
-    STONY_SLOPES
+    STONY_SLOPES,
+    SNOWY_TAIGA
 }

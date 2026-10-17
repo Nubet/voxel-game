@@ -81,6 +81,15 @@ public final class BiomeRegistry {
                 BiomeType.LAKE, profile(0, 0, 0, SurfaceMaterial.MUD, SurfaceMaterial.DIRT, Set.of()),
                 BiomeType.RIVER, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of())));
         profiles.put(BiomeType.STONY_SLOPES, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE, Set.of()));
+        profiles.put(
+                BiomeType.SNOWY_TAIGA,
+                profile(
+                        .45f,
+                        .08f,
+                        0,
+                        SurfaceMaterial.PODZOL,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.FERN, PlantType.SHORT_GRASS)));
         return new BiomeRegistry(profiles);
     }
 

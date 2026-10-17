@@ -25,7 +25,7 @@ public final class SurfaceMaterialResolver {
             boolean nearWater,
             double shoreVariation) {
         long waterDepth = (long) waterLevel - height;
-        double temperature = climate.temperature() - Math.max(0L, (long) height - baseHeight) * .004;
+        double temperature = ClimateRules.temperature(climate, height, baseHeight);
         if (waterDepth > 3)
             return new Result(materials.surface(SurfaceMaterial.GRAVEL), materials.subsurface(SurfaceMaterial.GRAVEL));
         if (waterDepth > 0 && slope > 1.5)
