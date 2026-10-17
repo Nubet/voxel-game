@@ -52,6 +52,7 @@ void main() {
     // The world y can be far from the camera; subtracting as integers first keeps it exact.
     vec3 relative = vec3(origin.x + local.x, y - uCameraBlock.y + local.y, origin.z + local.z) - uCameraFraction;
     if (water) relative.y -= WATER_DROP;
+    if (((shape >> 24) & 1u) != 0u) relative.y -= 0.875;
     vCameraOffset = relative;
     gl_Position = uVP * vec4(relative, 1.0);
 }

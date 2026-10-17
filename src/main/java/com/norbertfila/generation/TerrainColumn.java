@@ -27,6 +27,7 @@ final class TerrainColumn {
     private final List<TreeGenerator.Tree> trees;
     private final List<CavePlan.Segment> caves;
     private final BitSet removedSurface;
+    private final BitSet snowCover;
     private final int minSurface;
     private final int highestFeature;
 
@@ -40,7 +41,8 @@ final class TerrainColumn {
             int[] waterLevels,
             List<TreeGenerator.Tree> trees,
             List<CavePlan.Segment> caves,
-            BitSet removedSurface) {
+            BitSet removedSurface,
+            BitSet snowCover) {
         this.surfaceHeights = surfaceHeights;
         this.surfaceMaterials = surfaceMaterials;
         this.subsurfaceMaterials = subsurfaceMaterials;
@@ -53,6 +55,7 @@ final class TerrainColumn {
         this.trees = List.copyOf(trees);
         this.caves = List.copyOf(caves);
         this.removedSurface = (BitSet) removedSurface.clone();
+        this.snowCover = (BitSet) snowCover.clone();
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int height : surfaceHeights) {
             min = Math.min(min, height);
@@ -106,6 +109,7 @@ final class TerrainColumn {
         byte[] surface = new byte[AREA], subsurface = new byte[AREA];
         byte[] deep = new byte[AREA];
         BiomeType[] biomes = new BiomeType[AREA];
+        BitSet snow = new BitSet(AREA);
         for (int index = 0; index < AREA; index++) {
             TerrainSummary summary = summaries[index];
             if (summary.bedrockHeight() != first.bedrockHeight())
@@ -116,6 +120,7 @@ final class TerrainColumn {
             biomes[index] = summary.biome();
             waterLevels[index] = summary.waterLevel();
             deep[index] = summary.deepMaterial();
+            if (summary.snowCover()) snow.set(index);
         }
         return new TerrainColumn(
                 heights,
@@ -127,7 +132,8 @@ final class TerrainColumn {
                 waterLevels,
                 trees,
                 caves,
-                removedSurface);
+                removedSurface,
+                snow);
     }
 
     int surfaceHeight(int index) {
@@ -156,6 +162,10 @@ final class TerrainColumn {
 
     boolean surfaceSupported(int index) {
         return !removedSurface.get(index);
+    }
+
+    boolean snowCover(int index) {
+        return snowCover.get(index);
     }
 
     byte materialAt(int index, int worldY) {

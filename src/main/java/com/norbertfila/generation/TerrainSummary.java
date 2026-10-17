@@ -15,9 +15,33 @@ public record TerrainSummary(
         int waterLevel,
         BiomeType biome,
         ClimateSample climate,
-        WaterKind waterKind) {
+        WaterKind waterKind,
+        boolean snowCover) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
+
+    public TerrainSummary(
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel,
+            BiomeType biome,
+            ClimateSample climate,
+            WaterKind waterKind) {
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                biome,
+                climate,
+                waterKind,
+                false);
+    }
 
     public TerrainSummary(
             int surfaceHeight,
@@ -91,6 +115,7 @@ public record TerrainSummary(
     }
 
     public byte materialAt(int worldY) {
+        if (snowCover && (long) worldY == (long) surfaceHeight + 1) return BlockId.SNOW_LAYER;
         return materialAt(
                 worldY, surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, bedrockHeight, waterLevel);
     }

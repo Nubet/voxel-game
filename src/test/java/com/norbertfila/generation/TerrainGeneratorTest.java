@@ -35,7 +35,11 @@ class TerrainGeneratorTest {
         assertEquals(BlockId.STONE, blockAt(generator, wx, height - 4, wz));
         int tx = Math.floorDiv(wx, 64), tz = Math.floorDiv(wz, 64);
         var tile = new FarTerrainGenerator(generator).generate(tx, tz, 1, AreaEdits.none(tx * 64, tz * 64, 64));
-        assertEquals(height, tile.heightAt(Math.floorMod(wx, 64), Math.floorMod(wz, 64)));
+        assertEquals(
+                height + (cover == BlockId.SNOW_LAYER ? 1 : 0),
+                tile.heightAt(Math.floorMod(wx, 64), Math.floorMod(wz, 64)));
+        if (cover == BlockId.SNOW_LAYER)
+            assertEquals(cover, tile.materialAt(Math.floorMod(wx, 64), Math.floorMod(wz, 64)));
     }
 
     @Test
