@@ -45,6 +45,7 @@ public final class BiomeDebugMap {
             case OCEAN -> new Color(30, 70, 160);
             case LAKE -> new Color(55, 125, 190);
             case RIVER -> new Color(80, 160, 210);
+            case STONY_SLOPES -> new Color(130, 135, 140);
         };
     }
 }

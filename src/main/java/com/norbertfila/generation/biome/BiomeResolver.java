@@ -19,7 +19,10 @@ public final class BiomeResolver {
                 case NONE -> throw new IllegalStateException("Flooded column without water");
             };
         float temperature = climate.temperature() - Math.max(0L, (long) height - baseHeight) * .004f;
-        if (height > (long) baseHeight + 90 && temperature < -.25f) return BiomeType.ALPINE;
+        boolean highland = height > (long) baseHeight + 48;
+        if (height > (long) baseHeight + 90 && temperature < -.25f || highland && temperature < -.55f)
+            return BiomeType.ALPINE;
+        if (highland && (slope > 1.5 || temperature < -.3f)) return BiomeType.STONY_SLOPES;
         if (temperature < -.2f) return BiomeType.TAIGA;
         if (climate.humidity() > .15f
                 && nearWater

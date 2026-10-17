@@ -22,7 +22,7 @@ public final class BiomeRegistry {
     }
 
     public static BiomeRegistry defaults() {
-        return new BiomeRegistry(Map.of(
+        var profiles = new EnumMap<>(Map.of(
                 BiomeType.PLAINS,
                         profile(
                                 .05f,
@@ -80,6 +80,8 @@ public final class BiomeRegistry {
                 BiomeType.OCEAN, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of()),
                 BiomeType.LAKE, profile(0, 0, 0, SurfaceMaterial.MUD, SurfaceMaterial.DIRT, Set.of()),
                 BiomeType.RIVER, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of())));
+        profiles.put(BiomeType.STONY_SLOPES, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE, Set.of()));
+        return new BiomeRegistry(profiles);
     }
 
     private static BiomeProfile profile(
