@@ -90,6 +90,24 @@ public final class BiomeRegistry {
                         SurfaceMaterial.PODZOL,
                         SurfaceMaterial.DIRT,
                         Set.of(PlantType.FERN, PlantType.SHORT_GRASS)));
+        profiles.put(
+                BiomeType.TAIGA,
+                new BiomeProfile(
+                        new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
+                        new VegetationProfile(
+                                .65f,
+                                0,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.BERRY_BUSH, PlantType.MUSHROOM),
+                                .65f,
+                                .08f),
+                        new TreeProfile(.55f, TreeType.CONIFER)));
+        profiles.put(
+                BiomeType.SNOWY_TAIGA,
+                new BiomeProfile(
+                        new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
+                        new VegetationProfile(
+                                .08f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.MUSHROOM), .7f, .01f),
+                        new TreeProfile(.45f, TreeType.CONIFER)));
         return new BiomeRegistry(profiles);
     }
 
@@ -106,9 +124,6 @@ public final class BiomeRegistry {
             default -> TreeType.BROADLEAF;
         };
         return new BiomeProfile(
-                trees,
-                grass,
-                flowers,
                 new SurfaceProfile(surface, subsurface),
                 new VegetationProfile(grass, flowers, plants),
                 new TreeProfile(trees, treeType));

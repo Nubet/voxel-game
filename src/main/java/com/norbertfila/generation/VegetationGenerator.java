@@ -20,6 +20,7 @@ final class VegetationGenerator {
     private final long seed;
     private final Noise2D density;
     private final Noise2D forest;
+    private final Noise2D snow;
     private final BiomeRegistry biomes;
     private final TerrainSource terrain;
 
@@ -35,6 +36,7 @@ final class VegetationGenerator {
         this.seed = seed;
         this.density = density;
         this.forest = forest;
+        this.snow = new PerlinNoise(seed ^ 0xA24BAED4963EE407L);
         this.biomes = biomes;
         this.terrain = terrain;
     }
@@ -99,7 +101,8 @@ final class VegetationGenerator {
                 double woodland = sample(forest, ((long) ox + x) * .003, ((long) oz + z) * .003);
                 byte plant = woodland > .1
                                 && profile.vegetation().plants().contains(PlantType.FERN)
-                                && unit(hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z)) < .2
+                                && unit(hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z))
+                                        < profile.vegetation().fernFraction()
                         ? BlockId.FERN
                         : BlockId.SHORT_GRASS;
                 if (plant == BlockId.SHORT_GRASS
@@ -109,7 +112,16 @@ final class VegetationGenerator {
         for (int z = 0; z < Chunk.SIZE; z++)
             for (int x = 0; x < Chunk.SIZE; x++) {
                 int column = z * Chunk.SIZE + x;
-                if (columns.biome(column) == BiomeType.TAIGA && columns.surfaceMaterial(column) == BlockId.PODZOL)
+                if (columns.biome(column) != BiomeType.TAIGA
+                        || snow.sample(((long) ox + x) * .1, ((long) oz + z) * .1) <= .15) continue;
+                long canopy = TreeGenerator.canopyHeight(columns.trees(), ox + x, oz + z);
+                if (canopy > columns.surfaceHeight(column)) {
+                    long y = canopy + 1 - oy;
+                    if (y >= 0 && y < Chunk.SIZE) {
+                        int index = ((int) y * Chunk.SIZE + z) * Chunk.SIZE + x;
+                        if (blocks[index] == BlockId.AIR) blocks[index] = BlockId.SNOW_LAYER;
+                    }
+                } else if (columns.surfaceMaterial(column) == BlockId.PODZOL)
                     place(x, z, oy, blocks, columns, BlockId.SNOW_LAYER);
             }
     }
@@ -148,6 +160,7 @@ final class VegetationGenerator {
                 default -> 0;
             };
             if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
+            if (type == PlantType.MUSHROOM) weight *= profile.vegetation().specialDensity();
             if (roll < weight) return type;
             roll -= weight;
         }

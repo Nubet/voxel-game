@@ -19,7 +19,7 @@ class LandscapeMaterialTest {
         var terrain = new TerrainGenerator(0, TerrainConfig.defaults());
         int[] xs = {1088, 1184, 1216};
         BiomeType[] biomes = {BiomeType.SNOWY_TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE};
-        byte[] ground = {BlockId.PODZOL, BlockId.STONE, BlockId.SNOW};
+        byte[] ground = {BlockId.GRASS, BlockId.STONE, BlockId.SNOW};
         for (int i = 0; i < xs.length; i++) {
             var sample = terrain.sample(xs[i], -384);
             assertEquals(biomes[i], sample.biome());
@@ -37,7 +37,7 @@ class LandscapeMaterialTest {
             var climate = new ClimateSample(-.21f, humidity);
             var profile = registry.profile(biomes.resolve(climate, 40, 32, 0, false, 28, WaterKind.OCEAN));
             assertEquals(
-                    BlockId.PODZOL,
+                    BlockId.GRASS,
                     resolver.resolve(40, 0, 28, 32, climate, profile).surface());
         }
     }
@@ -69,7 +69,7 @@ class LandscapeMaterialTest {
         var climate = new ClimateSample(-.21f, 0);
         int[] heights = {40, 100, 120, 160};
         BiomeType[] expectedBiomes = {BiomeType.TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE, BiomeType.ALPINE};
-        byte[] expectedSurfaces = {BlockId.PODZOL, BlockId.STONE, BlockId.SNOW, BlockId.SNOW};
+        byte[] expectedSurfaces = {BlockId.GRASS, BlockId.STONE, BlockId.SNOW, BlockId.SNOW};
         for (int i = 0; i < heights.length; i++) {
             var biome = biomes.resolve(climate, heights[i], 32, 0, false, 28, WaterKind.OCEAN);
             assertEquals(expectedBiomes[i], biome);
@@ -78,8 +78,8 @@ class LandscapeMaterialTest {
         }
         var cold = new ClimateSample(-.8f, .2f);
         var taiga = resolver.resolve(40, 0, 28, 32, cold, registry.profile(BiomeType.TAIGA));
-        assertEquals(BlockId.PODZOL, taiga.surface());
-        assertEquals(BlockId.COARSE_DIRT, taiga.subsurface());
+        assertEquals(BlockId.GRASS, taiga.surface());
+        assertEquals(BlockId.DIRT, taiga.subsurface());
         var temperate = new ClimateSample(0, 0);
         var belowSnowline = biomes.resolve(temperate, 130, 32, 0, false, 28, WaterKind.OCEAN);
         assertEquals(BiomeType.STONY_SLOPES, belowSnowline);

@@ -51,7 +51,7 @@ public final class SurfaceMaterialResolver {
         if (slope > 1.5)
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
         SurfaceProfile surface = profile.surface();
-        if (surface.surface() == SurfaceMaterial.PODZOL)
+        if (profile.trees().type() == TreeType.CONIFER)
             return new Result(materials.surface(surface.surface()), materials.subsurface(surface.subsurface()));
         if (temperature < -.8 && height > (long) baseHeight + 150)
             return new Result(materials.surface(SurfaceMaterial.ICE), materials.subsurface(SurfaceMaterial.ICE));
@@ -74,4 +74,15 @@ public final class SurfaceMaterialResolver {
     }
 
     public record Result(byte surface, byte subsurface) {}
+
+    public Result forestFloor(double variation) {
+        SurfaceMaterial top = variation > .25
+                ? SurfaceMaterial.STONE
+                : variation > .12
+                        ? SurfaceMaterial.PODZOL
+                        : variation < -.22 ? SurfaceMaterial.DIRT : SurfaceMaterial.GRASS;
+        return new Result(
+                materials.surface(top),
+                materials.subsurface(top == SurfaceMaterial.STONE ? SurfaceMaterial.STONE : SurfaceMaterial.DIRT));
+    }
 }

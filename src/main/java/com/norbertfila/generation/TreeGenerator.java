@@ -145,17 +145,13 @@ final class TreeGenerator {
     }
 
     private static void placeCrown(Tree tree, int originX, int originY, int originZ, byte[] blocks) {
-        int layers = tree.type == TreeType.CONIFER ? 6 : tree.type == TreeType.SWAMP ? 4 : 5;
+        int layers = crownLayers(tree);
         for (int layer = 0; layer < layers; layer++) {
-            int radius = tree.type == TreeType.CONIFER
-                    ? Math.max(0, Math.min(tree.crownRadius, (layers - 1 - layer) / 2))
-                    : layer == 0 || layer == layers - 1 ? 1 : tree.crownRadius;
+            int radius = crownRadius(tree, layer);
             long y = (long) tree.baseY + tree.trunkHeight - 2 + layer;
             for (int dz = -radius; dz <= radius; dz++)
                 for (int dx = -radius; dx <= radius; dx++) {
-                    if (Math.abs(dx) + Math.abs(dz) > radius + 1 || dx == 0 && dz == 0 && layer < 2) continue;
-                    if (radius > 0 && Math.abs(dx) == radius && Math.abs(dz) == radius
-                            || Math.floorMod(hash(tree.shapeSeed, layer, dx * 31L + dz), 11) == 0) continue;
+                    if (!hasLeaf(tree, layer, dx, dz)) continue;
                     place((long) tree.x + dx, y, (long) tree.z + dz, originX, originY, originZ, blocks, leaves(tree));
                     if (tree.type == TreeType.SWAMP && layer == 1 && (Math.abs(dx) == radius || Math.abs(dz) == radius))
                         place(
@@ -169,6 +165,42 @@ final class TreeGenerator {
                                 leaves(tree));
                 }
         }
+    }
+
+    static long canopyHeight(List<Tree> trees, int x, int z) {
+        long highest = Long.MIN_VALUE, highestLog = Long.MIN_VALUE;
+        for (Tree tree : trees) {
+            long dx = (long) x - tree.x, dz = (long) z - tree.z;
+            if (dx == 0 && dz == 0) highestLog = Math.max(highestLog, (long) tree.baseY + tree.trunkHeight - 1);
+            if (Math.abs(dx) > tree.crownRadius || Math.abs(dz) > tree.crownRadius) continue;
+            for (int layer = crownLayers(tree) - 1; layer >= 0; layer--) {
+                if (!hasLeaf(tree, layer, (int) dx, (int) dz)) continue;
+                highest = Math.max(highest, (long) tree.baseY + tree.trunkHeight - 2 + layer);
+                break;
+            }
+        }
+        return highest > highestLog ? highest : Long.MIN_VALUE;
+    }
+
+    private static int crownLayers(Tree tree) {
+        return tree.type == TreeType.CONIFER ? 6 : tree.type == TreeType.SWAMP ? 4 : 5;
+    }
+
+    private static int crownRadius(Tree tree, int layer) {
+        int layers = crownLayers(tree);
+        return tree.type == TreeType.CONIFER
+                ? Math.max(0, Math.min(tree.crownRadius, (layers - 1 - layer) / 2))
+                : layer == 0 || layer == layers - 1 ? 1 : tree.crownRadius;
+    }
+
+    private static boolean hasLeaf(Tree tree, int layer, int dx, int dz) {
+        int radius = crownRadius(tree, layer);
+        return Math.abs(dx) <= radius
+                && Math.abs(dz) <= radius
+                && Math.abs(dx) + Math.abs(dz) <= radius + 1
+                && !(dx == 0 && dz == 0 && layer < 2)
+                && !(radius > 0 && Math.abs(dx) == radius && Math.abs(dz) == radius)
+                && Math.floorMod(hash(tree.shapeSeed, layer, dx * 31L + dz), 11) != 0;
     }
 
     private static void place(

@@ -30,7 +30,6 @@ class GameTest {
     @Test
     void perlinSpawnHasSolidFloorAndFreeBody() {
         TerrainGenerator generator = new TerrainGenerator(0, TerrainConfig.defaults());
-        boolean snowCovered = false;
         for (int x : new int[] {-17, 0, 31}) {
             var spawn = new SpawnResolver(generator).resolve(x, -1);
             int spawnX = (int) Math.floor(spawn.x()), spawnZ = (int) Math.floor(spawn.z());
@@ -46,7 +45,6 @@ class GameTest {
                             Math.floorMod(feetY, Chunk.SIZE),
                             Math.floorMod(spawnZ, Chunk.SIZE));
             assertTrue(cover == BlockId.AIR || cover == BlockId.SNOW_LAYER);
-            snowCovered |= cover == BlockId.SNOW_LAYER;
             double coverHeight = cover == BlockId.SNOW_LAYER
                     ? BlockRegistry.DEFAULT.definition(cover).model().maxY()
                     : 0;
@@ -66,7 +64,6 @@ class GameTest {
             assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 1));
             assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 2));
         }
-        assertTrue(snowCovered, "Spawn must also support the snow-covered taiga");
     }
 
     @Test

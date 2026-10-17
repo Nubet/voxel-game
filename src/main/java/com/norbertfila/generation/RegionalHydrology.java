@@ -27,6 +27,10 @@ final class RegionalHydrology {
     }
 
     Sample sample(double x, double z, double ground) {
+        return sample(x, z, ground, true);
+    }
+
+    Sample sample(double x, double z, double ground, boolean rivers) {
         int rx = (int) Math.floor(x / REGION_SIZE), rz = (int) Math.floor(z / REGION_SIZE);
         Sample result = null;
         double height = ground;
@@ -34,12 +38,14 @@ final class RegionalHydrology {
         Plan plan = regions.get(rx, rz, () -> plan(rx, rz));
         int tx = (int) Math.floor((x - (double) rx * REGION_SIZE) / TILE_SIZE);
         int tz = (int) Math.floor((z - (double) rz * REGION_SIZE) / TILE_SIZE);
-        for (Reach reach : plan.tiles().get(tz * TILES + tx)) {
-            if (!reach.near(x, z)) continue;
-            Sample candidate = reach.sample(x, z, ground, seaLevel, widthScale);
-            if (candidate != null) height = Math.min(height, candidate.height());
-            if (candidate != null && (result == null || candidate.proximity() < result.proximity())) result = candidate;
-        }
+        if (rivers)
+            for (Reach reach : plan.tiles().get(tz * TILES + tx)) {
+                if (!reach.near(x, z)) continue;
+                Sample candidate = reach.sample(x, z, ground, seaLevel, widthScale);
+                if (candidate != null) height = Math.min(height, candidate.height());
+                if (candidate != null && (result == null || candidate.proximity() < result.proximity()))
+                    result = candidate;
+            }
         for (Lake lake : plan.lakes()) {
             Sample candidate = lake.sample(x, z, ground);
             if (candidate != null) height = Math.min(height, candidate.height());

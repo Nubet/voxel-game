@@ -12,6 +12,25 @@ class PlantRulesTest {
     Path temporary;
 
     @Test
+    void snowSurvivesOnLeavesUntilItsSupportIsRemovedAcrossASectionBoundary() {
+        for (byte leaves : new byte[] {BlockId.LEAVES, BlockId.PINE_NEEDLES, BlockId.SWAMP_LEAVES}) {
+            var world = new World();
+            var lower = new Chunk();
+            lower.set(2, 15, 2, leaves);
+            var upper = new Chunk();
+            upper.set(2, 0, 2, BlockId.SNOW_LAYER);
+            world.putChunk(new ChunkPos(0, 0, 0), lower);
+            world.putChunk(new ChunkPos(0, 1, 0), upper);
+            var edit = new WorldEdit(world, 64);
+            edit.validatePlants(new ChunkPos(0, 1, 0));
+            var snow = new BlockPos(2, 16, 2);
+            assertEquals(BlockId.SNOW_LAYER, world.getBlock(snow).orElseThrow());
+            edit.setBlock(new BlockPos(2, 15, 2), BlockId.AIR);
+            assertEquals(BlockId.AIR, world.getBlock(snow).orElseThrow());
+        }
+    }
+
+    @Test
     void reedsKeepUnknownWaterNeighborsAndRevalidateAcrossHorizontalAndVerticalSeams() {
         for (boolean waterPresent : new boolean[] {false, true}) {
             var world = new World();
