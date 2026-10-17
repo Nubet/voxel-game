@@ -79,4 +79,31 @@ class BadlandsSurfaceTest {
         assertThrows(IllegalArgumentException.class, () -> new BadlandsSurface.Column(surface, 8));
         assertThrows(IllegalArgumentException.class, () -> new BadlandsSurface.Column(surface, -8));
     }
+
+    @Test
+    void lowerDrySurfacesHaveRedSandOverOrangeTerracotta() {
+        var column = new BadlandsSurface(42).column(-17, 16);
+        for (int seaLevel : new int[] {-20, 28, 63}) {
+            for (int height : new int[] {seaLevel, seaLevel + 16, seaLevel + 32}) {
+                byte top = column.surfaceAt(height, seaLevel);
+                assertEquals(BlockId.RED_SAND, top);
+                assertEquals(top, column.materialAt(height, height, top));
+                for (int depth = 1; depth <= 3; depth++)
+                    assertEquals(BlockId.TERRACOTTA_ORANGE, column.materialAt(height - depth, height, top));
+                assertEquals(column.bandAt(height - 4), column.materialAt(height - 4, height, top));
+            }
+            for (int height : new int[] {seaLevel - 1, seaLevel + 33})
+                assertEquals(column.bandAt(height), column.surfaceAt(height, seaLevel));
+        }
+    }
+
+    @Test
+    void highSurfacesExposeBandsAndReturnToStoneAtDepth() {
+        var column = new BadlandsSurface(42).column(513, -257);
+        byte top = column.surfaceAt(120, 28);
+        assertEquals(column.bandAt(120), top);
+        for (int y = 72; y <= 120; y++) assertEquals(column.bandAt(y), column.materialAt(y, 120, top));
+        assertEquals(BlockId.STONE, column.materialAt(71, 120, top));
+        assertThrows(IllegalArgumentException.class, () -> column.materialAt(121, 120, top));
+    }
 }
