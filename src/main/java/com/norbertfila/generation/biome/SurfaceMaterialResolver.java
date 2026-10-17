@@ -59,14 +59,6 @@ public final class SurfaceMaterialResolver {
             return new Result(materials.surface(SurfaceMaterial.SNOW), materials.subsurface(SurfaceMaterial.SNOW));
         if (temperature < -.3)
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
-        if (profile.surface().surface() == SurfaceMaterial.GRAVEL && slope <= 1.5) {
-            SurfaceMaterial band = switch (Math.floorMod(height - baseHeight, 24) / 8) {
-                case 0 -> SurfaceMaterial.TERRACOTTA_RED;
-                case 1 -> SurfaceMaterial.TERRACOTTA_ORANGE;
-                default -> SurfaceMaterial.CLAY;
-            };
-            return new Result(materials.surface(band), materials.subsurface(band));
-        }
         if (surface.surface() == SurfaceMaterial.GRASS && climate.temperature() > .1 && climate.humidity() < -.15)
             return new Result(
                     materials.surface(SurfaceMaterial.DRY_GRASS), materials.subsurface(SurfaceMaterial.DRY_GRASS));

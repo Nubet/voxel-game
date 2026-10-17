@@ -17,6 +17,13 @@ class BiomeModelTest {
     private final BiomeResolver resolver = new BiomeResolver();
 
     @Test
+    void badlandsDeclareTerracottaInsteadOfUsingGravelAsABiomeMarker() {
+        var surface = BiomeRegistry.defaults().profile(BiomeType.BADLANDS).surface();
+        assertEquals(SurfaceMaterial.TERRACOTTA_ORANGE, surface.surface());
+        assertEquals(SurfaceMaterial.TERRACOTTA_ORANGE, surface.subsurface());
+    }
+
+    @Test
     void bothTaigasHaveIndependentForestProfilesOnGrass() {
         var registry = BiomeRegistry.defaults();
         var green = registry.profile(BiomeType.TAIGA);
