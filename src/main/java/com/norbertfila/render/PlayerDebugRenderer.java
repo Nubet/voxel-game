@@ -11,16 +11,13 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class PlayerDebugRenderer implements AutoCloseable {
-    private final int program, vao, vbo, vp, model, texture;
+    private final int program, vao, vbo, vp, model;
+    private final SkinManager skins;
     private boolean closed;
 
-    public PlayerDebugRenderer() {
-        this(PlayerSkin.loadDefault());
-    }
-
-    public PlayerDebugRenderer(PlayerSkin skin) {
-        Objects.requireNonNull(skin);
-        int createdProgram = 0, createdVao = 0, createdVbo = 0, createdTexture = 0;
+    public PlayerDebugRenderer(SkinManager skins) {
+        this.skins = Objects.requireNonNull(skins);
+        int createdProgram = 0, createdVao = 0, createdVbo = 0;
         try {
             createdProgram = ShaderPrograms.create("/shaders/player_debug.vert", "/shaders/player_debug.frag");
             vp = ShaderPrograms.uniform(createdProgram, "uVP");
@@ -36,19 +33,7 @@ public final class PlayerDebugRenderer implements AutoCloseable {
             glVertexArrayAttribFormat(createdVao, 1, 2, GL_FLOAT, false, 3 * Float.BYTES);
             glVertexArrayAttribBinding(createdVao, 1, 0);
             glEnableVertexArrayAttrib(createdVao, 1);
-            createdTexture = glCreateTextures(GL_TEXTURE_2D);
-            glTextureStorage2D(createdTexture, 1, GL_RGBA8, PlayerSkin.SIZE, PlayerSkin.SIZE);
-            glTextureParameteri(createdTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTextureParameteri(createdTexture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTextureParameteri(createdTexture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTextureParameteri(createdTexture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            try (var stack = MemoryStack.stackPush()) {
-                var pixels = stack.bytes(skin.rgba());
-                glTextureSubImage2D(
-                        createdTexture, 0, 0, 0, PlayerSkin.SIZE, PlayerSkin.SIZE, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-            }
         } catch (RuntimeException | Error failure) {
-            glDeleteTextures(createdTexture);
             glDeleteBuffers(createdVbo);
             glDeleteVertexArrays(createdVao);
             glDeleteProgram(createdProgram);
@@ -57,7 +42,6 @@ public final class PlayerDebugRenderer implements AutoCloseable {
         program = createdProgram;
         vao = createdVao;
         vbo = createdVbo;
-        texture = createdTexture;
     }
 
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose) {
@@ -65,6 +49,8 @@ public final class PlayerDebugRenderer implements AutoCloseable {
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
         Objects.requireNonNull(pose);
+        int texture = skins.texture();
+        if (texture == 0) return;
         boolean depth = glIsEnabled(GL_DEPTH_TEST), mask = glGetBoolean(GL_DEPTH_WRITEMASK);
         boolean blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
         int depthFunction = glGetInteger(GL_DEPTH_FUNC);
@@ -124,7 +110,6 @@ public final class PlayerDebugRenderer implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        glDeleteTextures(texture);
         glDeleteBuffers(vbo);
         glDeleteVertexArrays(vao);
         glDeleteProgram(program);

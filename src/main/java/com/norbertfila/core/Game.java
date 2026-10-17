@@ -5,6 +5,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.generation.*;
 import com.norbertfila.i18n.Translations;
 import com.norbertfila.meshing.WaterMesher;
+import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.LanguagePreferences;
 import com.norbertfila.persistence.ViewDistancePreferences;
@@ -32,18 +33,21 @@ public final class Game {
         settings.setCrosshair(crosshairPreferences.load());
         var distancePreferences = new ViewDistancePreferences();
         distancePreferences.loadInto(settings);
+        var appearancePreferences = new AppearancePreferences();
+        settings.setModelVariant(appearancePreferences.load());
         try (Window window = new Window(1280, 720, "Voxel Engine");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
+                SkinManager skins = new SkinManager();
                 WorldIo io = new WorldIo();
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
-            var loop = new GameLoop();
+            var loop = new GameLoop(skins);
             TerrainConfig config = TerrainConfig.defaults();
             int version = new TerrainGenerator(0, config).generatorVersion();
             var catalog =
                     new WorldCatalog(Path.of(System.getProperty("voxel.worlds", "saves/worlds")), "default", version);
-            var menu = new WorldMenu(io, catalog, "default", version, settings);
+            var menu = new WorldMenu(io, catalog, "default", version, settings, skins);
             var session = new GameSession(
                     io, seed -> new TerrainGenerator(seed, config), new WaterMesher(), terrainDemand(config));
             while (!window.shouldClose()) {
@@ -66,6 +70,7 @@ public final class Game {
             languagePreferences.save(settings.translations().language());
             crosshairPreferences.save(settings.crosshair());
             distancePreferences.save(settings);
+            appearancePreferences.save(settings.modelVariant());
         }
     }
 

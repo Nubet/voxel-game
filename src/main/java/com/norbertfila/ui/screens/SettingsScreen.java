@@ -3,7 +3,9 @@ package com.norbertfila.ui.screens;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
+import com.norbertfila.player.visual.model.ModelVariant;
 import com.norbertfila.render.CloudMode;
+import com.norbertfila.render.SkinManager;
 import com.norbertfila.ui.*;
 import com.norbertfila.ui.crosshair.CrosshairSettings;
 import java.util.Objects;
@@ -19,9 +21,12 @@ public final class SettingsScreen implements Screen {
     private final Translations translations;
     private final Consumer<CrosshairSettings> saveCrosshair;
     private final Runnable saveDistances;
+    private final SkinManager skins;
+    private final Consumer<ModelVariant> saveAppearance;
     private Screen child;
     private final Button distances = new Button(new UiBounds(20, 30, 280, 20), "");
     private final Button crosshair = new Button(new UiBounds(204, 2, 92, 18), "");
+    private final Button appearance = new Button(new UiBounds(108, 2, 92, 18), "");
     private final Slider fieldOfView = new Slider(
             new UiBounds(CAMERA_X, FOV_Y, CAMERA_WIDTH, 12),
             (int) GameSettings.MIN_FIELD_OF_VIEW,
@@ -53,9 +58,20 @@ public final class SettingsScreen implements Screen {
     }
 
     public SettingsScreen(GameSettings settings, Consumer<CrosshairSettings> saveCrosshair, Runnable saveDistances) {
+        this(settings, saveCrosshair, saveDistances, null, ignored -> {});
+    }
+
+    public SettingsScreen(
+            GameSettings settings,
+            Consumer<CrosshairSettings> saveCrosshair,
+            Runnable saveDistances,
+            SkinManager skins,
+            Consumer<ModelVariant> saveAppearance) {
         this.settings = Objects.requireNonNull(settings);
         this.saveCrosshair = Objects.requireNonNull(saveCrosshair);
         this.saveDistances = Objects.requireNonNull(saveDistances);
+        this.skins = skins;
+        this.saveAppearance = Objects.requireNonNull(saveAppearance);
         translations = settings.translations();
         syncControls();
     }
@@ -75,8 +91,9 @@ public final class SettingsScreen implements Screen {
             else if (guiScale.bounds().contains(x, y)) focus(5);
             else if (clouds.bounds().contains(x, y)) focus(6);
             else if (language.bounds().contains(x, y)) focus(7);
-            else if (crosshair.bounds().contains(x, y)) focus(8);
-            else if (back.bounds().contains(x, y)) focus(9);
+            else if (appearance.bounds().contains(x, y)) focus(8);
+            else if (crosshair.bounds().contains(x, y)) focus(9);
+            else if (back.bounds().contains(x, y)) focus(10);
             else focus(-1);
         }
         if (fieldOfView.updatePointer(down, pressed, x, y)) settings.setFieldOfView(fieldOfView.value());
@@ -90,6 +107,7 @@ public final class SettingsScreen implements Screen {
         boolean close = back.updatePointer(down, pressed, x, y);
         if (distances.updatePointer(down, pressed, x, y)) openChild(new ViewDistanceScreen(settings));
         if (crosshair.updatePointer(down, pressed, x, y)) openChild(new CrosshairSettingsScreen(settings));
+        if (appearance.updatePointer(down, pressed, x, y)) openChild(new AppearanceScreen(settings, skins));
         syncControls();
         return close ? closeSettings() : Action.NONE;
     }
@@ -102,8 +120,8 @@ public final class SettingsScreen implements Screen {
         syncControls();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
             int direction = key == UiKey.NEXT ? 1 : -1;
-            int current = focusIndex < 0 ? (direction > 0 ? -1 : 10) : focusIndex;
-            focus(Math.floorMod(current + direction, 10));
+            int current = focusIndex < 0 ? (direction > 0 ? -1 : 11) : focusIndex;
+            focus(Math.floorMod(current + direction, 11));
         } else {
             switch (focusIndex) {
                 case 0 -> {
@@ -131,9 +149,12 @@ public final class SettingsScreen implements Screen {
                     if (language.keyPress(key)) cycleLanguage();
                 }
                 case 8 -> {
-                    if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
+                    if (appearance.keyPress(key)) openChild(new AppearanceScreen(settings, skins));
                 }
                 case 9 -> {
+                    if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
+                }
+                case 10 -> {
                     if (back.keyPress(key)) return closeSettings();
                 }
                 default -> {}
@@ -149,6 +170,7 @@ public final class SettingsScreen implements Screen {
         pointerReady = false;
         distances.cancelInteraction();
         crosshair.cancelInteraction();
+        appearance.cancelInteraction();
         fieldOfView.cancelInteraction();
         zoomFieldOfView.cancelInteraction();
         mouseSensitivity.cancelInteraction();
@@ -173,6 +195,7 @@ public final class SettingsScreen implements Screen {
         int dx = panelX - PANEL_X, dy = panelY - PANEL_Y;
         distances.setPosition(panelX + 12, panelY + 30);
         crosshair.setPosition(panelX + 204, panelY + 2);
+        appearance.setPosition(panelX + 100, panelY + 2);
         fieldOfView.setPosition(CAMERA_X + dx, FOV_Y + dy);
         zoomFieldOfView.setPosition(CAMERA_X + dx, ZOOM_FOV_Y + dy);
         mouseSensitivity.setPosition(CAMERA_X + dx, SENSITIVITY_Y + dy);
@@ -203,6 +226,7 @@ public final class SettingsScreen implements Screen {
         language.setLabel(translations.language().displayName());
         back.setLabel(translations.text("action.back"));
         crosshair.setLabel(translations.text("crosshair.title"));
+        appearance.setLabel(translations.text("appearance.title"));
     }
 
     private void focus(int index) {
@@ -215,8 +239,9 @@ public final class SettingsScreen implements Screen {
         guiScale.setFocused(index == 5);
         clouds.setFocused(index == 6);
         language.setFocused(index == 7);
-        crosshair.setFocused(index == 8);
-        back.setFocused(index == 9);
+        appearance.setFocused(index == 8);
+        crosshair.setFocused(index == 9);
+        back.setFocused(index == 10);
     }
 
     private void cycleGuiScale() {
@@ -265,6 +290,7 @@ public final class SettingsScreen implements Screen {
         label(canvas, translations.text("settings.language"), LANGUAGE_Y + 3);
         distances.render(canvas, BitmapFont.DEFAULT);
         crosshair.render(canvas, BitmapFont.DEFAULT);
+        appearance.render(canvas, BitmapFont.DEFAULT);
         fieldOfView.render(canvas);
         zoomFieldOfView.render(canvas);
         mouseSensitivity.render(canvas);
@@ -289,6 +315,7 @@ public final class SettingsScreen implements Screen {
         if (action != Action.CLOSE) return action;
         if (child instanceof CrosshairSettingsScreen) saveCrosshair.accept(settings.crosshair());
         if (child instanceof ViewDistanceScreen) saveDistances.run();
+        if (child instanceof AppearanceScreen) saveAppearance.accept(settings.modelVariant());
         child.cancelInteraction();
         child = null;
         cancelInteraction();
@@ -297,11 +324,16 @@ public final class SettingsScreen implements Screen {
 
     private Action closeSettings() {
         saveDistances.run();
+        saveAppearance.accept(settings.modelVariant());
         return Action.CLOSE;
     }
 
     public Button distancesButton() {
         return distances;
+    }
+
+    public Button appearanceButton() {
+        return appearance;
     }
 
     public Button crosshairButton() {

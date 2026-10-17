@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class PlayerSkinTest {
     @Test
     void defaultHasMirroredLegacyLimbsAndTransparentOuterLayers() {
-        var pixels = PlayerSkin.loadDefault().rgba();
+        var pixels = SkinLoader.loadDefault().rgba();
         int[][] regions = {
             {4, 16, 20, 48, 4, 4}, {8, 16, 24, 48, 4, 4}, {8, 20, 16, 52, 4, 12},
             {4, 20, 20, 52, 4, 12}, {0, 20, 24, 52, 4, 12}, {12, 20, 28, 52, 4, 12},
@@ -35,7 +35,7 @@ class PlayerSkinTest {
         var image = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         image.setRGB(1, 2, 0x7f123456);
         image.setRGB(1, 61, 0xffabcdef);
-        var skin = PlayerSkin.read(png(image));
+        var skin = SkinLoader.read(png(image));
         var rgba = skin.rgba();
         assertEquals(0x12, Byte.toUnsignedInt(rgba[(2 * 64 + 1) * 4]));
         assertEquals(0x7f, Byte.toUnsignedInt(rgba[(2 * 64 + 1) * 4 + 3]));
@@ -51,9 +51,9 @@ class PlayerSkinTest {
     void rejectsLegacyDimensionsNonRgbaAndCorruptImages() throws IOException {
         var legacy = png(new BufferedImage(64, 32, BufferedImage.TYPE_INT_ARGB));
         var rgb = png(new BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB));
-        assertThrows(IOException.class, () -> PlayerSkin.read(legacy));
-        assertThrows(IOException.class, () -> PlayerSkin.read(rgb));
-        assertThrows(IOException.class, () -> PlayerSkin.read(new ByteArrayInputStream(new byte[] {1, 2, 3})));
+        assertThrows(IOException.class, () -> SkinLoader.read(legacy));
+        assertThrows(IOException.class, () -> SkinLoader.read(rgb));
+        assertThrows(IOException.class, () -> SkinLoader.read(new ByteArrayInputStream(new byte[] {1, 2, 3})));
         assertThrows(IllegalArgumentException.class, () -> new PlayerSkin(new byte[64 * 32 * 4]));
     }
 

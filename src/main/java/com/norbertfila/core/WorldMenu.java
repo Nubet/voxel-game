@@ -1,9 +1,11 @@
 package com.norbertfila.core;
 
 import com.norbertfila.i18n.Translations;
+import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.ViewDistancePreferences;
 import com.norbertfila.persistence.world.*;
+import com.norbertfila.render.SkinManager;
 import com.norbertfila.ui.*;
 import com.norbertfila.ui.screens.*;
 import java.time.Instant;
@@ -35,6 +37,7 @@ public final class WorldMenu implements Screen {
     private final String generatorId;
     private final int generatorVersion;
     private final GameSettings settings;
+    private final SkinManager skins;
     private final Translations translations;
     private State state = State.MAIN;
     private Screen screen;
@@ -51,7 +54,18 @@ public final class WorldMenu implements Screen {
 
     public WorldMenu(
             WorldIo io, WorldCatalog catalog, String generatorId, int generatorVersion, GameSettings settings) {
+        this(io, catalog, generatorId, generatorVersion, settings, null);
+    }
+
+    public WorldMenu(
+            WorldIo io,
+            WorldCatalog catalog,
+            String generatorId,
+            int generatorVersion,
+            GameSettings settings,
+            SkinManager skins) {
         this.settings = Objects.requireNonNull(settings);
+        this.skins = skins;
         translations = settings.translations();
         screen = new MainMenuScreen(false, translations);
         this.io = Objects.requireNonNull(io);
@@ -161,7 +175,9 @@ public final class WorldMenu implements Screen {
                     new SettingsScreen(
                             settings,
                             new CrosshairPreferences()::save,
-                            () -> new ViewDistancePreferences().save(settings)));
+                            () -> new ViewDistancePreferences().save(settings),
+                            skins,
+                            new AppearancePreferences()::save));
         else if (state == State.MAIN && action == Action.PLAY) scan();
         else if (state == State.SELECTING && action instanceof Action.ShowCreateWorld) {
             form = new CreateWorldScreen(translations);
