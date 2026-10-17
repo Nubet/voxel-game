@@ -18,6 +18,8 @@ public final class BiomeResolver {
                 case RIVER -> BiomeType.RIVER;
                 case NONE -> throw new IllegalStateException("Flooded column without water");
             };
+        BiomeType climateBiome = resolve(climate);
+        if (climateBiome == BiomeType.BADLANDS) return climateBiome;
         float temperature = ClimateRules.temperature(climate, height, baseHeight);
         boolean highland = height > (long) baseHeight + 48;
         if (highland && temperature < -.55f) return BiomeType.ALPINE;
@@ -29,7 +31,6 @@ public final class BiomeResolver {
                 && slope < .8
                 && height >= (long) waterLevel - 1
                 && height <= (long) waterLevel + 2) return BiomeType.SWAMP;
-        BiomeType climateBiome = resolve(climate);
         return climateBiome == BiomeType.SWAMP ? BiomeType.FOREST : climateBiome;
     }
 

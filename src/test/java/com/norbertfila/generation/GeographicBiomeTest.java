@@ -134,13 +134,13 @@ class GeographicBiomeTest {
                 false,
                 false,
                 layers);
-        for (int y = 32; y <= 80; y++) assertEquals(layers.bandAt(y), summary.materialAt(y));
-        assertEquals(BlockId.STONE, summary.materialAt(31));
+        for (int y = -16; y <= 80; y++) assertEquals(layers.bandAt(y), summary.materialAt(y));
+        assertEquals(BlockId.STONE, summary.materialAt(-17));
         var summaries = new TerrainSummary[256];
         java.util.Arrays.fill(summaries, summary);
         var column = TerrainColumn.of(summaries, java.util.List.of());
         assertEquals(-1, column.uniformBlock(48));
-        assertEquals(BlockId.STONE, column.uniformBlock(0));
+        assertEquals(BlockId.STONE, column.uniformBlock(-48));
     }
 
     @Test

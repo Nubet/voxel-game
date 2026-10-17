@@ -106,8 +106,8 @@ class BadlandsSurfaceTest {
         var column = new BadlandsSurface(42).column(513, -257);
         byte top = column.surfaceAt(120, 28);
         assertEquals(column.bandAt(120), top);
-        for (int y = 72; y <= 120; y++) assertEquals(column.bandAt(y), column.materialAt(y, 120, top));
-        assertEquals(BlockId.STONE, column.materialAt(71, 120, top));
+        for (int y = 24; y <= 120; y++) assertEquals(column.bandAt(y), column.materialAt(y, 120, top));
+        assertEquals(BlockId.STONE, column.materialAt(23, 120, top));
         assertThrows(IllegalArgumentException.class, () -> column.materialAt(121, 120, top));
     }
 
@@ -124,7 +124,7 @@ class BadlandsSurfaceTest {
                         top,
                         layers.materialAt(height - 1, height, top),
                         BlockId.STONE,
-                        -64,
+                        -128,
                         28,
                         BiomeType.BADLANDS,
                         new ClimateSample(.5f, 0),
@@ -135,12 +135,12 @@ class BadlandsSurfaceTest {
             }
             var column = TerrainColumn.of(summaries, java.util.List.of());
             for (int index = 0; index < summaries.length; index++)
-                for (int y = -65; y <= height + 1; y++)
+                for (int y = -129; y <= height + 1; y++)
                     assertEquals(summaries[index].materialAt(y), column.materialAt(index, y));
             assertEquals(-1, column.uniformBlock(height - 32));
-            assertEquals(BlockId.STONE, column.uniformBlock(height - 80));
-            assertEquals(BlockId.BEDROCK, column.materialAt(0, -64));
-            assertEquals(BlockId.AIR, column.materialAt(0, -65));
+            assertEquals(BlockId.STONE, column.uniformBlock(height - 128));
+            assertEquals(BlockId.BEDROCK, column.materialAt(0, -128));
+            assertEquals(BlockId.AIR, column.materialAt(0, -129));
         }
     }
 

@@ -2,6 +2,7 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.generation.biome.BadlandsSurface;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
@@ -16,6 +17,28 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 class BadlandsGenerationTest {
+    @Test
+    void naturalBadlandsContainTallFormationsWithTerracottaCliffs() {
+        var generator = new TerrainGenerator(42, TerrainConfig.defaults());
+        int formations = 0, isolated = 0;
+        for (int z = -4096; z <= 4096; z += 64)
+            for (int x = -4096; x <= 4096; x += 64) {
+                var peak = generator.sample(x, z);
+                if (peak.biome() != BiomeType.BADLANDS || BadlandsLandforms.weight(peak.climate()) < .9) continue;
+                int floor = Math.min(generator.surfaceHeight(x - 24, z), generator.surfaceHeight(x + 24, z));
+                floor = Math.min(
+                        floor, Math.min(generator.surfaceHeight(x, z - 24), generator.surfaceHeight(x, z + 24)));
+                if (peak.surfaceHeight() - floor < 45) continue;
+                assertNotEquals(BlockId.STONE, peak.materialAt(floor + 1));
+                formations++;
+                int rim = Math.max(generator.surfaceHeight(x - 24, z), generator.surfaceHeight(x + 24, z));
+                rim = Math.max(rim, Math.max(generator.surfaceHeight(x, z - 24), generator.surfaceHeight(x, z + 24)));
+                if (peak.surfaceHeight() - rim > 20) isolated++;
+            }
+        assertTrue(formations > 5, "Natural Badlands must contain multiple tall formations");
+        assertTrue(isolated > 0, "Some formations must rise above their surroundings on all four sides");
+    }
+
     @Test
     void cliffFixtureExposesAllSevenTerracottasAboveTheRedSandFloor() {
         var scene = new BadlandsCliffScene();
@@ -39,13 +62,13 @@ class BadlandsGenerationTest {
     @Test
     void realBadlandsChunksMatchTheirSummariesApartFromCarvedAir() {
         var generator = new TerrainGenerator(42, TerrainConfig.defaults());
-        for (int[] site : new int[][] {{-1408, -1440}, {-2016, -1472}}) {
+        for (int[] site : new int[][] {{-1408, -1440}, {-2016, -1472}, {3072, -3136}, {-1664, 2560}}) {
             var center = generator.sample(site[0], site[1]);
             assertEquals(BiomeType.BADLANDS, center.biome());
             assertNotNull(center.badlands());
             assertEquals(site[0] == -1408, center.surfaceMaterial() == BlockId.RED_SAND);
             int compared = 0;
-            for (int cy = Math.floorDiv(center.surfaceHeight() - 48, 16);
+            for (int cy = Math.floorDiv(center.surfaceHeight() - BadlandsSurface.TERRACOTTA_DEPTH, 16);
                     cy <= Math.floorDiv(center.surfaceHeight(), 16);
                     cy++) {
                 var position = new ChunkPos(Math.floorDiv(site[0], 16), cy, Math.floorDiv(site[1], 16));
@@ -56,7 +79,8 @@ class BadlandsGenerationTest {
                         if (summary.biome() != BiomeType.BADLANDS) continue;
                         for (int y = 0; y < 16; y++) {
                             int worldY = cy * 16 + y;
-                            if (worldY > summary.surfaceHeight() || worldY < summary.surfaceHeight() - 48) continue;
+                            if (worldY > summary.surfaceHeight()
+                                    || worldY < summary.surfaceHeight() - BadlandsSurface.TERRACOTTA_DEPTH) continue;
                             byte actual = chunk.get(x, y, z);
                             if (actual == BlockId.AIR) continue;
                             assertEquals(
@@ -77,7 +101,7 @@ class BadlandsGenerationTest {
         var sequential = new TerrainGenerator(42, config);
         var parallel = new TerrainGenerator(42, config);
         var positions = new ArrayList<ChunkPos>();
-        for (int x = -127; x <= -125; x++) for (int y = 2; y <= 6; y++) positions.add(new ChunkPos(x, y, -92));
+        for (int x = -105; x <= -103; x++) for (int y = 2; y <= 6; y++) positions.add(new ChunkPos(x, y, 160));
         Collections.shuffle(positions, new Random(42));
         try (var workers = Executors.newFixedThreadPool(4)) {
             List<Future<ChunkData>> futures = new ArrayList<>();
