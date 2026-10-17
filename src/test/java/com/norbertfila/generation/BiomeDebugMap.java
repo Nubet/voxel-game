@@ -39,6 +39,7 @@ public final class BiomeDebugMap {
             case FOREST -> new Color(35, 125, 55);
             case DESERT -> new Color(224, 190, 100);
             case TAIGA -> new Color(75, 125, 135);
+            case SNOWY_TAIGA -> new Color(210, 225, 230);
             case SWAMP -> new Color(65, 105, 75);
             case BADLANDS -> new Color(170, 90, 55);
             case ALPINE -> new Color(220, 230, 235);

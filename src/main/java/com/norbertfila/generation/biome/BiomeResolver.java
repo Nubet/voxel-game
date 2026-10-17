@@ -18,10 +18,11 @@ public final class BiomeResolver {
                 case RIVER -> BiomeType.RIVER;
                 case NONE -> throw new IllegalStateException("Flooded column without water");
             };
-        float temperature = climate.temperature() - Math.max(0L, (long) height - baseHeight) * .004f;
+        float temperature = ClimateRules.temperature(climate, height, baseHeight);
         boolean highland = height > (long) baseHeight + 48;
         if (highland && temperature < -.55f) return BiomeType.ALPINE;
         if (highland && (slope > 1.5 || temperature < -.3f)) return BiomeType.STONY_SLOPES;
+        if (temperature < -.45f) return BiomeType.SNOWY_TAIGA;
         if (temperature < -.2f) return BiomeType.TAIGA;
         if (climate.humidity() > .15f
                 && nearWater
@@ -37,7 +38,8 @@ public final class BiomeResolver {
     public BiomeType resolve(ClimateSample climate) {
         float temperature = climate.temperature();
         float humidity = climate.humidity();
-        if (temperature < -.2f) return humidity > 0 ? BiomeType.TAIGA : BiomeType.ALPINE;
+        if (temperature < -.45f) return BiomeType.SNOWY_TAIGA;
+        if (temperature < -.2f) return BiomeType.TAIGA;
         if (temperature > .35f && humidity < -.05f) return BiomeType.DESERT;
         if (temperature > .2f && humidity < .25f) return BiomeType.BADLANDS;
         if (humidity > .35f) return temperature < .4f ? BiomeType.SWAMP : BiomeType.FOREST;

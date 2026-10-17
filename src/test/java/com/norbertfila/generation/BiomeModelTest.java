@@ -17,8 +17,9 @@ class BiomeModelTest {
     void resolvesClimateBands() {
         assertEquals(BiomeType.DESERT, resolver.resolve(new ClimateSample(.8f, -.8f)));
         assertEquals(BiomeType.SWAMP, resolver.resolve(new ClimateSample(.2f, .8f)));
-        assertEquals(BiomeType.TAIGA, resolver.resolve(new ClimateSample(-.8f, .8f)));
-        assertEquals(BiomeType.ALPINE, resolver.resolve(new ClimateSample(-.8f, -.8f)));
+        assertEquals(BiomeType.SNOWY_TAIGA, resolver.resolve(new ClimateSample(-.8f, .8f)));
+        assertEquals(BiomeType.SNOWY_TAIGA, resolver.resolve(new ClimateSample(-.8f, -.8f)));
+        assertEquals(BiomeType.TAIGA, resolver.resolve(new ClimateSample(-.3f, .3f)));
         assertEquals(BiomeType.PLAINS, resolver.resolve(new ClimateSample(0, -.8f)));
     }
 

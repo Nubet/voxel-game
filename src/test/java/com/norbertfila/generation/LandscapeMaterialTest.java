@@ -18,7 +18,7 @@ class LandscapeMaterialTest {
     void generatedMountainTransectHasRootableTaigaThenRockThenSnow() {
         var terrain = new TerrainGenerator(0, TerrainConfig.defaults());
         int[] xs = {1088, 1184, 1216};
-        BiomeType[] biomes = {BiomeType.TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE};
+        BiomeType[] biomes = {BiomeType.SNOWY_TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE};
         byte[] ground = {BlockId.PODZOL, BlockId.STONE, BlockId.SNOW};
         for (int i = 0; i < xs.length; i++) {
             var sample = terrain.sample(xs[i], -384);
