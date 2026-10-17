@@ -8,6 +8,24 @@ import org.junit.jupiter.api.Test;
 
 class GeographicBiomeTest {
     @Test
+    void rockyHighlandsSeparateTaigaFromAlpineWithoutTurningLowCliffsIntoMountains() {
+        var resolver = new BiomeResolver();
+        var climate = new ClimateSample(-.21f, 0);
+        assertEquals(BiomeType.TAIGA, resolver.resolve(climate, 40, 32, 0, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.STONY_SLOPES, resolver.resolve(climate, 100, 32, 0, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.ALPINE, resolver.resolve(climate, 120, 32, 0, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.ALPINE, resolver.resolve(climate, 160, 32, 2, false, 28, WaterKind.OCEAN));
+        var warm = new ClimateSample(.4f, .3f);
+        assertEquals(BiomeType.FOREST, resolver.resolve(warm, 40, 32, 2, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.FOREST, resolver.resolve(warm, 100, 32, 0, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.STONY_SLOPES, resolver.resolve(warm, 100, 32, 2, false, 28, WaterKind.OCEAN));
+        assertEquals(BiomeType.LAKE, resolver.resolve(climate, 100, 32, 2, true, 110, WaterKind.LAKE));
+        var slopes = BiomeRegistry.defaults().profile(BiomeType.STONY_SLOPES);
+        assertEquals(0, slopes.trees().density());
+        assertTrue(slopes.vegetation().plants().isEmpty());
+    }
+
+    @Test
     void swampRequiresWaterAndGentleGroundAndAlpineRequiresAltitude() {
         var resolver = new BiomeResolver();
         var humid = new ClimateSample(.2f, .8f);

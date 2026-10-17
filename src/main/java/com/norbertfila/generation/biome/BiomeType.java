@@ -10,5 +10,6 @@ public enum BiomeType {
     ALPINE,
     OCEAN,
     LAKE,
-    RIVER
+    RIVER,
+    STONY_SLOPES
 }
