@@ -1,6 +1,8 @@
 package com.norbertfila.world;
 
 public final class PlantRules {
+    private static final int[][] ATTACHMENT_SIDES = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
     private PlantRules() {}
 
     public static boolean isPlant(byte id) {
@@ -144,8 +146,7 @@ public final class PlantRules {
         int id = Byte.toUnsignedInt(plant);
         boolean vine = id <= Byte.toUnsignedInt(BlockId.VINE_NORTH);
         int side = (id - Byte.toUnsignedInt(vine ? BlockId.VINE_EAST : BlockId.COCOA_EAST)) % 4;
-        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-        long x = (long) p.x() + directions[side][0], z = (long) p.z() + directions[side][1];
+        long x = (long) p.x() + ATTACHMENT_SIDES[side][0], z = (long) p.z() + ATTACHMENT_SIDES[side][1];
         if (x < Integer.MIN_VALUE || x > Integer.MAX_VALUE || z < Integer.MIN_VALUE || z > Integer.MAX_VALUE)
             return false;
         var support = world.getBlock(new BlockPos((int) x, p.y(), (int) z));

@@ -13,7 +13,7 @@ import java.util.Objects;
  *       VisibleFaceMesher#NORMALS} order, 6 and 7 the two cross-plant planes); bits 18-21 width - 1; bits 22-25
  *       height - 1; bit 26 back side of a cross plane.
  *   <li>word 1: bits 0-7 texture layer; bits 8-12 biome tint; bits 16-23 block ID;
- *       bits 24-26 model top in eighths (zero denotes full height).
+ *       bits 24-26 model top in eighths (zero denotes full height); bits 27-31 attached model geometry index.
  * </ul>
  *
  * <p>Water records ({@link Format#WATER}, four ints):

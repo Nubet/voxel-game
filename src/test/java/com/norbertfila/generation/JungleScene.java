@@ -6,10 +6,16 @@ import com.norbertfila.world.*;
 final class JungleScene implements TerrainSource {
     private final TreeGenerator trees = new TreeGenerator(42, (x, z) -> 1, this);
     private final boolean slope;
+    private final boolean tropical;
     private final JungleVegetation jungle = new JungleVegetation(42);
 
     JungleScene(boolean slope) {
+        this(slope, true);
+    }
+
+    JungleScene(boolean slope, boolean tropical) {
         this.slope = slope;
+        this.tropical = tropical;
     }
 
     public int surfaceHeight(int x, int z) {
@@ -24,7 +30,7 @@ final class JungleScene implements TerrainSource {
                 BlockId.STONE,
                 WorldBounds.MIN_Y,
                 TerrainSummary.NO_WATER,
-                BiomeType.JUNGLE,
+                tropical ? BiomeType.JUNGLE : BiomeType.FOREST,
                 new ClimateSample(.7f, .7f));
     }
 

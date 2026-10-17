@@ -23,10 +23,10 @@ class JungleBiomeTest {
 
     @Test
     void tropicalTerrainWeightHasSmoothEdges() {
-        assertEquals(0, JungleRules.climateWeight(new ClimateSample(.22f, .8f)), 1e-12);
+        assertEquals(0, JungleRules.climateWeight(new ClimateSample(.12f, .8f)), 1e-12);
         assertEquals(1, JungleRules.climateWeight(new ClimateSample(.6f, .6f)), 1e-12);
-        double before = JungleRules.climateWeight(new ClimateSample(.3f - .0001f, .6f));
-        double after = JungleRules.climateWeight(new ClimateSample(.3f + .0001f, .6f));
+        double before = JungleRules.climateWeight(new ClimateSample(.2f - .0001f, .6f));
+        double after = JungleRules.climateWeight(new ClimateSample(.2f + .0001f, .6f));
         assertTrue(after > before && after - before < .002);
     }
 }

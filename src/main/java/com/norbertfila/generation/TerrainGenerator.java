@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 36;
+    private static final int GENERATOR_VERSION = 37;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -128,8 +128,10 @@ public final class TerrainGenerator implements TerrainSource {
             throw new IllegalArgumentException("Canopy query overflow");
         var trees = new java.util.LinkedHashSet<TreeGenerator.Tree>();
         for (int z = Math.floorDiv(originZ, 16); z <= Math.floorDiv((int) endZ, 16); z++)
-            for (int x = Math.floorDiv(originX, 16); x <= Math.floorDiv((int) endX, 16); x++)
+            for (int x = Math.floorDiv(originX, 16); x <= Math.floorDiv((int) endX, 16); x++) {
+                if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
                 trees.addAll(forestAt(x, z));
+            }
         var result = new ArrayList<Canopy>();
         for (var tree : trees) {
             if (tree.plan() == null) continue;

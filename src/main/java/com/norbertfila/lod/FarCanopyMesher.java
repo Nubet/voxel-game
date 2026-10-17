@@ -8,6 +8,7 @@ final class FarCanopyMesher {
     static int[] mesh(TerrainSource source, int ox, int oz, int sampleStep, AreaEdits edits) {
         var out = new IntList();
         for (var canopy : source.canopies(ox, oz, 64)) {
+            if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
             int step = sampleStep < 8 ? 2 : 4;
             for (int c = 0; c < edits.columnCount(); c++)
                 if (Math.abs((long) edits.columnX(c) - canopy.x()) <= canopy.radius()
@@ -31,13 +32,13 @@ final class FarCanopyMesher {
                             FarTileMesher.add(out, x, y + 1, z + step, 2, false, step, step, texture, false);
                         if (!present(canopy, sx, y - 1, sz, edits))
                             FarTileMesher.add(out, x, y, z, 3, false, step, step, texture, false);
-                        if (!present(canopy, sx + step, y, sz, edits))
+                        if (!present(canopy, (long) sx + step, y, sz, edits))
                             FarTileMesher.add(out, x + step, y, z, 0, false, step, 1, texture, false);
-                        if (!present(canopy, sx - step, y, sz, edits))
+                        if (!present(canopy, (long) sx - step, y, sz, edits))
                             FarTileMesher.add(out, x, y, z + step, 1, false, step, 1, texture, false);
-                        if (!present(canopy, sx, y, sz + step, edits))
+                        if (!present(canopy, sx, y, (long) sz + step, edits))
                             FarTileMesher.add(out, x + step, y, z + step, 4, false, step, 1, texture, false);
-                        if (!present(canopy, sx, y, sz - step, edits))
+                        if (!present(canopy, sx, y, (long) sz - step, edits))
                             FarTileMesher.add(out, x, y, z, 5, false, step, 1, texture, false);
                     }
                 }
@@ -45,7 +46,10 @@ final class FarCanopyMesher {
         return out.toArray();
     }
 
-    private static boolean present(Canopy canopy, int x, int y, int z, AreaEdits edits) {
+    private static boolean present(Canopy canopy, long wx, int y, long wz, AreaEdits edits) {
+        if (wx < Integer.MIN_VALUE || wx > Integer.MAX_VALUE || wz < Integer.MIN_VALUE || wz > Integer.MAX_VALUE)
+            return false;
+        int x = (int) wx, z = (int) wz;
         if (!canopy.contains(x, y, z)) return false;
         int column = edits.find(x, z);
         if (column >= 0)

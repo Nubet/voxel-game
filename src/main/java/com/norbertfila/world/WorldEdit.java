@@ -100,30 +100,34 @@ public final class WorldEdit {
     public List<ChunkPos> validatePlants(ChunkPos loaded) {
         if (!world.hasChunk(loaded)) return List.of();
         Set<ChunkPos> dirty = new LinkedHashSet<>();
-        validatePlantsIn(loaded, false, dirty);
+        validatePlantsIn(loaded, 0, Chunk.SIZE, dirty);
         for (int[] d : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
             long x = (long) loaded.x() + d[0], z = (long) loaded.z() + d[1];
             if (x < Integer.MIN_VALUE || x > Integer.MAX_VALUE || z < Integer.MIN_VALUE || z > Integer.MAX_VALUE)
                 continue;
             var neighbor = new ChunkPos((int) x, loaded.y(), (int) z);
-            if (world.hasChunk(neighbor)) validatePlantsIn(neighbor, false, dirty);
+            if (world.hasChunk(neighbor)) validatePlantsIn(neighbor, 0, Chunk.SIZE, dirty);
             if (loaded.y() < Integer.MAX_VALUE) {
                 var aboveNeighbor = new ChunkPos((int) x, loaded.y() + 1, (int) z);
-                if (world.hasChunk(aboveNeighbor)) validatePlantsIn(aboveNeighbor, true, dirty);
+                if (world.hasChunk(aboveNeighbor)) validatePlantsIn(aboveNeighbor, 0, 1, dirty);
             }
         }
         if (loaded.y() < Integer.MAX_VALUE) {
             ChunkPos above = new ChunkPos(loaded.x(), loaded.y() + 1, loaded.z());
-            if (world.hasChunk(above)) validatePlantsIn(above, true, dirty);
+            if (world.hasChunk(above)) validatePlantsIn(above, 0, 1, dirty);
+        }
+        if (loaded.y() > Integer.MIN_VALUE) {
+            var below = new ChunkPos(loaded.x(), loaded.y() - 1, loaded.z());
+            if (world.hasChunk(below)) validatePlantsIn(below, Chunk.SIZE - 1, Chunk.SIZE, dirty);
         }
         return List.copyOf(dirty);
     }
 
-    private void validatePlantsIn(ChunkPos chunkPos, boolean bottomOnly, Set<ChunkPos> dirty) {
+    private void validatePlantsIn(ChunkPos chunkPos, int minY, int maxY, Set<ChunkPos> dirty) {
         Chunk chunk = world.getChunk(chunkPos);
         int uniform = chunk.uniformBlock();
         if (uniform >= 0 && !PlantRules.isPlant((byte) uniform)) return;
-        for (int y = 0; y < (bottomOnly ? 1 : Chunk.SIZE); y++)
+        for (int y = minY; y < maxY; y++)
             for (int z = 0; z < Chunk.SIZE; z++)
                 for (int x = 0; x < Chunk.SIZE; x++) {
                     if (!PlantRules.isPlant(chunk.get(x, y, z))) continue;
