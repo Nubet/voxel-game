@@ -37,6 +37,7 @@ public final class BiomeDebugMap {
         return switch (biome) {
             case PLAINS -> new Color(145, 205, 95);
             case FOREST -> new Color(35, 125, 55);
+            case JUNGLE -> new Color(25, 95, 30);
             case DESERT -> new Color(224, 190, 100);
             case TAIGA -> new Color(75, 125, 135);
             case SNOWY_TAIGA -> new Color(210, 225, 230);

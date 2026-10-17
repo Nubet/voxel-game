@@ -94,6 +94,12 @@ public final class BiomeRegistry {
                         new VegetationProfile(
                                 .08f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.MUSHROOM), .7f, .01f),
                         new TreeProfile(.45f, TreeType.CONIFER)));
+        profiles.put(
+                BiomeType.JUNGLE,
+                new BiomeProfile(
+                        new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
+                        new VegetationProfile(.8f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN), .65f, 0),
+                        new TreeProfile(.9f, TreeType.JUNGLE)));
         return new BiomeRegistry(profiles);
     }
 
