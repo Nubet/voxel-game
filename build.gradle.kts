@@ -241,3 +241,13 @@ tasks.register<JavaExec>("smokeFarTerrain") {
     args(output.get().asFile.absolutePath)
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
+
+tasks.register<JavaExec>("smokeBadlands") {
+    group = "verification"
+    description = "Renders Badlands lowlands and strata with near chunks and four Far LOD steps."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.BadlandsSmoke")
+    args(layout.buildDirectory.dir("badlands-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
