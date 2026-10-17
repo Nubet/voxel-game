@@ -42,6 +42,9 @@ public final class BiomeDebugMap {
             case SWAMP -> new Color(65, 105, 75);
             case BADLANDS -> new Color(170, 90, 55);
             case ALPINE -> new Color(220, 230, 235);
+            case OCEAN -> new Color(30, 70, 160);
+            case LAKE -> new Color(55, 125, 190);
+            case RIVER -> new Color(80, 160, 210);
         };
     }
 }

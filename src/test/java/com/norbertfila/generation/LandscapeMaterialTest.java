@@ -19,7 +19,7 @@ class LandscapeMaterialTest {
         var biomes = new com.norbertfila.generation.biome.BiomeResolver();
         for (float humidity : new float[] {-.01f, .01f}) {
             var climate = new ClimateSample(-.21f, humidity);
-            var profile = registry.profile(biomes.resolve(climate, 40, 32, 0, false, 28));
+            var profile = registry.profile(biomes.resolve(climate, 40, 32, 0, false, 28, WaterKind.OCEAN));
             assertEquals(
                     BlockId.PODZOL,
                     resolver.resolve(40, 0, 28, 32, climate, profile).surface());

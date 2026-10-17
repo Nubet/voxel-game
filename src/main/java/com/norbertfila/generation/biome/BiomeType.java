@@ -7,5 +7,8 @@ public enum BiomeType {
     TAIGA,
     SWAMP,
     BADLANDS,
-    ALPINE
+    ALPINE,
+    OCEAN,
+    LAKE,
+    RIVER
 }
