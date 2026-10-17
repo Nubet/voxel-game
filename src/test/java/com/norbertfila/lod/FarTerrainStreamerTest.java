@@ -13,6 +13,35 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class FarTerrainStreamerTest {
+    @Test
+    void disablingFarCancelsQueuedWorkAndInterruptsTheRunningBuild() throws Exception {
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var interrupted = new java.util.concurrent.CountDownLatch(1);
+        TerrainSource source = new FlatSource() {
+            @Override
+            public TerrainSummary sample(int x, int z) {
+                started.countDown();
+                try {
+                    new java.util.concurrent.CountDownLatch(1).await();
+                } catch (InterruptedException stopped) {
+                    interrupted.countDown();
+                    Thread.currentThread().interrupt();
+                }
+                return super.sample(x, z);
+            }
+        };
+        try (var streamer = new FarTerrainStreamer(source, overlay, 1)) {
+            streamer.update(8, 8, 2, 16);
+            streamer.process();
+            assertTrue(started.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            streamer.update(8, 8, 2, 0);
+            assertTrue(interrupted.await(2, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(0, streamer.metrics().inFlight());
+            streamer.process();
+            assertTrue(streamer.residency().tiles().isEmpty());
+        }
+    }
+
     private static final int SURFACE = 10;
     private final WorldChangeOverlay overlay = new WorldChangeOverlay();
 

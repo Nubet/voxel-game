@@ -39,6 +39,7 @@ public final class FarTerrainGenerator {
         int center = sampleStep / 2;
         for (int cellZ = 0; cellZ < cells; cellZ++)
             for (int cellX = 0; cellX < cells; cellX++) {
+                if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
                 int x = originX + cellX * sampleStep + center, z = originZ + cellZ * sampleStep + center;
                 TerrainSummary terrain = source.sample(x, z);
                 int column = edits.find(x, z);
@@ -80,6 +81,7 @@ public final class FarTerrainGenerator {
         int originZ = Math.multiplyExact(tileZ, FarTerrainTile.SIZE) + center;
         int[] border = new int[4 * cells];
         for (int cell = 0; cell < cells; cell++) {
+            if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
             int along = cell * sampleStep;
             border[cell] = source.surfaceHeight(originX - sampleStep, originZ + along);
             border[cells + cell] = source.surfaceHeight(originX + FarTerrainTile.SIZE, originZ + along);

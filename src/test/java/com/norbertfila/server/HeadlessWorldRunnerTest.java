@@ -10,9 +10,17 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class HeadlessWorldRunnerTest {
+    private final java.util.List<HeadlessWorldRunner> runners = new java.util.ArrayList<>();
+
+    @AfterEach
+    void closeRunners() {
+        runners.forEach(HeadlessWorldRunner::close);
+    }
+
     @Test
     void runsWorldCoreAndCommandsWithoutGraphicsRuntime() {
         HeadlessWorldRunner runner = runner();
@@ -59,7 +67,10 @@ class HeadlessWorldRunnerTest {
         assertEquals(0, runner.tickCount());
     }
 
-    private static HeadlessWorldRunner runner() {
-        return new HeadlessWorldRunner(new HillsGenerator(123), new ViewDemand(1, 0, 0, ViewDemand.Shape.SQUARE), 8);
+    private HeadlessWorldRunner runner() {
+        var runner =
+                new HeadlessWorldRunner(new HillsGenerator(123), new ViewDemand(1, 0, 0, ViewDemand.Shape.SQUARE), 8);
+        runners.add(runner);
+        return runner;
     }
 }

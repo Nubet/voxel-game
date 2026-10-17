@@ -65,6 +65,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     // bounded by in-flight work. Removal is conditional because an older task may finish after a newer submission.
     private final ConcurrentMap<ChunkPos, TaskKey> latest = new ConcurrentHashMap<>();
     private final Object readyLock = new Object();
+    private volatile boolean closed;
 
     public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity) {
         if (workerCount <= 0 || taskQueueCapacity <= 0 || readyQueueCapacity <= 0) {
@@ -84,6 +85,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     public boolean submit(ChunkTask<T> task) {
         Objects.requireNonNull(task);
+        if (closed) return false;
         cancelled.remove(TaskKey.of(task));
         if (!outstanding.tryAcquire()) return false;
         TaskKey key = TaskKey.of(task);
@@ -276,11 +278,12 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                         task.work().call(),
                         null);
             } catch (Throwable failure) {
-                LOG.log(
-                        Level.SEVERE,
-                        "Chunk task failed position=" + task.position() + " revision=" + task.revision() + " token="
-                                + task.token(),
-                        failure);
+                if (!closed)
+                    LOG.log(
+                            Level.SEVERE,
+                            "Chunk task failed position=" + task.position() + " revision=" + task.revision() + " token="
+                                    + task.token(),
+                            failure);
                 outcome = new ChunkTask.Outcome<T>(
                         task.position(), task.revision(), task.meshDependencyRevision(), task.token(), null, failure);
             }
@@ -291,6 +294,12 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 return;
             }
             synchronized (readyLock) {
+                if (closed) {
+                    outcome.discard();
+                    outstanding.release();
+                    forget(TaskKey.of(task));
+                    return;
+                }
                 if (!ready.offer(outcome)) {
                     throw new IllegalStateException("Reserved chunk result slot unavailable: " + outcome.position());
                 }
@@ -350,6 +359,12 @@ public final class ChunkScheduler<T> implements AutoCloseable {
             TaskKey key = TaskKey.of(task);
             running.add(key);
             try {
+                if (closed || cancelled.contains(key)) {
+                    submitted.remove(key);
+                    outstanding.release();
+                    forget(key);
+                    return;
+                }
                 execute(task);
             } finally {
                 running.remove(key);
@@ -374,9 +389,13 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
     @Override
     public void close() {
-        shutdown();
+        synchronized (readyLock) {
+            closed = true;
+        }
+        shutdownNow();
         try {
-            if (!awaitTermination(Duration.ofSeconds(5))) shutdownNow();
+            if (!awaitTermination(Duration.ofSeconds(5)))
+                LOG.warning("Chunk workers did not terminate within five seconds");
         } catch (InterruptedException interrupted) {
             shutdownNow();
             Thread.currentThread().interrupt();

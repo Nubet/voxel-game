@@ -14,12 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public final class HeadlessWorldRunner {
+public final class HeadlessWorldRunner implements AutoCloseable {
     private final long ownerThreadId = Thread.currentThread().threadId();
     private final World world;
     private final ChunkManager chunks;
     private final WorldEdit edits;
     private long tick;
+    private boolean closed;
 
     public HeadlessWorldRunner(WorldGenerator generator, ViewDemand demand, int farTileSize) {
         this(new World(), generator, demand, farTileSize);
@@ -36,6 +37,7 @@ public final class HeadlessWorldRunner {
 
     public TickResult tick(ChunkPos center, List<? extends Command> commands) {
         assertOwner();
+        if (closed) throw new IllegalStateException("Headless runner is closed");
         Objects.requireNonNull(center);
         Objects.requireNonNull(commands);
         ChunkManager.UpdateResult update = chunks.update(center);
@@ -75,6 +77,15 @@ public final class HeadlessWorldRunner {
     private void assertOwner() {
         if (Thread.currentThread().threadId() != ownerThreadId) {
             throw new IllegalStateException("HeadlessWorldRunner is single-thread owned");
+        }
+    }
+
+    @Override
+    public void close() {
+        assertOwner();
+        if (!closed) {
+            closed = true;
+            chunks.close();
         }
     }
 

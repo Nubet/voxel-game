@@ -403,11 +403,11 @@ public final class ChunkManager implements AutoCloseable {
         long deadline = System.nanoTime() + timeout.toNanos();
         int generated = 0;
         while (generationScheduler.outstandingJobs() > 0) {
-            generated += processResults().generated();
+            generated += processResults(RESULTS_PER_UPDATE, 0).generated();
             if (System.nanoTime() >= deadline) throw new IllegalStateException("Chunk generation timed out");
             Thread.sleep(1);
         }
-        generated += processResults().generated();
+        generated += processResults(RESULTS_PER_UPDATE, 0).generated();
         return generated;
     }
 

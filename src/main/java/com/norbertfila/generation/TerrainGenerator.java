@@ -264,6 +264,7 @@ public final class TerrainGenerator implements TerrainSource {
     @Override
     public ChunkData generate(ChunkPos position) {
         Objects.requireNonNull(position);
+        if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
         int originX = origin(position.x());
         int originY = origin(position.y());
         int originZ = origin(position.z());
@@ -289,6 +290,7 @@ public final class TerrainGenerator implements TerrainSource {
                         blocks[(y * Chunk.SIZE + z) * Chunk.SIZE + x] = column.materialAt(index, originY + y);
                 }
         boolean carved = caveCarver.carve(position, blocks, column.caves());
+        if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
         boolean mineralized = mayHaveOres && ores.generate(position, blocks);
         if (uniform >= 0 && !carved && !mineralized)
             return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);

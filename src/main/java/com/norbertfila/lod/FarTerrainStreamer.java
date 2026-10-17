@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -45,12 +45,14 @@ public final class FarTerrainStreamer implements AutoCloseable {
 
     private final FarTerrainGenerator generator;
     private final WorldChangeOverlay overlay;
-    private final ExecutorService workers;
+    private final ThreadPoolExecutor workers;
+    private final Object completionLock = new Object();
+    private boolean closed;
     private final ConcurrentLinkedQueue<Built> completed = new ConcurrentLinkedQueue<>();
     // Wanted sample step per tile key, and the published meshes.
     private final Map<FarTilePos, Integer> desired = new HashMap<>();
     private final Map<FarTilePos, FarTileMesh> resident = new HashMap<>();
-    private final Map<FarTilePos, Long> inFlight = new HashMap<>();
+    private final Map<FarTilePos, BuildJob> inFlight = new HashMap<>();
     // Tiles to build, nearest first; entries may be outdated and are checked when taken.
     private final ArrayDeque<FarTilePos> queue = new ArrayDeque<>();
     private long nextToken;
@@ -80,6 +82,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
      */
     public void update(double cameraBlockX, double cameraBlockZ, int nearRadiusChunks, int farRadiusChunks) {
         assertOwner();
+        if (closed) throw new IllegalStateException("Far streamer is closed");
         int x = (int) Math.floor(cameraBlockX), z = (int) Math.floor(cameraBlockZ);
         int tileX = Math.floorDiv(x, FarTerrainTile.SIZE), tileZ = Math.floorDiv(z, FarTerrainTile.SIZE);
         int radius = farRadiusChunks > nearRadiusChunks ? farRadiusChunks * Chunk.SIZE : 0;
@@ -107,6 +110,12 @@ public final class FarTerrainStreamer implements AutoCloseable {
                 order.add(new Planned(distance, key));
             }
         changed |= resident.keySet().removeIf(key -> !desired.containsKey(key));
+        inFlight.entrySet().removeIf(entry -> {
+            Integer step = desired.get(entry.getKey());
+            if (step != null && step == entry.getValue().step) return false;
+            cancel(entry.getValue());
+            return true;
+        });
         order.sort(Comparator.comparingLong(Planned::distance));
         queue.clear();
         for (Planned entry : order) if (needsBuild(entry.tile())) queue.add(entry.tile());
@@ -145,18 +154,24 @@ public final class FarTerrainStreamer implements AutoCloseable {
     public void markEdited(List<FarTilePos> tiles) {
         assertOwner();
         for (FarTilePos tile : tiles) {
-            if (desired.containsKey(tile)) queue.addFirst(tile);
+            if (desired.containsKey(tile)) {
+                BuildJob previous = inFlight.remove(tile);
+                if (previous != null) cancel(previous);
+                queue.remove(tile);
+                queue.addFirst(tile);
+            }
         }
     }
 
     /** Accepts finished tiles and starts new builds up to the in-flight bound. */
     public void process() {
         assertOwner();
+        if (closed) return;
         Built built;
         while ((built = completed.poll()) != null) {
             FarTilePos key = built.key();
-            Long token = inFlight.get(key);
-            if (token == null || token != built.token()) continue;
+            BuildJob job = inFlight.get(key);
+            if (job == null || job.token != built.token()) continue;
             inFlight.remove(key);
             builtNanos += built.nanos();
             builtTiles++;
@@ -183,21 +198,47 @@ public final class FarTerrainStreamer implements AutoCloseable {
     }
 
     private void submit(FarTilePos key, int step) {
-        int tileX = key.x(), tileZ = key.z();
         AreaEdits edits = overlay.edits(key.originX(), key.originZ(), FarTerrainTile.SIZE);
         long token = ++nextToken;
-        inFlight.put(key, token);
-        workers.execute(() -> {
-            long started = System.nanoTime();
-            FarTileMesh mesh = null;
-            try {
-                FarTerrainTile tile = generator.generate(tileX, tileZ, step, edits);
-                mesh = FarTileMesh.of(tile, FarTileMesher.mesh(tile, generator.border(tileX, tileZ, step)));
-            } catch (RuntimeException failure) {
+        BuildJob job = new BuildJob(key, step, edits, token);
+        inFlight.put(key, job);
+        workers.execute(job);
+    }
+
+    private void build(FarTilePos key, int step, AreaEdits edits, long token) {
+        int tileX = key.x(), tileZ = key.z();
+        long started = System.nanoTime();
+        FarTileMesh mesh = null;
+        try {
+            FarTerrainTile tile = generator.generate(tileX, tileZ, step, edits);
+            mesh = FarTileMesh.of(tile, FarTileMesher.mesh(tile, generator.border(tileX, tileZ, step)));
+        } catch (Throwable failure) {
+            if (!Thread.currentThread().isInterrupted())
                 LOG.log(Level.SEVERE, "Far tile build failed x=" + tileX + " z=" + tileZ + " step=" + step, failure);
-            }
-            completed.add(new Built(key, token, mesh, System.nanoTime() - started));
-        });
+        }
+        synchronized (completionLock) {
+            if (!closed && !Thread.currentThread().isInterrupted())
+                completed.add(new Built(key, token, mesh, System.nanoTime() - started));
+        }
+    }
+
+    private void cancel(BuildJob job) {
+        job.cancel(true);
+        workers.remove(job);
+    }
+
+    private final class BuildJob extends FutureTask<Void> {
+        private final long token;
+        private final int step;
+
+        BuildJob(FarTilePos key, int step, AreaEdits edits, long token) {
+            super(() -> {
+                build(key, step, edits, token);
+                return null;
+            });
+            this.token = token;
+            this.step = step;
+        }
     }
 
     public Residency residency() {
@@ -212,7 +253,24 @@ public final class FarTerrainStreamer implements AutoCloseable {
 
     @Override
     public void close() {
+        assertOwner();
+        synchronized (completionLock) {
+            closed = true;
+            completed.clear();
+        }
+        inFlight.values().forEach(this::cancel);
+        inFlight.clear();
+        queue.clear();
+        desired.clear();
+        resident.clear();
+        residency = new Residency(residency.revision() + 1, Map.of());
         workers.shutdownNow();
+        try {
+            if (!workers.awaitTermination(5, TimeUnit.SECONDS))
+                LOG.warning("Far workers did not terminate within five seconds");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** Published far tiles by position; the revision changes whenever the map does. */

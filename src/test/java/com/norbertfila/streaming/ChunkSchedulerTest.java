@@ -15,6 +15,38 @@ import org.junit.jupiter.api.Test;
 
 class ChunkSchedulerTest {
     @Test
+    void closeDiscardsWorkEvenWhenItReturnsAfterInterruption() throws Exception {
+        var started = new CountDownLatch(1);
+        var interrupted = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var scheduler = new ChunkScheduler<Integer>(1, 2, 2);
+        assertTrue(scheduler.submitLatest(new ChunkTask<>(new ChunkPos(0, 0, 0), 1, () -> {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException ignored) {
+                interrupted.countDown();
+                release.await();
+            }
+            return 42;
+        })));
+        assertTrue(started.await(2, TimeUnit.SECONDS));
+        Thread closer = new Thread(scheduler::close);
+        closer.start();
+        try {
+            assertTrue(interrupted.await(2, TimeUnit.SECONDS));
+            assertFalse(scheduler.submit(new ChunkTask<>(new ChunkPos(1, 0, 0), 2, () -> 1)));
+        } finally {
+            release.countDown();
+            closer.join(3_000);
+        }
+        assertFalse(closer.isAlive());
+        assertNull(scheduler.pollReady());
+        assertEquals(0, scheduler.outstandingJobs());
+        assertEquals(0, scheduler.metadataEntries());
+    }
+
+    @Test
     void reservesResultCapacityUntilConsumerDrainsIt() throws Exception {
         try (ChunkScheduler<Integer> scheduler = new ChunkScheduler<>(1, 8, 2)) {
             assertTrue(scheduler.submit(new ChunkTask<>(new ChunkPos(0, 0, 0), 0, 0, () -> 0)));
