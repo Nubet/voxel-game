@@ -1,14 +1,19 @@
 package com.norbertfila.generation.biome;
 
+import com.norbertfila.generation.Noise2D;
+import com.norbertfila.generation.PerlinNoise;
 import com.norbertfila.world.BlockId;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Random;
 
 public final class BadlandsSurface {
     private static final int BAND_COUNT = 192;
     private final byte[] bands = new byte[BAND_COUNT];
+    private final Noise2D offsetNoise;
 
     public BadlandsSurface(long seed) {
+        offsetNoise = new PerlinNoise(seed ^ 0xBB67AE8584CAA73BL);
         var random = new Random(seed ^ 0x6A09E667F3BCC909L);
         Arrays.fill(bands, BlockId.TERRACOTTA);
         for (int y = random.nextInt(5); y < bands.length; y += random.nextInt(2, 6))
@@ -31,7 +36,23 @@ public final class BadlandsSurface {
         }
     }
 
-    public byte bandAt(int worldY) {
+    public byte bandAt(long worldY) {
         return bands[Math.floorMod(worldY, bands.length)];
+    }
+
+    public Column column(int worldX, int worldZ) {
+        int offset = (int) Math.round(Math.clamp(offsetNoise.sample(worldX / 256d, worldZ / 256d), -1, 1) * 7);
+        return new Column(this, offset);
+    }
+
+    public record Column(BadlandsSurface surface, int offset) {
+        public Column {
+            Objects.requireNonNull(surface);
+            if (offset < -7 || offset > 7) throw new IllegalArgumentException("Badlands band offset outside [-7, 7]");
+        }
+
+        public byte bandAt(int worldY) {
+            return surface.bandAt((long) worldY + offset);
+        }
     }
 }

@@ -49,4 +49,34 @@ class BadlandsSurfaceTest {
         }
         assertTrue(differs);
     }
+
+    @Test
+    void offsetsVarySmoothlyAcrossWorldAndChunkBoundaries() {
+        var surface = new BadlandsSurface(42);
+        var same = new BadlandsSurface(42);
+        var offsets = new HashSet<Integer>();
+        for (int z = -1024; z <= 1024; z += 31)
+            for (int x = -1024; x <= 1024; x++) {
+                var column = surface.column(x, z);
+                offsets.add(column.offset());
+                assertTrue(Math.abs(column.offset()) <= 7);
+                assertEquals(column.offset(), same.column(x, z).offset());
+                assertTrue(Math.abs(column.offset() - surface.column(x + 1, z).offset()) <= 1);
+                assertTrue(Math.abs(column.offset() - surface.column(x, z + 1).offset()) <= 1);
+                assertEquals(surface.bandAt(80L + column.offset()), column.bandAt(80));
+            }
+        assertTrue(offsets.size() > 3);
+    }
+
+    @Test
+    void offsetsCannotOverflowAtExtremeHeights() {
+        var surface = new BadlandsSurface(42);
+        for (int offset : new int[] {-7, 7}) {
+            var column = new BadlandsSurface.Column(surface, offset);
+            for (int y : new int[] {Integer.MIN_VALUE, Integer.MAX_VALUE})
+                assertEquals(surface.bandAt((long) y + offset), column.bandAt(y));
+        }
+        assertThrows(IllegalArgumentException.class, () -> new BadlandsSurface.Column(surface, 8));
+        assertThrows(IllegalArgumentException.class, () -> new BadlandsSurface.Column(surface, -8));
+    }
 }
