@@ -28,21 +28,24 @@ public final class FarTileMesher {
         int cells = tile.cells();
         if (border.length != 4 * cells) throw new IllegalArgumentException("Border needs four edges of cells");
         IntList records = new IntList();
-        tops(tile, records, false);
-        walls(tile, border, records);
+        tops(tile, records, false, false);
+        walls(tile, border, records, false);
         int solid = records.size() / QuadMesh.Format.FAR.ints();
-        tops(tile, records, true);
+        tops(tile, records, false, true);
+        walls(tile, border, records, true);
+        tops(tile, records, true, false);
         int water = records.size() / QuadMesh.Format.FAR.ints() - solid;
         return new QuadMesh(QuadMesh.Format.FAR, records.toArray(), new QuadRanges(solid, 0, water));
     }
 
     /** Greedy rectangles of cells sharing a height and material, or a water level when {@code water} is set. */
-    private static void tops(FarTerrainTile tile, IntList records, boolean water) {
+    private static void tops(FarTerrainTile tile, IntList records, boolean water, boolean ice) {
         int cells = tile.cells(), step = tile.sampleStep();
         boolean[] done = new boolean[cells * cells];
         for (int z = 0; z < cells; z++)
             for (int x = 0; x < cells; x++) {
                 if (done[z * cells + x] || !hasTop(tile, x, z, water)) continue;
+                if (!water && (tile.materialAt(x, z) == BlockId.ICE) != ice) continue;
                 int height = top(tile, x, z, water);
                 byte material = water ? BlockId.WATER : tile.materialAt(x, z);
                 int endX = x + 1;
@@ -106,13 +109,13 @@ public final class FarTileMesher {
     }
 
     /** Walls toward each of the four neighbors, merged along runs of cells with the same span and material. */
-    private static void walls(FarTerrainTile tile, int[] border, IntList records) {
+    private static void walls(FarTerrainTile tile, int[] border, IntList records, boolean ice) {
         int cells = tile.cells(), step = tile.sampleStep();
         for (int line = 0; line < cells; line++) {
-            wallRun(tile, border, records, line, FACE_POSITIVE_X, cells, step);
-            wallRun(tile, border, records, line, FACE_NEGATIVE_X, cells, step);
-            wallRun(tile, border, records, line, FACE_POSITIVE_Z, cells, step);
-            wallRun(tile, border, records, line, FACE_NEGATIVE_Z, cells, step);
+            wallRun(tile, border, records, line, FACE_POSITIVE_X, cells, step, ice);
+            wallRun(tile, border, records, line, FACE_NEGATIVE_X, cells, step, ice);
+            wallRun(tile, border, records, line, FACE_POSITIVE_Z, cells, step, ice);
+            wallRun(tile, border, records, line, FACE_NEGATIVE_Z, cells, step, ice);
         }
     }
 
@@ -121,7 +124,7 @@ public final class FarTileMesher {
      * for z faces the line is a row z and cells run along x.
      */
     private static void wallRun(
-            FarTerrainTile tile, int[] border, IntList records, int line, int face, int cells, int step) {
+            FarTerrainTile tile, int[] border, IntList records, int line, int face, int cells, int step, boolean ice) {
         boolean xFace = face == FACE_POSITIVE_X || face == FACE_NEGATIVE_X;
         int start = -1, runBottom = 0, runTop = 0, runTexture = 0;
         for (int along = 0; along <= cells; along++) {
@@ -130,7 +133,7 @@ public final class FarTileMesher {
             if (along < cells) {
                 int x = xFace ? line : along, z = xFace ? along : line;
                 int height = tile.heightAt(x, z);
-                if (height != FarTerrainTile.NO_SURFACE) {
+                if (height != FarTerrainTile.NO_SURFACE && (tile.materialAt(x, z) == BlockId.ICE) == ice) {
                     int nx = x + (face == FACE_POSITIVE_X ? 1 : face == FACE_NEGATIVE_X ? -1 : 0);
                     int nz = z + (face == FACE_POSITIVE_Z ? 1 : face == FACE_NEGATIVE_Z ? -1 : 0);
                     boolean edge = nx < 0 || nz < 0 || nx >= cells || nz >= cells;

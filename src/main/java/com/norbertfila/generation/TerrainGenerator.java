@@ -260,7 +260,12 @@ public final class TerrainGenerator implements TerrainSource {
                                 com.norbertfila.generation.biome.ClimateRules.temperature(
                                         column.climate(), height, config.baseHeight()),
                                 slope,
-                                shores.sample(worldX * .018, worldZ * .018)));
+                                shores.sample(worldX * .018, worldZ * .018)),
+                height < column.waterLevel()
+                        && com.norbertfila.generation.biome.SnowRules.freezes(
+                                column.waterKind(),
+                                com.norbertfila.generation.biome.ClimateRules.temperature(
+                                        column.climate(), column.waterLevel(), config.baseHeight())));
     }
 
     private boolean nearWater(int x, int z, int height, int level) {

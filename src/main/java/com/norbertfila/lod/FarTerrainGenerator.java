@@ -98,6 +98,7 @@ public final class FarTerrainGenerator {
     private static long surface(TerrainSummary terrain, AreaEdits edits, int column) {
         int changes = column < 0 ? 0 : edits.changeCount(column);
         int surface = terrain.surfaceHeight() + (terrain.snowCover() ? 1 : 0);
+        if (terrain.frozenWater()) surface = Math.max(surface, terrain.waterLevel());
         long y = changes > 0 ? Math.max(surface, edits.changeY(column, 0)) : surface;
         int change = 0;
         while (true) {
@@ -110,7 +111,7 @@ public final class FarTerrainGenerator {
                 if (!BLOCKS.isCollidable(block)) {
                     // Generated columns are air or water above the surface and air below bedrock.
                     long next = change < changes ? edits.changeY(column, change) : Long.MIN_VALUE;
-                    if (y > surface) next = Math.max(next, surface);
+                    if (y > terrain.surfaceHeight()) next = Math.max(next, terrain.surfaceHeight());
                     if (next == Long.MIN_VALUE) return (long) FarTerrainTile.NO_SURFACE << 8;
                     y = next;
                     continue;
