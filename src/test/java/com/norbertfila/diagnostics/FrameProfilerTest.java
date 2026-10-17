@@ -28,6 +28,21 @@ class FrameProfilerTest {
 
         assertEquals(2, profiler.frames());
         assertEquals(3, profiler.droppedFrames());
+        assertEquals(5, profiler.totalFrames());
+    }
+
+    @Test
+    void samplesTheWholeRunAndCountsEverySlowFrame() {
+        var profiler = new FrameProfiler(256, false);
+        profiler.recording(true);
+        for (int i = 0; i < 10_000; i++) frame(profiler, i < 5_000 ? 1_000_000 : 40_000_000);
+        assertEquals(5_000, profiler.framesOver(33_333_333));
+        assertEquals(20.5, profiler.meanMillis());
+        assertEquals(40, profiler.maxMillis());
+        assertEquals(40, profiler.frameDistribution().p95Millis());
+        profiler.reset();
+        assertEquals(0, profiler.totalFrames());
+        assertEquals(0, profiler.framesOver(33_333_333));
     }
 
     @Test

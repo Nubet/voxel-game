@@ -167,6 +167,14 @@ tasks.register<JavaExec>("benchmarkGame") {
     description = "Runs the scripted production-game benchmark (-Pscenes, -Prd, -Pfar, -Plabel)."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.norbertfila.Main")
+    doFirst {
+        systemProperty("voxel.benchmark.revision", providers.exec {
+            commandLine("git", "rev-parse", "HEAD")
+        }.standardOutput.asText.get().trim())
+        systemProperty("voxel.benchmark.dirty", providers.exec {
+            commandLine("git", "status", "--porcelain", "--untracked-files=no")
+        }.standardOutput.asText.get().isNotBlank())
+    }
     jvmArgs("-Xmx4g")
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
     systemProperty("voxel.benchmark", findProperty("scenes") ?: "all")

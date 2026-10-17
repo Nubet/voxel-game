@@ -64,6 +64,9 @@ public final class GameLoop {
 
     /** Scripted replacement for player look and movement, used by the game benchmark. */
     interface FrameDriver {
+        default WorldRuntime.Controls controls(WorldRuntime.Controls controls) {
+            return controls;
+        }
         /** Positions the camera and issues world commands for the current frame. */
         void update(WorldRuntime runtime, WorldRuntime.Frame state, Camera camera);
 
@@ -309,8 +312,8 @@ public final class GameLoop {
             if (blocked) input.clearPlayerInput();
             else camera.updateLook(input.mouseDeltaX(), input.mouseDeltaY());
             PlayerInput held = input.peekPlayerTick();
-            if (state != null)
-                runtime.controls(new WorldRuntime.Controls(
+            if (state != null) {
+                var controls = new WorldRuntime.Controls(
                         new PlayerInput(
                                 held.forward(),
                                 held.backward(),
@@ -330,7 +333,9 @@ public final class GameLoop {
                         !blocked && input.rightMouseDown(),
                         settings.farDistance(),
                         settings.simulationDistance(),
-                        !blocked && input.leftMouseDown()));
+                        !blocked && input.leftMouseDown());
+                runtime.controls(driver == null ? controls : driver.controls(controls));
+            }
             if (previousSlot != hotbar.selectedSlot())
                 submit(runtime, new WorldRuntime.SelectSlot(hotbar.selectedSlot()));
             Screen.Action uiAction;

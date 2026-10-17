@@ -40,6 +40,11 @@ public record ChunkTask<T>(
         private final long token;
         private T result;
         private final Throwable failure;
+        private final long completedAt = System.nanoTime();
+
+        public long completedAt() {
+            return completedAt;
+        }
 
         public Outcome(
                 ChunkPos position,

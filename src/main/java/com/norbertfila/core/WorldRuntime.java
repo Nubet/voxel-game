@@ -200,7 +200,7 @@ public final class WorldRuntime implements AutoCloseable {
             Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
             Map<Long, Long> issuedAt = new HashMap<>();
             WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
-            long[] estimatedChunkBytes = {0}, publishNanos = {0};
+            long[] estimatedChunkBytes = {0};
             BlockBreaking breaking = new BlockBreaking(world);
             var commands = new GameCommands();
             CommandSource commandSource = new CommandSource() {
@@ -494,6 +494,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 captureNanos = System.nanoTime() - captureStarted;
                             }
                             saves.poll();
+                            long publishStarted = System.nanoTime();
                             Map<Long, ChunkManager.MeshResult> valid = new HashMap<>();
                             outstanding.forEach((token, mesh) -> {
                                 if (chunks.isCurrentMesh(mesh)) valid.put(token, mesh);
@@ -510,6 +511,21 @@ public final class WorldRuntime implements AutoCloseable {
                                     : Optional.<VoxelRaycaster.Hit>empty();
                             long oldestAck =
                                     issuedAt.isEmpty() ? 0 : System.nanoTime() - Collections.min(issuedAt.values());
+                            var residents = chunks.residency();
+                            var farResidents = far.residency();
+                            var coverage = chunks.coverage();
+                            var validMeshes = Map.copyOf(valid);
+                            var inventorySnapshot = inventory.snapshot();
+                            var breaks = List.copyOf(brokenBlocks);
+                            var itemSnapshot = items.renderSnapshot(world);
+                            var biome = generator
+                                    .sample(
+                                            (int) Math.floor(
+                                                    player.state().position().x()),
+                                            (int) Math.floor(
+                                                    player.state().position().z()))
+                                    .biome();
+                            long publishNanos = System.nanoTime() - publishStarted;
                             var metrics = new SimulationMetrics(
                                     System.nanoTime() - tickStarted,
                                     predictionNanos,
@@ -530,9 +546,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     movementWaiting,
                                     estimatedChunkBytes[0],
                                     streamingNanos,
-                                    publishNanos[0],
+                                    publishNanos,
                                     far.metrics());
-                            long publishStarted = System.nanoTime();
                             frame.set(new Frame(
                                     sessionId,
                                     poseReady[0],
@@ -548,27 +563,18 @@ public final class WorldRuntime implements AutoCloseable {
                                     contact,
                                     player.flying(),
                                     state.paused(),
-                                    chunks.residency(),
-                                    far.residency(),
-                                    chunks.coverage(),
-                                    Map.copyOf(valid),
+                                    residents,
+                                    farResidents,
+                                    coverage,
+                                    validMeshes,
                                     water.pendingUpdates(),
                                     metrics,
-                                    inventory.snapshot(),
+                                    inventorySnapshot,
                                     target,
                                     breaking.progress(),
-                                    List.copyOf(brokenBlocks),
-                                    items.renderSnapshot(world),
-                                    generator
-                                            .sample(
-                                                    (int) Math.floor(player.state()
-                                                            .position()
-                                                            .x()),
-                                                    (int) Math.floor(player.state()
-                                                            .position()
-                                                            .z()))
-                                            .biome()));
-                            publishNanos[0] = System.nanoTime() - publishStarted;
+                                    breaks,
+                                    itemSnapshot,
+                                    biome));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");

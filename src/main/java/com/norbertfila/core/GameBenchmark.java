@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL46C.glGetInteger;
 
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.diagnostics.BenchmarkRecord;
+import com.norbertfila.diagnostics.DurationHistogram;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Distribution;
@@ -20,6 +21,7 @@ import com.norbertfila.persistence.world.WorldIo;
 import com.norbertfila.persistence.world.WorldMetadata;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.render.BlockTextureArray;
@@ -72,6 +74,7 @@ public final class GameBenchmark {
     private static final int PROFILER_CAPACITY = 1 << 17;
     private static final int GL_NVX_CURRENT_AVAILABLE_VIDMEM = 0x9049;
     private static final double NANO_TIME_COST_NS = nanoTimeCost();
+    private static final String RUN_ID = UUID.randomUUID().toString();
 
     public static boolean requested() {
         return System.getProperty("voxel.benchmark") != null;
@@ -86,6 +89,14 @@ public final class GameBenchmark {
         Path out = Path.of(System.getProperty("voxel.benchmark.out", "benchmarks/opt/game-benchmark.csv"));
         String seconds = System.getProperty("voxel.benchmark.seconds");
         double measureOverride = seconds == null ? 0 : Double.parseDouble(seconds);
+        if (measureOverride != 0 && (!Double.isFinite(measureOverride) || measureOverride <= 0))
+            throw new IllegalArgumentException("Benchmark duration must be positive and finite");
+        if (scenes.contains(BenchmarkScene.FLY_RETURN)
+                && (scenes.indexOf(BenchmarkScene.FLY_RETURN) == 0
+                        || scenes.get(scenes.indexOf(BenchmarkScene.FLY_RETURN) - 1) != BenchmarkScene.FLY_NEW
+                        || (measureOverride != 0 && measureOverride != BenchmarkScene.FLIGHT_SECONDS)))
+            throw new IllegalArgumentException(
+                    "FLY_RETURN requires FLY_NEW immediately before it, both lasting 10 seconds");
         int width = Integer.getInteger("voxel.benchmark.width", 1280);
         int height = Integer.getInteger("voxel.benchmark.height", 720);
         boolean gpuTimers = Boolean.parseBoolean(System.getProperty("voxel.benchmark.gpuTimers", "true"));
@@ -189,7 +200,7 @@ public final class GameBenchmark {
     private static List<BenchmarkScene> scenes(String value) {
         if (value.isBlank() || value.equalsIgnoreCase("all") || value.equalsIgnoreCase("true"))
             return Arrays.stream(BenchmarkScene.values())
-                    .filter(scene -> scene != BenchmarkScene.SOAK)
+                    .filter(scene -> scene != BenchmarkScene.SOAK && scene != BenchmarkScene.COLLISION_FLIGHT)
                     .toList();
         return Arrays.stream(value.split(","))
                 .map(name -> BenchmarkScene.valueOf(name.strip().toUpperCase(Locale.ROOT)))
@@ -267,17 +278,36 @@ public final class GameBenchmark {
         }
 
         @Override
+        public WorldRuntime.Controls controls(WorldRuntime.Controls ignored) {
+            boolean moving =
+                    phase == Phase.RUNNING && current.measureStarted != 0 && scene() == BenchmarkScene.COLLISION_FLIGHT;
+            var pose = scene().pose(lastScriptTime, site);
+            return new WorldRuntime.Controls(
+                    new PlayerInput(moving, false, false, false, false, false, moving),
+                    pose.yaw(),
+                    pose.pitch(),
+                    phase == Phase.LOADING,
+                    false,
+                    settings.renderDistance(),
+                    0,
+                    false,
+                    settings.farDistance(),
+                    settings.simulationDistance());
+        }
+
+        @Override
         public void update(WorldRuntime runtime, WorldRuntime.Frame state, Camera camera) {
             long now = System.nanoTime();
             if (phase == Phase.LOADING && runtime.state() == WorldRuntime.State.PLAYING) startScene(runtime, now);
             if (phase == Phase.LOADING) return;
             double t = phase == Phase.RUNNING ? (now - phaseStarted) / 1e9 : 0;
             var pose = scene().pose(t, site);
-            camera.setPosition(pose.x(), pose.y(), pose.z());
+            if (scene() != BenchmarkScene.COLLISION_FLIGHT || phase != Phase.RUNNING)
+                camera.setPosition(pose.x(), pose.y(), pose.z());
             camera.restoreLook((float) pose.yaw(), (float) pose.pitch());
             settings.setRenderDistance(scene().renderDistance(t, baseRenderDistance));
             if (phase != Phase.RUNNING) return;
-            if (state != null && state.tick() != lastTeleportTick) {
+            if (scene() != BenchmarkScene.COLLISION_FLIGHT && state != null && state.tick() != lastTeleportTick) {
                 lastTeleportTick = state.tick();
                 teleport(runtime, pose);
             }
@@ -442,8 +472,8 @@ public final class GameBenchmark {
             int[] width = new int[1], height = new int[1];
             window.framebufferSize(width, height);
             if (completed.size() < scenes.size())
-                LOG.warning(
-                        "Benchmark time limit reached after " + completed.size() + " of " + scenes.size() + " scenes");
+                throw new IllegalStateException(
+                        "Incomplete benchmark: " + completed.size() + " of " + scenes.size() + " scenes");
             return completed.stream()
                     .map(measurement -> measurement.record(label, renderDistance, farDistance, width[0], height[0]))
                     .toList();
@@ -463,6 +493,10 @@ public final class GameBenchmark {
         private int residentMax, uploadQueueMax, over16, over33;
         private Counters start, end;
         private double retainedHeapMb, profilerOverheadUs;
+        private double frameMeanMs, frameMaxMs;
+        private long reservoirReplacements, oldestAckMax, movementWaitingTicks;
+        private double startX, startZ, travelledBlocks;
+        private int over6944, genQueueMax, meshQueueMax;
         private long nvxStartKb = -1, nvxEndKb = -1;
         private Distribution frameTimes, gpuTerrain, gpuUi, gpuFar, gpuClouds, gpuTranslucent;
 
@@ -474,6 +508,8 @@ public final class GameBenchmark {
             measureStarted = now;
             start = Counters.sample(runtime, state, renderer);
             nvxStartKb = nvxAvailableKb();
+            startX = state.playerState().position().x();
+            startZ = state.playerState().position().z();
         }
 
         void sample(WorldRuntime.Frame state, TerrainRenderer.RenderStats stats, int uploadQueue) {
@@ -488,6 +524,10 @@ public final class GameBenchmark {
             if (lastSampledTick >= 0) missedTicks += Math.max(0, state.tick() - lastSampledTick - 1);
             lastSampledTick = state.tick();
             var metrics = state.metrics();
+            genQueueMax = Math.max(genQueueMax, metrics.streaming().generationQueued());
+            meshQueueMax = Math.max(meshQueueMax, metrics.streaming().meshQueued());
+            oldestAckMax = Math.max(oldestAckMax, metrics.oldestAckNanos());
+            if (metrics.movementWaiting()) movementWaitingTicks++;
             ticks.add(metrics.tickNanos());
             streaming.add(metrics.streamingNanos());
             publish.add(metrics.publishNanos());
@@ -513,16 +553,39 @@ public final class GameBenchmark {
             gpuClouds = profiler.gpuDistribution(FrameProfiler.GpuPass.CLOUDS);
             gpuTranslucent = profiler.gpuDistribution(FrameProfiler.GpuPass.TRANSLUCENT_AND_EFFECTS);
             over16 = profiler.framesOver(16_666_667);
+            over6944 = profiler.framesOver(6_944_444);
             over33 = profiler.framesOver(33_333_333);
-            int recorded = Math.max(1, profiler.frames());
+            long recorded = Math.max(1, profiler.totalFrames());
+            frames = profiler.totalFrames();
             profilerOverheadUs =
                     (profiler.overheadNanos() / (double) recorded + Segment.values().length * NANO_TIME_COST_NS) / 1e3;
             retainedHeapMb = retainedHeapMb();
+            frameMeanMs = profiler.meanMillis();
+            frameMaxMs = profiler.maxMillis();
+            reservoirReplacements = profiler.droppedFrames();
+            travelledBlocks = Math.hypot(
+                    state.playerState().position().x() - startX,
+                    state.playerState().position().z() - startZ);
         }
 
         BenchmarkRecord record(String label, int renderDistance, int farDistance, int width, int height) {
             double seconds = measureNanos / 1e9;
             var record = new BenchmarkRecord()
+                    .put("schema", 2)
+                    .put("runId", RUN_ID)
+                    .put("revision", System.getProperty("voxel.benchmark.revision", "unknown"))
+                    .put("dirty", System.getProperty("voxel.benchmark.dirty", "unknown"))
+                    .put("seed", Long.getLong("voxel.benchmark.seed", SEED))
+                    .put("siteX", Integer.getInteger("voxel.benchmark.siteX", 0))
+                    .put("siteZ", Integer.getInteger("voxel.benchmark.siteZ", 0))
+                    .put("clouds", System.getProperty("voxel.benchmark.clouds", "FAST"))
+                    .put("gpuTimers", System.getProperty("voxel.benchmark.gpuTimers", "true"))
+                    .put("gpu", glGetString(GL_RENDERER))
+                    .put("glVersion", glGetString(GL_VERSION))
+                    .put(
+                            "jvmArgs",
+                            String.join(
+                                    " ", ManagementFactory.getRuntimeMXBean().getInputArguments()))
                     .put("label", label)
                     .put("scene", scene)
                     .put("rd", renderDistance)
@@ -532,10 +595,15 @@ public final class GameBenchmark {
                     .put("settleS", settleNanos / 1e9)
                     .put("settleTimedOut", settleTimedOut)
                     .put("measuredS", seconds)
-                    .put("frames", frameTimes.samples())
-                    .put("fps", frameTimes.samples() / seconds)
+                    .put("frames", frames)
+                    .put("frameSamples", frameTimes.samples())
+                    .put("frameOverflowCount", reservoirReplacements)
+                    .put("ticksComplete", missedTicks == 0)
+                    .put("fps", frames / seconds)
                     .put("frame", frameTimes)
-                    .put("frameMeanMs", frameTimes.meanMillis())
+                    .put("frameMeanMs", frameMeanMs)
+                    .put("frameExactMaxMs", frameMaxMs)
+                    .put("over6944us", over6944)
                     .put("over16ms", over16)
                     .put("over33ms", over33);
             for (Segment segment : Segment.values()) {
@@ -576,6 +644,38 @@ public final class GameBenchmark {
                     .put("captureMaxMs", capture.distribution().maxMillis());
             var s0 = start.streaming();
             var s1 = end.streaming();
+            timing(
+                    record,
+                    "genExecution",
+                    s0.generationTimings().execution(),
+                    s1.generationTimings().execution());
+            timing(
+                    record,
+                    "genQueue",
+                    s0.generationTimings().queueWait(),
+                    s1.generationTimings().queueWait());
+            timing(
+                    record,
+                    "genIntake",
+                    s0.generationTimings().intake(),
+                    s1.generationTimings().intake());
+            timing(
+                    record,
+                    "meshExecution",
+                    s0.meshTimings().execution(),
+                    s1.meshTimings().execution());
+            timing(
+                    record,
+                    "meshQueue",
+                    s0.meshTimings().queueWait(),
+                    s1.meshTimings().queueWait());
+            timing(
+                    record,
+                    "meshIntake",
+                    s0.meshTimings().intake(),
+                    s1.meshTimings().intake());
+            timing(record, "requestToGenerated", s0.generationDistribution(), s1.generationDistribution());
+            timing(record, "requestToUpload", s0.uploadDistribution(), s1.uploadDistribution());
             long generated = s1.generationCompleted() - s0.generationCompleted();
             long meshed = s1.meshCompleted() - s0.meshCompleted();
             record.put("genJobsPerS", generated / seconds)
@@ -597,9 +697,17 @@ public final class GameBenchmark {
                     .put("cullAvgMs", frames == 0 ? 0.0 : cullNanos / 1e6 / frames)
                     .put("directDraw", Boolean.getBoolean("voxel.render.directDraw"))
                     .put("uploadQueueMax", uploadQueueMax)
+                    .put("generationQueueMax", genQueueMax)
+                    .put("meshQueueMax", meshQueueMax)
+                    .put("oldestAckMaxMs", oldestAckMax / 1e6)
+                    .put("movementWaitingTicks", movementWaitingTicks)
+                    .put("travelledBlocks", travelledBlocks)
                     .put("renderAllocMBps", megabytes(end.renderAllocated() - start.renderAllocated()) / seconds)
                     .put("worldAllocMBps", megabytes(end.worldAllocated() - start.worldAllocated()) / seconds)
                     .put("totalAllocMBps", megabytes(end.totalAllocated() - start.totalAllocated()) / seconds)
+                    .put("renderCpuMsPerS", (end.renderCpuNanos() - start.renderCpuNanos()) / 1e6 / seconds)
+                    .put("worldCpuMsPerS", (end.worldCpuNanos() - start.worldCpuNanos()) / 1e6 / seconds)
+                    .put("processCpuMsPerS", (end.processCpuNanos() - start.processCpuNanos()) / 1e6 / seconds)
                     .put("gcCount", end.gcCount() - start.gcCount())
                     .put("gcMs", end.gcMillis() - start.gcMillis())
                     .put("retainedHeapMB", retainedHeapMb)
@@ -619,6 +727,16 @@ public final class GameBenchmark {
 
         private static double average(long nanos, long count) {
             return count == 0 ? 0.0 : nanos / 1e6 / count;
+        }
+
+        private static void timing(
+                BenchmarkRecord record,
+                String prefix,
+                DurationHistogram.Snapshot before,
+                DurationHistogram.Snapshot after) {
+            record.put(prefix + "P50Ms", after.percentileMillisSince(before, .5))
+                    .put(prefix + "P95Ms", after.percentileMillisSince(before, .95))
+                    .put(prefix + "P99Ms", after.percentileMillisSince(before, .99));
         }
 
         private static double latency(ChunkManager.LatencyTotals before, ChunkManager.LatencyTotals after) {
@@ -658,6 +776,9 @@ public final class GameBenchmark {
             long renderAllocated,
             long worldAllocated,
             long totalAllocated,
+            long renderCpuNanos,
+            long worldCpuNanos,
+            long processCpuNanos,
             long gcCount,
             long gcMillis,
             long gpuMeshBytes,
@@ -679,6 +800,10 @@ public final class GameBenchmark {
                     threads.getThreadAllocatedBytes(Thread.currentThread().threadId()),
                     threads.getThreadAllocatedBytes(runtime.threadId()),
                     threads.getTotalThreadAllocatedBytes(),
+                    threads.getCurrentThreadCpuTime(),
+                    threads.getThreadCpuTime(runtime.threadId()),
+                    ((com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean())
+                            .getProcessCpuTime(),
                     gcCount,
                     gcMillis,
                     renderer.memoryStats().allocated(),

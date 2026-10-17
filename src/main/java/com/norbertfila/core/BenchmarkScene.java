@@ -93,6 +93,19 @@ enum BenchmarkScene {
                 }
         }
     },
+    COLLISION_FLIGHT(1, 10) {
+        @Override
+        Pose pose(double t, Site site) {
+            return new Pose(site.x(), site.flightY(), site.z(), 0, -10);
+        }
+
+        @Override
+        void commands(double from, double to, Site site, Consumer<WorldRuntime.Action> sink) {
+            if (from <= 0 && to > 0) sink.accept(new WorldRuntime.ChatCommand("/gamemode creative"));
+            if (from <= .1 && to > .1) sink.accept(new WorldRuntime.Jump(.1));
+            if (from <= .3 && to > .3) sink.accept(new WorldRuntime.Jump(.3));
+        }
+    },
     FLY_NEW(0, 10) {
         @Override
         Pose pose(double t, Site site) {

@@ -1,10 +1,10 @@
 package com.norbertfila.diagnostics;
 
 import java.util.Arrays;
+import java.util.SplittableRandom;
 
 /**
- * Render-thread frame profiler with preallocated sample storage. Recording never allocates; when the capacity is
- * exhausted further frames are counted but not stored.
+ * Render-thread profiler. Reservoir sampling keeps bounded storage representative of the whole run.
  */
 public final class FrameProfiler {
     public enum Segment {
@@ -35,6 +35,11 @@ public final class FrameProfiler {
     private final long[][] segmentNanos;
     private final long[][] gpuNanos;
     private final int[] gpuSamples = new int[GPU_PASSES];
+    private final long[] gpuSeen = new long[GPU_PASSES];
+    private SplittableRandom random = new SplittableRandom(0);
+    private long totalFrames;
+    private int over6944, over16, over33;
+    private long totalNanos, maxNanos;
     private final long[] current = new long[SEGMENTS];
     private int frames;
     private long droppedFrames;
@@ -75,8 +80,12 @@ public final class FrameProfiler {
     public void reset() {
         frames = 0;
         droppedFrames = 0;
+        totalFrames = totalNanos = maxNanos = 0;
+        over6944 = over16 = over33 = 0;
+        random = new SplittableRandom(0);
         overheadNanos = 0;
         Arrays.fill(gpuSamples, 0);
+        Arrays.fill(gpuSeen, 0);
     }
 
     public void beginFrame() {
@@ -96,21 +105,28 @@ public final class FrameProfiler {
     public void endFrame(long frameDurationNanos) {
         if (!recording) return;
         long started = System.nanoTime();
-        if (frames == capacity) droppedFrames++;
-        else {
-            frameNanos[frames] = frameDurationNanos;
-            for (int segment = 0; segment < SEGMENTS; segment++) segmentNanos[segment][frames] = current[segment];
-            frames++;
+        totalFrames++;
+        totalNanos += frameDurationNanos;
+        maxNanos = Math.max(maxNanos, frameDurationNanos);
+        if (frameDurationNanos > 6_944_444) over6944++;
+        if (frameDurationNanos > 16_666_667) over16++;
+        if (frameDurationNanos > 33_333_333) over33++;
+        long slot = totalFrames <= capacity ? frames++ : random.nextLong(totalFrames);
+        if (totalFrames > capacity) droppedFrames++;
+        if (slot < capacity) {
+            frameNanos[(int) slot] = frameDurationNanos;
+            for (int segment = 0; segment < SEGMENTS; segment++) segmentNanos[segment][(int) slot] = current[segment];
         }
         overheadNanos += System.nanoTime() - started;
     }
 
     public void recordGpu(GpuPass pass, long nanos) {
         if (!recording) return;
-        int index = gpuSamples[pass.ordinal()];
+        int ordinal = pass.ordinal();
+        long seen = ++gpuSeen[ordinal];
+        long index = seen <= capacity ? gpuSamples[ordinal]++ : random.nextLong(seen);
         if (index < capacity) {
-            gpuNanos[pass.ordinal()][index] = nanos;
-            gpuSamples[pass.ordinal()] = index + 1;
+            gpuNanos[ordinal][(int) index] = nanos;
         }
     }
 
@@ -120,6 +136,18 @@ public final class FrameProfiler {
 
     public long droppedFrames() {
         return droppedFrames;
+    }
+
+    public long totalFrames() {
+        return totalFrames;
+    }
+
+    public double meanMillis() {
+        return totalFrames == 0 ? 0 : totalNanos / 1e6 / totalFrames;
+    }
+
+    public double maxMillis() {
+        return maxNanos / 1e6;
     }
 
     public long overheadNanos() {
@@ -139,6 +167,9 @@ public final class FrameProfiler {
     }
 
     public int framesOver(long thresholdNanos) {
+        if (thresholdNanos == 6_944_444) return over6944;
+        if (thresholdNanos == 16_666_667) return over16;
+        if (thresholdNanos == 33_333_333) return over33;
         int count = 0;
         for (int index = 0; index < frames; index++) if (frameNanos[index] > thresholdNanos) count++;
         return count;

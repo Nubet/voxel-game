@@ -1,5 +1,6 @@
 package com.norbertfila.streaming;
 
+import com.norbertfila.diagnostics.DurationHistogram;
 import com.norbertfila.world.ChunkPos;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -21,6 +22,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class ChunkScheduler<T> implements AutoCloseable {
+    private final DurationHistogram execution = new DurationHistogram(),
+            wait = new DurationHistogram(),
+            intake = new DurationHistogram();
+
+    public record Timings(
+            DurationHistogram.Snapshot execution,
+            DurationHistogram.Snapshot queueWait,
+            DurationHistogram.Snapshot intake) {}
+
+    public Timings timings() {
+        return new Timings(execution.snapshot(), wait.snapshot(), intake.snapshot());
+    }
+
     private final java.util.concurrent.atomic.LongAdder workNanos = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.LongAdder completedJobs = new java.util.concurrent.atomic.LongAdder();
     private final java.util.concurrent.atomic.LongAdder queueWaitNanos = new java.util.concurrent.atomic.LongAdder();
@@ -99,6 +113,7 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         synchronized (readyLock) {
             ChunkTask.Outcome<T> outcome = ready.poll();
             if (outcome != null) {
+                intake.record(System.nanoTime() - outcome.completedAt());
                 outstanding.release();
                 forget(TaskKey.of(outcome));
             }
@@ -281,7 +296,9 @@ public final class ChunkScheduler<T> implements AutoCloseable {
                 }
             }
         } finally {
-            workNanos.add(System.nanoTime() - started);
+            long elapsed = System.nanoTime() - started;
+            workNanos.add(elapsed);
+            execution.record(elapsed);
             completedJobs.increment();
             submitted.remove(TaskKey.of(task));
         }
@@ -327,7 +344,9 @@ public final class ChunkScheduler<T> implements AutoCloseable {
 
         @Override
         public void run() {
-            queueWaitNanos.add(System.nanoTime() - submittedAt);
+            long waited = System.nanoTime() - submittedAt;
+            queueWaitNanos.add(waited);
+            wait.record(waited);
             TaskKey key = TaskKey.of(task);
             running.add(key);
             try {

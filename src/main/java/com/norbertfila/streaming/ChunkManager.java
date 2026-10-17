@@ -1,5 +1,6 @@
 package com.norbertfila.streaming;
 
+import com.norbertfila.diagnostics.DurationHistogram;
 import com.norbertfila.generation.ChunkData;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.BlockNeighborhood;
@@ -108,7 +109,11 @@ public final class ChunkManager implements AutoCloseable {
                 visibleLatency.snapshot(),
                 generationScheduler.metadataEntries() + meshingScheduler.metadataEntries(),
                 skippedMeshInputs,
-                waterOnlyMeshes);
+                waterOnlyMeshes,
+                generationScheduler.timings(),
+                meshingScheduler.timings(),
+                generationLatency.histogram.snapshot(),
+                visibleLatency.histogram.snapshot());
     }
 
     public record Metrics(
@@ -133,15 +138,21 @@ public final class ChunkManager implements AutoCloseable {
             LatencyTotals visibleLatency,
             int schedulerMetadata,
             long skippedMeshInputs,
-            long waterOnlyMeshes) {}
+            long waterOnlyMeshes,
+            ChunkScheduler.Timings generationTimings,
+            ChunkScheduler.Timings meshTimings,
+            DurationHistogram.Snapshot generationDistribution,
+            DurationHistogram.Snapshot uploadDistribution) {}
 
     /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
     public record LatencyTotals(long count, long totalNanos, long maxNanos) {}
 
     private static final class Latency {
+        private final DurationHistogram histogram = new DurationHistogram();
         private long count, total, max;
 
         void record(long nanos) {
+            histogram.record(nanos);
             count++;
             total += nanos;
             max = Math.max(max, nanos);
