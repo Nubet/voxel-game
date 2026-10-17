@@ -300,7 +300,9 @@ public final class GameBenchmark {
                     0,
                     false,
                     settings.farDistance(),
-                    settings.simulationDistance());
+                    settings.simulationDistance(),
+                    false,
+                    ignored.appearance());
         }
 
         @Override

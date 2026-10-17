@@ -38,6 +38,14 @@ public final class PlayerModel {
             part(Part.RIGHT_LEG, null, 2, 12, new ModelCuboid(-2, -12, -2, 4, 12, 4), 0, 16),
             part(Part.LEFT_LEG, null, -2, 12, new ModelCuboid(-2, -12, -2, 4, 12, 4), 16, 48));
 
+    public static final List<PartDefinition> SLIM_PARTS = List.of(
+            definition(Part.BODY),
+            definition(Part.HEAD),
+            part(Part.RIGHT_ARM, Part.BODY, 5, 9.5f, new ModelCuboid(-1, -10, -2, 3, 12, 4), 40, 16),
+            part(Part.LEFT_ARM, Part.BODY, -5, 9.5f, new ModelCuboid(-2, -10, -2, 3, 12, 4), 32, 48),
+            definition(Part.RIGHT_LEG),
+            definition(Part.LEFT_LEG));
+
     private PlayerModel() {}
 
     private static PartDefinition part(Part part, Part parent, float x, float y, ModelCuboid cuboid, int u, int v) {
@@ -45,18 +53,33 @@ public final class PlayerModel {
     }
 
     public static PartDefinition definition(Part part) {
-        return PARTS.get(Objects.requireNonNull(part).ordinal());
+        return definition(ModelVariant.CLASSIC, part);
+    }
+
+    public static List<PartDefinition> parts(ModelVariant variant) {
+        return switch (Objects.requireNonNull(variant)) {
+            case CLASSIC -> PARTS;
+            case SLIM -> SLIM_PARTS;
+        };
+    }
+
+    public static PartDefinition definition(ModelVariant variant, Part part) {
+        return parts(variant).get(Objects.requireNonNull(part).ordinal());
     }
 
     public static Matrix4f partMatrix(Part part, PlayerPose pose, Matrix4f destination) {
-        Objects.requireNonNull(pose);
-        destination.scaling(PIXEL_SCALE);
-        return applyHierarchy(part, pose, destination);
+        return partMatrix(ModelVariant.CLASSIC, part, pose, destination);
     }
 
-    private static Matrix4f applyHierarchy(Part part, PlayerPose pose, Matrix4f matrix) {
-        var definition = definition(part);
-        if (definition.parent() != null) applyHierarchy(definition.parent(), pose, matrix);
+    public static Matrix4f partMatrix(ModelVariant variant, Part part, PlayerPose pose, Matrix4f destination) {
+        Objects.requireNonNull(pose);
+        destination.scaling(PIXEL_SCALE);
+        return applyHierarchy(variant, part, pose, destination);
+    }
+
+    private static Matrix4f applyHierarchy(ModelVariant variant, Part part, PlayerPose pose, Matrix4f matrix) {
+        var definition = definition(variant, part);
+        if (definition.parent() != null) applyHierarchy(variant, definition.parent(), pose, matrix);
         definition.pivot().apply(matrix);
         return pose.transform(part).apply(matrix);
     }

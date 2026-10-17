@@ -14,6 +14,9 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.player.visual.PlayerAppearance;
+import com.norbertfila.player.visual.model.ModelVariant;
+import com.norbertfila.player.visual.model.PlayerModel.Part;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.*;
 import java.nio.file.Files;
@@ -27,6 +30,51 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
+    @Test
+    void appearanceSettingsReachFrozenSnapshotsWithoutChangingOrPersistingGameplay() throws Exception {
+        var settings = new GameSettings();
+        var screen = new com.norbertfila.ui.screens.AppearanceScreen(settings, null);
+        var save = directory.resolve("appearance.vxl");
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(appearanceControls(new PlayerAppearance(settings.modelVariant())));
+            var classic = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(
+                    ModelVariant.CLASSIC,
+                    classic.playerRenderState().appearance().model());
+            screen.keyPress(com.norbertfila.ui.UiKey.NEXT);
+            screen.keyPress(com.norbertfila.ui.UiKey.ACTIVATE);
+            assertEquals(ModelVariant.SLIM, settings.modelVariant());
+            var slimAppearance = new PlayerAppearance(settings.modelVariant()).withOuterLayer(Part.RIGHT_ARM, false);
+            runtime.controls(appearanceControls(slimAppearance));
+            var slim = await(runtime, f -> f.playerRenderState().appearance().model() == ModelVariant.SLIM);
+            assertEquals(slimAppearance, slim.playerRenderState().appearance());
+            assertEquals(classic.tick(), slim.tick());
+            assertEquals(classic.playerState(), slim.playerState());
+            assertEquals(classic.inventory(), slim.inventory());
+            assertEquals(
+                    ModelVariant.CLASSIC,
+                    classic.playerRenderState().appearance().model());
+            screen.keyPress(com.norbertfila.ui.UiKey.ACTIVATE);
+            runtime.controls(appearanceControls(new PlayerAppearance(settings.modelVariant())));
+            await(runtime, f -> f.playerRenderState().appearance().model() == ModelVariant.CLASSIC);
+            runtime.controls(appearanceControls(slimAppearance));
+            await(runtime, f -> f.playerRenderState().appearance().model() == ModelVariant.SLIM);
+        }
+        try (var runtime = start(new Flat(), save)) {
+            assertEquals(
+                    ModelVariant.CLASSIC,
+                    await(runtime, f -> f.tick() >= 2)
+                            .playerRenderState()
+                            .appearance()
+                            .model());
+        }
+        assertThrows(NullPointerException.class, () -> appearanceControls(null));
+    }
+
+    private static WorldRuntime.Controls appearanceControls(PlayerAppearance appearance) {
+        return new WorldRuntime.Controls(PlayerInput.NONE, -90, 0, true, true, 0, 0, false, 0, 0, false, appearance);
+    }
+
     @Test
     void publishesImmutableVisualsAndResetsBlockedPausedAndTeleportedHistory() throws Exception {
         try (var runtime = start(new Flat(), directory.resolve("player-visuals.vxl"))) {

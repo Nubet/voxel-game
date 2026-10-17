@@ -50,18 +50,49 @@ class CuboidMeshTest {
     }
 
     @Test
-    void classicPartsUseDistinctCanonicalBaseRegions() {
+    void bothVariantsUseDistinctCanonicalBaseRegions() {
         int[][] origins = {{16, 16}, {0, 0}, {40, 16}, {32, 48}, {0, 16}, {16, 48}};
-        for (var part : PlayerModel.PARTS) {
-            assertEquals(
-                    new UvOrigin(
-                            origins[part.part().ordinal()][0],
-                            origins[part.part().ordinal()][1]),
-                    part.uvOrigin());
-            var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), 64, 64);
-            for (int i = 0; i < mesh.length; i += 5) {
-                assertTrue(mesh[i + 3] >= 0 && mesh[i + 3] <= 1);
-                assertTrue(mesh[i + 4] >= 0 && mesh[i + 4] <= 1);
+        for (var variant : ModelVariant.values()) {
+            for (var part : PlayerModel.parts(variant)) {
+                assertEquals(
+                        new UvOrigin(
+                                origins[part.part().ordinal()][0],
+                                origins[part.part().ordinal()][1]),
+                        part.uvOrigin());
+                var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), 64, 64);
+                for (int i = 0; i < mesh.length; i += 5) {
+                    assertTrue(mesh[i + 3] >= 0 && mesh[i + 3] <= 1);
+                    assertTrue(mesh[i + 4] >= 0 && mesh[i + 4] <= 1);
+                }
+            }
+        }
+    }
+
+    @Test
+    void armAndSleeveNetsHaveCanonicalFaceRectanglesForBothVariants() {
+        int[] indices = {0, 3, 2, 0, 2, 1};
+        float[][] slim = {{4, 4, 7, 16}, {11, 4, 14, 16}, {0, 4, 4, 16}, {7, 4, 11, 16}, {4, 0, 7, 4}, {7, 4, 10, 0}};
+        float[][] classic = {{4, 4, 8, 16}, {12, 4, 16, 16}, {0, 4, 4, 16}, {8, 4, 12, 16}, {4, 0, 8, 4}, {8, 4, 12, 0}
+        };
+        for (var variant : ModelVariant.values()) {
+            for (var arm : new PlayerModel.Part[] {PlayerModel.Part.RIGHT_ARM, PlayerModel.Part.LEFT_ARM}) {
+                var part = PlayerModel.definition(variant, arm);
+                var layer = PlayerModel.OUTER_LAYERS.get(arm.ordinal());
+                for (var origin : new UvOrigin[] {part.uvOrigin(), layer.uvOrigin()}) {
+                    var mesh = CuboidMesh.vertices(part.cuboid(), origin, 64, 64, layer.inflation());
+                    var rects = variant == ModelVariant.SLIM ? slim : classic;
+                    for (var face : CuboidMesh.Face.values()) {
+                        var rect = rects[face.ordinal()];
+                        for (int vertex = 0; vertex < 6; vertex++) {
+                            int corner = indices[vertex], offset = face.ordinal() * 30 + vertex * 5;
+                            assertEquals(
+                                    (origin.u() + rect[corner == 1 || corner == 2 ? 2 : 0]) / 64, mesh[offset + 3]);
+                            assertEquals((origin.v() + rect[corner >= 2 ? 3 : 1]) / 64, mesh[offset + 4]);
+                            assertTrue(mesh[offset + 3] >= 0 && mesh[offset + 3] <= 1);
+                            assertTrue(mesh[offset + 4] >= 0 && mesh[offset + 4] <= 1);
+                        }
+                    }
+                }
             }
         }
     }

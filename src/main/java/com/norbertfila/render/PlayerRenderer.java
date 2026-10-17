@@ -6,6 +6,7 @@ import com.norbertfila.assets.PlayerSkin;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.model.CuboidMesh;
+import com.norbertfila.player.visual.model.ModelVariant;
 import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
@@ -15,7 +16,8 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class PlayerRenderer implements AutoCloseable {
-    private static final float[] VERTICES = vertices();
+    private static final int VERTICES_PER_MODEL =
+            (PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * CuboidMesh.VERTEX_COUNT;
     private final int program, vao, vbo, vp, model, outerLayer;
     private final SkinManager skins;
     private boolean closed;
@@ -31,7 +33,7 @@ public final class PlayerRenderer implements AutoCloseable {
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
-            glNamedBufferData(createdVbo, VERTICES, GL_STATIC_DRAW);
+            glNamedBufferStorage(createdVbo, vertices(), 0);
             glVertexArrayVertexBuffer(createdVao, 0, createdVbo, 0, CuboidMesh.FLOATS_PER_VERTEX * Float.BYTES);
             glVertexArrayAttribFormat(createdVao, 0, 3, GL_FLOAT, false, 0);
             glVertexArrayAttribBinding(createdVao, 0, 0);
@@ -106,17 +108,22 @@ public final class PlayerRenderer implements AutoCloseable {
             glUniformMatrix4fv(vp, false, viewProjection.get(buffer));
             var partMatrix = new Matrix4f();
             var worldMatrix = new Matrix4f();
-            for (var part : PlayerModel.PARTS) {
-                PlayerModel.partMatrix(part.part(), pose, partMatrix);
+            int firstVertex = appearance.model().ordinal() * VERTICES_PER_MODEL;
+            for (var part : PlayerModel.parts(appearance.model())) {
+                PlayerModel.partMatrix(appearance.model(), part.part(), pose, partMatrix);
                 modelToWorld.mul(partMatrix, worldMatrix);
                 glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
                 glUniform1i(outerLayer, 0);
-                glDrawArrays(GL_TRIANGLES, part.part().ordinal() * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
+                glDrawArrays(
+                        GL_TRIANGLES,
+                        firstVertex + part.part().ordinal() * CuboidMesh.VERTEX_COUNT,
+                        CuboidMesh.VERTEX_COUNT);
                 if (appearance.outerLayers().contains(part.part())) {
                     glUniform1i(outerLayer, 1);
                     glDrawArrays(
                             GL_TRIANGLES,
-                            (PlayerModel.PARTS.size() + part.part().ordinal()) * CuboidMesh.VERTEX_COUNT,
+                            firstVertex
+                                    + (PlayerModel.PARTS.size() + part.part().ordinal()) * CuboidMesh.VERTEX_COUNT,
                             CuboidMesh.VERTEX_COUNT);
                 }
             }
@@ -139,20 +146,27 @@ public final class PlayerRenderer implements AutoCloseable {
 
     private static float[] vertices() {
         int partSize = CuboidMesh.VERTEX_COUNT * CuboidMesh.FLOATS_PER_VERTEX;
-        var vertices = new float[(PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * partSize];
-        for (var part : PlayerModel.PARTS) {
-            var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), PlayerSkin.SIZE, PlayerSkin.SIZE);
-            System.arraycopy(mesh, 0, vertices, part.part().ordinal() * partSize, partSize);
-        }
-        for (var layer : PlayerModel.OUTER_LAYERS) {
-            var mesh = CuboidMesh.vertices(
-                    PlayerModel.definition(layer.part()).cuboid(),
-                    layer.uvOrigin(),
-                    PlayerSkin.SIZE,
-                    PlayerSkin.SIZE,
-                    layer.inflation());
-            System.arraycopy(
-                    mesh, 0, vertices, (PlayerModel.PARTS.size() + layer.part().ordinal()) * partSize, partSize);
+        var vertices = new float[ModelVariant.values().length * VERTICES_PER_MODEL * CuboidMesh.FLOATS_PER_VERTEX];
+        for (var variant : ModelVariant.values()) {
+            int offset = variant.ordinal() * VERTICES_PER_MODEL * CuboidMesh.FLOATS_PER_VERTEX;
+            for (var part : PlayerModel.parts(variant)) {
+                var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), PlayerSkin.SIZE, PlayerSkin.SIZE);
+                System.arraycopy(mesh, 0, vertices, offset + part.part().ordinal() * partSize, partSize);
+            }
+            for (var layer : PlayerModel.OUTER_LAYERS) {
+                var mesh = CuboidMesh.vertices(
+                        PlayerModel.definition(variant, layer.part()).cuboid(),
+                        layer.uvOrigin(),
+                        PlayerSkin.SIZE,
+                        PlayerSkin.SIZE,
+                        layer.inflation());
+                System.arraycopy(
+                        mesh,
+                        0,
+                        vertices,
+                        offset + (PlayerModel.PARTS.size() + layer.part().ordinal()) * partSize,
+                        partSize);
+            }
         }
         return vertices;
     }

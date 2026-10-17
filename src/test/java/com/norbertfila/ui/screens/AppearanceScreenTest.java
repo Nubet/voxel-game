@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class AppearanceScreenTest {
     @Test
-    void settingsKeyboardOpensChildCyclesMetadataAndSavesOnBack() {
+    void settingsKeyboardOpensChildCyclesVariantAndSavesOnBack() {
         var settings = new GameSettings();
         var saved = new ArrayList<ModelVariant>();
         var screen = new SettingsScreen(settings, ignored -> {}, () -> {}, null, saved::add);

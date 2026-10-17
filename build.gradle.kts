@@ -40,7 +40,7 @@ tasks.test { useJUnitPlatform() }
 
 tasks.register<JavaExec>("smokePlayerModel") {
     group = "verification"
-    description = "Checks directional Classic skin mapping, default skin, articulation and OpenGL state."
+    description = "Checks Classic/Slim directional skin mapping, runtime switching, outer layers and OpenGL state."
     dependsOn(tasks.testClasses)
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.norbertfila.render.PlayerModelSmoke")

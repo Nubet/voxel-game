@@ -12,6 +12,7 @@ import com.norbertfila.player.WaterContact;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.player.visual.model.CuboidMesh.Face;
+import com.norbertfila.player.visual.model.ModelVariant;
 import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
@@ -21,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -28,17 +30,19 @@ import org.lwjgl.BufferUtils;
 
 public final class PlayerModelSmoke {
     private static final int SIZE = 512;
-    private static final PlayerAppearance BASE_ONLY = new PlayerAppearance(PlayerAppearance.Model.CLASSIC, Set.of());
+    private static final PlayerAppearance BASE_ONLY = new PlayerAppearance(ModelVariant.CLASSIC, Set.of());
 
     public static void main(String[] args) throws Exception {
         Path output = Path.of(args[0]);
         Files.createDirectories(output);
         var debugSkin = directionalSkin();
         var defaultSkin = SkinLoader.loadDefault();
+        var decodes = new AtomicInteger();
         try (Window window = new Window(SIZE, SIZE, "Player model smoke");
-                SkinManager skins = new SkinManager(
-                        Executors.newSingleThreadExecutor(),
-                        () -> new SkinLoader.Loaded(debugSkin, "directional", ""));
+                SkinManager skins = new SkinManager(Executors.newSingleThreadExecutor(), () -> {
+                    decodes.incrementAndGet();
+                    return new SkinLoader.Loaded(debugSkin, "directional", "");
+                });
                 SkinManager defaults = new SkinManager(
                         Executors.newSingleThreadExecutor(),
                         () -> new SkinLoader.Loaded(defaultSkin, SkinLoader.BUNDLED_PATH, ""));
@@ -47,10 +51,15 @@ public final class PlayerModelSmoke {
                         Executors.newSingleThreadExecutor(),
                         () -> new SkinLoader.Loaded(layerSkin(), "outer-layers", ""));
                 PlayerRenderer layerRenderer = new PlayerRenderer(layers);
+                SkinManager slimSkins = new SkinManager(
+                        Executors.newSingleThreadExecutor(),
+                        () -> new SkinLoader.Loaded(layerSkin(ModelVariant.SLIM), "slim-directional", ""));
+                PlayerRenderer slimRenderer = new PlayerRenderer(slimSkins);
                 PlayerRenderer defaultRenderer = new PlayerRenderer(defaults)) {
             awaitSkin(skins);
             awaitSkin(defaults);
             awaitSkin(layers);
+            awaitSkin(slimSkins);
             SkinManagerSmoke.checkLifecycle();
             int fbo = glCreateFramebuffers(), color = glCreateTextures(GL_TEXTURE_2D);
             int depth = glCreateRenderbuffers(), sentinelVao = glCreateVertexArrays();
@@ -63,6 +72,23 @@ public final class PlayerModelSmoke {
                 glBindFramebuffer(GL_FRAMEBUFFER, fbo);
                 glViewport(0, 0, SIZE, SIZE);
                 for (var face : Face.values()) {
+                    var slim = new PlayerAppearance(ModelVariant.SLIM);
+                    checkFace(
+                            slimRenderer,
+                            layerSkin(ModelVariant.SLIM),
+                            face,
+                            sentinelVao,
+                            output.resolve("slim-outer-" + face + ".png"),
+                            slim,
+                            true);
+                    checkFace(
+                            slimRenderer,
+                            layerSkin(ModelVariant.SLIM),
+                            face,
+                            sentinelVao,
+                            output.resolve("slim-base-" + face + ".png"),
+                            new PlayerAppearance(ModelVariant.SLIM, Set.of()),
+                            true);
                     checkFace(
                             layerRenderer,
                             layerSkin(),
@@ -162,15 +188,17 @@ public final class PlayerModelSmoke {
                 render(renderer, front, pose, sentinelVao);
                 check(occluded.equals(capture()), "Model ignored foreground depth");
                 checkSnapshots(layerRenderer, output);
+                checkSwitching(renderer, skins, decodes);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 com.norbertfila.core.PlayerGameHookSmoke.run(window, skins, output);
+                check(decodes.get() == 1, "Runtime setting switch reloaded skin");
                 renderer.close();
                 renderer.close();
                 defaultRenderer.close();
                 defaultRenderer.close();
                 check(glGetError() == GL_NO_ERROR, "Player model GL error");
                 System.out.println(
-                        "PASS six-face base/outer UVs, alpha holes, opaque bases, inflated depth, per-part and articulated masks, default PNG, deterministic images, state and cleanup; GPU="
+                        "PASS Classic/Slim six-face base/sleeve UVs, immutable shared geometry, no switch reload, alpha holes, inflated depth, articulated masks, default PNG, state and cleanup; GPU="
                                 + glGetString(GL_RENDERER) + "; output=" + output);
             } finally {
                 glBindVertexArray(0);
@@ -295,8 +323,50 @@ public final class PlayerModelSmoke {
     }
 
     private static PlayerSkin directionalSkin() {
+        return directionalSkin(ModelVariant.CLASSIC);
+    }
+
+    private static void checkSwitching(PlayerRenderer renderer, SkinManager skins, AtomicInteger decodes)
+            throws Exception {
+        var field = PlayerRenderer.class.getDeclaredField("vbo");
+        field.setAccessible(true);
+        int vbo = field.getInt(renderer), texture = skins.texture();
+        check(glGetNamedBufferParameteri(vbo, GL_BUFFER_IMMUTABLE_STORAGE) == GL_TRUE, "Geometry is not immutable");
+        check(glGetNamedBufferParameteri(vbo, GL_BUFFER_STORAGE_FLAGS) == 0, "Geometry permits runtime writes");
+        int bytes = glGetNamedBufferParameteri(vbo, GL_BUFFER_SIZE);
+        check(bytes == 2 * 12 * 36 * 5 * Float.BYTES, "Both model sets were not uploaded together");
+        var before = BufferUtils.createByteBuffer(bytes);
+        glGetNamedBufferSubData(vbo, 0, before);
+        var vp = new Matrix4f().ortho(-1.3f, 1.3f, -1.3f, 1.3f, .1f, 20).lookAt(0, 0, 0, 0, 0, 1, 0, 1, 0);
+        var player = new PlayerController();
+        var extractor = new PlayerRenderStateExtractor();
+        var water = new WaterContact.Result(0, false, true);
+        ByteBuffer classic = null, slim = null;
+        player.setPosition(new PlayerState.Position(0, 0, 0));
+        for (int i = 0; i < 20; i++) {
+            var variant = i % 2 == 0 ? ModelVariant.CLASSIC : ModelVariant.SLIM;
+            var state = extractor.extract(player, -90, 0, water, true, new PlayerAppearance(variant));
+            clear(1);
+            check(renderer.render(vp, state, .5, 0, 1, -5), "Switch snapshot culled");
+            var image = capture();
+            if (i == 0) classic = image;
+            else if (i == 1) {
+                slim = image;
+                check(!classic.equals(slim), "Explicit Slim appearance did not change model");
+            } else check(image.equals(variant == ModelVariant.CLASSIC ? classic : slim), "Switch image changed");
+            skins.update();
+            check(
+                    field.getInt(renderer) == vbo && skins.texture() == texture && decodes.get() == 1,
+                    "Switch rebuilt geometry or reloaded skin");
+        }
+        var after = BufferUtils.createByteBuffer(bytes);
+        glGetNamedBufferSubData(vbo, 0, after);
+        check(before.equals(after), "Switch changed uploaded geometry");
+    }
+
+    private static PlayerSkin directionalSkin(ModelVariant variant) {
         byte[] rgba = new byte[64 * 64 * 4];
-        for (var part : PlayerModel.PARTS) {
+        for (var part : PlayerModel.parts(variant)) {
             for (var face : Face.values()) {
                 int[] rect = rectangle(part, face);
                 for (int y = 0; y < rect[3]; y++)
@@ -313,20 +383,23 @@ public final class PlayerModelSmoke {
     }
 
     private static PlayerSkin layerSkin() {
-        var rgba = directionalSkin().rgba();
-        for (var part : PlayerModel.PARTS) {
+        return layerSkin(ModelVariant.CLASSIC);
+    }
+
+    private static PlayerSkin layerSkin(ModelVariant variant) {
+        var rgba = directionalSkin(variant).rgba();
+        for (var part : PlayerModel.parts(variant)) {
             for (var face : Face.values()) {
                 int[] rect = rectangle(part, face);
                 for (int y = 0; y < rect[3]; y++)
                     for (int x = 0; x < rect[2]; x++) {
                         int i = ((rect[1] + y) * 64 + rect[0] + x) * 4;
-                        rgba[i + 2] = 40;
                         rgba[i + 3] = 0;
                     }
             }
         }
         for (var layer : PlayerModel.OUTER_LAYERS) {
-            var base = PlayerModel.definition(layer.part());
+            var base = PlayerModel.definition(variant, layer.part());
             var definition = new PlayerModel.PartDefinition(
                     layer.part(), base.parent(), base.pivot(), base.cuboid(), layer.uvOrigin());
             for (var face : Face.values()) {
@@ -336,7 +409,7 @@ public final class PlayerModelSmoke {
                         int i = ((rect[1] + y) * 64 + rect[0] + x) * 4;
                         rgba[i] = (byte) (220 - layer.part().ordinal() * 24);
                         rgba[i + 1] = (byte) (210 - face.ordinal() * 24);
-                        rgba[i + 2] = (byte) (100 + (y >= rect[3] / 2 ? 80 : 0));
+                        rgba[i + 2] = (byte) (40 + (x >= rect[2] / 2 ? 80 : 0) + (y >= rect[3] / 2 ? 120 : 0));
                         rgba[i + 3] = x < rect[2] / 2 ? 0 : (byte) 128;
                     }
             }
@@ -392,11 +465,11 @@ public final class PlayerModelSmoke {
                 .lookAt(new Vector3f(normal).mul(5), new Vector3f(), up);
         var pose = PlayerPose.NEUTRAL;
         var bodyShift = new Vector3f();
-        for (var part : PlayerModel.PARTS) {
+        for (var part : PlayerModel.parts(appearance.model())) {
             int index = part.part().ordinal();
             var box = part.cuboid();
             var center = new Vector3f(box.x() + box.width() / 2, box.y() + box.height() / 2, box.z() + box.depth() / 2);
-            PlayerModel.partMatrix(part.part(), PlayerPose.NEUTRAL, new Matrix4f())
+            PlayerModel.partMatrix(appearance.model(), part.part(), PlayerPose.NEUTRAL, new Matrix4f())
                     .transformPosition(center);
             var desired = new Vector3f(right).mul((index % 3 - 1) * .85f).fma(index < 3 ? .6f : -.6f, up);
             var shift = desired.sub(center).mul(16);
@@ -405,7 +478,7 @@ public final class PlayerModelSmoke {
             pose = pose.with(part.part(), new PartTransform(shift.x, shift.y, shift.z, 0, 0, 0));
         }
         clear(1);
-        render(renderer, vp, pose, vao, BASE_ONLY);
+        render(renderer, vp, pose, vao, new PlayerAppearance(appearance.model(), Set.of()));
         var baseDepth = BufferUtils.createFloatBuffer(SIZE * SIZE);
         glReadPixels(0, 0, SIZE, SIZE, GL_DEPTH_COMPONENT, GL_FLOAT, baseDepth);
         clear(1);
@@ -414,14 +487,19 @@ public final class PlayerModelSmoke {
         var layerDepth = BufferUtils.createFloatBuffer(SIZE * SIZE);
         glReadPixels(0, 0, SIZE, SIZE, GL_DEPTH_COMPONENT, GL_FLOAT, layerDepth);
         var rgba = skin.rgba();
-        for (var part : PlayerModel.PARTS) {
+        for (var part : PlayerModel.parts(appearance.model())) {
             int index = part.part().ordinal();
             int[] rect = rectangle(part, face);
-            for (float fy : new float[] {.31f, .45f, .55f, .69f})
-                for (float fx : new float[] {.31f, .45f, .55f, .69f}) {
-                    float sx = (index % 3 - 1) * .85f + (fx - .5f) * rect[2] / 16;
-                    float sy = (index < 3 ? .6f : -.6f) + (.5f - fy) * rect[3] / 16;
-                    int offset = (((int) ((sy + 1.5f) / 3 * SIZE)) * SIZE + (int) ((sx + 1.5f) / 3 * SIZE)) * 4;
+            for (float sampleY : new float[] {.31f, .45f, .55f, .69f})
+                for (float sampleX : new float[] {.31f, .45f, .55f, .69f}) {
+                    float centerX = (index % 3 - 1) * .85f, centerY = index < 3 ? .6f : -.6f;
+                    float sx = centerX + (sampleX - .5f) * rect[2] / 16;
+                    float sy = centerY + (.5f - sampleY) * rect[3] / 16;
+                    int pixelX = (int) ((sx + 1.5f) / 3 * SIZE), pixelY = (int) ((sy + 1.5f) / 3 * SIZE);
+                    int offset = (pixelY * SIZE + pixelX) * 4;
+                    // Sample the rasterized pixel center; rounding matters at the three-pixel sleeve's alpha edge.
+                    float fx = .5f + ((pixelX + .5f) / SIZE * 3 - 1.5f - centerX) * 16 / rect[2];
+                    float fy = .5f - ((pixelY + .5f) / SIZE * 3 - 1.5f - centerY) * 16 / rect[3];
                     float textureY = face == Face.BOTTOM ? 1 - fy : fy;
                     int texel = ((rect[1] + (int) (textureY * rect[3])) * 64 + rect[0] + (int) (fx * rect[2])) * 4;
                     boolean opaqueLayer = false;

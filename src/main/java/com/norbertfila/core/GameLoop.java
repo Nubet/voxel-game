@@ -15,6 +15,7 @@ import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
@@ -354,7 +355,8 @@ public final class GameLoop {
                         !blocked && input.rightMouseDown(),
                         settings.farDistance(),
                         settings.simulationDistance(),
-                        !blocked && input.leftMouseDown());
+                        !blocked && input.leftMouseDown(),
+                        new PlayerAppearance(settings.modelVariant()));
                 runtime.controls(driver == null ? controls : driver.controls(controls));
             }
             if (previousSlot != hotbar.selectedSlot())

@@ -11,6 +11,7 @@ import com.norbertfila.persistence.world.*;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.visual.model.ModelVariant;
 import com.norbertfila.render.*;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.world.BlockRegistry;
@@ -46,11 +47,14 @@ public final class PlayerGameHookSmoke {
             var camera = new Camera(settings);
             var driver = new GameLoop.FrameDriver() {
                 int frames;
+                int classicArmPixels;
+                int switches;
                 boolean hiddenChecked, displacedChecked;
 
                 @Override
-                public WorldRuntime.Controls controls(WorldRuntime.Controls ignored) {
-                    return new WorldRuntime.Controls(PlayerInput.NONE, -90, 0, true, false, 2);
+                public WorldRuntime.Controls controls(WorldRuntime.Controls controls) {
+                    return new WorldRuntime.Controls(
+                            PlayerInput.NONE, -90, 0, true, false, 2, 0, false, 0, 2, false, controls.appearance());
                 }
 
                 @Override
@@ -68,6 +72,7 @@ public final class PlayerGameHookSmoke {
                         WorldRuntime runtime, WorldRuntime.Frame state, TerrainRenderer.RenderStats stats, int queue) {
                     if (System.nanoTime() > deadline) throw new AssertionError("Production player hook timed out");
                     if (runtime.state() != WorldRuntime.State.PLAYING || state == null || ++frames < 10) return false;
+                    if (state.playerRenderState().appearance().model() != settings.modelVariant()) return false;
                     var pixels = BufferUtils.createByteBuffer(512 * 512 * 4);
                     glReadBuffer(GL_FRONT);
                     glReadPixels(0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
@@ -89,8 +94,29 @@ public final class PlayerGameHookSmoke {
                     }
                     if (bodyPixels < 100)
                         throw new AssertionError("Production hook did not draw the local body: " + bodyPixels);
-                    displacedChecked = true;
-                    return true;
+                    int armPixels = 0;
+                    for (int p = 0; p < pixels.capacity(); p += 4) {
+                        int red = Byte.toUnsignedInt(pixels.get(p));
+                        if ((red == 94 || red == 126) && Byte.toUnsignedInt(pixels.get(p + 1)) == 30) armPixels++;
+                    }
+                    if (switches == 0) {
+                        if (armPixels < 100) throw new AssertionError("Production arms not visible");
+                        classicArmPixels = armPixels;
+                        settings.setModelVariant(ModelVariant.SLIM);
+                    } else if (switches == 1) {
+                        if (armPixels >= classicArmPixels * .9 || armPixels < classicArmPixels * .6)
+                            throw new AssertionError(
+                                    "Runtime Slim arms did not narrow: " + classicArmPixels + " -> " + armPixels);
+                        settings.setModelVariant(ModelVariant.CLASSIC);
+                    } else {
+                        if (armPixels != classicArmPixels)
+                            throw new AssertionError("Classic switch did not restore arms");
+                        displacedChecked = true;
+                        return true;
+                    }
+                    switches++;
+                    frames = 0;
+                    return false;
                 }
             };
             try {
@@ -107,7 +133,8 @@ public final class PlayerGameHookSmoke {
                         FrameProfiler.disabled());
                 if (!driver.displacedChecked) throw new AssertionError("Production player hook was not exercised");
                 if (glGetError() != GL_NO_ERROR) throw new AssertionError("Production player hook GL error");
-                System.out.println("PASS production GameLoop: first-person hidden, displaced camera renders snapshot");
+                System.out.println(
+                        "PASS production GameLoop: first-person hidden, snapshot Classic/Slim/Classic setting switching");
             } finally {
                 session.saveAndQuit();
                 loop.awaitStop(window, input, ui, settings, session);
