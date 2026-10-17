@@ -57,7 +57,13 @@ public final class BiomeRegistry {
                                 Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.REED, PlantType.MUSHROOM),
                                 TreeType.SWAMP),
                 BiomeType.BADLANDS,
-                        profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of(PlantType.DEAD_BUSH)),
+                        profile(
+                                0,
+                                .05f,
+                                0,
+                                SurfaceMaterial.TERRACOTTA_ORANGE,
+                                SurfaceMaterial.TERRACOTTA_ORANGE,
+                                Set.of(PlantType.DEAD_BUSH)),
                 BiomeType.ALPINE,
                         profile(
                                 0,
