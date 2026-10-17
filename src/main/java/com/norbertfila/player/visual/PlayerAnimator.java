@@ -94,7 +94,7 @@ public final class PlayerAnimator {
                 : (float) (-Math.toRadians(10) * lerp(a.lean(), b.lean(), alpha) - impact * .12);
         float sway = (float) (Math.sin(phase) * intensity * .025 * (1 - air));
         float leg = (float) (Math.sin(phase) * intensity * (state.sprinting() ? 1.1 : .75));
-        float arm = (float) (Math.sin(phase - .3) * intensity * (state.sprinting() ? 1.1 : .75));
+        float arm = (float) (Math.sin(phase * .78 - .45) * intensity * (state.sprinting() ? .62 : .5));
         float rightArm = -arm, leftArm = arm, rightLeg = leg, leftLeg = -leg;
         boolean flying = state.flying() || state.mode() == PlayerController.Mode.SPECTATOR;
         if (flying) {
