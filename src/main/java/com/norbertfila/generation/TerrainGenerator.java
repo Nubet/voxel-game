@@ -1,5 +1,6 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BadlandsSurface;
 import com.norbertfila.generation.biome.BiomeProfile;
 import com.norbertfila.generation.biome.BiomeRegistry;
 import com.norbertfila.generation.biome.BiomeResolver;
@@ -42,6 +43,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final BiomeResolver biomeResolver = new BiomeResolver();
     private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
     private final SurfaceMaterialResolver surfaceMaterials = new SurfaceMaterialResolver(new SurfaceMaterialMapper());
+    private final BadlandsSurface badlandsSurface;
     private final TreeGenerator trees;
     private final VegetationGenerator vegetation;
     private final SnowGenerator snow = new SnowGenerator();
@@ -61,6 +63,7 @@ public final class TerrainGenerator implements TerrainSource {
 
     TerrainGenerator(long seed, TerrainConfig config, Noise2D noise, Noise2D forestDensity) {
         this.seed = seed;
+        badlandsSurface = new BadlandsSurface(seed);
         this.config = Objects.requireNonNull(config);
         Objects.requireNonNull(noise);
         Objects.requireNonNull(forestDensity);
@@ -241,14 +244,16 @@ public final class TerrainGenerator implements TerrainSource {
                 && slope <= 1.5) {
             materials = surfaceMaterials.forestFloor(shores.sample(worldX * .035, worldZ * .035));
         }
-        boolean badlands = column.biome() == BiomeType.BADLANDS;
-        byte subsurface = column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
-        byte deep = badlands ? BlockId.TERRACOTTA_RED : BlockId.STONE;
+        var badlands = column.biome() == BiomeType.BADLANDS ? badlandsSurface.column(worldX, worldZ) : null;
+        byte surface = badlands == null ? materials.surface() : badlands.surfaceAt(height, waterLevel());
+        byte subsurface = badlands != null
+                ? badlands.materialAt(height - 1, height, surface)
+                : column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
         return new TerrainSummary(
                 height,
-                badlands ? SurfaceMaterialMapper.badlands(height) : materials.surface(),
+                surface,
                 subsurface,
-                deep,
+                BlockId.STONE,
                 WorldBounds.MIN_Y,
                 column.waterLevel(),
                 column.biome(),
@@ -265,7 +270,8 @@ public final class TerrainGenerator implements TerrainSource {
                         && com.norbertfila.generation.biome.SnowRules.freezes(
                                 column.waterKind(),
                                 com.norbertfila.generation.biome.ClimateRules.temperature(
-                                        column.climate(), column.waterLevel(), config.baseHeight())));
+                                        column.climate(), column.waterLevel(), config.baseHeight())),
+                badlands);
     }
 
     private boolean nearWater(int x, int z, int height, int level) {

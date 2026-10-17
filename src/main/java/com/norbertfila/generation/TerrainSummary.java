@@ -1,5 +1,6 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BadlandsSurface;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.world.BlockId;
@@ -17,7 +18,8 @@ public record TerrainSummary(
         ClimateSample climate,
         WaterKind waterKind,
         boolean snowCover,
-        boolean frozenWater) {
+        boolean frozenWater,
+        BadlandsSurface.Column badlands) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
 
@@ -43,7 +45,8 @@ public record TerrainSummary(
                 climate,
                 waterKind,
                 snowCover,
-                false);
+                false,
+                null);
     }
 
     public TerrainSummary(
@@ -134,6 +137,8 @@ public record TerrainSummary(
             throw new IllegalArgumentException("Ice requires water above the ground");
         if (snowCover && surfaceHeight < waterLevel)
             throw new IllegalArgumentException("Ground snow cannot cover a flooded column");
+        if (badlands != null && biome != BiomeType.BADLANDS)
+            throw new IllegalArgumentException("Badlands layers require a badlands biome");
         if (!BlockId.isValid(surfaceMaterial)
                 || !BlockId.isValid(subsurfaceMaterial)
                 || !BlockId.isValid(deepMaterial)
@@ -148,7 +153,14 @@ public record TerrainSummary(
         if (frozenWater && worldY == waterLevel) return BlockId.ICE;
         if (snowCover && (long) worldY == (long) surfaceHeight + 1) return BlockId.SNOW_LAYER;
         return materialAt(
-                worldY, surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, bedrockHeight, waterLevel);
+                worldY,
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                badlands);
     }
 
     static byte materialAt(
@@ -158,18 +170,16 @@ public record TerrainSummary(
             byte subsurfaceMaterial,
             byte deepMaterial,
             int bedrockHeight,
-            int waterLevel) {
+            int waterLevel,
+            BadlandsSurface.Column badlands) {
         if (bedrockHeight != NO_BEDROCK) {
             if (worldY < bedrockHeight) return BlockId.AIR;
             if (worldY == bedrockHeight) return BlockId.BEDROCK;
         }
         if (worldY > surfaceHeight) return worldY <= waterLevel ? BlockId.WATER : BlockId.AIR;
-        if (deepMaterial == BlockId.TERRACOTTA_RED && worldY >= (long) surfaceHeight - 48)
-            return com.norbertfila.generation.biome.SurfaceMaterialMapper.badlands(worldY);
+        if (badlands != null) return badlands.materialAt(worldY, surfaceHeight, surfaceMaterial);
         if (worldY == surfaceHeight) return surfaceMaterial;
-        return worldY >= surfaceHeight - 3
-                ? subsurfaceMaterial
-                : deepMaterial == BlockId.TERRACOTTA_RED ? BlockId.STONE : deepMaterial;
+        return worldY >= surfaceHeight - 3 ? subsurfaceMaterial : deepMaterial;
     }
 
     public boolean flooded() {

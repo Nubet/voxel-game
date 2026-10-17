@@ -3,14 +3,6 @@ package com.norbertfila.generation.biome;
 import com.norbertfila.world.BlockId;
 
 public final class SurfaceMaterialMapper {
-    public static byte badlands(int y) {
-        return switch (Math.floorMod(y, 24) / 8) {
-            case 0 -> BlockId.TERRACOTTA_RED;
-            case 1 -> BlockId.TERRACOTTA_ORANGE;
-            default -> BlockId.CLAY;
-        };
-    }
-
     public byte surface(SurfaceMaterial material) {
         return switch (material) {
             case GRASS -> BlockId.GRASS;

@@ -120,14 +120,21 @@ class GeographicBiomeTest {
 
     @Test
     void badlandsExposeVerticalStrataAndReturnToStoneAtDepth() {
+        var layers = new BadlandsSurface(42).column(0, 0);
         var summary = new TerrainSummary(
                 80,
-                BlockId.TERRACOTTA_RED,
-                BlockId.TERRACOTTA_RED,
-                BlockId.TERRACOTTA_RED,
+                layers.bandAt(80),
+                layers.bandAt(79),
+                BlockId.STONE,
                 -70,
-                TerrainSummary.NO_WATER);
-        for (int y = 32; y <= 80; y++) assertEquals(SurfaceMaterialMapper.badlands(y), summary.materialAt(y));
+                TerrainSummary.NO_WATER,
+                BiomeType.BADLANDS,
+                new ClimateSample(.5f, 0),
+                WaterKind.NONE,
+                false,
+                false,
+                layers);
+        for (int y = 32; y <= 80; y++) assertEquals(layers.bandAt(y), summary.materialAt(y));
         assertEquals(BlockId.STONE, summary.materialAt(31));
         var summaries = new TerrainSummary[256];
         java.util.Arrays.fill(summaries, summary);

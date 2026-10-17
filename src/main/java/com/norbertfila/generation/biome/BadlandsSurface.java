@@ -68,5 +68,17 @@ public final class BadlandsSurface {
             if (topMaterial == BlockId.RED_SAND && depth <= 3) return BlockId.TERRACOTTA_ORANGE;
             return bandAt(worldY);
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Column column
+                    && offset == column.offset
+                    && Arrays.equals(surface.bands, column.surface.bands);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(surface.bands) + offset;
+        }
     }
 }

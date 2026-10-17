@@ -3,6 +3,8 @@ package com.norbertfila.generation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.generation.biome.BadlandsSurface;
+import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.world.BlockId;
 import java.util.HashSet;
 import java.util.Set;
@@ -41,6 +43,8 @@ class BadlandsSurfaceTest {
         var first = new BadlandsSurface(42);
         var same = new BadlandsSurface(42);
         var different = new BadlandsSurface(43);
+        assertEquals(first.column(-17, 16), same.column(-17, 16));
+        assertEquals(first.column(-17, 16).hashCode(), same.column(-17, 16).hashCode());
         boolean differs = false;
         for (int y = -384; y <= 384; y++) {
             assertEquals(first.bandAt(y), same.bandAt(y));
@@ -105,5 +109,44 @@ class BadlandsSurfaceTest {
         for (int y = 72; y <= 120; y++) assertEquals(column.bandAt(y), column.materialAt(y, 120, top));
         assertEquals(BlockId.STONE, column.materialAt(71, 120, top));
         assertThrows(IllegalArgumentException.class, () -> column.materialAt(121, 120, top));
+    }
+
+    @Test
+    void summariesAndCachedColumnsShareLayersWithoutFlatteningSections() {
+        var surface = new BadlandsSurface(42);
+        for (int height : new int[] {48, 100}) {
+            var summaries = new TerrainSummary[TerrainColumn.AREA];
+            for (int index = 0; index < summaries.length; index++) {
+                var layers = surface.column(index % 16 - 16, index / 16);
+                byte top = layers.surfaceAt(height, 28);
+                summaries[index] = new TerrainSummary(
+                        height,
+                        top,
+                        layers.materialAt(height - 1, height, top),
+                        BlockId.STONE,
+                        -64,
+                        28,
+                        BiomeType.BADLANDS,
+                        new ClimateSample(.5f, 0),
+                        WaterKind.OCEAN,
+                        false,
+                        false,
+                        layers);
+            }
+            var column = TerrainColumn.of(summaries, java.util.List.of());
+            for (int index = 0; index < summaries.length; index++)
+                for (int y = -65; y <= height + 1; y++)
+                    assertEquals(summaries[index].materialAt(y), column.materialAt(index, y));
+            assertEquals(-1, column.uniformBlock(height - 32));
+            assertEquals(BlockId.STONE, column.uniformBlock(height - 80));
+            assertEquals(BlockId.BEDROCK, column.materialAt(0, -64));
+            assertEquals(BlockId.AIR, column.materialAt(0, -65));
+        }
+    }
+
+    @Test
+    void redTerracottaAloneDoesNotEnableBadlandsGeneration() {
+        var summary = new TerrainSummary(80, BlockId.TERRACOTTA_RED, BlockId.TERRACOTTA_RED, BlockId.TERRACOTTA_RED);
+        assertEquals(BlockId.TERRACOTTA_RED, summary.materialAt(31));
     }
 }
