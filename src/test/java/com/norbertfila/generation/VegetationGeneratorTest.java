@@ -12,7 +12,7 @@ class VegetationGeneratorTest {
     private static final TerrainSummary GRASS = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
 
     @Test
-    void taigaSnowLeavesMostPodzolVisibleAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
+    void snowyTaigaCoversSoilAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
         var summary = new TerrainSummary(
                 15,
                 BlockId.PODZOL,
@@ -20,10 +20,12 @@ class VegetationGeneratorTest {
                 BlockId.STONE,
                 TerrainSummary.NO_BEDROCK,
                 TerrainSummary.NO_WATER,
-                BiomeType.TAIGA,
-                new ClimateSample(-.6f, 0));
+                BiomeType.SNOWY_TAIGA,
+                new ClimateSample(-.6f, 0),
+                WaterKind.NONE,
+                true);
         var column = TerrainColumn.of(columns(summary), List.of());
-        var generator = new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1);
+        var generator = new SnowGenerator();
         byte[] below = new byte[Chunk.BLOCK_BYTES];
         generator.generate(-16, 0, -16, below, column);
         assertArrayEquals(new byte[Chunk.BLOCK_BYTES], below);
@@ -40,9 +42,9 @@ class VegetationGeneratorTest {
                 plants++;
             }
         }
-        assertTrue(snow > 0 && snow < 90, "Snow should be sparse patches, not a blanket: " + snow);
-        assertTrue(bare > 128, "Most podzol should remain visible even away from plants");
-        assertTrue(plants > 0);
+        assertEquals(255, snow);
+        assertEquals(0, bare);
+        assertEquals(0, plants);
         byte[] repeat = new byte[Chunk.BLOCK_BYTES];
         repeat[0] = BlockId.PINE_LOG;
         generator.generate(-16, 16, -16, repeat, column);
@@ -50,7 +52,7 @@ class VegetationGeneratorTest {
     }
 
     @Test
-    void taigaSnowFormsPatchesAcrossSeedsAndChunkSeams() {
+    void ordinaryTaigaNeverGetsSnowFromVegetation() {
         var summary = new TerrainSummary(
                 15,
                 BlockId.PODZOL,
@@ -80,8 +82,7 @@ class VegetationGeneratorTest {
                     if (area[z][x + 1] == BlockId.SNOW_LAYER) adjacentSnow++;
                 }
             double coverage = snow / (128.0 * 127);
-            assertTrue(coverage > .05 && coverage < .3, "Snow coverage for seed " + seed + ": " + coverage);
-            assertTrue(adjacentSnow > snow * .65, "Snow should form connected patches, not isolated speckles");
+            assertEquals(0, coverage);
         }
     }
 
@@ -94,8 +95,10 @@ class VegetationGeneratorTest {
                 BlockId.STONE,
                 TerrainSummary.NO_BEDROCK,
                 TerrainSummary.NO_WATER,
-                BiomeType.TAIGA,
-                new ClimateSample(-.6f, 0));
+                BiomeType.SNOWY_TAIGA,
+                new ClimateSample(-.6f, 0),
+                WaterKind.NONE,
+                true);
         var trees = new ArrayList<TreeGenerator.Tree>();
         for (int z = -18; z <= 18; z += 6)
             for (int x = -18; x <= 18; x += 6)
@@ -107,7 +110,7 @@ class VegetationGeneratorTest {
                 "The snow above a crown must not be skipped as uniform air");
         trees.add(new TreeGenerator.Tree(-6, -6, 15, 5, 2, 42, com.norbertfila.generation.biome.TreeType.CONIFER));
         var column = TerrainColumn.of(columns(summary), trees);
-        var generator = new VegetationGenerator(42, (x, z) -> -1, (x, z) -> -1);
+        var generator = new SnowGenerator();
         int snowOnLeaves = 0, snowAtSeam = 0;
         for (int oz : new int[] {-16, 0})
             for (int ox : new int[] {-16, 0}) {

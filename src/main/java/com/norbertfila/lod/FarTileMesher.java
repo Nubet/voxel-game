@@ -67,7 +67,8 @@ public final class FarTileMesher {
                         water,
                         (endZ - z) * step,
                         (endX - x) * step,
-                        texture);
+                        texture,
+                        material == BlockId.SNOW_LAYER);
             }
     }
 
@@ -183,11 +184,25 @@ public final class FarTileMesher {
 
     private static void add(
             IntList records, int x, int y, int z, int face, boolean water, int width, int height, int texture) {
+        add(records, x, y, z, face, water, width, height, texture, false);
+    }
+
+    private static void add(
+            IntList records,
+            int x,
+            int y,
+            int z,
+            int face,
+            boolean water,
+            int width,
+            int height,
+            int texture,
+            boolean snowLayer) {
         if (x < 0 || x > FarTerrainTile.SIZE || z < 0 || z > FarTerrainTile.SIZE)
             throw new IllegalArgumentException("Far quad corner outside the tile");
         if (width < 1 || width > FarTerrainTile.SIZE || height < 1 || height > MAX_HEIGHT || texture >>> 16 != 0)
             throw new IllegalArgumentException("Invalid far quad");
-        records.add(x | z << 7 | face << 14 | (water ? 1 << 17 : 0) | (width - 1) << 18);
+        records.add(x | z << 7 | face << 14 | (water ? 1 << 17 : 0) | (width - 1) << 18 | (snowLayer ? 1 << 24 : 0));
         records.add(y);
         records.add(height - 1 | texture << 16);
     }

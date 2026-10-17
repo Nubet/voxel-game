@@ -44,6 +44,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final SurfaceMaterialResolver surfaceMaterials = new SurfaceMaterialResolver(new SurfaceMaterialMapper());
     private final TreeGenerator trees;
     private final VegetationGenerator vegetation;
+    private final SnowGenerator snow = new SnowGenerator();
     private final GenerationCache<TerrainColumn> columns = new GenerationCache<>(COLUMN_CACHE_CAPACITY);
     private final GenerationCache<CavePlan> cavePlans = new GenerationCache<>(128);
     private final CavePlanner cavePlanner;
@@ -252,7 +253,14 @@ public final class TerrainGenerator implements TerrainSource {
                 column.waterLevel(),
                 column.biome(),
                 column.climate(),
-                column.waterKind());
+                column.waterKind(),
+                height >= column.waterLevel()
+                        && com.norbertfila.generation.biome.SnowRules.covered(
+                                column.biome(),
+                                com.norbertfila.generation.biome.ClimateRules.temperature(
+                                        column.climate(), height, config.baseHeight()),
+                                slope,
+                                shores.sample(worldX * .018, worldZ * .018)));
     }
 
     private boolean nearWater(int x, int z, int height, int level) {
@@ -309,6 +317,7 @@ public final class TerrainGenerator implements TerrainSource {
         if (uniform >= 0 && !carved && !mineralized)
             return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
+        snow.generate(originX, originY, originZ, blocks, column);
         vegetation.generate(originX, originY, originZ, blocks, column);
         return tinted(new ChunkData(position, blocks), originX, originZ);
     }

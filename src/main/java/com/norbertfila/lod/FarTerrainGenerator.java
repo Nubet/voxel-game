@@ -97,7 +97,7 @@ public final class FarTerrainGenerator {
      */
     private static long surface(TerrainSummary terrain, AreaEdits edits, int column) {
         int changes = column < 0 ? 0 : edits.changeCount(column);
-        int surface = terrain.surfaceHeight();
+        int surface = terrain.surfaceHeight() + (terrain.snowCover() ? 1 : 0);
         long y = changes > 0 ? Math.max(surface, edits.changeY(column, 0)) : surface;
         int change = 0;
         while (true) {
