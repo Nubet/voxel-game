@@ -147,7 +147,8 @@ public final class WorldFlowSmoke {
                 Thread.getAllStackTraces().keySet().stream()
                         .noneMatch(t -> t.isAlive()
                                 && (t.getName().startsWith("voxel-")
-                                        || t.getName().startsWith("pool-"))),
+                                        || t.getName().startsWith("chunk-")
+                                        || t.getName().startsWith("far-terrain-"))),
                 "Leaked workers");
         System.out.println("WORLD-05 " + args[1] + " PASS root=" + root);
     }

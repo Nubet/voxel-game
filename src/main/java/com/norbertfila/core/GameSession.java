@@ -5,6 +5,7 @@ import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.world.WorldCatalog;
 import com.norbertfila.persistence.world.WorldIo;
 import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.streaming.WorkerCounts;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -25,16 +26,27 @@ public final class GameSession {
     private final LongFunction<TerrainSource> generators;
     private final LayeredMesher mesher;
     private final ViewDemand demand;
+    private final WorkerCounts workers;
     private CompletableFuture<WorldCatalog.Loaded> loading;
     private WorldRuntime runtime;
     private State state = State.MENU;
     private Throwable failure;
 
     public GameSession(WorldIo io, LongFunction<TerrainSource> generators, LayeredMesher mesher, ViewDemand demand) {
+        this(io, generators, mesher, demand, WorkerCounts.DEFAULT);
+    }
+
+    public GameSession(
+            WorldIo io,
+            LongFunction<TerrainSource> generators,
+            LayeredMesher mesher,
+            ViewDemand demand,
+            WorkerCounts workers) {
         this.io = Objects.requireNonNull(io);
         this.generators = Objects.requireNonNull(generators);
         this.mesher = Objects.requireNonNull(mesher);
         this.demand = Objects.requireNonNull(demand);
+        this.workers = Objects.requireNonNull(workers);
     }
 
     public void open(WorldCatalog catalog, UUID id) {
@@ -55,7 +67,8 @@ public final class GameSession {
                             demand,
                             loaded.statePath(),
                             io,
-                            loaded.snapshot());
+                            loaded.snapshot(),
+                            workers);
             } catch (CompletionException failed) {
                 failure = failed.getCause();
             } catch (RuntimeException failed) {

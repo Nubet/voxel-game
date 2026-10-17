@@ -317,7 +317,9 @@ class GameSessionTest {
     private static long worldThreads() {
         return Thread.getAllStackTraces().keySet().stream()
                 .filter(t -> t.isAlive()
-                        && (t.getName().equals("voxel-world") || t.getName().startsWith("pool-")))
+                        && (t.getName().equals("voxel-world")
+                                || t.getName().startsWith("chunk-")
+                                || t.getName().startsWith("far-terrain-")))
                 .count();
     }
 

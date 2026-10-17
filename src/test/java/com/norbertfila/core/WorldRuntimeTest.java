@@ -649,7 +649,7 @@ class WorldRuntimeTest {
             assertTrue(frame.pendingWater() > 0);
             assertThrows(
                     UnsupportedOperationException.class, () -> frame.residents().clear());
-            assertTrue(terrain.threads.stream().anyMatch(name -> name.startsWith("pool-")));
+            assertTrue(terrain.threads.stream().anyMatch(name -> name.startsWith("chunk-generation-")));
             assertFalse(terrain.threads.contains(Thread.currentThread().getName()));
             stopped = frame.tick();
         }

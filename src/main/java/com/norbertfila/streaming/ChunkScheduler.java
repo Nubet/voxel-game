@@ -68,13 +68,23 @@ public final class ChunkScheduler<T> implements AutoCloseable {
     private volatile boolean closed;
 
     public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity) {
+        this(workerCount, taskQueueCapacity, readyQueueCapacity, "chunk-worker");
+    }
+
+    public ChunkScheduler(int workerCount, int taskQueueCapacity, int readyQueueCapacity, String name) {
         if (workerCount <= 0 || taskQueueCapacity <= 0 || readyQueueCapacity <= 0) {
             throw new IllegalArgumentException("Scheduler capacities must be positive");
         }
         PriorityBlockingQueue<Runnable> tasks = new PriorityBlockingQueue<>(
                 taskQueueCapacity, (left, right) -> ((PrioritizedTask) left).compareTo((PrioritizedTask) right));
         executor = new ThreadPoolExecutor(
-                workerCount, workerCount, 0L, TimeUnit.MILLISECONDS, tasks, new ThreadPoolExecutor.AbortPolicy());
+                workerCount,
+                workerCount,
+                0L,
+                TimeUnit.MILLISECONDS,
+                tasks,
+                Thread.ofPlatform().name(Objects.requireNonNull(name) + "-", 0).factory(),
+                new ThreadPoolExecutor.AbortPolicy());
         // promote() re-inserts tasks straight into the queue, which only running workers will drain.
         executor.prestartAllCoreThreads();
         ready = new ArrayBlockingQueue<>(readyQueueCapacity);

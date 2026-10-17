@@ -179,7 +179,8 @@ public final class SessionLifecycleSmoke {
         return Thread.getAllStackTraces().keySet().stream()
                 .filter(thread -> thread.isAlive()
                         && (thread.getName().equals("voxel-world")
-                                || thread.getName().startsWith("pool-")))
+                                || thread.getName().startsWith("chunk-")
+                                || thread.getName().startsWith("far-terrain-")))
                 .count();
     }
 

@@ -182,6 +182,9 @@ tasks.register<JavaExec>("benchmarkGame") {
     systemProperty("voxel.benchmark.label", findProperty("label") ?: "unlabeled")
     systemProperty("voxel.benchmark.gpuTimers", findProperty("gpuTimers") ?: "true")
     findProperty("seconds")?.let { systemProperty("voxel.benchmark.seconds", it) }
+    findProperty("genWorkers")?.let { systemProperty("voxel.benchmark.genWorkers", it) }
+    findProperty("meshWorkers")?.let { systemProperty("voxel.benchmark.meshWorkers", it) }
+    findProperty("farWorkers")?.let { systemProperty("voxel.benchmark.farWorkers", it) }
     findProperty("directDraw")?.let { systemProperty("voxel.render.directDraw", it) }
     findProperty("width")?.let { systemProperty("voxel.benchmark.width", it) }
     findProperty("height")?.let { systemProperty("voxel.benchmark.height", it) }

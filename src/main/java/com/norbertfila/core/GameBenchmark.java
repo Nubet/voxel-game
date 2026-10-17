@@ -29,6 +29,7 @@ import com.norbertfila.render.CloudMode;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.streaming.WorkerCounts;
 import com.norbertfila.world.BlockRegistry;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -101,6 +102,10 @@ public final class GameBenchmark {
         int height = Integer.getInteger("voxel.benchmark.height", 720);
         boolean gpuTimers = Boolean.parseBoolean(System.getProperty("voxel.benchmark.gpuTimers", "true"));
         long seed = Long.getLong("voxel.benchmark.seed", SEED);
+        var workers = new WorkerCounts(
+                Integer.getInteger("voxel.benchmark.genWorkers", WorkerCounts.DEFAULT.generation()),
+                Integer.getInteger("voxel.benchmark.meshWorkers", WorkerCounts.DEFAULT.meshing()),
+                Integer.getInteger("voxel.benchmark.farWorkers", WorkerCounts.DEFAULT.far()));
         try (Window window = new Window(width, height, "Voxel Engine | Benchmark");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
@@ -114,7 +119,8 @@ public final class GameBenchmark {
                     io,
                     worldSeed -> new TerrainGenerator(worldSeed, config),
                     new WaterMesher(),
-                    Game.terrainDemand(config));
+                    Game.terrainDemand(config),
+                    workers);
             var spawn = new SpawnResolver(terrain)
                     .resolve(
                             Integer.getInteger("voxel.benchmark.siteX", 0),
@@ -161,7 +167,7 @@ public final class GameBenchmark {
                             settings,
                             driver,
                             profiler);
-                    records = driver.records(label, renderDistance, farDistance, window);
+                    records = driver.records(label, renderDistance, farDistance, window, workers);
                 } finally {
                     if (session.state() == GameSession.State.PLAYING) session.saveAndQuit();
                     else if (session.state() == GameSession.State.LOADING) session.cancelLoading();
@@ -468,14 +474,16 @@ public final class GameBenchmark {
             }
         }
 
-        List<BenchmarkRecord> records(String label, int renderDistance, int farDistance, Window window) {
+        List<BenchmarkRecord> records(
+                String label, int renderDistance, int farDistance, Window window, WorkerCounts workers) {
             int[] width = new int[1], height = new int[1];
             window.framebufferSize(width, height);
             if (completed.size() < scenes.size())
                 throw new IllegalStateException(
                         "Incomplete benchmark: " + completed.size() + " of " + scenes.size() + " scenes");
             return completed.stream()
-                    .map(measurement -> measurement.record(label, renderDistance, farDistance, width[0], height[0]))
+                    .map(measurement ->
+                            measurement.record(label, renderDistance, farDistance, width[0], height[0], workers))
                     .toList();
         }
     }
@@ -572,10 +580,18 @@ public final class GameBenchmark {
                     state.playerState().position().z() - startZ);
         }
 
-        BenchmarkRecord record(String label, int renderDistance, int farDistance, int width, int height) {
+        BenchmarkRecord record(
+                String label, int renderDistance, int farDistance, int width, int height, WorkerCounts workers) {
             double seconds = measureNanos / 1e9;
             var record = new BenchmarkRecord()
                     .put("schema", 2)
+                    .put("generationWorkers", workers.generation())
+                    .put("meshingWorkers", workers.meshing())
+                    .put("farWorkers", workers.far())
+                    .put("resultBatch", ChunkManager.RESULTS_PER_UPDATE)
+                    .put("schedulerReadyCapacity", 64)
+                    .put("nearUploadBudgetMs", 2)
+                    .put("farUploadBudgetMs", 1)
                     .put("runId", RUN_ID)
                     .put("revision", System.getProperty("voxel.benchmark.revision", "unknown"))
                     .put("dirty", System.getProperty("voxel.benchmark.dirty", "unknown"))

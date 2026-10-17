@@ -25,6 +25,7 @@ import com.norbertfila.player.*;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.streaming.WorkerCounts;
 import com.norbertfila.world.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -47,7 +48,6 @@ public final class WorldRuntime implements AutoCloseable {
     private static final AtomicLong SESSION_IDS = new AtomicLong();
     private static final int CAPACITY = 64;
     private static final int FAR_TILE_SIZE = FarTerrainTile.SIZE;
-    private static final int FAR_TERRAIN_WORKERS = 2;
     private static final double COLLISION_LOOKAHEAD_SECONDS = .5;
     private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
     private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
@@ -70,6 +70,7 @@ public final class WorldRuntime implements AutoCloseable {
     private volatile WorldSnapshot finalSnapshot;
     private volatile ChunkPos initialView;
     private CompletableFuture<WorldSnapshot> startup;
+    private final WorkerCounts workers;
 
     public WorldRuntime(TerrainSource generator, LayeredMesher mesher, ViewDemand demand, Path savePath) {
         this(generator, mesher, demand, savePath, ownedIo(generator, mesher, demand, savePath));
@@ -84,7 +85,7 @@ public final class WorldRuntime implements AutoCloseable {
     }
 
     private WorldRuntime(TerrainSource generator, LayeredMesher mesher, ViewDemand demand, Path savePath, WorldIo io) {
-        this(generator, mesher, demand, savePath, io, true, io.read(savePath));
+        this(generator, mesher, demand, savePath, io, true, io.read(savePath), WorkerCounts.DEFAULT);
     }
 
     public WorldRuntime(
@@ -94,7 +95,18 @@ public final class WorldRuntime implements AutoCloseable {
             Path savePath,
             WorldIo io,
             WorldSnapshot initial) {
-        this(generator, mesher, demand, savePath, io, false, CompletableFuture.completedFuture(initial));
+        this(generator, mesher, demand, savePath, io, initial, WorkerCounts.DEFAULT);
+    }
+
+    public WorldRuntime(
+            TerrainSource generator,
+            LayeredMesher mesher,
+            ViewDemand demand,
+            Path savePath,
+            WorldIo io,
+            WorldSnapshot initial,
+            WorkerCounts workers) {
+        this(generator, mesher, demand, savePath, io, false, CompletableFuture.completedFuture(initial), workers);
     }
 
     private WorldRuntime(
@@ -104,12 +116,14 @@ public final class WorldRuntime implements AutoCloseable {
             Path savePath,
             WorldIo io,
             boolean ownsIo,
-            CompletableFuture<WorldSnapshot> initial) {
+            CompletableFuture<WorldSnapshot> initial,
+            WorkerCounts workers) {
         Objects.requireNonNull(generator);
         Objects.requireNonNull(mesher);
         Objects.requireNonNull(demand);
         Objects.requireNonNull(savePath);
         this.io = io;
+        this.workers = Objects.requireNonNull(workers);
         this.ownsIo = ownsIo;
         saves = new SaveScheduler(io, savePath);
         ViewDemand sessionDemand =
@@ -223,8 +237,14 @@ public final class WorldRuntime implements AutoCloseable {
                 breaking.blockChanged(position);
             });
             BlockTargeting targeting = new BlockTargeting(world);
-            try (ChunkManager chunks = new ChunkManager(world, generator, mesher, demand);
-                    FarTerrainStreamer far = new FarTerrainStreamer(generator, world.changes(), FAR_TERRAIN_WORKERS)) {
+            try (ChunkManager chunks = new ChunkManager(
+                            world,
+                            generator,
+                            mesher,
+                            demand,
+                            demand.horizontalRadius() + ChunkManager.UNLOAD_MARGIN,
+                            workers);
+                    FarTerrainStreamer far = new FarTerrainStreamer(generator, world.changes(), workers.far())) {
                 boolean[] viewReady = {false}, poseReady = {false};
                 WorldEdit plantEdits = new WorldEdit(world, FAR_TILE_SIZE);
                 chunks.setChunkLifecycleListener(position -> {

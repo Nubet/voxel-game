@@ -32,7 +32,6 @@ import java.util.logging.Logger;
 
 public final class ChunkManager implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(ChunkManager.class.getName());
-    private static final int WORKER_COUNT = 2;
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
     public static final int RESULTS_PER_UPDATE = 32;
@@ -52,10 +51,8 @@ public final class ChunkManager implements AutoCloseable {
     private final LayeredMesher mesher;
     private final ViewDemand viewDemand;
     private int hysteresisRadius;
-    private final ChunkScheduler<ChunkData> generationScheduler =
-            new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
-    private final ChunkScheduler<ChunkMesh> meshingScheduler =
-            new ChunkScheduler<>(WORKER_COUNT, TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY);
+    private final ChunkScheduler<ChunkData> generationScheduler;
+    private final ChunkScheduler<ChunkMesh> meshingScheduler;
     private final Map<ChunkPos, ChunkEntry> entries = new HashMap<>();
     private final Map<ChunkPos, Long> meshTokens = new HashMap<>();
     // Mesh parts (ChunkMesh.SOLID, ChunkMesh.WATER) still to rebuild per chunk, and the parts of the task in flight.
@@ -185,6 +182,16 @@ public final class ChunkManager implements AutoCloseable {
 
     public ChunkManager(
             World world, WorldGenerator generator, LayeredMesher mesher, ViewDemand viewDemand, int unloadRadius) {
+        this(world, generator, mesher, viewDemand, unloadRadius, WorkerCounts.DEFAULT);
+    }
+
+    public ChunkManager(
+            World world,
+            WorldGenerator generator,
+            LayeredMesher mesher,
+            ViewDemand viewDemand,
+            int unloadRadius,
+            WorkerCounts workers) {
         this.world = Objects.requireNonNull(world);
         this.generator = Objects.requireNonNull(generator);
         this.mesher = Objects.requireNonNull(mesher);
@@ -193,6 +200,11 @@ public final class ChunkManager implements AutoCloseable {
             throw new IllegalArgumentException("Unload radius must not be smaller than load radius");
         }
         this.hysteresisRadius = unloadRadius;
+        Objects.requireNonNull(workers);
+        generationScheduler = new ChunkScheduler<>(
+                workers.generation(), TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY, "chunk-generation");
+        meshingScheduler =
+                new ChunkScheduler<>(workers.meshing(), TASK_QUEUE_CAPACITY, READY_QUEUE_CAPACITY, "chunk-meshing");
     }
 
     public UpdateResult update(ChunkPos center) {
