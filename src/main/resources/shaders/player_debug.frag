@@ -11,12 +11,13 @@ uniform vec2 uWaterFogRange;
 uniform vec3 uSkyColor;
 uniform vec3 uWaterColor;
 uniform float uUnderwater;
+uniform float uOpacity;
 out vec4 fragColor;
 
 void main() {
     fragColor = texture(uSkin, vUV);
     if (uOuterLayer && fragColor.a < 0.5) discard;
-    fragColor.a = 1.0;
+    fragColor.a = uOpacity;
     if (uWorldShading) {
         fragColor.rgb *= vShade;
         float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));
