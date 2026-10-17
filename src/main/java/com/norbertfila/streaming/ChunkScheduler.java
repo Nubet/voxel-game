@@ -168,6 +168,14 @@ public final class ChunkScheduler<T> implements AutoCloseable {
         return outstandingLimit - outstanding.availablePermits();
     }
 
+    public long readyBytes(java.util.function.ToLongFunction<T> size) {
+        synchronized (readyLock) {
+            long bytes = 0;
+            for (var outcome : ready) if (outcome.succeeded()) bytes += size.applyAsLong(outcome.result());
+            return bytes;
+        }
+    }
+
     public boolean hasCapacity() {
         return outstanding.availablePermits() > 0;
     }

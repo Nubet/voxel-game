@@ -114,7 +114,8 @@ public final class ChunkManager implements AutoCloseable {
                 generationScheduler.timings(),
                 meshingScheduler.timings(),
                 generationLatency.histogram.snapshot(),
-                visibleLatency.histogram.snapshot());
+                visibleLatency.histogram.snapshot(),
+                meshingScheduler.readyBytes(ChunkMesh::bytes));
     }
 
     public record Metrics(
@@ -143,7 +144,8 @@ public final class ChunkManager implements AutoCloseable {
             ChunkScheduler.Timings generationTimings,
             ChunkScheduler.Timings meshTimings,
             DurationHistogram.Snapshot generationDistribution,
-            DurationHistogram.Snapshot uploadDistribution) {}
+            DurationHistogram.Snapshot uploadDistribution,
+            long readyMeshBytes) {}
 
     /** Cumulative request-to-event latency: request to generated data, or request to first GPU upload. */
     public record LatencyTotals(long count, long totalNanos, long maxNanos) {}

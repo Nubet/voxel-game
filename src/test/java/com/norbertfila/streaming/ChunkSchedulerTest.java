@@ -56,9 +56,11 @@ class ChunkSchedulerTest {
             scheduler.shutdown();
             assertTrue(scheduler.awaitTermination(Duration.ofSeconds(2)));
             assertEquals(2, scheduler.outstandingJobs());
+            assertEquals(3, scheduler.readyBytes(value -> value + 1));
             var outcomes = scheduler.drainReady();
             assertEquals(2, outcomes.size());
             assertEquals(0, scheduler.outstandingJobs());
+            assertEquals(0, scheduler.readyBytes(value -> value + 1));
             assertTrue(scheduler.hasCapacity());
             assertEquals(
                     java.util.Set.of(0, 1),

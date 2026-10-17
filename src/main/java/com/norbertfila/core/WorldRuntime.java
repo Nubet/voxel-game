@@ -496,9 +496,12 @@ public final class WorldRuntime implements AutoCloseable {
                             saves.poll();
                             long publishStarted = System.nanoTime();
                             Map<Long, ChunkManager.MeshResult> valid = new HashMap<>();
-                            outstanding.forEach((token, mesh) -> {
-                                if (chunks.isCurrentMesh(mesh)) valid.put(token, mesh);
-                            });
+                            long outstandingBytes = 0;
+                            for (var entry : outstanding.entrySet()) {
+                                var mesh = entry.getValue();
+                                outstandingBytes += mesh.bytes();
+                                if (chunks.isCurrentMesh(mesh)) valid.put(entry.getKey(), mesh);
+                            }
                             if (tick[0] % 60 == 0) {
                                 fluidMetrics[0] = water.metrics(tick[0]);
                                 estimatedChunkBytes[0] = world.estimatedBytes();
@@ -547,7 +550,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     estimatedChunkBytes[0],
                                     streamingNanos,
                                     publishNanos,
-                                    far.metrics());
+                                    far.metrics(),
+                                    outstandingBytes);
                             frame.set(new Frame(
                                     sessionId,
                                     poseReady[0],

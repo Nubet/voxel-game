@@ -26,4 +26,5 @@ public record SimulationMetrics(
         long estimatedChunkBytes,
         long streamingNanos,
         long publishNanos,
-        FarTerrainStreamer.Metrics far) {}
+        FarTerrainStreamer.Metrics far,
+        long outstandingMeshBytes) {}

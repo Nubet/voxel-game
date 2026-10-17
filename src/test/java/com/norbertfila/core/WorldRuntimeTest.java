@@ -776,6 +776,9 @@ class WorldRuntimeTest {
         try (WorldRuntime runtime = start(new Flat(), directory.resolve("backpressure.vxl"))) {
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, true, false, 3));
             var blocked = await(runtime, f -> f.tick() >= 60);
+            assertTrue(blocked.metrics().streaming().meshOutstanding() <= 64);
+            assertTrue(blocked.metrics().outstandingAcks() <= 64);
+            assertTrue(blocked.metrics().outstandingMeshBytes() >= 0);
             var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             WorldRuntime.SessionMesh mesh;
             while ((mesh = runtime.pollMesh()) != null) {

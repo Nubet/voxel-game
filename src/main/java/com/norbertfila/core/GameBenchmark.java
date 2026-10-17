@@ -495,6 +495,7 @@ public final class GameBenchmark {
         private double retainedHeapMb, profilerOverheadUs;
         private double frameMeanMs, frameMaxMs;
         private long reservoirReplacements, oldestAckMax, movementWaitingTicks;
+        private long meshPipelineBytesMax;
         private double startX, startZ, travelledBlocks;
         private int over6944, genQueueMax, meshQueueMax;
         private long nvxStartKb = -1, nvxEndKb = -1;
@@ -528,6 +529,9 @@ public final class GameBenchmark {
             meshQueueMax = Math.max(meshQueueMax, metrics.streaming().meshQueued());
             oldestAckMax = Math.max(oldestAckMax, metrics.oldestAckNanos());
             if (metrics.movementWaiting()) movementWaitingTicks++;
+            meshPipelineBytesMax = Math.max(
+                    meshPipelineBytesMax,
+                    metrics.outstandingMeshBytes() + metrics.streaming().readyMeshBytes());
             ticks.add(metrics.tickNanos());
             streaming.add(metrics.streamingNanos());
             publish.add(metrics.publishNanos());
@@ -699,6 +703,7 @@ public final class GameBenchmark {
                     .put("uploadQueueMax", uploadQueueMax)
                     .put("generationQueueMax", genQueueMax)
                     .put("meshQueueMax", meshQueueMax)
+                    .put("meshPipelineMaxMB", megabytes(meshPipelineBytesMax))
                     .put("oldestAckMaxMs", oldestAckMax / 1e6)
                     .put("movementWaitingTicks", movementWaitingTicks)
                     .put("travelledBlocks", travelledBlocks)
