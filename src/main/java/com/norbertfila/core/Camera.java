@@ -12,6 +12,8 @@ public final class Camera {
     private final Vector3f forward = new Vector3f();
     private final GameSettings settings;
     private float yaw = -90f, pitch = -25f;
+    private float renderYaw = -90f, renderPitch = -25f;
+    private Perspective perspective = Perspective.FIRST;
     private float currentFov;
 
     public Camera() {
@@ -30,6 +32,7 @@ public final class Camera {
         float sensitivity = mouseSensitivity();
         yaw += deltaX * sensitivity;
         pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - deltaY * sensitivity));
+        renderLook(yaw, pitch);
     }
 
     public void updateZoom(boolean held, double deltaSeconds) {
@@ -65,6 +68,26 @@ public final class Camera {
             throw new IllegalArgumentException("Invalid camera orientation");
         this.yaw = yaw;
         this.pitch = Math.clamp(pitch, -MAX_PITCH, MAX_PITCH);
+        renderLook(this.yaw, this.pitch);
+    }
+
+    public enum Perspective {
+        FIRST,
+        REAR,
+        FRONT
+    }
+
+    public Perspective perspective() {
+        return perspective;
+    }
+
+    public void cyclePerspective() {
+        perspective = Perspective.values()[(perspective.ordinal() + 1) % Perspective.values().length];
+    }
+
+    public void renderLook(float yaw, float pitch) {
+        renderYaw = yaw;
+        renderPitch = pitch;
     }
 
     public float yaw() {
@@ -95,7 +118,7 @@ public final class Camera {
     }
 
     private void getForward() {
-        float yr = (float) Math.toRadians(yaw), pr = (float) Math.toRadians(pitch);
+        double yr = Math.toRadians(renderYaw), pr = Math.toRadians(renderPitch);
         forward.set((float) (Math.cos(yr) * Math.cos(pr)), (float) Math.sin(pr), (float) (Math.sin(yr) * Math.cos(pr)))
                 .normalize();
     }

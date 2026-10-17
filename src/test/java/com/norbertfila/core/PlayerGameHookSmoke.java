@@ -1,5 +1,6 @@
 package com.norbertfila.core;
 
+import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
@@ -50,20 +51,31 @@ public final class PlayerGameHookSmoke {
                 int classicArmPixels;
                 int switches;
                 boolean hiddenChecked, displacedChecked;
+                boolean lookInitialized;
 
                 @Override
                 public WorldRuntime.Controls controls(WorldRuntime.Controls controls) {
                     return new WorldRuntime.Controls(
-                            PlayerInput.NONE, -90, 0, true, false, 2, 0, false, 0, 2, false, controls.appearance());
+                            PlayerInput.NONE,
+                            controls.yaw(),
+                            controls.pitch(),
+                            true,
+                            false,
+                            2,
+                            0,
+                            false,
+                            0,
+                            2,
+                            false,
+                            controls.appearance());
                 }
 
                 @Override
                 public void update(WorldRuntime runtime, WorldRuntime.Frame state, Camera view) {
                     if (state == null || !state.ready()) return;
-                    if (hiddenChecked) {
-                        var feet = state.playerRenderState().current().feet();
-                        view.setPosition(feet.x(), feet.y() + 1, feet.z() - 5);
-                        view.restoreLook(90, 0);
+                    if (!lookInitialized) {
+                        view.restoreLook(-90, 0);
+                        lookInitialized = true;
                     }
                 }
 
@@ -81,23 +93,65 @@ public final class PlayerGameHookSmoke {
                     for (int y = 200; y < 300; y++)
                         for (int x = 200; x < 300; x++) {
                             int p = (y * 512 + x) * 4;
-                            if (Byte.toUnsignedInt(pixels.get(p)) == 30
-                                    && Byte.toUnsignedInt(pixels.get(p + 1)) == 30
-                                    && (Byte.toUnsignedInt(pixels.get(p + 2)) == 40
-                                            || Byte.toUnsignedInt(pixels.get(p + 2)) == 120)) bodyPixels++;
+                            int red = Byte.toUnsignedInt(pixels.get(p));
+                            int green = Byte.toUnsignedInt(pixels.get(p + 1));
+                            int blue = Byte.toUnsignedInt(pixels.get(p + 2));
+                            if (red >= 25
+                                    && red <= 27
+                                    && ((green >= 25 && green <= 27) || (green >= 52 && green <= 54))
+                                    && blue > 30) bodyPixels++;
                         }
                     if (!hiddenChecked) {
                         if (bodyPixels != 0) throw new AssertionError("Local body visible in first person");
                         hiddenChecked = true;
+                        key(window, GLFW_KEY_F5, GLFW_PRESS);
+                        key(window, GLFW_KEY_F5, GLFW_REPEAT);
+                        key(window, GLFW_KEY_F5, GLFW_RELEASE);
+                        frames = 0;
+                        return false;
+                    }
+                    if (switches == 6) {
+                        if (camera.perspective() != Camera.Perspective.FIRST || bodyPixels != 0)
+                            throw new AssertionError("F5 loop did not restore hidden first person");
+                        displacedChecked = true;
+                        return true;
+                    }
+                    if (switches == 4) {
+                        if (camera.perspective() != Camera.Perspective.FRONT)
+                            throw new AssertionError("UI consumed F5 as gameplay");
+                        key(window, GLFW_KEY_E, GLFW_PRESS);
+                        switches++;
+                        frames = 0;
+                        return false;
+                    }
+                    if (switches == 5) {
+                        if (camera.perspective() != Camera.Perspective.FRONT)
+                            throw new AssertionError("Blocked F5 leaked after UI closed");
+                        key(window, GLFW_KEY_F5, GLFW_PRESS);
+                        key(window, GLFW_KEY_F5, GLFW_RELEASE);
+                        switches++;
                         frames = 0;
                         return false;
                     }
                     if (bodyPixels < 100)
-                        throw new AssertionError("Production hook did not draw the local body: " + bodyPixels);
+                        throw new AssertionError("Production hook did not draw the local body: " + bodyPixels
+                                + " perspective=" + camera.perspective() + " stage=" + switches);
+                    if (switches == 0 && camera.perspective() == Camera.Perspective.REAR) {
+                        key(window, GLFW_KEY_F5, GLFW_PRESS);
+                        key(window, GLFW_KEY_F5, GLFW_RELEASE);
+                        frames = 0;
+                        return false;
+                    }
                     int armPixels = 0;
                     for (int p = 0; p < pixels.capacity(); p += 4) {
                         int red = Byte.toUnsignedInt(pixels.get(p));
-                        if ((red == 94 || red == 126) && Byte.toUnsignedInt(pixels.get(p + 1)) == 30) armPixels++;
+                        int green = Byte.toUnsignedInt(pixels.get(p + 1));
+                        if (green >= 17
+                                && green <= 63
+                                && (Math.abs(red - green * 94.0 / 62) < 1.5
+                                        || Math.abs(red - green * 126.0 / 62) < 1.5
+                                        || Math.abs(red - green * 94.0 / 30) < 1.5
+                                        || Math.abs(red - green * 126.0 / 30) < 1.5)) armPixels++;
                     }
                     if (switches == 0) {
                         if (armPixels < 100) throw new AssertionError("Production arms not visible");
@@ -108,11 +162,15 @@ public final class PlayerGameHookSmoke {
                             throw new AssertionError(
                                     "Runtime Slim arms did not narrow: " + classicArmPixels + " -> " + armPixels);
                         settings.setModelVariant(ModelVariant.CLASSIC);
-                    } else {
+                    } else if (switches == 2) {
                         if (armPixels != classicArmPixels)
                             throw new AssertionError("Classic switch did not restore arms");
-                        displacedChecked = true;
-                        return true;
+                    } else if (switches == 3) {
+                        if (camera.perspective() != Camera.Perspective.FRONT)
+                            throw new AssertionError("Second F5 did not select front view");
+                        key(window, GLFW_KEY_E, GLFW_PRESS);
+                        key(window, GLFW_KEY_F5, GLFW_PRESS);
+                        key(window, GLFW_KEY_F5, GLFW_RELEASE);
                     }
                     switches++;
                     frames = 0;
@@ -134,11 +192,18 @@ public final class PlayerGameHookSmoke {
                 if (!driver.displacedChecked) throw new AssertionError("Production player hook was not exercised");
                 if (glGetError() != GL_NO_ERROR) throw new AssertionError("Production player hook GL error");
                 System.out.println(
-                        "PASS production GameLoop: first-person hidden, snapshot Classic/Slim/Classic setting switching");
+                        "PASS production GameLoop: F5 first/rear/front/first, repeat suppression, UI blocking, Classic/Slim/Classic");
             } finally {
                 session.saveAndQuit();
                 loop.awaitStop(window, input, ui, settings, session);
             }
         }
+    }
+
+    private static void key(Window window, int key, int action) {
+        var callback = glfwSetKeyCallback(window.handle(), null);
+        glfwSetKeyCallback(window.handle(), callback);
+        if (callback == null) throw new AssertionError("Missing production input callback");
+        callback.invoke(window.handle(), key, 0, action, 0);
     }
 }

@@ -17,7 +17,7 @@ import org.lwjgl.system.MemoryStack;
 public final class PlayerRenderer implements AutoCloseable {
     private static final int VERTICES_PER_MODEL =
             (PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * CuboidMesh.VERTEX_COUNT;
-    private final int program, vao, vbo, vp, model, outerLayer;
+    private final int program, vao, vbo, vp, model, outerLayer, worldShading, fogRange, underwater;
     private final SkinManager skins;
     private boolean closed;
 
@@ -29,6 +29,26 @@ public final class PlayerRenderer implements AutoCloseable {
             vp = ShaderPrograms.uniform(createdProgram, "uVP");
             model = ShaderPrograms.uniform(createdProgram, "uModel");
             outerLayer = ShaderPrograms.uniform(createdProgram, "uOuterLayer");
+            worldShading = ShaderPrograms.uniform(createdProgram, "uWorldShading");
+            fogRange = ShaderPrograms.uniform(createdProgram, "uDistanceFogRange");
+            underwater = ShaderPrograms.uniform(createdProgram, "uUnderwater");
+            glProgramUniform3f(
+                    createdProgram,
+                    ShaderPrograms.uniform(createdProgram, "uSkyColor"),
+                    UnderwaterVisibility.SKY_RED,
+                    UnderwaterVisibility.SKY_GREEN,
+                    UnderwaterVisibility.SKY_BLUE);
+            glProgramUniform3f(
+                    createdProgram,
+                    ShaderPrograms.uniform(createdProgram, "uWaterColor"),
+                    UnderwaterVisibility.FOG_RED,
+                    UnderwaterVisibility.FOG_GREEN,
+                    UnderwaterVisibility.FOG_BLUE);
+            glProgramUniform2f(
+                    createdProgram,
+                    ShaderPrograms.uniform(createdProgram, "uWaterFogRange"),
+                    UnderwaterVisibility.CLEAR_DISTANCE,
+                    UnderwaterVisibility.FOG_DENSITY);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
@@ -59,16 +79,28 @@ public final class PlayerRenderer implements AutoCloseable {
             double cameraX,
             double cameraY,
             double cameraZ) {
+        return render(viewProjection, state, pose, alpha, cameraX, cameraY, cameraZ, null, 0);
+    }
+
+    public boolean render(
+            Matrix4f viewProjection,
+            PlayerRenderState state,
+            PlayerPose pose,
+            double alpha,
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            DistanceFog fog,
+            float water) {
         if (closed) throw new IllegalStateException("Player renderer is closed");
         if (skins.texture() == 0) return false;
         var sample = state.interpolate(alpha);
         var feet = sample.feet();
         float x = (float) (feet.x() - cameraX), y = (float) (feet.y() - cameraY), z = (float) (feet.z() - cameraZ);
-        // Includes the head at any look angle; visual bounds deliberately exceed the gameplay hitbox.
-        if (!new FrustumIntersection(viewProjection).testAab(x - 1, y - .5f, z - 1, x + 1, y + 2.5f, z + 1))
-            return false;
+        // Encloses fully rotated limbs, swimming, crouching and inflated outer layers.
+        if (!new FrustumIntersection(viewProjection).testAab(x - 2, y - 2, z - 2, x + 2, y + 3, z + 2)) return false;
         var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
-        render(viewProjection, transform, pose, state.appearance());
+        render(viewProjection, transform, pose, state.appearance(), fog, water);
         return true;
     }
 
@@ -77,6 +109,16 @@ public final class PlayerRenderer implements AutoCloseable {
     }
 
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose, PlayerAppearance appearance) {
+        render(viewProjection, modelToWorld, pose, appearance, null, 0);
+    }
+
+    public void render(
+            Matrix4f viewProjection,
+            Matrix4f modelToWorld,
+            PlayerPose pose,
+            PlayerAppearance appearance,
+            DistanceFog fog,
+            float water) {
         if (closed) throw new IllegalStateException("Player renderer is closed");
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
@@ -98,6 +140,9 @@ public final class PlayerRenderer implements AutoCloseable {
             glDisable(GL_BLEND);
             glDisable(GL_CULL_FACE);
             glUseProgram(program);
+            glUniform1i(worldShading, fog == null ? 0 : 1);
+            glUniform2f(fogRange, fog == null ? 0 : fog.start(), fog == null ? 0 : fog.end());
+            glUniform1f(underwater, water);
             glBindVertexArray(vao);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
