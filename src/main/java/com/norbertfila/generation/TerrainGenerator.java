@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 30;
+    private static final int GENERATOR_VERSION = 33;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -34,6 +34,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
     private final RegionalHydrology hydrology;
+    private final SmallWaterBodyClassifier waterBodies;
     private final GenerationCache<BiomeType> tintBiomes = new GenerationCache<>(4096);
     private final GenerationCache<byte[]> tintColumns = new GenerationCache<>(2048);
     private final Noise2D shores;
@@ -81,6 +82,10 @@ public final class TerrainGenerator implements TerrainSource {
                 waterLevel(),
                 Math.min(config.maxHeight(), WorldBounds.MAX_Y_EXCLUSIVE - 1),
                 (x, z) -> baseSample(x, z).elevation());
+        waterBodies = new SmallWaterBodyClassifier((x, z) -> {
+            var geography = geographySample(x, z);
+            return geography.waterKind() == WaterKind.OCEAN && geography.elevation() < geography.waterLevel();
+        });
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
@@ -149,23 +154,20 @@ public final class TerrainGenerator implements TerrainSource {
         GeographySample geography = geographySample(worldX, worldZ);
         ClimateSample climateSample = climate.sample(geography.x(), geography.z());
         int height = (int) Math.floor(geography.elevation());
+        WaterKind waterKind = geography.waterKind();
+        if (waterKind == WaterKind.OCEAN && height < geography.waterLevel())
+            waterKind = waterBodies.classify((int) worldX, (int) worldZ);
         double slope = surfaceSlope((int) worldX, (int) worldZ, geography.elevation());
         boolean nearWater = nearWater((int) worldX, (int) worldZ, height, geography.waterLevel());
         BiomeType biome = biomeResolver.resolve(
-                climateSample,
-                height,
-                config.baseHeight(),
-                slope,
-                nearWater,
-                geography.waterLevel(),
-                geography.waterKind());
+                climateSample, height, config.baseHeight(), slope, nearWater, geography.waterLevel(), waterKind);
         return new ColumnSample(
                 geography.elevation(),
                 climateSample,
                 biome,
                 biomeRegistry.profile(biome),
                 geography.waterLevel(),
-                geography.waterKind(),
+                waterKind,
                 slope,
                 nearWater);
     }
@@ -173,7 +175,8 @@ public final class TerrainGenerator implements TerrainSource {
     private GeographySample geographySample(double worldX, double worldZ) {
         GeographySample base = baseSample(worldX, worldZ);
         if (config.landforms().amplitude() == 0) return base;
-        var water = hydrology.sample(worldX, worldZ, base.elevation());
+        boolean rivers = biomeResolver.resolve(climate.sample(base.x(), base.z())) != BiomeType.DESERT;
+        var water = hydrology.sample(worldX, worldZ, base.elevation(), rivers);
         return new GeographySample(boundedHeight(water.height()), base.x(), base.z(), water.waterLevel(), water.kind());
     }
 
@@ -232,6 +235,11 @@ public final class TerrainGenerator implements TerrainSource {
                 column.waterKind(),
                 column.nearWater(),
                 shores.sample(worldX * .008, worldZ * .008));
+        if ((column.biome() == BiomeType.TAIGA || column.biome() == BiomeType.SNOWY_TAIGA)
+                && height > column.waterLevel() + 1
+                && slope <= 1.5) {
+            materials = surfaceMaterials.forestFloor(shores.sample(worldX * .035, worldZ * .035));
+        }
         boolean badlands = column.biome() == BiomeType.BADLANDS;
         byte subsurface = column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
         byte deep = badlands ? BlockId.TERRACOTTA_RED : BlockId.STONE;

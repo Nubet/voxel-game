@@ -12,7 +12,7 @@ class VegetationGeneratorTest {
     private static final TerrainSummary GRASS = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
 
     @Test
-    void taigaSnowCoversPodzolAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
+    void taigaSnowLeavesMostPodzolVisibleAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
         var summary = new TerrainSummary(
                 15,
                 BlockId.PODZOL,
@@ -31,20 +31,113 @@ class VegetationGeneratorTest {
         above[0] = BlockId.PINE_LOG;
         generator.generate(-16, 16, -16, above, column);
         assertEquals(BlockId.PINE_LOG, above[0]);
-        int snow = 0, plants = 0;
+        int snow = 0, plants = 0, bare = 0;
         for (int i = 1; i < Chunk.SIZE * Chunk.SIZE; i++) {
             if (above[i] == BlockId.SNOW_LAYER) snow++;
+            else if (above[i] == BlockId.AIR) bare++;
             else {
                 assertTrue(PlantRules.supports(above[i], BlockId.PODZOL, false));
                 plants++;
             }
         }
-        assertTrue(snow > 128);
+        assertTrue(snow > 0 && snow < 90, "Snow should be sparse patches, not a blanket: " + snow);
+        assertTrue(bare > 128, "Most podzol should remain visible even away from plants");
         assertTrue(plants > 0);
         byte[] repeat = new byte[Chunk.BLOCK_BYTES];
         repeat[0] = BlockId.PINE_LOG;
         generator.generate(-16, 16, -16, repeat, column);
         assertArrayEquals(above, repeat);
+    }
+
+    @Test
+    void taigaSnowFormsPatchesAcrossSeedsAndChunkSeams() {
+        var summary = new TerrainSummary(
+                15,
+                BlockId.PODZOL,
+                BlockId.COARSE_DIRT,
+                BlockId.STONE,
+                TerrainSummary.NO_BEDROCK,
+                TerrainSummary.NO_WATER,
+                BiomeType.TAIGA,
+                new ClimateSample(-.6f, 0));
+        for (long seed : new long[] {0, 42, -1371839073867120140L}) {
+            var generator = new VegetationGenerator(seed, (x, z) -> -1, (x, z) -> -1);
+            int snow = 0, adjacentSnow = 0;
+            byte[][] area = new byte[128][128];
+            for (int z = -4; z < 4; z++)
+                for (int x = -4; x < 4; x++) {
+                    var position = new ChunkPos(x, 1, z);
+                    byte[] blocks = generate(generator, position, summary);
+                    assertArrayEquals(blocks, generate(generator, position, summary));
+                    for (int lz = 0; lz < 16; lz++)
+                        for (int lx = 0; lx < 16; lx++)
+                            area[(z + 4) * 16 + lz][(x + 4) * 16 + lx] = blocks[lz * 16 + lx];
+                }
+            for (int z = 0; z < 128; z++)
+                for (int x = 0; x < 127; x++) {
+                    if (area[z][x] != BlockId.SNOW_LAYER) continue;
+                    snow++;
+                    if (area[z][x + 1] == BlockId.SNOW_LAYER) adjacentSnow++;
+                }
+            double coverage = snow / (128.0 * 127);
+            assertTrue(coverage > .05 && coverage < .3, "Snow coverage for seed " + seed + ": " + coverage);
+            assertTrue(adjacentSnow > snow * .65, "Snow should form connected patches, not isolated speckles");
+        }
+    }
+
+    @Test
+    void taigaSnowRestsOnExposedCanopiesAcrossVerticalAndNegativeHorizontalSeams() {
+        var summary = new TerrainSummary(
+                6,
+                BlockId.PODZOL,
+                BlockId.COARSE_DIRT,
+                BlockId.STONE,
+                TerrainSummary.NO_BEDROCK,
+                TerrainSummary.NO_WATER,
+                BiomeType.TAIGA,
+                new ClimateSample(-.6f, 0));
+        var trees = new ArrayList<TreeGenerator.Tree>();
+        for (int z = -18; z <= 18; z += 6)
+            for (int x = -18; x <= 18; x += 6)
+                trees.add(new TreeGenerator.Tree(
+                        x, z, 7, 5, 2, x * 31L + z, com.norbertfila.generation.biome.TreeType.CONIFER));
+        assertEquals(
+                -1,
+                TerrainColumn.of(columns(summary), trees).uniformBlock(16),
+                "The snow above a crown must not be skipped as uniform air");
+        trees.add(new TreeGenerator.Tree(-6, -6, 15, 5, 2, 42, com.norbertfila.generation.biome.TreeType.CONIFER));
+        var column = TerrainColumn.of(columns(summary), trees);
+        var generator = new VegetationGenerator(42, (x, z) -> -1, (x, z) -> -1);
+        int snowOnLeaves = 0, snowAtSeam = 0;
+        for (int oz : new int[] {-16, 0})
+            for (int ox : new int[] {-16, 0}) {
+                byte[][] sections = new byte[2][Chunk.BLOCK_BYTES];
+                for (int section = 1; section >= 0; section--) {
+                    byte[] blocks = sections[section];
+                    TreeGenerator.place(trees, ox, section * 16, oz, blocks);
+                    byte[] before = blocks.clone();
+                    generator.generate(ox, section * 16, oz, blocks, column);
+                    byte[] repeat = before.clone();
+                    generator.generate(ox, section * 16, oz, repeat, column);
+                    assertArrayEquals(blocks, repeat);
+                    for (int i = 0; i < blocks.length; i++)
+                        if (before[i] != BlockId.AIR) assertEquals(before[i], blocks[i]);
+                }
+                for (int z = 0; z < 16; z++)
+                    for (int x = 0; x < 16; x++)
+                        for (int y = 8; y < 32; y++) {
+                            if (sections[y / 16][(y % 16 * 16 + z) * 16 + x] != BlockId.SNOW_LAYER) continue;
+                            byte support = sections[(y - 1) / 16][((y - 1) % 16 * 16 + z) * 16 + x];
+                            assertEquals(BlockId.PINE_NEEDLES, support);
+                            assertTrue(PlantRules.supports(BlockId.SNOW_LAYER, support, false));
+                            for (int above = y + 1; above < 32; above++)
+                                assertEquals(BlockId.AIR, sections[above / 16][(above % 16 * 16 + z) * 16 + x]);
+                            snowOnLeaves++;
+                            if (y == 16) snowAtSeam++;
+                        }
+            }
+        assertTrue(snowOnLeaves > 0);
+        assertTrue(snowAtSeam > 0, "Snow must also appear above leaves at y=15");
     }
 
     @Test

@@ -60,7 +60,7 @@ final class TerrainColumn {
         }
         long highest = (long) max + 1;
         for (TreeGenerator.Tree tree : this.trees)
-            highest = Math.max(highest, (long) tree.baseY() + tree.trunkHeight() + 3);
+            highest = Math.max(highest, (long) tree.baseY() + tree.trunkHeight() + 4);
         minSurface = min;
         highestFeature = (int) Math.min(Integer.MAX_VALUE, highest);
     }

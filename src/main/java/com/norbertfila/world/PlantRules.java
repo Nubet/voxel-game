@@ -23,6 +23,7 @@ public final class PlantRules {
 
     public static boolean supports(byte ground) {
         return ground == BlockId.GRASS
+                || ground == BlockId.DIRT
                 || ground == BlockId.PODZOL
                 || ground == BlockId.MUD
                 || ground == BlockId.COARSE_DIRT
@@ -40,7 +41,11 @@ public final class PlantRules {
 
     public static boolean supports(byte plant, byte ground, boolean nearWater) {
         return switch (plant) {
-            case BlockId.SNOW_LAYER -> BlockRegistry.DEFAULT.occludesFullFace(ground);
+            case BlockId.SNOW_LAYER ->
+                BlockRegistry.DEFAULT.occludesFullFace(ground)
+                        || ground == BlockId.LEAVES
+                        || ground == BlockId.PINE_NEEDLES
+                        || ground == BlockId.SWAMP_LEAVES;
             case BlockId.CACTUS -> ground == BlockId.SAND || ground == BlockId.CACTUS;
             case BlockId.DEAD_BUSH -> supportsDry(ground) || supports(ground);
             case BlockId.REED ->
