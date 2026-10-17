@@ -208,6 +208,16 @@ tasks.register<JavaExec>("smokeOres") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeBuildingBlocks") {
+    group = "verification"
+    description = "Renders building materials and all Creative catalog pages on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.BuildingBlocksSmoke")
+    args(layout.buildDirectory.dir("building-blocks-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeStreamingLifecycle") {
     group = "verification"
     description = "Checks session replacement, GPU cleanup, persistence and worker termination on OpenGL."

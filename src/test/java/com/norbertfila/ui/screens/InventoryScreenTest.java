@@ -15,8 +15,7 @@ class InventoryScreenTest {
         for (boolean creative : new boolean[] {false, true}) {
             var screen = new InventoryScreen(creative);
             screen.update(InventorySnapshot.EMPTY, 8, VIEWPORT);
-            int catalogCells =
-                    creative ? Math.max(27, ((InventoryScreen.catalogBlocks().size() + 8) / 9) * 9) : 27;
+            int catalogCells = 27;
             for (int cell = 0; cell < catalogCells + 9; cell++) {
                 var box = screen.bounds(cell);
                 screen.updatePointer(false, false, box.x() + 1, box.y() + 1);
@@ -77,7 +76,8 @@ class InventoryScreenTest {
         var catalog = InventoryScreen.catalogBlocks();
         for (int id = 1; id < 256; id++) assertEquals(BlockId.isValid((byte) id), catalog.contains((byte) id));
         for (int i = 0; i < catalog.size(); i++) {
-            var box = screen.bounds(i);
+            if (i > 0 && i % 27 == 0) screen.keyPress(UiKey.PAGE_DOWN);
+            var box = screen.bounds(i % 27);
             assertEquals(
                     new Screen.Action.CreativePick(catalog.get(i), 8),
                     screen.updatePointer(true, true, box.x() + 1, box.y() + 1));
@@ -88,6 +88,35 @@ class InventoryScreenTest {
                 screen.updatePointer(
                         true, true, screen.bounds(0).x(), screen.bounds(0).y()));
         assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
+    }
+
+    @Test
+    void pageButtonsAndKeysReachTheLastPageWithoutMovingTheHotbarOffscreen() {
+        var screen = new InventoryScreen(true);
+        var viewport = new UiViewport(640, 360, 640, 360);
+        screen.update(InventorySnapshot.EMPTY, 8, viewport);
+        screen.updatePointer(false, false, 0, 0);
+        var first = screen.bounds(0);
+        var next = screen.pageBounds(true);
+        screen.updatePointer(true, true, next.x() + 1, next.y() + 1);
+        assertEquals(
+                new Screen.Action.CreativePick(InventoryScreen.catalogBlocks().get(27), 8),
+                screen.updatePointer(true, true, first.x() + 1, first.y() + 1));
+        screen.keyPress(UiKey.PAGE_UP);
+        screen.keyPress(UiKey.PAGE_UP);
+        assertEquals(
+                new Screen.Action.CreativePick(InventoryScreen.catalogBlocks().getFirst(), 8),
+                screen.keyPress(UiKey.ACTIVATE));
+        for (int i = 0; i < 20; i++) screen.keyPress(UiKey.PAGE_DOWN);
+        int lastPage = (InventoryScreen.catalogBlocks().size() - 1) / 27;
+        int used = InventoryScreen.catalogBlocks().size() - lastPage * 27;
+        var empty = screen.bounds(used);
+        assertEquals(Screen.Action.NONE, screen.updatePointer(true, true, empty.x() + 1, empty.y() + 1));
+        var hotbar = screen.bounds(35);
+        assertTrue(hotbar.y() + hotbar.height() <= viewport.height());
+        assertEquals(
+                new Screen.Action.SlotClick(8, false, false),
+                screen.updatePointer(true, true, hotbar.x() + 1, hotbar.y() + 1));
     }
 
     @Test

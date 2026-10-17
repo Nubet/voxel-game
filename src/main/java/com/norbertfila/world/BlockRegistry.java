@@ -1,5 +1,6 @@
 package com.norbertfila.world;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,6 +17,10 @@ public final class BlockRegistry {
     public static final int BEDROCK_TEXTURE = 7;
     public static final int SNOW_TEXTURE = 8;
     public static final int SNOWY_GRASS_SIDE_TEXTURE = 55;
+    public static final int BIRCH_LEAVES_TEXTURE = 56,
+            DARK_OAK_LEAVES_TEXTURE = 57,
+            ACACIA_LEAVES_TEXTURE = 58,
+            JUNGLE_LEAVES_TEXTURE = 59;
     public static final int LOG_SIDE_TEXTURE = 9;
     public static final int LOG_TOP_TEXTURE = 10;
     public static final int LEAVES_TEXTURE = 11;
@@ -177,159 +182,298 @@ public final class BlockRegistry {
         textures.put("refi_swamp_log_side", SWAMP_LOG_SIDE_TEXTURE);
         textures.put("refi_swamp_leaves", SWAMP_LEAVES_TEXTURE);
         textures.put("refi_grass_side_overlay", GRASS_SIDE_OVERLAY_TEXTURE);
-        return new BlockRegistry(
-                java.util.List.of(
-                        new BlockDefinition(
-                                0,
-                                "air",
-                                FALLBACK_TEXTURE,
-                                FALLBACK_TEXTURE,
-                                FALLBACK_TEXTURE,
-                                false,
-                                false,
-                                RenderLayer.OPAQUE),
-                        new BlockDefinition(
-                                1,
-                                "grass",
-                                GRASS_TOP_TEXTURE,
-                                DIRT_TEXTURE,
-                                GRASS_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        new BlockDefinition(
-                                2, "dirt", DIRT_TEXTURE, DIRT_TEXTURE, DIRT_TEXTURE, true, true, RenderLayer.OPAQUE),
-                        new BlockDefinition(
-                                3,
-                                "stone",
-                                STONE_TEXTURE,
-                                STONE_TEXTURE,
-                                STONE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        uniform(BlockId.COAL_ORE, "coal_ore", COAL_ORE_TEXTURE, true),
-                        uniform(BlockId.IRON_ORE, "iron_ore", IRON_ORE_TEXTURE, true),
-                        uniform(BlockId.GOLD_ORE, "gold_ore", GOLD_ORE_TEXTURE, true),
-                        uniform(BlockId.DIAMOND_ORE, "diamond_ore", DIAMOND_ORE_TEXTURE, true),
-                        uniform(BlockId.LAPIS_ORE, "lapis_ore", LAPIS_ORE_TEXTURE, true),
-                        uniform(BlockId.SAND, "sand", SAND_TEXTURE, true),
-                        uniform(BlockId.GRAVEL, "gravel", GRAVEL_TEXTURE, true),
-                        uniform(BlockId.BEDROCK, "bedrock", BEDROCK_TEXTURE, true),
-                        uniform(BlockId.SNOW, "snow", SNOW_TEXTURE, true),
-                        new BlockDefinition(
-                                Byte.toUnsignedInt(BlockId.LOG),
-                                "log",
-                                LOG_TOP_TEXTURE,
-                                LOG_TOP_TEXTURE,
-                                LOG_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false, .3),
-                        uniform(BlockId.PLANKS, "planks", PLANKS_TEXTURE, true),
-                        uniform(BlockId.COBBLE, "cobble", COBBLE_TEXTURE, true),
-                        uniform(BlockId.BRICKS, "bricks", BRICKS_TEXTURE, true),
-                        uniform(BlockId.GLASS, "glass", GLASS_TEXTURE, false),
-                        uniform(BlockId.SANDSTONE, "sandstone", SANDSTONE_TEXTURE, true),
-                        uniform(BlockId.STONE_BRICKS, "stone_bricks", STONE_BRICKS_TEXTURE, true),
-                        new BlockDefinition(
-                                Byte.toUnsignedInt(BlockId.WATER),
-                                "water",
-                                WATER_TEXTURE,
-                                WATER_TEXTURE,
-                                WATER_TEXTURE,
-                                false,
-                                false,
-                                RenderLayer.TRANSLUCENT,
-                                false,
-                                false),
-                        plant(BlockId.SHORT_GRASS, "short_grass", SHORT_GRASS_TEXTURE),
-                        plant(BlockId.FERN, "fern", FERN_TEXTURE),
-                        plant(BlockId.DANDELION_YELLOW, "dandelion_yellow", DANDELION_YELLOW_TEXTURE),
-                        plant(BlockId.DANDELION_WHITE, "dandelion_white", DANDELION_WHITE_TEXTURE),
-                        plant(BlockId.POPPY, "poppy", POPPY_TEXTURE),
-                        uniform(BlockId.MUD, "mud", MUD_TEXTURE, true),
-                        new BlockDefinition(
-                                BlockId.PODZOL,
-                                "podzol",
-                                PODZOL_TOP_TEXTURE,
-                                DIRT_TEXTURE,
-                                PODZOL_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        uniform(BlockId.COARSE_DIRT, "coarse_dirt", COARSE_DIRT_TEXTURE, true),
-                        uniform(BlockId.CLAY, "clay", CLAY_TEXTURE, true),
-                        uniform(BlockId.TERRACOTTA_RED, "terracotta_red", TERRACOTTA_RED_TEXTURE, true),
-                        uniform(BlockId.TERRACOTTA_ORANGE, "terracotta_orange", TERRACOTTA_ORANGE_TEXTURE, true),
-                        new BlockDefinition(
-                                BlockId.ICE,
-                                "ice",
-                                ICE_TEXTURE,
-                                ICE_TEXTURE,
-                                ICE_TEXTURE,
-                                true,
-                                false,
-                                RenderLayer.TRANSLUCENT),
-                        uniform(BlockId.PACKED_ICE, "packed_ice", PACKED_ICE_TEXTURE, true),
-                        new BlockDefinition(
-                                BlockId.DRY_GRASS,
-                                "dry_grass",
-                                DRY_GRASS_TOP_TEXTURE,
-                                DIRT_TEXTURE,
-                                DRY_GRASS_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        new BlockDefinition(
-                                BlockId.CACTUS,
-                                "cactus",
-                                CACTUS_TOP_TEXTURE,
-                                CACTUS_BOTTOM_TEXTURE,
-                                CACTUS_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        plant(BlockId.DEAD_BUSH, "dead_bush", DEAD_BUSH_TEXTURE),
-                        plant(BlockId.REED, "reed", REED_TEXTURE),
-                        plant(BlockId.MUSHROOM, "mushroom", MUSHROOM_TEXTURE),
-                        plant(BlockId.BERRY_BUSH, "berry_bush", BERRY_BUSH_TEXTURE),
-                        plant(BlockId.ALPINE_GRASS, "alpine_grass", ALPINE_GRASS_TEXTURE),
-                        new BlockDefinition(
-                                BlockId.PINE_LOG,
-                                "pine_log",
-                                PINE_LOG_TOP_TEXTURE,
-                                PINE_LOG_TOP_TEXTURE,
-                                PINE_LOG_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        uniform(BlockId.PINE_NEEDLES, "pine_needles", PINE_NEEDLES_TEXTURE, false, .3),
-                        new BlockDefinition(
-                                BlockId.SWAMP_LOG,
-                                "swamp_log",
-                                SWAMP_LOG_TOP_TEXTURE,
-                                SWAMP_LOG_TOP_TEXTURE,
-                                SWAMP_LOG_SIDE_TEXTURE,
-                                true,
-                                true,
-                                RenderLayer.OPAQUE),
-                        uniform(BlockId.SWAMP_LEAVES, "swamp_leaves", SWAMP_LEAVES_TEXTURE, false, .3),
-                        new BlockDefinition(
-                                BlockId.SNOW_LAYER,
-                                "snow_layer",
-                                SNOW_TEXTURE,
-                                SNOW_TEXTURE,
-                                SNOW_TEXTURE,
-                                true,
-                                false,
-                                RenderLayer.OPAQUE,
-                                true,
-                                true,
-                                BlockShape.SNOW_LAYER,
-                                true)),
-                textures);
+        textures.put("refi_birch_leaves", BIRCH_LEAVES_TEXTURE);
+        textures.put("refi_dark_oak_leaves", DARK_OAK_LEAVES_TEXTURE);
+        textures.put("refi_acacia_leaves", ACACIA_LEAVES_TEXTURE);
+        textures.put("refi_jungle_leaves", JUNGLE_LEAVES_TEXTURE);
+        var blocks = new ArrayList<>(java.util.List.of(
+                new BlockDefinition(
+                        0,
+                        "air",
+                        FALLBACK_TEXTURE,
+                        FALLBACK_TEXTURE,
+                        FALLBACK_TEXTURE,
+                        false,
+                        false,
+                        RenderLayer.OPAQUE),
+                new BlockDefinition(
+                        1,
+                        "grass",
+                        GRASS_TOP_TEXTURE,
+                        DIRT_TEXTURE,
+                        GRASS_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                new BlockDefinition(
+                        2, "dirt", DIRT_TEXTURE, DIRT_TEXTURE, DIRT_TEXTURE, true, true, RenderLayer.OPAQUE),
+                new BlockDefinition(
+                        3, "stone", STONE_TEXTURE, STONE_TEXTURE, STONE_TEXTURE, true, true, RenderLayer.OPAQUE),
+                uniform(BlockId.COAL_ORE, "coal_ore", COAL_ORE_TEXTURE, true),
+                uniform(BlockId.IRON_ORE, "iron_ore", IRON_ORE_TEXTURE, true),
+                uniform(BlockId.GOLD_ORE, "gold_ore", GOLD_ORE_TEXTURE, true),
+                uniform(BlockId.DIAMOND_ORE, "diamond_ore", DIAMOND_ORE_TEXTURE, true),
+                uniform(BlockId.LAPIS_ORE, "lapis_ore", LAPIS_ORE_TEXTURE, true),
+                uniform(BlockId.SAND, "sand", SAND_TEXTURE, true),
+                uniform(BlockId.GRAVEL, "gravel", GRAVEL_TEXTURE, true),
+                uniform(BlockId.BEDROCK, "bedrock", BEDROCK_TEXTURE, true),
+                uniform(BlockId.SNOW, "snow", SNOW_TEXTURE, true),
+                new BlockDefinition(
+                        Byte.toUnsignedInt(BlockId.LOG),
+                        "log",
+                        LOG_TOP_TEXTURE,
+                        LOG_TOP_TEXTURE,
+                        LOG_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                uniform(BlockId.LEAVES, "leaves", LEAVES_TEXTURE, false, .3),
+                uniform(BlockId.PLANKS, "planks", PLANKS_TEXTURE, true),
+                uniform(BlockId.COBBLE, "cobble", COBBLE_TEXTURE, true),
+                uniform(BlockId.BRICKS, "bricks", BRICKS_TEXTURE, true),
+                uniform(BlockId.GLASS, "glass", GLASS_TEXTURE, false),
+                uniform(BlockId.SANDSTONE, "sandstone", SANDSTONE_TEXTURE, true),
+                uniform(BlockId.STONE_BRICKS, "stone_bricks", STONE_BRICKS_TEXTURE, true),
+                new BlockDefinition(
+                        Byte.toUnsignedInt(BlockId.WATER),
+                        "water",
+                        WATER_TEXTURE,
+                        WATER_TEXTURE,
+                        WATER_TEXTURE,
+                        false,
+                        false,
+                        RenderLayer.TRANSLUCENT,
+                        false,
+                        false),
+                plant(BlockId.SHORT_GRASS, "short_grass", SHORT_GRASS_TEXTURE),
+                plant(BlockId.FERN, "fern", FERN_TEXTURE),
+                plant(BlockId.DANDELION_YELLOW, "dandelion_yellow", DANDELION_YELLOW_TEXTURE),
+                plant(BlockId.DANDELION_WHITE, "dandelion_white", DANDELION_WHITE_TEXTURE),
+                plant(BlockId.POPPY, "poppy", POPPY_TEXTURE),
+                uniform(BlockId.MUD, "mud", MUD_TEXTURE, true),
+                new BlockDefinition(
+                        BlockId.PODZOL,
+                        "podzol",
+                        PODZOL_TOP_TEXTURE,
+                        DIRT_TEXTURE,
+                        PODZOL_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                uniform(BlockId.COARSE_DIRT, "coarse_dirt", COARSE_DIRT_TEXTURE, true),
+                uniform(BlockId.CLAY, "clay", CLAY_TEXTURE, true),
+                uniform(BlockId.TERRACOTTA_RED, "terracotta_red", TERRACOTTA_RED_TEXTURE, true),
+                uniform(BlockId.TERRACOTTA_ORANGE, "terracotta_orange", TERRACOTTA_ORANGE_TEXTURE, true),
+                new BlockDefinition(
+                        BlockId.ICE,
+                        "ice",
+                        ICE_TEXTURE,
+                        ICE_TEXTURE,
+                        ICE_TEXTURE,
+                        true,
+                        false,
+                        RenderLayer.TRANSLUCENT),
+                uniform(BlockId.PACKED_ICE, "packed_ice", PACKED_ICE_TEXTURE, true),
+                new BlockDefinition(
+                        BlockId.DRY_GRASS,
+                        "dry_grass",
+                        DRY_GRASS_TOP_TEXTURE,
+                        DIRT_TEXTURE,
+                        DRY_GRASS_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                new BlockDefinition(
+                        BlockId.CACTUS,
+                        "cactus",
+                        CACTUS_TOP_TEXTURE,
+                        CACTUS_BOTTOM_TEXTURE,
+                        CACTUS_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                plant(BlockId.DEAD_BUSH, "dead_bush", DEAD_BUSH_TEXTURE),
+                plant(BlockId.REED, "reed", REED_TEXTURE),
+                plant(BlockId.MUSHROOM, "mushroom", MUSHROOM_TEXTURE),
+                plant(BlockId.BERRY_BUSH, "berry_bush", BERRY_BUSH_TEXTURE),
+                plant(BlockId.ALPINE_GRASS, "alpine_grass", ALPINE_GRASS_TEXTURE),
+                new BlockDefinition(
+                        BlockId.PINE_LOG,
+                        "pine_log",
+                        PINE_LOG_TOP_TEXTURE,
+                        PINE_LOG_TOP_TEXTURE,
+                        PINE_LOG_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                uniform(BlockId.PINE_NEEDLES, "pine_needles", PINE_NEEDLES_TEXTURE, false, .3),
+                new BlockDefinition(
+                        BlockId.SWAMP_LOG,
+                        "swamp_log",
+                        SWAMP_LOG_TOP_TEXTURE,
+                        SWAMP_LOG_TOP_TEXTURE,
+                        SWAMP_LOG_SIDE_TEXTURE,
+                        true,
+                        true,
+                        RenderLayer.OPAQUE),
+                uniform(BlockId.SWAMP_LEAVES, "swamp_leaves", SWAMP_LEAVES_TEXTURE, false, .3),
+                new BlockDefinition(
+                        BlockId.SNOW_LAYER,
+                        "snow_layer",
+                        SNOW_TEXTURE,
+                        SNOW_TEXTURE,
+                        SNOW_TEXTURE,
+                        true,
+                        false,
+                        RenderLayer.OPAQUE,
+                        true,
+                        true,
+                        BlockShape.SNOW_LAYER,
+                        true)));
+        blocks.addAll(java.util.List.of(
+                material(textures, BlockId.GRANITE, "granite"),
+                material(textures, BlockId.POLISHED_GRANITE, "polished_granite"),
+                material(textures, BlockId.DIORITE, "diorite"),
+                material(textures, BlockId.POLISHED_DIORITE, "polished_diorite"),
+                material(textures, BlockId.ANDESITE, "andesite"),
+                material(textures, BlockId.POLISHED_ANDESITE, "polished_andesite"),
+                material(textures, BlockId.MOSSY_COBBLE, "mossy_cobble"),
+                material(textures, BlockId.MOSSY_STONE_BRICKS, "mossy_stone_bricks"),
+                material(textures, BlockId.CRACKED_STONE_BRICKS, "cracked_stone_bricks"),
+                material(textures, BlockId.CHISELED_STONE_BRICKS, "chiseled_stone_bricks"),
+                material(textures, BlockId.PINE_PLANKS, "pine_planks"),
+                log(textures, BlockId.BIRCH_LOG, "birch_log"),
+                material(textures, BlockId.BIRCH_PLANKS, "birch_planks"),
+                leaves(textures, BlockId.BIRCH_LEAVES, "birch_leaves"),
+                log(textures, BlockId.DARK_OAK_LOG, "dark_oak_log"),
+                material(textures, BlockId.DARK_OAK_PLANKS, "dark_oak_planks"),
+                leaves(textures, BlockId.DARK_OAK_LEAVES, "dark_oak_leaves"),
+                log(textures, BlockId.ACACIA_LOG, "acacia_log"),
+                material(textures, BlockId.ACACIA_PLANKS, "acacia_planks"),
+                leaves(textures, BlockId.ACACIA_LEAVES, "acacia_leaves"),
+                log(textures, BlockId.JUNGLE_LOG, "jungle_log"),
+                material(textures, BlockId.JUNGLE_PLANKS, "jungle_planks"),
+                leaves(textures, BlockId.JUNGLE_LEAVES, "jungle_leaves"),
+                log(textures, BlockId.STRIPPED_OAK_LOG, "stripped_oak_log"),
+                log(textures, BlockId.STRIPPED_PINE_LOG, "stripped_pine_log"),
+                log(textures, BlockId.STRIPPED_BIRCH_LOG, "stripped_birch_log"),
+                log(textures, BlockId.STRIPPED_DARK_OAK_LOG, "stripped_dark_oak_log"),
+                log(textures, BlockId.STRIPPED_ACACIA_LOG, "stripped_acacia_log"),
+                log(textures, BlockId.STRIPPED_JUNGLE_LOG, "stripped_jungle_log"),
+                material(textures, BlockId.MOSS, "moss"),
+                material(textures, BlockId.ROOTED_DIRT, "rooted_dirt"),
+                material(textures, BlockId.PACKED_MUD, "packed_mud"),
+                material(textures, BlockId.MUD_BRICKS, "mud_bricks"),
+                material(textures, BlockId.MYCELIUM, "mycelium", "mycelium_top", "dirt", "mycelium_side"),
+                material(textures, BlockId.RED_SAND, "red_sand"),
+                material(textures, BlockId.CALCITE, "calcite"),
+                material(textures, BlockId.TUFF, "tuff"),
+                material(textures, BlockId.POLISHED_TUFF, "polished_tuff"),
+                material(textures, BlockId.TUFF_BRICKS, "tuff_bricks"),
+                material(
+                        textures,
+                        BlockId.CHISELED_TUFF,
+                        "chiseled_tuff",
+                        "chiseled_tuff_top",
+                        "chiseled_tuff_top",
+                        "chiseled_tuff"),
+                material(
+                        textures,
+                        BlockId.CHISELED_TUFF_BRICKS,
+                        "chiseled_tuff_bricks",
+                        "chiseled_tuff_bricks_top",
+                        "chiseled_tuff_bricks_top",
+                        "chiseled_tuff_bricks"),
+                material(textures, BlockId.DRIPSTONE, "dripstone"),
+                material(textures, BlockId.BLUE_ICE, "blue_ice"),
+                leaves(textures, BlockId.AZALEA_LEAVES, "azalea_leaves"),
+                leaves(textures, BlockId.FLOWERING_AZALEA_LEAVES, "flowering_azalea_leaves"),
+                material(
+                        textures,
+                        BlockId.CHISELED_SANDSTONE,
+                        "chiseled_sandstone",
+                        "sandstone_top",
+                        "sandstone_bottom",
+                        "chiseled_sandstone"),
+                material(textures, BlockId.SMOOTH_SANDSTONE, "smooth_sandstone"),
+                material(
+                        textures,
+                        BlockId.RED_SANDSTONE,
+                        "red_sandstone",
+                        "red_sandstone_top",
+                        "red_sandstone_bottom",
+                        "red_sandstone"),
+                material(
+                        textures,
+                        BlockId.CHISELED_RED_SANDSTONE,
+                        "chiseled_red_sandstone",
+                        "red_sandstone_top",
+                        "red_sandstone_bottom",
+                        "chiseled_red_sandstone"),
+                material(textures, BlockId.SMOOTH_RED_SANDSTONE, "smooth_red_sandstone"),
+                material(textures, BlockId.IRON_BLOCK, "iron_block"),
+                material(textures, BlockId.GOLD_BLOCK, "gold_block"),
+                material(textures, BlockId.COAL_BLOCK, "coal_block"),
+                material(textures, BlockId.DIAMOND_BLOCK, "diamond_block"),
+                material(textures, BlockId.EMERALD_BLOCK, "emerald_block"),
+                material(textures, BlockId.LAPIS_BLOCK, "lapis_block"),
+                material(textures, BlockId.TERRACOTTA, "terracotta")));
+        String[] colors = {
+            "white",
+            "orange",
+            "magenta",
+            "light_blue",
+            "yellow",
+            "lime",
+            "pink",
+            "gray",
+            "light_gray",
+            "cyan",
+            "purple",
+            "blue",
+            "brown",
+            "green",
+            "red",
+            "black"
+        };
+        int terracotta = Byte.toUnsignedInt(BlockId.TERRACOTTA_WHITE);
+        for (int i = 0; i < colors.length; i++) {
+            String color = colors[i];
+            blocks.add(material(textures, (byte) (BlockId.CONCRETE_WHITE + i), "concrete_" + color));
+            blocks.add(material(textures, (byte) (BlockId.WOOL_WHITE + i), "wool_" + color));
+            if (!color.equals("orange") && !color.equals("red"))
+                blocks.add(material(textures, (byte) terracotta++, "terracotta_" + color));
+        }
+        return new BlockRegistry(blocks, textures);
+    }
+
+    private static int texture(Map<String, Integer> textures, String name) {
+        return textures.computeIfAbsent("refi_" + name, key -> textures.size());
+    }
+
+    private static BlockDefinition material(Map<String, Integer> textures, byte id, String name) {
+        return uniform(id, name, texture(textures, name), true);
+    }
+
+    private static BlockDefinition material(
+            Map<String, Integer> textures, byte id, String name, String top, String bottom, String side) {
+        return new BlockDefinition(
+                Byte.toUnsignedInt(id),
+                name,
+                texture(textures, top),
+                texture(textures, bottom),
+                texture(textures, side),
+                true,
+                true,
+                RenderLayer.OPAQUE);
+    }
+
+    private static BlockDefinition log(Map<String, Integer> textures, byte id, String name) {
+        return material(textures, id, name, name + "_top", name + "_top", name + "_side");
+    }
+
+    private static BlockDefinition leaves(Map<String, Integer> textures, byte id, String name) {
+        return uniform(id, name, texture(textures, name), false, .3);
     }
 
     private static BlockDefinition plant(byte id, String name, int texture) {

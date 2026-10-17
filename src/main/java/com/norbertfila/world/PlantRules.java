@@ -27,15 +27,21 @@ public final class PlantRules {
                 || ground == BlockId.PODZOL
                 || ground == BlockId.MUD
                 || ground == BlockId.COARSE_DIRT
-                || ground == BlockId.DRY_GRASS;
+                || ground == BlockId.DRY_GRASS
+                || ground == BlockId.MOSS
+                || ground == BlockId.ROOTED_DIRT
+                || ground == BlockId.MYCELIUM;
     }
 
     public static boolean supportsDry(byte ground) {
         return ground == BlockId.SAND
+                || ground == BlockId.RED_SAND
                 || ground == BlockId.GRAVEL
                 || ground == BlockId.STONE
                 || ground == BlockId.TERRACOTTA_RED
                 || ground == BlockId.TERRACOTTA_ORANGE
+                || (Byte.toUnsignedInt(ground) >= Byte.toUnsignedInt(BlockId.TERRACOTTA)
+                        && Byte.toUnsignedInt(ground) <= Byte.toUnsignedInt(BlockId.TERRACOTTA_BLACK))
                 || ground == BlockId.COARSE_DIRT;
     }
 
@@ -45,12 +51,22 @@ public final class PlantRules {
                 BlockRegistry.DEFAULT.occludesFullFace(ground)
                         || ground == BlockId.LEAVES
                         || ground == BlockId.PINE_NEEDLES
-                        || ground == BlockId.SWAMP_LEAVES;
-            case BlockId.CACTUS -> ground == BlockId.SAND || ground == BlockId.CACTUS;
+                        || ground == BlockId.SWAMP_LEAVES
+                        || ground == BlockId.BIRCH_LEAVES
+                        || ground == BlockId.DARK_OAK_LEAVES
+                        || ground == BlockId.ACACIA_LEAVES
+                        || ground == BlockId.JUNGLE_LEAVES
+                        || ground == BlockId.AZALEA_LEAVES
+                        || ground == BlockId.FLOWERING_AZALEA_LEAVES;
+            case BlockId.CACTUS -> ground == BlockId.SAND || ground == BlockId.RED_SAND || ground == BlockId.CACTUS;
             case BlockId.DEAD_BUSH -> supportsDry(ground) || supports(ground);
             case BlockId.REED ->
                 ground == BlockId.REED
-                        || nearWater && (supports(ground) || ground == BlockId.SAND || ground == BlockId.CLAY);
+                        || nearWater
+                                && (supports(ground)
+                                        || ground == BlockId.SAND
+                                        || ground == BlockId.RED_SAND
+                                        || ground == BlockId.CLAY);
             case BlockId.MUSHROOM -> supports(ground) || ground == BlockId.DIRT;
             case BlockId.ALPINE_GRASS -> supports(ground) || ground == BlockId.SNOW;
             default -> supports(ground);

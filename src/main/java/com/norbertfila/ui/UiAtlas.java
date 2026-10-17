@@ -6,10 +6,10 @@ import javax.imageio.ImageIO;
 
 public final class UiAtlas {
     public static final int WIDTH = 256;
-    public static final int HEIGHT = 256;
-    public static final int ITEM_Y = 128;
+    public static final int HEIGHT = 512;
+    public static final int ITEM_Y = 256;
     public static final int ITEM_SIZE = 16;
-    public static final int LAST_ITEM = 46;
+    public static final int LAST_ITEM = Byte.toUnsignedInt(com.norbertfila.world.BlockId.TERRACOTTA_BLACK);
     public static final Region HOTBAR = new Region(0, 176, 182, 22);
     public static final Region SELECTION = new Region(0, 200, 24, 23);
     public static final Region CROSSHAIR = new Region(32, 200, 15, 15);
@@ -43,7 +43,7 @@ public final class UiAtlas {
         if (stream == null) throw new IOException("Missing UI atlas");
         var image = ImageIO.read(stream);
         if (image == null || image.getWidth() != WIDTH || image.getHeight() != HEIGHT)
-            throw new IOException("UI atlas must be a 256x256 image");
+            throw new IOException("UI atlas must be a " + WIDTH + "x" + HEIGHT + " image");
         if (image.getRGB(0, 0) != 0xffffffff) throw new IOException("UI atlas is missing the white texel");
         byte[] pixels = new byte[WIDTH * HEIGHT * 4];
         for (int y = 0; y < HEIGHT; y++)
