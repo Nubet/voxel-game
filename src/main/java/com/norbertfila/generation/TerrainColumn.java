@@ -188,6 +188,9 @@ final class TerrainColumn {
     }
 
     long estimatedBytes() {
-        return AREA * (2L * Integer.BYTES + 3L) + trees.size() * 48L + caves.size() * 8L + removedSurface.size() / 8L;
+        return AREA * (2L * Integer.BYTES + 3L)
+                + trees.size() * 48L
+                + caves.size() * 8L
+                + (removedSurface.size() + snowCover.size() + frozenWater.size()) / 8L;
     }
 }

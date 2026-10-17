@@ -30,9 +30,7 @@ public final class BiomeResolver {
                 && height >= (long) waterLevel - 1
                 && height <= (long) waterLevel + 2) return BiomeType.SWAMP;
         BiomeType climateBiome = resolve(climate);
-        return climateBiome == BiomeType.ALPINE
-                ? BiomeType.TAIGA
-                : climateBiome == BiomeType.SWAMP ? BiomeType.FOREST : climateBiome;
+        return climateBiome == BiomeType.SWAMP ? BiomeType.FOREST : climateBiome;
     }
 
     public BiomeType resolve(ClimateSample climate) {

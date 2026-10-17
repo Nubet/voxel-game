@@ -15,6 +15,25 @@ class LandscapeMaterialTest {
     private final BiomeRegistry registry = BiomeRegistry.defaults();
 
     @Test
+    void forestFloorHasMostlyGrassWithLocalSoilAndStonePatches() {
+        var noise = new PerlinNoise(42);
+        int grass = 0, podzol = 0, dirt = 0, stone = 0;
+        for (int z = -128; z < 128; z++)
+            for (int x = -128; x < 128; x++) {
+                byte material =
+                        resolver.forestFloor(noise.sample(x * .035, z * .035)).surface();
+                if (material == BlockId.GRASS) grass++;
+                else if (material == BlockId.PODZOL) podzol++;
+                else if (material == BlockId.DIRT) dirt++;
+                else if (material == BlockId.STONE) stone++;
+            }
+        org.junit.jupiter.api.Assertions.assertTrue(grass > 65536 * .55);
+        org.junit.jupiter.api.Assertions.assertTrue(podzol > 65536 * .05 && podzol < 65536 * .3);
+        org.junit.jupiter.api.Assertions.assertTrue(dirt > 0 && stone > 0 && stone < 65536 * .15);
+        assertEquals(65536, grass + podzol + dirt + stone);
+    }
+
+    @Test
     void generatedMountainTransectHasRootableTaigaThenRockThenSnow() {
         var terrain = new TerrainGenerator(0, TerrainConfig.defaults());
         int[] xs = {1088, 1184, 1216};

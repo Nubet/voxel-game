@@ -133,11 +133,13 @@ public final class FarTileMesher {
             if (along < cells) {
                 int x = xFace ? line : along, z = xFace ? along : line;
                 int height = tile.heightAt(x, z);
+                if (tile.materialAt(x, z) == BlockId.SNOW_LAYER) height--;
                 if (height != FarTerrainTile.NO_SURFACE && (tile.materialAt(x, z) == BlockId.ICE) == ice) {
                     int nx = x + (face == FACE_POSITIVE_X ? 1 : face == FACE_NEGATIVE_X ? -1 : 0);
                     int nz = z + (face == FACE_POSITIVE_Z ? 1 : face == FACE_NEGATIVE_Z ? -1 : 0);
                     boolean edge = nx < 0 || nz < 0 || nx >= cells || nz >= cells;
                     int neighbor = edge ? border(border, cells, x, z, face) : tile.heightAt(nx, nz);
+                    if (!edge && tile.materialAt(nx, nz) == BlockId.SNOW_LAYER) neighbor--;
                     long low = neighbor == FarTerrainTile.NO_SURFACE ? (long) height - 16 : neighbor;
                     if (edge) low = Math.min(low, height) - SKIRT;
                     if (low < height) {
@@ -145,9 +147,11 @@ public final class FarTileMesher {
                         top = height + 1;
                         bottom = (int) Math.max(low + 1, (long) top - MAX_HEIGHT);
                         texture = BlockRegistry.DEFAULT
-                                .definition(tile.materialAt(x, z))
+                                .definition(tile.wallMaterialAt(x, z))
                                 .textureLayer(face);
                         texture |= tile.tintAt(x, z) << 8;
+                        if (tile.materialAt(x, z) == BlockId.SNOW_LAYER && tile.wallMaterialAt(x, z) == BlockId.GRASS)
+                            texture = BlockRegistry.SNOWY_GRASS_SIDE_TEXTURE;
                     }
                 }
             }

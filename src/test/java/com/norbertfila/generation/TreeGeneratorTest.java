@@ -17,9 +17,10 @@ class TreeGeneratorTest {
 
     @Test
     void taigaGrowsConifersButMountainBiomesRemainTreeless() {
-        for (var biome : new BiomeType[] {BiomeType.TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE}) {
+        for (var biome :
+                new BiomeType[] {BiomeType.TAIGA, BiomeType.SNOWY_TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE}) {
             var trees = new TreeGenerator(42, (x, z) -> 1, terrain((x, z) -> 8, BlockId.PODZOL, biome)).trees(0, 0);
-            if (biome == BiomeType.TAIGA) {
+            if (biome == BiomeType.TAIGA || biome == BiomeType.SNOWY_TAIGA) {
                 assertFalse(trees.isEmpty());
                 assertTrue(trees.stream()
                         .allMatch(tree -> tree.type() == com.norbertfila.generation.biome.TreeType.CONIFER));

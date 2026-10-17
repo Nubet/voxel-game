@@ -1,0 +1,5 @@
+refi_grass_side_snowed.png is derived from REFI_Textures by MysticTempest.
+Source: https://github.com/MysticTempest/REFI_Textures
+Original: textures/default_mcl_core/soil/mcl_core_grass_side_snowed.png
+Change: vertically flipped for the engine's side-face UV convention.
+License: CC BY-SA 4.0. See REFI_LICENSE.txt.

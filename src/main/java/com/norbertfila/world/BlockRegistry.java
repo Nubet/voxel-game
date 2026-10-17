@@ -15,6 +15,7 @@ public final class BlockRegistry {
     public static final int GRAVEL_TEXTURE = 6;
     public static final int BEDROCK_TEXTURE = 7;
     public static final int SNOW_TEXTURE = 8;
+    public static final int SNOWY_GRASS_SIDE_TEXTURE = 55;
     public static final int LOG_SIDE_TEXTURE = 9;
     public static final int LOG_TOP_TEXTURE = 10;
     public static final int LEAVES_TEXTURE = 11;
@@ -134,6 +135,7 @@ public final class BlockRegistry {
         textures.put("refi_gravel", GRAVEL_TEXTURE);
         textures.put("refi_bedrock", BEDROCK_TEXTURE);
         textures.put("refi_snow", SNOW_TEXTURE);
+        textures.put("refi_grass_side_snowed", SNOWY_GRASS_SIDE_TEXTURE);
         textures.put("refi_log_side", LOG_SIDE_TEXTURE);
         textures.put("refi_log_top", LOG_TOP_TEXTURE);
         textures.put("refi_leaves", LEAVES_TEXTURE);

@@ -136,7 +136,7 @@ final class VegetationGenerator {
                 default -> 0;
             };
             if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
-            if (type == PlantType.MUSHROOM) weight *= profile.vegetation().specialDensity();
+            if (type == PlantType.MUSHROOM) weight *= profile.vegetation().mushroomDensity();
             if (roll < weight) return type;
             roll -= weight;
         }

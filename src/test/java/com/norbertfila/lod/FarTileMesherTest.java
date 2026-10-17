@@ -13,6 +13,41 @@ import org.junit.jupiter.api.Test;
 
 class FarTileMesherTest {
     @Test
+    void snowKeepsThinTopAndSoilWallsWhileIceUsesTranslucencyWithoutWaterOffset() {
+        var snow = new FarTerrainTile(
+                0,
+                0,
+                64,
+                0,
+                new int[] {11},
+                new byte[] {BlockId.SNOW_LAYER},
+                new int[] {FarTerrainTile.NO_WATER},
+                new byte[1],
+                new byte[] {BlockId.GRASS});
+        var mesh = FarTileMesher.mesh(snow, new int[] {10, 10, 10, 10});
+        int tops = 0;
+        for (int i = 0; i < mesh.records().length; i += 3) {
+            int shape = mesh.records()[i], extent = mesh.records()[i + 2];
+            boolean top = ((shape >>> 14) & 7) == 2;
+            if (top) {
+                assertEquals(1, (shape >>> 24) & 1);
+                assertEquals(12, mesh.records()[i + 1]);
+                tops++;
+            } else {
+                assertEquals(com.norbertfila.world.BlockRegistry.SNOWY_GRASS_SIDE_TEXTURE, (extent >>> 16) & 255);
+                assertEquals(7, mesh.records()[i + 1]);
+            }
+        }
+        assertEquals(1, tops);
+        var ice = new FarTerrainTile(
+                0, 0, 64, 0, new int[] {12}, new byte[] {BlockId.ICE}, new int[] {FarTerrainTile.NO_WATER});
+        mesh = FarTileMesher.mesh(ice, new int[] {12, 12, 12, 12});
+        assertEquals(0, mesh.ranges().opaque());
+        assertTrue(mesh.ranges().translucent() > 0);
+        for (int i = 0; i < mesh.records().length; i += 3) assertEquals(0, (mesh.records()[i] >>> 17) & 1);
+    }
+
+    @Test
     void flatTileIsOneTopQuadWithSkirtsOnEveryEdge() {
         FarTerrainTile tile = tile(8, (x, z) -> 20, null);
         QuadMesh mesh = FarTileMesher.mesh(tile, border(8, 20));

@@ -3,15 +3,32 @@ package com.norbertfila.generation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.norbertfila.generation.biome.BiomeRegistry;
 import com.norbertfila.generation.biome.BiomeResolver;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.ClimateSample;
+import com.norbertfila.generation.biome.SurfaceMaterial;
+import com.norbertfila.generation.biome.TreeType;
 import org.junit.jupiter.api.Test;
 
 class BiomeModelTest {
     private final BiomeResolver resolver = new BiomeResolver();
+
+    @Test
+    void bothTaigasHaveIndependentForestProfilesOnGrass() {
+        var registry = BiomeRegistry.defaults();
+        var green = registry.profile(BiomeType.TAIGA);
+        var snowy = registry.profile(BiomeType.SNOWY_TAIGA);
+        for (var profile : java.util.List.of(green, snowy)) {
+            assertEquals(SurfaceMaterial.GRASS, profile.surface().surface());
+            assertEquals(TreeType.CONIFER, profile.trees().type());
+        }
+        assertTrue(green.trees().density() > snowy.trees().density());
+        assertTrue(green.vegetation().grassDensity() > snowy.vegetation().grassDensity());
+        assertTrue(green.vegetation().mushroomDensity() > snowy.vegetation().mushroomDensity());
+    }
 
     @Test
     void resolvesClimateBands() {

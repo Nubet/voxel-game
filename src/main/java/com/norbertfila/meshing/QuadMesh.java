@@ -29,7 +29,7 @@ import java.util.Objects;
  *
  * <ul>
  *   <li>word 0: bits 0-6 and 7-13 first corner x and z in 0..64; bits 14-16 cube face; bit 17 water surface;
- *       bits 18-23 width - 1.
+ *       bits 18-23 width - 1; bit 24 thin snow surface.
  *   <li>word 1: world y of the first corner.
  *   <li>word 2: bits 0-15 height - 1; bits 16-23 texture layer; bits 24-28 biome tint.
  * </ul>

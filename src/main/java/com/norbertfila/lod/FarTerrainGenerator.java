@@ -33,6 +33,7 @@ public final class FarTerrainGenerator {
         int cells = FarTerrainTile.SIZE / sampleStep;
         int[] heights = new int[cells * cells];
         byte[] materials = new byte[heights.length];
+        byte[] wallMaterials = new byte[heights.length];
         int[] waterTops = new int[heights.length];
         byte[] tints = new byte[heights.length];
         Arrays.fill(waterTops, FarTerrainTile.NO_WATER);
@@ -48,6 +49,8 @@ public final class FarTerrainGenerator {
                 long surface = surface(terrain, edits, column);
                 heights[index] = (int) (surface >> 8);
                 materials[index] = (byte) surface;
+                wallMaterials[index] =
+                        materials[index] == BlockId.SNOW_LAYER ? terrain.surfaceMaterial() : materials[index];
                 waterTops[index] = waterTop(terrain, edits, column, heights[index]);
             }
         for (int column = 0; column < edits.columnCount(); column++) {
@@ -61,12 +64,14 @@ public final class FarTerrainGenerator {
                 if (y > heights[index]) {
                     heights[index] = y;
                     materials[index] = block;
+                    wallMaterials[index] = block == BlockId.SNOW_LAYER ? BlockId.DIRT : block;
                     if (waterTops[index] <= y) waterTops[index] = FarTerrainTile.NO_WATER;
                 }
                 break;
             }
         }
-        return new FarTerrainTile(tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops, tints);
+        return new FarTerrainTile(
+                tileX, tileZ, sampleStep, edits.revision(), heights, materials, waterTops, tints, wallMaterials);
     }
 
     /**
