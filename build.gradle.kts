@@ -176,6 +176,7 @@ tasks.register<JavaExec>("benchmarkGame") {
         }.standardOutput.asText.get().isNotBlank())
     }
     jvmArgs("-Xmx4g")
+    findProperty("jfr")?.let { jvmArgs("-XX:StartFlightRecording=filename=$it,settings=profile,dumponexit=true,maxsize=256m") }
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
     systemProperty("voxel.benchmark", findProperty("scenes") ?: "all")
     systemProperty("voxel.benchmark.rd", findProperty("rd") ?: "8")
@@ -204,5 +205,29 @@ tasks.register<JavaExec>("smokeOres") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.norbertfila.generation.OreSmoke")
     args(layout.buildDirectory.dir("ore-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
+tasks.register<JavaExec>("smokeStreamingLifecycle") {
+    group = "verification"
+    description = "Checks session replacement, GPU cleanup, persistence and worker termination on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.core.SessionLifecycleSmoke")
+    val output = layout.buildDirectory.dir("streaming-lifecycle-smoke")
+    doFirst { output.get().asFile.mkdirs() }
+    args(output.get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
+tasks.register<JavaExec>("smokeFarTerrain") {
+    group = "verification"
+    description = "Renders generated Far LOD from three viewpoints and checks OpenGL errors."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.lod.FarTerrainSmoke")
+    val output = layout.buildDirectory.dir("far-terrain-smoke")
+    doFirst { output.get().asFile.mkdirs() }
+    args(output.get().asFile.absolutePath)
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }

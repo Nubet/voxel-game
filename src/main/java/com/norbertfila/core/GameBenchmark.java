@@ -90,7 +90,7 @@ public final class GameBenchmark {
         Path out = Path.of(System.getProperty("voxel.benchmark.out", "benchmarks/opt/game-benchmark.csv"));
         String seconds = System.getProperty("voxel.benchmark.seconds");
         double measureOverride = seconds == null ? 0 : Double.parseDouble(seconds);
-        if (measureOverride != 0 && (!Double.isFinite(measureOverride) || measureOverride <= 0))
+        if (seconds != null && (!Double.isFinite(measureOverride) || measureOverride <= 0))
             throw new IllegalArgumentException("Benchmark duration must be positive and finite");
         if (scenes.contains(BenchmarkScene.FLY_RETURN)
                 && (scenes.indexOf(BenchmarkScene.FLY_RETURN) == 0
@@ -600,6 +600,10 @@ public final class GameBenchmark {
                     .put("siteZ", Integer.getInteger("voxel.benchmark.siteZ", 0))
                     .put("clouds", System.getProperty("voxel.benchmark.clouds", "FAST"))
                     .put("gpuTimers", System.getProperty("voxel.benchmark.gpuTimers", "true"))
+                    .put(
+                            "jfr",
+                            ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
+                                    .anyMatch(arg -> arg.startsWith("-XX:StartFlightRecording")))
                     .put("gpu", glGetString(GL_RENDERER))
                     .put("glVersion", glGetString(GL_VERSION))
                     .put(

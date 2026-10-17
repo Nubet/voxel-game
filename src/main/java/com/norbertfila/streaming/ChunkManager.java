@@ -34,8 +34,7 @@ public final class ChunkManager implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(ChunkManager.class.getName());
     private static final int TASK_QUEUE_CAPACITY = 64;
     private static final int READY_QUEUE_CAPACITY = 64;
-    // Drain a full ready queue per tick; a smaller batch adds ticks of latency without reducing retained work.
-    public static final int RESULTS_PER_UPDATE = READY_QUEUE_CAPACITY;
+    public static final int RESULTS_PER_UPDATE = 32;
     /**
      * Chunks stay loaded this many columns past the render distance, so walking back and forth across the edge does
      * not load and evict the same chunks over and over.

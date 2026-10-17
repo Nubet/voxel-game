@@ -18,10 +18,14 @@ def load(directory):
             for row in csv.DictReader(source):
                 if row.get("schema") != "2":
                     raise ValueError(f"{path}: expected schema 2 and one header per file")
+                if row.get("jfr", "false") != "false":
+                    raise ValueError(f"{path}: diagnostic recordings cannot be used for A/B timing")
                 if row["settleTimedOut"] != "false" or row["droppedCommands"] != "0":
                     raise ValueError(f"{path}: incomplete workload")
                 # Timing jitter must not split otherwise identical scripted durations.
                 key = tuple(str(round(float(row[k]))) if k == "measuredS" else row[k] for k in KEYS)
+                if any(previous["runId"] == row["runId"] for previous in groups[key]):
+                    raise ValueError(f"{path}: duplicate run for the same workload")
                 groups[key].append(row)
     if not groups:
         raise ValueError(f"{directory}: no benchmark rows")
