@@ -80,7 +80,7 @@ public final class SurfaceMaterialResolver {
                 ? SurfaceMaterial.STONE
                 : variation > .12
                         ? SurfaceMaterial.PODZOL
-                        : variation < -.22 ? SurfaceMaterial.DIRT : SurfaceMaterial.GRASS;
+                        : variation < -.22 ? SurfaceMaterial.COARSE_DIRT : SurfaceMaterial.GRASS;
         return new Result(
                 materials.surface(top),
                 materials.subsurface(top == SurfaceMaterial.STONE ? SurfaceMaterial.STONE : SurfaceMaterial.DIRT));
