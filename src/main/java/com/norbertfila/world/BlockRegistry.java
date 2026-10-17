@@ -466,6 +466,7 @@ public final class BlockRegistry {
         blocks.add(log(textures, BlockId.MAHOGANY_LOG, "mahogany_log"));
         blocks.add(leaves(textures, BlockId.MAHOGANY_LEAVES, "mahogany_leaves"));
         blocks.add(material(textures, BlockId.MAHOGANY_PLANKS, "mahogany_planks"));
+        blocks.add(material(textures, BlockId.PUMPKIN, "pumpkin", "pumpkin_top", "pumpkin_top", "pumpkin_side"));
         return new BlockRegistry(blocks, textures);
     }
 

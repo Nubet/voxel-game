@@ -98,7 +98,7 @@ public final class BiomeRegistry {
                 BiomeType.JUNGLE,
                 new BiomeProfile(
                         new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
-                        new VegetationProfile(.8f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN), .65f, 0),
+                        new VegetationProfile(1f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN), .35f, 0),
                         new TreeProfile(.9f, TreeType.JUNGLE)));
         return new BiomeRegistry(profiles);
     }

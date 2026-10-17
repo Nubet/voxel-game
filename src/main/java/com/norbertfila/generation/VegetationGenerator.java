@@ -96,7 +96,7 @@ final class VegetationGenerator {
                                 * t
                                 * (3 - 2 * t)
                                 * (columns.biome(column) == com.norbertfila.generation.biome.BiomeType.JUNGLE
-                                        ? Math.clamp(.5 + jungle.understory(ox + x, oz + z) * 2, .05, 1)
+                                        ? Math.clamp(.75 + jungle.understory(ox + x, oz + z) * 2, .15, 1)
                                         : 1)) continue;
                 double woodland = sample(forest, ((long) ox + x) * .003, ((long) oz + z) * .003);
                 byte plant = woodland > .1

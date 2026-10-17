@@ -9,6 +9,38 @@ import org.junit.jupiter.api.Test;
 
 class JungleGenerationTest {
     @Test
+    void naturalJungleContainsRootedDirtAndCocoaWithValidSupport() {
+        var source = new TerrainGenerator(42, TerrainConfig.defaults());
+        var site = JungleSites.find(source, false);
+        var world = new World();
+        int roots = 0;
+        for (int z = -4; z < 4; z++)
+            for (int x = -4; x < 4; x++)
+                for (int y = 1; y <= 8; y++) {
+                    var pos = new ChunkPos(Math.floorDiv(site.x(), 16) + x, y, Math.floorDiv(site.z(), 16) + z);
+                    var data = source.generate(pos);
+                    for (byte b : data.blocks()) if (b == BlockId.ROOTED_DIRT) roots++;
+                    world.putChunk(pos, Chunk.fromBlocks(data.blocks()));
+                }
+        int cocoa = 0;
+        for (int z = site.z() - 48; z < site.z() + 48; z++)
+            for (int x = site.x() - 48; x < site.x() + 48; x++)
+                for (int y = 16; y < 128; y++) {
+                    var pos = new BlockPos(x, y, z);
+                    int id = world.getBlock(pos).orElse(0);
+                    if (id >= Byte.toUnsignedInt(BlockId.COCOA_EAST) && id <= Byte.toUnsignedInt(BlockId.COCOA_NORTH)) {
+                        assertTrue(
+                                PlantRules.canPlace(world, pos, (byte) id),
+                                "Generated cocoa must attach to Jungle wood");
+                        cocoa++;
+                    }
+                }
+        assertTrue(roots > 0 && roots < 16384 / 10, "Rooted dirt should remain a minor ground detail: " + roots);
+        assertTrue(cocoa > 0, "Natural Jungle must actually generate cocoa");
+        System.out.printf("Natural Jungle 128x128: rootedDirt=%d cocoaInInner96x96=%d%n", roots, cocoa);
+    }
+
+    @Test
     void naturalJungleRemainsDeterministicAcrossParallelSectionsAndNegativeCoordinates() throws Exception {
         var source = new TerrainGenerator(42, TerrainConfig.defaults());
         var site = JungleSites.find(source, false);

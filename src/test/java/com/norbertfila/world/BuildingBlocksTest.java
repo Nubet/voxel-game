@@ -20,8 +20,9 @@ import org.junit.jupiter.api.Test;
 class BuildingBlocksTest {
     @Test
     void buildingBlocksCanBeMinedCollectedAndPlacedIncludingUnsignedIds() {
-        for (byte block :
-                new byte[] {BlockId.PINE_PLANKS, BlockId.MYCELIUM, BlockId.WOOL_CYAN, BlockId.TERRACOTTA_BLACK}) {
+        for (byte block : new byte[] {
+            BlockId.PINE_PLANKS, BlockId.MYCELIUM, BlockId.WOOL_CYAN, BlockId.TERRACOTTA_BLACK, BlockId.PUMPKIN
+        }) {
             var world = new World();
             world.putChunk(new ChunkPos(0, 0, 0), new Chunk());
             var position = new BlockPos(3, 2, 3);
@@ -58,7 +59,8 @@ class BuildingBlocksTest {
                     field.getName().toLowerCase(java.util.Locale.ROOT),
                     registry.definition(id).name());
         }
-        for (int id = 47; id <= 149; id++) {
+        for (int id = 47; id <= 166; id++) {
+            if (id >= 150 && id < 166) continue;
             byte block = (byte) id;
             var definition = registry.definition(block);
             assertTrue(InventoryScreen.catalogBlocks().contains(block));

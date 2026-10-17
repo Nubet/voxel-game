@@ -9,3 +9,4 @@ refi_cocoa: textures/farming_mcl_farming/mcl_cocoas/mcl_cocoas_cocoa_stage_2.png
 refi_tall_grass_bottom/top: textures/flowers_mcl_flowers/mcl_flowers_double_plant_grass_bottom/top.png
 refi_large_fern_bottom/top: textures/flowers_mcl_flowers/mcl_flowers_double_plant_fern_bottom/top.png
 refi_melon_top/side: textures/farming_mcl_farming/farming_melon_top/side.png
+refi_pumpkin_top/side: textures/farming_mcl_farming/farming_pumpkin_top/side.png
