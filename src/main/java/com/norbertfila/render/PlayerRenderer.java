@@ -3,19 +3,23 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.PlayerSkin;
+import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.model.CuboidMesh;
+import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
 import java.util.Objects;
+import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
-public final class PlayerDebugRenderer implements AutoCloseable {
+public final class PlayerRenderer implements AutoCloseable {
+    private static final float[] VERTICES = vertices();
     private final int program, vao, vbo, vp, model;
     private final SkinManager skins;
     private boolean closed;
 
-    public PlayerDebugRenderer(SkinManager skins) {
+    public PlayerRenderer(SkinManager skins) {
         this.skins = Objects.requireNonNull(skins);
         int createdProgram = 0, createdVao = 0, createdVbo = 0;
         try {
@@ -25,7 +29,7 @@ public final class PlayerDebugRenderer implements AutoCloseable {
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
-            glNamedBufferData(createdVbo, vertices(), GL_STATIC_DRAW);
+            glNamedBufferData(createdVbo, VERTICES, GL_STATIC_DRAW);
             glVertexArrayVertexBuffer(createdVao, 0, createdVbo, 0, CuboidMesh.FLOATS_PER_VERTEX * Float.BYTES);
             glVertexArrayAttribFormat(createdVao, 0, 3, GL_FLOAT, false, 0);
             glVertexArrayAttribBinding(createdVao, 0, 0);
@@ -44,8 +48,30 @@ public final class PlayerDebugRenderer implements AutoCloseable {
         vbo = createdVbo;
     }
 
+    public boolean render(
+            Matrix4f viewProjection,
+            PlayerRenderState state,
+            double alpha,
+            double cameraX,
+            double cameraY,
+            double cameraZ) {
+        if (closed) throw new IllegalStateException("Player renderer is closed");
+        if (skins.texture() == 0) return false;
+        var sample = state.interpolate(alpha);
+        var feet = sample.feet();
+        float x = (float) (feet.x() - cameraX), y = (float) (feet.y() - cameraY), z = (float) (feet.z() - cameraZ);
+        // Includes the head at any look angle; visual bounds deliberately exceed the gameplay hitbox.
+        if (!new FrustumIntersection(viewProjection).testAab(x - 1, y - .5f, z - 1, x + 1, y + 2.5f, z + 1))
+            return false;
+        var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
+        var pose = PlayerPose.NEUTRAL.with(
+                PlayerModel.Part.HEAD, new PartTransform(0, 0, 0, (float) Math.toRadians(sample.pitch()), 0, 0));
+        render(viewProjection, transform, pose);
+        return true;
+    }
+
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose) {
-        if (closed) throw new IllegalStateException("Player debug renderer is closed");
+        if (closed) throw new IllegalStateException("Player renderer is closed");
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
         Objects.requireNonNull(pose);
