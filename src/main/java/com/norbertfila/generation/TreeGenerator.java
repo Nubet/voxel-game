@@ -13,7 +13,7 @@ import java.util.List;
 final class TreeGenerator {
     private static final int CELL_SIZE = 6;
     private static final int MIN_SPACING = 4;
-    private static final int MAX_CROWN_RADIUS = 3;
+    private static final int MAX_CROWN_RADIUS = 9;
     private static final int SLOPE_SAMPLE_DISTANCE = 2;
     private static final int MAX_SLOPE = 2;
     private static final long PRIORITY_SALT = 0xD1B54A32D192ED03L;
@@ -22,7 +22,7 @@ final class TreeGenerator {
 
     private final long seed;
     private final Noise2D forestDensity;
-    private final TerrainSource terrain;
+    private final GroundSampler terrain;
     private final BiomeRegistry biomes;
 
     TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain) {
@@ -30,6 +30,10 @@ final class TreeGenerator {
     }
 
     TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain, BiomeRegistry biomes) {
+        this(seed, forestDensity, terrain::sample, biomes);
+    }
+
+    TreeGenerator(long seed, Noise2D forestDensity, GroundSampler terrain, BiomeRegistry biomes) {
         this.seed = seed;
         this.forestDensity = forestDensity;
         this.terrain = terrain;
@@ -56,11 +60,17 @@ final class TreeGenerator {
         return List.copyOf(trees);
     }
 
-    // Order matters because logs overwrite leaves of trees placed earlier, while leaves only fill air.
+    // Place all wood first so overlapping crowns cannot replace another tree's branches.
     static void place(List<Tree> trees, int originX, int originY, int originZ, byte[] blocks) {
         for (Tree tree : trees) {
-            placeTrunk(tree, originX, originY, originZ, blocks);
-            placeCrown(tree, originX, originY, originZ, blocks);
+            if (tree.plan != null)
+                tree.plan.wood((x, y, z, block) -> place(x, y, z, originX, originY, originZ, blocks, block));
+            else placeTrunk(tree, originX, originY, originZ, blocks);
+        }
+        for (Tree tree : trees) {
+            if (tree.plan != null)
+                tree.plan.foliage((x, y, z, block) -> place(x, y, z, originX, originY, originZ, blocks, block));
+            else placeCrown(tree, originX, originY, originZ, blocks);
         }
     }
 
@@ -87,6 +97,35 @@ final class TreeGenerator {
         long shapeSeed = hash(seed ^ SHAPE_SALT, cellX, cellZ);
         TerrainSummary sample = terrain.sample(x, z);
         TreeType type = biomes.profile(sample.biome()).trees().type();
+        if (type == TreeType.JUNGLE) {
+            int roll = JungleTrees.bounded(shapeSeed, 17, 100);
+            type = roll < 8 ? TreeType.GIANT_JUNGLE : TreeType.JUNGLE;
+            if (x < Integer.MIN_VALUE + 10
+                    || x > Integer.MAX_VALUE - 10
+                    || z < Integer.MIN_VALUE + 10
+                    || z > Integer.MAX_VALUE - 10) return null;
+            if (type == TreeType.GIANT_JUNGLE) {
+                for (int dz = 0; dz < 2; dz++)
+                    for (int dx = 0; dx < 2; dx++) {
+                        var support = terrain.sample(x + dx, z + dz);
+                        if (!suitable(x + dx, z + dz, support) || support.surfaceHeight() != sample.surfaceHeight())
+                            return null;
+                    }
+            }
+            var plan = JungleTrees.plan(x, sample.surfaceHeight() + 1, z, shapeSeed, type);
+            if (plan.maxY() >= com.norbertfila.world.WorldBounds.MAX_Y_EXCLUSIVE) return null;
+            return new Candidate(
+                    new Tree(
+                            x,
+                            z,
+                            sample.surfaceHeight() + 1,
+                            plan.maxY() - sample.surfaceHeight() - 2,
+                            9,
+                            shapeSeed,
+                            type,
+                            plan),
+                    sample);
+        }
         int trunkHeight = type == TreeType.CONIFER
                 ? 5 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 1), 4)
                 : type == TreeType.SWAMP
@@ -106,8 +145,8 @@ final class TreeGenerator {
         if (!Double.isFinite(densityNoise) || densityNoise < -1 || densityNoise > 1)
             throw new IllegalStateException("Forest noise must be finite and within [-1, 1]");
         double t = Math.clamp((densityNoise + .1) / .5, 0, 1);
-        double density =
-                biomes.profile(terrain.sample((int) x, (int) z).biome()).trees().density() * t * t * (3 - 2 * t);
+        var profile = biomes.profile(terrain.sample((int) x, (int) z).biome()).trees();
+        double density = profile.density() * (profile.type() == TreeType.JUNGLE ? .85 + .15 * t : t * t * (3 - 2 * t));
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }
 
@@ -170,6 +209,10 @@ final class TreeGenerator {
     static long canopyHeight(List<Tree> trees, int x, int z) {
         long highest = Long.MIN_VALUE, highestLog = Long.MIN_VALUE;
         for (Tree tree : trees) {
+            if (tree.plan != null) {
+                highest = Math.max(highest, tree.plan.canopyHeight(x, z));
+                continue;
+            }
             long dx = (long) x - tree.x, dz = (long) z - tree.z;
             if (dx == 0 && dz == 0) highestLog = Math.max(highestLog, (long) tree.baseY + tree.trunkHeight - 1);
             if (Math.abs(dx) > tree.crownRadius || Math.abs(dz) > tree.crownRadius) continue;
@@ -212,11 +255,17 @@ final class TreeGenerator {
     }
 
     private static boolean isLog(byte block) {
-        return block == BlockId.LOG || block == BlockId.PINE_LOG || block == BlockId.SWAMP_LOG;
+        return block == BlockId.LOG
+                || block == BlockId.PINE_LOG
+                || block == BlockId.SWAMP_LOG
+                || block == BlockId.JUNGLE_LOG;
     }
 
     private static boolean isLeaves(byte block) {
-        return block == BlockId.LEAVES || block == BlockId.PINE_NEEDLES || block == BlockId.SWAMP_LEAVES;
+        return block == BlockId.LEAVES
+                || block == BlockId.PINE_NEEDLES
+                || block == BlockId.SWAMP_LEAVES
+                || block == BlockId.JUNGLE_LEAVES;
     }
 
     private static byte log(Tree tree) {
@@ -231,7 +280,16 @@ final class TreeGenerator {
                 : tree.type == TreeType.SWAMP ? BlockId.SWAMP_LEAVES : BlockId.LEAVES;
     }
 
-    record Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type) {}
+    record Tree(
+            int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type, TreePlan plan) {
+        Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type) {
+            this(x, z, baseY, trunkHeight, crownRadius, shapeSeed, type, null);
+        }
+
+        int maxY() {
+            return plan == null ? baseY + trunkHeight + 4 : plan.maxY();
+        }
+    }
 
     private record Candidate(Tree tree, TerrainSummary terrain) {}
 }

@@ -95,7 +95,7 @@ public final class TerrainGenerator implements TerrainSource {
         });
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
-        trees = new TreeGenerator(seed, forestDensity, this, biomeRegistry);
+        trees = new TreeGenerator(seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry);
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
@@ -239,6 +239,10 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
+        return sampleBase(worldX, worldZ);
+    }
+
+    private TerrainSummary sampleBase(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
         double slope = column.slope();
@@ -361,14 +365,24 @@ public final class TerrainGenerator implements TerrainSource {
                     removedSurface.set(index);
             }
         var supportedTrees = trees.trees(originX, originZ).stream()
-                .filter(tree -> !caveCarver.carves(
-                        tree.x(),
-                        tree.baseY() - 1,
-                        tree.z(),
-                        BlockId.GRASS,
-                        cavesAt(Math.floorDiv(tree.x(), Chunk.SIZE), Math.floorDiv(tree.z(), Chunk.SIZE))))
+                .filter(this::treeSupported)
                 .toList();
         return TerrainColumn.of(summaries, supportedTrees, segments, removedSurface);
+    }
+
+    private boolean treeSupported(TreeGenerator.Tree tree) {
+        int width = tree.type() == com.norbertfila.generation.biome.TreeType.GIANT_JUNGLE ? 2 : 1;
+        for (int dz = 0; dz < width; dz++)
+            for (int dx = 0; dx < width; dx++) {
+                int x = tree.x() + dx, z = tree.z() + dz;
+                if (caveCarver.carves(
+                        x,
+                        tree.baseY() - 1,
+                        z,
+                        BlockId.GRASS,
+                        cavesAt(Math.floorDiv(x, Chunk.SIZE), Math.floorDiv(z, Chunk.SIZE)))) return false;
+            }
+        return true;
     }
 
     private List<CavePlan.Segment> cavesAt(int chunkX, int chunkZ) {
