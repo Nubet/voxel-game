@@ -25,6 +25,12 @@ public final class GameCommands {
     private final CommandDispatcher<Execution> dispatcher = new CommandDispatcher<>();
 
     public GameCommands() {
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("seed").executes(context -> {
+            context.getSource()
+                    .output()
+                    .add("Seed: " + context.getSource().source().seed());
+            return 1;
+        }));
         dispatcher.register(LiteralArgumentBuilder.<Execution>literal("help").executes(context -> {
             context.getSource()
                     .output()
