@@ -6,6 +6,10 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.assets.PlayerSkin;
 import com.norbertfila.assets.SkinLoader;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerState;
+import com.norbertfila.player.WaterContact;
+import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.player.visual.model.CuboidMesh.Face;
 import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
@@ -35,8 +39,8 @@ public final class PlayerModelSmoke {
                 SkinManager defaults = new SkinManager(
                         Executors.newSingleThreadExecutor(),
                         () -> new SkinLoader.Loaded(defaultSkin, SkinLoader.BUNDLED_PATH, ""));
-                PlayerDebugRenderer renderer = new PlayerDebugRenderer(skins);
-                PlayerDebugRenderer defaultRenderer = new PlayerDebugRenderer(defaults)) {
+                PlayerRenderer renderer = new PlayerRenderer(skins);
+                PlayerRenderer defaultRenderer = new PlayerRenderer(defaults)) {
             awaitSkin(skins);
             awaitSkin(defaults);
             SkinManagerSmoke.checkLifecycle();
@@ -98,6 +102,9 @@ public final class PlayerModelSmoke {
                 var occluded = capture();
                 render(renderer, front, pose, sentinelVao);
                 check(occluded.equals(capture()), "Model ignored foreground depth");
+                checkSnapshots(renderer, output);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                com.norbertfila.core.PlayerGameHookSmoke.run(window, skins, output);
                 renderer.close();
                 renderer.close();
                 defaultRenderer.close();
@@ -128,7 +135,44 @@ public final class PlayerModelSmoke {
                 "Skin upload timed out or failed: " + skins.status());
     }
 
-    private static void render(PlayerDebugRenderer renderer, Matrix4f vp, PlayerPose pose, int vao) {
+    private static void checkSnapshots(PlayerRenderer renderer, Path output) throws Exception {
+        var player = new PlayerController();
+        var extractor = new PlayerRenderStateExtractor();
+        var water = new WaterContact.Result(0, false, true);
+        var vp = new Matrix4f().ortho(-1.3f, 1.3f, -1.3f, 1.3f, .1f, 20).lookAt(0, 0, 0, 0, 0, 1, 0, 1, 0);
+        ByteBuffer reference = null;
+        for (double origin : new double[] {0, -1_000_000_000.25}) {
+            player.setPosition(new PlayerState.Position(origin, 0, origin));
+            var state = extractor.extract(player, -90, 0, water, false);
+            clear(1);
+            check(renderer.render(vp, state, .5, origin, 1, origin - 5), "Visible snapshot was culled");
+            var image = capture();
+            if (reference == null) reference = image;
+            else check(reference.equals(image), "Large negative coordinates lost sub-block precision");
+            write(image, output.resolve(origin == 0 ? "snapshot-origin.png" : "snapshot-negative.png"));
+            clear(1);
+            var empty = capture();
+            check(!renderer.render(vp, state, .5, origin + 100, 1, origin - 5), "Off-frustum snapshot drawn");
+            check(empty.equals(capture()), "Culled snapshot wrote pixels");
+            clear(0);
+            empty = capture();
+            renderer.render(vp, state, .5, origin, 1, origin - 5);
+            check(empty.equals(capture()), "Snapshot ignored opaque occlusion");
+            for (double yaw : new double[] {-90, 0, 90, 180}) {
+                var turned = extractor.extract(player, yaw, 0, water, true);
+                double angle = Math.toRadians(yaw);
+                double cx = origin + Math.cos(angle) * 5, cz = origin + Math.sin(angle) * 5;
+                var facing = new Matrix4f()
+                        .ortho(-1.3f, 1.3f, -1.3f, 1.3f, .1f, 20)
+                        .lookAt(0, 0, 0, (float) -Math.cos(angle), 0, (float) -Math.sin(angle), 0, 1, 0);
+                clear(1);
+                renderer.render(facing, turned, 1, cx, 1, cz);
+                check(reference.equals(capture()), "Wrong gameplay-to-model yaw mapping: " + yaw);
+            }
+        }
+    }
+
+    private static void render(PlayerRenderer renderer, Matrix4f vp, PlayerPose pose, int vao) {
         glDisable(GL_DEPTH_TEST);
         glDepthMask(false);
         glDepthFunc(GL_GREATER);
@@ -212,7 +256,7 @@ public final class PlayerModelSmoke {
         };
     }
 
-    private static void checkFace(PlayerDebugRenderer renderer, PlayerSkin skin, Face face, int vao, Path path)
+    private static void checkFace(PlayerRenderer renderer, PlayerSkin skin, Face face, int vao, Path path)
             throws Exception {
         Vector3f normal = switch (face) {
             case FRONT -> new Vector3f(0, 0, -1);

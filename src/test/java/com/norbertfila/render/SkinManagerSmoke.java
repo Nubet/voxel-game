@@ -68,8 +68,8 @@ final class SkinManagerSmoke {
             assertNotEquals(original, shared);
             assertFalse(glIsTexture(original));
             assertEquals("latest", skins.status().source());
-            try (var a = new PlayerDebugRenderer(skins);
-                    var b = new PlayerDebugRenderer(skins)) {
+            try (var a = new PlayerRenderer(skins);
+                    var b = new PlayerRenderer(skins)) {
                 a.close();
                 assertTrue(glIsTexture(shared));
             }

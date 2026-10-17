@@ -28,6 +28,54 @@ import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
     @Test
+    void publishesImmutableVisualsAndResetsBlockedPausedAndTeleportedHistory() throws Exception {
+        try (var runtime = start(new Flat(), directory.resolve("player-visuals.vxl"))) {
+            runtime.controls(controls(false, false));
+            var playing = await(runtime, f -> f.tick() >= 3);
+            assertEquals(
+                    playing.playerState().position(),
+                    playing.playerRenderState().current().feet());
+            long interpolationTime =
+                    playing.publishedAt() + (long) (1e9 * com.norbertfila.simulation.FixedSimulation.TICK_SECONDS * .5);
+            assertEquals(.5, playing.interpolationAlpha(interpolationTime), 1e-7);
+            assertEquals(
+                    playing.playerRenderState()
+                            .interpolate(playing.interpolationAlpha(interpolationTime))
+                            .eye(),
+                    playing.interpolatedEye(interpolationTime));
+            var camera = new Camera();
+            var eye = playing.interpolatedEye(interpolationTime);
+            camera.setPosition(eye.x(), eye.y(), eye.z());
+            assertFalse(GameLoop.localPlayerVisible(playing, interpolationTime, camera));
+            camera.setPosition(eye.x() - 5, eye.y(), eye.z());
+            assertTrue(GameLoop.localPlayerVisible(playing, interpolationTime, camera));
+
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 179, 20, true, false, 0));
+            var blocked = await(runtime, f -> f.playerRenderState().current().yaw() == 179);
+            assertTrue(blocked.playerRenderState().frozen());
+            assertEquals(
+                    blocked.playerRenderState().current(),
+                    blocked.playerRenderState().previous());
+            assertTrue(runtime.offer(new WorldRuntime.Teleport(-500.25, 20, -800.75)));
+            var teleported = await(runtime, f -> f.playerState().position().x() == -500.25);
+            assertEquals(
+                    teleported.playerRenderState().current(),
+                    teleported.playerRenderState().previous());
+            assertEquals(
+                    playing.playerState().position(),
+                    playing.playerRenderState().current().feet());
+
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, -179, -20, true, true, 0));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(-179, paused.playerRenderState().interpolate(.5).yaw());
+            assertEquals(
+                    paused.playerRenderState().current(),
+                    paused.playerRenderState().previous());
+            assertEquals(paused.eye(), paused.interpolatedEye(paused.publishedAt()));
+        }
+    }
+
+    @Test
     void chatCommandsExecuteOnceWhileInputIsBlockedAndPersistOnlyGameState() throws Exception {
         Path save = directory.resolve("chat-commands.vxl");
         try (var runtime = start(new Flat(), save)) {

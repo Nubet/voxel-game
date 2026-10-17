@@ -20,6 +20,7 @@ import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
+import com.norbertfila.render.PlayerRenderer;
 import com.norbertfila.render.SkinManager;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
@@ -125,7 +126,8 @@ public final class GameLoop {
                 BlockOutlineRenderer outline = new BlockOutlineRenderer();
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
-                CloudRenderer clouds = new CloudRenderer()) {
+                CloudRenderer clouds = new CloudRenderer();
+                PlayerRenderer players = skins == null ? null : new PlayerRenderer(skins)) {
             return run(
                     window,
                     input,
@@ -141,7 +143,8 @@ public final class GameLoop {
                     outline,
                     effects,
                     items,
-                    clouds);
+                    clouds,
+                    players);
         }
     }
 
@@ -160,7 +163,8 @@ public final class GameLoop {
             BlockOutlineRenderer outline,
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
-            CloudRenderer clouds) {
+            CloudRenderer clouds,
+            PlayerRenderer players) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -414,6 +418,7 @@ public final class GameLoop {
                 renderer.enqueueUpload(mesh.mesh());
             }
             state = runtime.frame();
+            long interpolationTime = System.nanoTime();
             if (state != null) {
                 if (state.residency().revision() != residencyRevision) {
                     var current = state.residents();
@@ -426,7 +431,7 @@ public final class GameLoop {
                     residents = current;
                     residencyRevision = state.residency().revision();
                 }
-                var eye = state.interpolatedEye(System.nanoTime());
+                var eye = state.interpolatedEye(interpolationTime);
                 camera.setPosition(eye.x(), eye.y(), eye.z());
                 renderer.far().reconcile(state.far(), eye.x(), eye.z());
             }
@@ -479,10 +484,21 @@ public final class GameLoop {
             }
             if (gpuTimer != null) gpuTimer.stamp();
             var opaque = renderer.renderOpaque(viewProjection, camera.x(), camera.y(), camera.z(), visibility.amount());
+            if (players != null
+                    && state != null
+                    && state.ready()
+                    && localPlayerVisible(state, interpolationTime, camera))
+                players.render(
+                        viewProjection,
+                        state.playerRenderState(),
+                        state.interpolationAlpha(interpolationTime),
+                        camera.x(),
+                        camera.y(),
+                        camera.z());
             if (gpuTimer != null) gpuTimer.stamp();
             double effectSeconds = state == null
                     ? 0
-                    : animationSeconds(state.tick(), state.publishedAt(), state.paused(), System.nanoTime());
+                    : animationSeconds(state.tick(), state.publishedAt(), state.paused(), interpolationTime);
             clouds.render(
                     viewProjection,
                     camera.x(),
@@ -520,7 +536,7 @@ public final class GameLoop {
                 double itemAlpha = state.paused()
                         ? 0
                         : Math.clamp(
-                                (System.nanoTime() - state.publishedAt()) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
+                                (interpolationTime - state.publishedAt()) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
                 items.render(viewProjection, state.items(), itemAlpha, camera.x(), camera.y(), camera.z());
                 effects.render(
                         viewProjection,
@@ -800,6 +816,12 @@ public final class GameLoop {
         else hotbar.scroll(hotbarScrollSteps);
         if (!removePressed && (!placePressed || hotbar.selectedBlock() == BlockId.AIR)) return Optional.empty();
         return Optional.of(new WorldRuntime.Edit(removePressed, hotbar.selectedBlock(), yaw, pitch));
+    }
+
+    public static boolean localPlayerVisible(WorldRuntime.Frame state, long interpolationTime, Camera camera) {
+        var eye = state.interpolatedEye(interpolationTime);
+        double dx = camera.x() - eye.x(), dy = camera.y() - eye.y(), dz = camera.z() - eye.z();
+        return dx * dx + dy * dy + dz * dz > 1e-8;
     }
 
     static double clampDelta(double deltaSeconds) {

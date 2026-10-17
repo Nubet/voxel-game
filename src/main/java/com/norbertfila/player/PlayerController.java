@@ -15,6 +15,8 @@ public final class PlayerController {
     private Mode mode = Mode.SURVIVAL;
     private Mode requestedMode;
     private boolean flying;
+    private boolean sprinting;
+    private long interpolationResetRevision;
     private double lastJumpPressSeconds = Double.NaN;
     private Position previous = new Position(0, 22, 34);
     private double previousEyeHeight = PlayerState.EYE_HEIGHT;
@@ -29,8 +31,7 @@ public final class PlayerController {
                 && !collision.spaceFree(Objects.requireNonNull(world), current.body())) return false;
         if (this.mode != next) {
             current = current.resetMotion().withCrouching(next != Mode.SPECTATOR && current.crouching());
-            previous = current.position();
-            previousEyeHeight = current.eyeHeight();
+            pauseInterpolation();
             flying = false;
             clearInputGestures();
         }
@@ -56,6 +57,14 @@ public final class PlayerController {
         return flying;
     }
 
+    public boolean sprinting() {
+        return sprinting;
+    }
+
+    public long interpolationResetRevision() {
+        return interpolationResetRevision;
+    }
+
     public void clearInputGestures() {
         lastJumpPressSeconds = Double.NaN;
     }
@@ -66,8 +75,7 @@ public final class PlayerController {
 
     public void setPosition(Position position) {
         current = PlayerState.at(position).withCrouching(current.crouching());
-        previous = current.position();
-        previousEyeHeight = current.eyeHeight();
+        pauseInterpolation();
         flying = false;
         requestedMode = null;
         clearInputGestures();
@@ -81,6 +89,7 @@ public final class PlayerController {
         if (flying && mode != Mode.CREATIVE) throw new IllegalArgumentException("Invalid restored flight state");
         setPosition(position);
         current = current.withCrouching(false);
+        pauseInterpolation();
         this.mode = Objects.requireNonNull(mode);
         this.flying = flying;
     }
@@ -159,6 +168,8 @@ public final class PlayerController {
         previous = current.position();
         previousEyeHeight = current.eyeHeight();
         current = result;
+        sprinting =
+                !result.crouching() && (move.flying || mode == Mode.SPECTATOR ? input.sprintHeld() : sprinting(input));
         flying = move.flying && !result.grounded();
         if (move.flying && !flying) clearInputGestures();
         else if (mode == Mode.CREATIVE && input.jumpPressed())
@@ -227,6 +238,8 @@ public final class PlayerController {
     public void pauseInterpolation() {
         previous = current.position();
         previousEyeHeight = current.eyeHeight();
+        sprinting = false;
+        interpolationResetRevision++;
     }
 
     private PlayerState movementStart(PlayerInput input, Movement move) {

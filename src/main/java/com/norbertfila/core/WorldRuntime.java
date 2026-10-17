@@ -22,6 +22,8 @@ import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.*;
+import com.norbertfila.player.visual.PlayerRenderState;
+import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
@@ -182,6 +184,7 @@ public final class WorldRuntime implements AutoCloseable {
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
+            var playerVisuals = new PlayerRenderStateExtractor();
             Inventory inventory = new Inventory(saved.inventory());
             ItemSystem items = new ItemSystem(saved.items());
             ItemThrower thrower = new ItemThrower(world, inventory, items);
@@ -263,6 +266,7 @@ public final class WorldRuntime implements AutoCloseable {
                 try {
                     while (!stopping) {
                         long now = System.nanoTime();
+                        boolean stalled = now - previous > 100_000_000L;
                         double delta = Math.min(.1, (now - previous) / 1e9);
                         previous = now;
                         clock.advance(delta, dt -> {
@@ -466,6 +470,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 }
                                 playerNanos = System.nanoTime() - playerStarted;
                             } else player.pauseInterpolation();
+                            if (stalled) player.pauseInterpolation();
                             if (activated
                                     && poseReady[0]
                                     && !state.blocked()
@@ -533,6 +538,12 @@ public final class WorldRuntime implements AutoCloseable {
                             }
                             long contactStarted = System.nanoTime();
                             var contact = WaterContact.sample(world, player.state());
+                            var playerRenderState = playerVisuals.extract(
+                                    player,
+                                    state.yaw(),
+                                    state.pitch(),
+                                    contact,
+                                    !activated || state.blocked() || state.paused() || movementWaiting || stalled);
                             long contactNanos = System.nanoTime() - contactStarted;
                             var target = activated && poseReady[0] && !interactionBlocked
                                     ? target(targeting, player, state)
@@ -603,7 +614,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     breaking.progress(),
                                     breaks,
                                     itemSnapshot,
-                                    biome));
+                                    biome,
+                                    playerRenderState));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1021,7 +1033,8 @@ public final class WorldRuntime implements AutoCloseable {
             Optional<BlockBreaking.Progress> breaking,
             List<BlockBreakEvent> brokenBlocks,
             List<ItemRenderState> items,
-            BiomeType biome) {
+            BiomeType biome,
+            PlayerRenderState playerRenderState) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1032,6 +1045,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(breaking);
             brokenBlocks = List.copyOf(brokenBlocks);
             items = List.copyOf(items);
+            Objects.requireNonNull(playerRenderState);
         }
 
         public Map<ChunkPos, Long> residents() {
@@ -1047,11 +1061,11 @@ public final class WorldRuntime implements AutoCloseable {
         }
 
         public PlayerState.Position interpolatedEye(long now) {
-            double alpha = Math.clamp((now - publishedAt) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
-            return new PlayerState.Position(
-                    previousEye.x() + (eye.x() - previousEye.x()) * alpha,
-                    previousEye.y() + (eye.y() - previousEye.y()) * alpha,
-                    previousEye.z() + (eye.z() - previousEye.z()) * alpha);
+            return playerRenderState.interpolate(interpolationAlpha(now)).eye();
+        }
+
+        public double interpolationAlpha(long now) {
+            return Math.clamp((now - publishedAt) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
         }
     }
 }

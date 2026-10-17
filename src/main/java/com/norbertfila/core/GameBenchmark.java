@@ -26,6 +26,7 @@ import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.render.BlockTextureArray;
 import com.norbertfila.render.CloudMode;
+import com.norbertfila.render.SkinManager;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.streaming.ChunkManager;
@@ -109,6 +110,7 @@ public final class GameBenchmark {
         try (Window window = new Window(width, height, "Voxel Engine | Benchmark");
                 Input input = new Input(window.handle());
                 UiRenderer ui = new UiRenderer();
+                SkinManager skins = new SkinManager();
                 WorldIo io = new WorldIo();
                 BlockTextureArray textures =
                         new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
@@ -138,7 +140,7 @@ public final class GameBenchmark {
             var identity = new WorldIdentity(UUID.randomUUID(), seed, "default", terrain.generatorVersion());
             var entry = io.create(catalog, new WorldMetadata(identity, "benchmark", Instant.now()))
                     .join();
-            var loop = new GameLoop();
+            var loop = new GameLoop(skins);
             var profiler = new FrameProfiler(PROFILER_CAPACITY, gpuTimers);
             List<BenchmarkRecord> records;
             try (TerrainRenderer renderer = new TerrainRenderer(textures)) {
