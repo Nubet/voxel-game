@@ -23,7 +23,7 @@ final class JungleScene implements TerrainSource {
                 BlockId.STONE,
                 WorldBounds.MIN_Y,
                 TerrainSummary.NO_WATER,
-                BiomeType.FOREST,
+                BiomeType.JUNGLE,
                 new ClimateSample(.7f, .7f));
     }
 
