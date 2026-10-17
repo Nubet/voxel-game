@@ -58,15 +58,10 @@ public final class VisibleFaceMesher implements ChunkMesher {
                             rgb = BiomeTint.color(snapshot.tintIndex(x, z), BiomeTint.foliageTexture(texture));
                         for (int index : TRIANGLE_INDICES) {
                             int[] p = FACES[f][index];
-                            out.add(cx * Chunk.SIZE + x + p[0]);
-                            out.add(cy * Chunk.SIZE
-                                    + y
-                                    + p[1]
-                                            * BlockRegistry.DEFAULT
-                                                    .definition(block)
-                                                    .model()
-                                                    .maxY());
-                            out.add(cz * Chunk.SIZE + z + p[2]);
+                            var model = BlockRegistry.DEFAULT.definition(block).model();
+                            out.add(cx * Chunk.SIZE + x + model.minX() + p[0] * (model.maxX() - model.minX()));
+                            out.add(cy * Chunk.SIZE + y + model.minY() + p[1] * (model.maxY() - model.minY()));
+                            out.add(cz * Chunk.SIZE + z + model.minZ() + p[2] * (model.maxZ() - model.minZ()));
                             out.add(rgb[0] * shade);
                             out.add(rgb[1] * shade);
                             out.add(rgb[2] * shade);

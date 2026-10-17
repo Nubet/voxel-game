@@ -113,6 +113,18 @@ public final class QuadCodec {
             int top = material >>> 24 & 7;
             if (top != 0 && (face == 2 || face != 3 && alongV)) py -= 1 - top / 8f;
             pz = cz * Chunk.SIZE + z + offset[2];
+            if ((material >>> 27) != 0) {
+                var model = com.norbertfila.world.BlockRegistry.DEFAULT
+                        .definition(block)
+                        .model();
+                int[] origin = faceCorners[0];
+                float bx = cx * Chunk.SIZE + x - origin[0],
+                        by = cy * Chunk.SIZE + y - origin[1],
+                        bz = cz * Chunk.SIZE + z - origin[2];
+                px = bx + model.minX() + (px - bx) * (model.maxX() - model.minX());
+                py = by + model.minY() + (py - by) * (model.maxY() - model.minY());
+                pz = bz + model.minZ() + (pz - bz) * (model.maxZ() - model.minZ());
+            }
             u = alongU ? width : 0;
             v = alongV ? height : 0;
             shade = SHADE[face];

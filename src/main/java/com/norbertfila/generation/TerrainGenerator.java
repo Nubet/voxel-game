@@ -364,7 +364,11 @@ public final class TerrainGenerator implements TerrainSource {
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
         boolean hasJungle = false;
         for (int i = 0; i < TerrainColumn.AREA && !hasJungle; i++) hasJungle = column.biome(i) == BiomeType.JUNGLE;
-        if (hasJungle) jungle.generate(originX, originY, originZ, blocks, this::sampleBase, this::surfaceSupported);
+        JungleDecorations.generate(column.trees(), this::sampleBase, originX, originY, originZ, blocks);
+        if (hasJungle) {
+            jungle.generate(originX, originY, originZ, blocks, this::sampleBase, this::surfaceSupported);
+            JungleDecorations.ground(seed, originX, originY, originZ, blocks, column, jungle);
+        }
         snow.generate(originX, originY, originZ, blocks, column);
         vegetation.generate(originX, originY, originZ, blocks, column);
         return tinted(new ChunkData(position, blocks), originX, originZ);

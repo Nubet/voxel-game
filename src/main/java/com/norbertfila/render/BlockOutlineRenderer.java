@@ -11,7 +11,7 @@ import org.lwjgl.system.MemoryStack;
 
 public final class BlockOutlineRenderer implements AutoCloseable {
     private final int program, vao, vbo;
-    private final int viewProjection, offset, height;
+    private final int viewProjection, offset, height, width;
     private boolean closed;
 
     public BlockOutlineRenderer() {
@@ -21,6 +21,7 @@ public final class BlockOutlineRenderer implements AutoCloseable {
             viewProjection = ShaderPrograms.uniform(createdProgram, "uVP");
             offset = ShaderPrograms.uniform(createdProgram, "uOffset");
             height = ShaderPrograms.uniform(createdProgram, "uHeight");
+            width = ShaderPrograms.uniform(createdProgram, "uWidth");
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
             glNamedBufferData(createdVbo, vertices(), GL_STATIC_DRAW);
@@ -68,12 +69,16 @@ public final class BlockOutlineRenderer implements AutoCloseable {
             glDisable(GL_BLEND);
             glLineWidth(1);
             glUseProgram(program);
-            glUniform1f(
-                    height, BlockRegistry.DEFAULT.definition(blockId).model().maxY());
+            var model = BlockRegistry.DEFAULT.definition(blockId).model();
+            glUniform1f(height, model.maxY() - model.minY());
+            glUniform2f(width, model.maxX() - model.minX(), model.maxZ() - model.minZ());
             glUniformMatrix4fv(viewProjection, false, relativeViewProjection.get(stack.mallocFloat(16)));
             // Subtract in double precision before narrowing, including near the limits of block coordinates.
-            glUniform3f(offset, (float) (block.x() - cameraX), (float) (block.y() - cameraY), (float)
-                    (block.z() - cameraZ));
+            glUniform3f(
+                    offset,
+                    (float) (block.x() - cameraX + model.minX()),
+                    (float) (block.y() - cameraY + model.minY()),
+                    (float) (block.z() - cameraZ + model.minZ()));
             glBindVertexArray(vao);
             glDrawArrays(GL_LINES, 0, 24);
         } finally {

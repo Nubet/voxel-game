@@ -114,6 +114,7 @@ public record BlockDefinition(
     }
 
     public BlockModel model() {
+        if (shape.geometryIndex() >= 5) return new BlockModel(shape, .25f, .875f);
         return shape == BlockShape.SNOW_LAYER ? new BlockModel(shape, 0, .125f) : BlockModel.full(shape);
     }
 }

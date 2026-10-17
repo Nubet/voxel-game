@@ -93,7 +93,9 @@ public final class ItemEntityRenderer implements AutoCloseable {
                         (float) y + .25f,
                         (float) z + .25f)) continue;
                 var block = BlockRegistry.DEFAULT.definition((byte) item.itemId());
-                boolean isCross = block.model().shape() == BlockShape.CROSS;
+                boolean isCross = block.model().shape() == BlockShape.CROSS
+                        || block.model().shape().geometryIndex() > 0
+                                && block.model().shape().geometryIndex() < 5;
                 glUniform3f(offset, (float) x, (float) y, (float) z);
                 glUniform1f(angle, (float) (time * 1.5 + phase));
                 glUniform3i(layers, block.sideTexture(), block.topTexture(), block.bottomTexture());

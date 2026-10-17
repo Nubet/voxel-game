@@ -150,14 +150,27 @@ public final class BlockId {
             TERRACOTTA_BLUE = (byte) 146,
             TERRACOTTA_BROWN = (byte) 147,
             TERRACOTTA_GREEN = (byte) 148,
-            TERRACOTTA_BLACK = (byte) 149;
+            TERRACOTTA_BLACK = (byte) 149,
+            VINE_EAST = (byte) 150,
+            VINE_WEST = (byte) 151,
+            VINE_SOUTH = (byte) 152,
+            VINE_NORTH = (byte) 153,
+            COCOA_EAST = (byte) 154,
+            COCOA_WEST = (byte) 155,
+            COCOA_SOUTH = (byte) 156,
+            COCOA_NORTH = (byte) 157,
+            TALL_GRASS = (byte) 158,
+            TALL_GRASS_TOP = (byte) 159,
+            LARGE_FERN = (byte) 160,
+            LARGE_FERN_TOP = (byte) 161,
+            MELON = (byte) 162;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
     }
 
     public static boolean isValid(byte id) {
-        return toUnsignedInt(id) <= toUnsignedInt(TERRACOTTA_BLACK);
+        return toUnsignedInt(id) <= toUnsignedInt(MELON);
     }
 
     private BlockId() {}

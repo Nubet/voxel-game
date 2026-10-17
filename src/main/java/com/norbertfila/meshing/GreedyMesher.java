@@ -34,7 +34,8 @@ public final class GreedyMesher implements ChunkMesher {
             byte block = (byte) id;
             if (!BlockId.isValid(block)) continue;
             BlockDefinition definition = BlockRegistry.DEFAULT.definition(block);
-            CUBE[id] = definition.model().shape() != BlockShape.CROSS;
+            CUBE[id] = definition.model().shape() != BlockShape.CROSS
+                    && definition.shape().geometryIndex() == 0;
             CROSS[id] = definition.model().shape() == BlockShape.CROSS;
             OCCLUDES[id] = definition.occludesFullFace();
             LAYER[id] = definition.renderLayer().ordinal();
@@ -160,6 +161,7 @@ public final class GreedyMesher implements ChunkMesher {
     }
 
     private static void appendCrossPlants(Scratch scratch) {
+        appendDecorations(scratch);
         IntList out = scratch.layer(RenderLayer.CUTOUT.ordinal());
         byte[] grid = scratch.grid;
         for (int y = 0; y < S; y++)
@@ -173,6 +175,26 @@ public final class GreedyMesher implements ChunkMesher {
                             out.add(QuadCodec.solidPosition(x, y, z, plane, 1, 1, back));
                             out.add(material);
                         }
+                }
+    }
+
+    private static void appendDecorations(Scratch scratch) {
+        IntList out = scratch.layer(RenderLayer.CUTOUT.ordinal());
+        for (int y = 0; y < S; y++)
+            for (int z = 0; z < S; z++)
+                for (int x = 0; x < S; x++) {
+                    byte block = scratch.grid[padded(x, y, z)];
+                    var definition = BlockRegistry.DEFAULT.definition(block);
+                    int geometry = definition.shape().geometryIndex();
+                    if (geometry == 0) continue;
+                    for (int face = 0; face < 6; face++) {
+                        if (geometry <= 4 && (geometry <= 2 ? face >= 2 : face < 4)) continue;
+                        int[] corner = VisibleFaceMesher.FACES[face][0];
+                        out.add(QuadCodec.solidPosition(
+                                x + corner[0], y + corner[1], z + corner[2], face, 1, 1, false));
+                        out.add(QuadCodec.solidMaterial(definition.textureLayer(face), Byte.toUnsignedInt(block))
+                                | geometry << 27);
+                    }
                 }
     }
 

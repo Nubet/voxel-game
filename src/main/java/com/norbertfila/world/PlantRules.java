@@ -4,6 +4,8 @@ public final class PlantRules {
     private PlantRules() {}
 
     public static boolean isPlant(byte id) {
+        if (Byte.toUnsignedInt(id) >= Byte.toUnsignedInt(BlockId.VINE_EAST)
+                && Byte.toUnsignedInt(id) <= Byte.toUnsignedInt(BlockId.LARGE_FERN_TOP)) return true;
         return switch (id) {
             case BlockId.SHORT_GRASS,
                     BlockId.FERN,
@@ -78,6 +80,16 @@ public final class PlantRules {
     }
 
     public static boolean canPlace(World world, BlockPos position, byte plant) {
+        if (attached(plant)) return attachmentSupported(world, position, plant, false);
+        if (plant == BlockId.TALL_GRASS_TOP || plant == BlockId.LARGE_FERN_TOP) return false;
+        if (plant == BlockId.TALL_GRASS || plant == BlockId.LARGE_FERN) {
+            if (!WorldBounds.containsY(position.y() + 1)) return false;
+            var upper = world.getBlock(new BlockPos(position.x(), position.y() + 1, position.z()));
+            if (upper.isEmpty()
+                    || !BlockRegistry.DEFAULT
+                            .definition((byte) upper.getAsInt())
+                            .replaceable()) return false;
+        }
         if (position.y() == Integer.MIN_VALUE) return false;
         BlockPos below = new BlockPos(position.x(), position.y() - 1, position.z());
         return world.hasChunk(Coordinates.worldToChunk(below))
@@ -85,6 +97,23 @@ public final class PlantRules {
     }
 
     static boolean unsupported(World world, BlockPos position) {
+        byte plant = (byte) world.getBlock(position).orElse(BlockId.AIR);
+        if (attached(plant)) return !attachmentSupported(world, position, plant, true);
+        if (plant == BlockId.TALL_GRASS_TOP || plant == BlockId.LARGE_FERN_TOP) {
+            var below = world.getBlock(new BlockPos(position.x(), position.y() - 1, position.z()));
+            return below.isPresent()
+                    && below.getAsInt()
+                            != Byte.toUnsignedInt(
+                                    plant == BlockId.TALL_GRASS_TOP ? BlockId.TALL_GRASS : BlockId.LARGE_FERN);
+        }
+        if (plant == BlockId.TALL_GRASS || plant == BlockId.LARGE_FERN) {
+            var above = world.getBlock(new BlockPos(position.x(), position.y() + 1, position.z()));
+            if (above.isPresent()
+                    && above.getAsInt()
+                            != Byte.toUnsignedInt(
+                                    plant == BlockId.TALL_GRASS ? BlockId.TALL_GRASS_TOP : BlockId.LARGE_FERN_TOP))
+                return true;
+        }
         if (position.y() == Integer.MIN_VALUE) return true;
         BlockPos below = new BlockPos(position.x(), position.y() - 1, position.z());
         if (world.getBlock(position).orElse(BlockId.AIR) == BlockId.REED) {
@@ -103,6 +132,28 @@ public final class PlantRules {
                         (byte) world.getBlock(position).orElse(BlockId.AIR),
                         (byte) world.getBlock(below).orElseThrow(),
                         nearWater(world, below));
+    }
+
+    public static boolean attached(byte block) {
+        int id = Byte.toUnsignedInt(block);
+        return id >= Byte.toUnsignedInt(BlockId.VINE_EAST) && id <= Byte.toUnsignedInt(BlockId.COCOA_NORTH);
+    }
+
+    private static boolean attachmentSupported(World world, BlockPos p, byte plant, boolean keepUnknown) {
+        int id = Byte.toUnsignedInt(plant);
+        boolean vine = id <= Byte.toUnsignedInt(BlockId.VINE_NORTH);
+        int side = (id - Byte.toUnsignedInt(vine ? BlockId.VINE_EAST : BlockId.COCOA_EAST)) % 4;
+        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        long x = (long) p.x() + directions[side][0], z = (long) p.z() + directions[side][1];
+        if (x < Integer.MIN_VALUE || x > Integer.MAX_VALUE || z < Integer.MIN_VALUE || z > Integer.MAX_VALUE)
+            return false;
+        var support = world.getBlock(new BlockPos((int) x, p.y(), (int) z));
+        if (support.isEmpty()) return keepUnknown;
+        byte block = (byte) support.getAsInt();
+        if (vine ? BlockRegistry.DEFAULT.isCollidable(block) : block == BlockId.JUNGLE_LOG) return true;
+        if (!vine || p.y() == Integer.MAX_VALUE) return false;
+        var above = world.getBlock(new BlockPos(p.x(), p.y() + 1, p.z()));
+        return above.isEmpty() ? keepUnknown : above.getAsInt() == id;
     }
 
     private static boolean nearWater(World world, BlockPos ground) {

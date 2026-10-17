@@ -444,7 +444,37 @@ public final class BlockRegistry {
             if (!color.equals("orange") && !color.equals("red"))
                 blocks.add(material(textures, (byte) terracotta++, "terracotta_" + color));
         }
+        for (int i = 0; i < 4; i++) {
+            var vine = BlockShape.values()[BlockShape.VINE_EAST.ordinal() + i];
+            var cocoa = BlockShape.values()[BlockShape.COCOA_EAST.ordinal() + i];
+            blocks.add(decoration(
+                    (byte) (Byte.toUnsignedInt(BlockId.VINE_EAST) + i), "vine", texture(textures, "vine"), vine));
+            blocks.add(decoration(
+                    (byte) (Byte.toUnsignedInt(BlockId.COCOA_EAST) + i), "cocoa", texture(textures, "cocoa"), cocoa));
+        }
+        blocks.add(plant(BlockId.TALL_GRASS, "tall_grass", texture(textures, "tall_grass_bottom")));
+        blocks.add(plant(BlockId.TALL_GRASS_TOP, "tall_grass", texture(textures, "tall_grass_top")));
+        blocks.add(plant(BlockId.LARGE_FERN, "large_fern", texture(textures, "large_fern_bottom")));
+        blocks.add(plant(BlockId.LARGE_FERN_TOP, "large_fern", texture(textures, "large_fern_top")));
+        blocks.add(material(textures, BlockId.MELON, "melon", "melon_top", "melon_top", "melon_side"));
         return new BlockRegistry(blocks, textures);
+    }
+
+    private static BlockDefinition decoration(byte id, String name, int texture, BlockShape shape) {
+        return new BlockDefinition(
+                Byte.toUnsignedInt(id),
+                name,
+                texture,
+                texture,
+                texture,
+                false,
+                false,
+                RenderLayer.CUTOUT,
+                true,
+                true,
+                shape,
+                true,
+                0);
     }
 
     private static int texture(Map<String, Integer> textures, String name) {

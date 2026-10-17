@@ -143,14 +143,30 @@ public final class VoxelRaycaster {
             double limit,
             Normal normal) {
         var model = BlockRegistry.DEFAULT.definition((byte) block).model();
-        double localY = oy + dy * entry - position.y();
-        if (localY >= model.minY() && localY <= model.maxY()) return new Hit(position, normal, entry, block);
-        if (dy == 0) return null;
-        double distance = (position.y() + (dy < 0 ? model.maxY() : model.minY()) - oy) / dy;
-        double x = ox + dx * distance - position.x(), z = oz + dz * distance - position.z();
-        return distance >= entry && distance <= limit && x >= 0 && x <= 1 && z >= 0 && z <= 1
-                ? new Hit(position, new Normal(0, dy < 0 ? 1 : -1, 0), distance, block)
-                : null;
+        double[] origin = {ox - position.x(), oy - position.y(), oz - position.z()}, direction = {dx, dy, dz};
+        double[] low = {model.minX(), model.minY(), model.minZ()}, high = {model.maxX(), model.maxY(), model.maxZ()};
+        double near = entry, far = limit;
+        Normal hitNormal = normal;
+        for (int axis = 0; axis < 3; axis++) {
+            if (direction[axis] == 0) {
+                if (origin[axis] < low[axis] || origin[axis] > high[axis]) return null;
+                continue;
+            }
+            double a = (low[axis] - origin[axis]) / direction[axis], b = (high[axis] - origin[axis]) / direction[axis];
+            if (a > b) {
+                double swap = a;
+                a = b;
+                b = swap;
+            }
+            if (a > near) {
+                near = a;
+                int sign = direction[axis] > 0 ? -1 : 1;
+                hitNormal = new Normal(axis == 0 ? sign : 0, axis == 1 ? sign : 0, axis == 2 ? sign : 0);
+            }
+            far = Math.min(far, b);
+            if (near > far) return null;
+        }
+        return new Hit(position, hitNormal, near, block);
     }
 
     private static double firstBoundary(double origin, int cell, double direction, int step) {

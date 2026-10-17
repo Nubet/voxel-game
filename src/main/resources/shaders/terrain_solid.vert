@@ -47,6 +47,24 @@ void main() {
         local = vec3(base + (alongV ? FACE_V[face] * height : ivec3(0)) + (alongU ? FACE_U[face] * width : ivec3(0)));
         uint top = (material >> 24) & 7u;
         if (top != 0u && (face == 2 || (face != 3 && alongV))) local.y -= 1.0 - float(top) / 8.0;
+        uint geometry = material >> 27;
+        if (geometry != 0u) {
+            const ivec3 CORNER[6] = ivec3[](ivec3(1,0,0),ivec3(0,0,1),ivec3(0,1,1),ivec3(0,0,0),ivec3(1,0,1),ivec3(0,0,0));
+            vec3 origin = vec3(base - CORNER[face]);
+            vec3 low = vec3(0), high = vec3(1);
+            if (geometry == 1u) low.x = 15.0/16.0;
+            if (geometry == 2u) high.x = 1.0/16.0;
+            if (geometry == 3u) low.z = 15.0/16.0;
+            if (geometry == 4u) high.z = 1.0/16.0;
+            if (geometry >= 5u) {
+                low = vec3(.25); high = vec3(.75,.875,.75);
+                if (geometry == 5u) { low.x=.625; high.x=1; }
+                if (geometry == 6u) { low.x=0; high.x=.375; }
+                if (geometry == 7u) { low.z=.625; high.z=1; }
+                if (geometry == 8u) { low.z=0; high.z=.375; }
+            }
+            local = origin + low + (local - origin) * (high - low);
+        }
         vUv = vec2(alongU ? width : 0, alongV ? height : 0);
         vShade = SHADE[face];
     } else {

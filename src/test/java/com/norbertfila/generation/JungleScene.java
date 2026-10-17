@@ -43,8 +43,15 @@ final class JungleScene implements TerrainSource {
                 var ground = sample(pos.x() * 16 + x, pos.z() * 16 + z);
                 for (int y = 0; y < 16; y++) blocks[(y * 16 + z) * 16 + x] = ground.materialAt(pos.y() * 16 + y);
             }
-        trees.generate(pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks);
+        var plans = trees.trees(pos.x() * 16, pos.z() * 16);
+        TreeGenerator.place(plans, pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks);
+        JungleDecorations.generate(plans, this::sample, pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks);
         jungle.generate(pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks, this::sample, (x, z) -> true);
+        TerrainSummary[] summaries = new TerrainSummary[256];
+        for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++) summaries[z * 16 + x] = sample(pos.x() * 16 + x, pos.z() * 16 + z);
+        JungleDecorations.ground(
+                42, pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks, TerrainColumn.of(summaries, plans), jungle);
         return new ChunkData(pos, blocks);
     }
 }

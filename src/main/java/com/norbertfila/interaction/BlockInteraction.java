@@ -94,6 +94,14 @@ public final class BlockInteraction {
         if (target.isEmpty()) return Optional.empty();
         VoxelRaycaster.Hit hit = target.get();
         VoxelRaycaster.Normal normal = hit.normal();
+        if (PlantRules.attached(blockId)) {
+            if (normal.y() != 0 || normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
+            int side = normal.x() < 0 ? 0 : normal.x() > 0 ? 1 : normal.z() < 0 ? 2 : 3;
+            int base = Byte.toUnsignedInt(blockId) <= Byte.toUnsignedInt(BlockId.VINE_NORTH)
+                    ? Byte.toUnsignedInt(BlockId.VINE_EAST)
+                    : Byte.toUnsignedInt(BlockId.COCOA_EAST);
+            blockId = (byte) (base + side);
+        }
         boolean replacesTarget =
                 BlockRegistry.DEFAULT.definition((byte) hit.blockId()).replaceable();
         if (!replacesTarget && normal.equals(VoxelRaycaster.Normal.ZERO)) return Optional.empty();
