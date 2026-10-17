@@ -1,5 +1,8 @@
 package com.norbertfila.lod;
 
+import com.norbertfila.generation.TerrainSummary;
+import com.norbertfila.world.BlockRegistry;
+
 /**
  * Visual-only heightfield of one {@link #SIZE} by {@link #SIZE} block area, divided into square cells of
  * {@code sampleStep} blocks. Each cell stores its top solid block, that block's material and the top of the water
@@ -23,6 +26,7 @@ public final class FarTerrainTile {
     private final int[] heights;
     private final byte[] materials;
     private final byte[] wallMaterials;
+    private final WallColumn[] wallColumns;
     private final int[] waterTops;
     private final byte[] tints;
     private final int minHeight;
@@ -56,6 +60,30 @@ public final class FarTerrainTile {
             int[] waterTops,
             byte[] tints,
             byte[] wallMaterials) {
+        this(
+                tileX,
+                tileZ,
+                sampleStep,
+                editRevision,
+                heights,
+                materials,
+                waterTops,
+                tints,
+                wallMaterials,
+                new WallColumn[heights.length]);
+    }
+
+    FarTerrainTile(
+            int tileX,
+            int tileZ,
+            int sampleStep,
+            long editRevision,
+            int[] heights,
+            byte[] materials,
+            int[] waterTops,
+            byte[] tints,
+            byte[] wallMaterials,
+            WallColumn[] wallColumns) {
         if (!validStep(sampleStep)) throw new IllegalArgumentException("Sample step must divide the tile size");
         int cells = SIZE / sampleStep;
         if (heights.length != cells * cells || materials.length != heights.length || waterTops.length != heights.length)
@@ -69,6 +97,8 @@ public final class FarTerrainTile {
         this.materials = materials;
         if (wallMaterials.length != materials.length) throw new IllegalArgumentException("Invalid wall material grid");
         this.wallMaterials = wallMaterials;
+        if (wallColumns.length != heights.length) throw new IllegalArgumentException("Invalid wall profile grid");
+        this.wallColumns = wallColumns;
         this.waterTops = waterTops;
         if (tints.length != heights.length) throw new IllegalArgumentException("Invalid tint grid");
         this.tints = tints;
@@ -128,6 +158,16 @@ public final class FarTerrainTile {
         return wallMaterials[index(x, z)];
     }
 
+    byte wallMaterialAt(int x, int z, int worldY) {
+        int index = index(x, z);
+        var column = wallColumns[index];
+        return column == null ? wallMaterials[index] : column.materialAt(worldY, wallMaterials[index]);
+    }
+
+    boolean layeredWallAt(int x, int z) {
+        return wallColumns[index(x, z)] != null;
+    }
+
     public int waterTopAt(int cellX, int cellZ) {
         return waterTops[index(cellX, cellZ)];
     }
@@ -146,7 +186,33 @@ public final class FarTerrainTile {
     }
 
     public long estimatedBytes() {
-        return (long) heights.length * (2 * Integer.BYTES + 3);
+        long bytes = (long) heights.length * (2 * Integer.BYTES + 3 + Long.BYTES);
+        AreaEdits edits = null;
+        for (var column : wallColumns) {
+            if (column == null) continue;
+            bytes += 120;
+            edits = column.edits();
+        }
+        if (edits != null)
+            for (int column = 0; column < edits.columnCount(); column++)
+                bytes += 12L + edits.changeCount(column) * (long) Long.BYTES;
+        return bytes;
+    }
+
+    record WallColumn(TerrainSummary terrain, AreaEdits edits, int editColumn) {
+        byte materialAt(int worldY, byte fallback) {
+            int changes = editColumn < 0 ? 0 : edits.changeCount(editColumn);
+            for (int change = 0; change < changes; change++) {
+                int y = edits.changeY(editColumn, change);
+                if (y < worldY) break;
+                if (y == worldY && BlockRegistry.DEFAULT.isCollidable(edits.changeBlock(editColumn, change)))
+                    return edits.changeBlock(editColumn, change);
+            }
+            if (worldY > terrain.surfaceHeight()) return fallback;
+            // Far heightfields fill air gaps below the top surface
+            byte material = terrain.materialAt(worldY);
+            return BlockRegistry.DEFAULT.isCollidable(material) ? material : fallback;
+        }
     }
 
     private int index(int cellX, int cellZ) {

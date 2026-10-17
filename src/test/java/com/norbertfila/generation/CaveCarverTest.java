@@ -50,6 +50,21 @@ class CaveCarverTest {
     }
 
     @Test
+    void cavesCutThroughEveryBadlandsLayer() {
+        for (byte material : new byte[] {
+            BlockId.RED_SAND, BlockId.TERRACOTTA, BlockId.TERRACOTTA_ORANGE,
+            BlockId.TERRACOTTA_RED, BlockId.TERRACOTTA_YELLOW, BlockId.TERRACOTTA_BROWN,
+            BlockId.TERRACOTTA_WHITE, BlockId.TERRACOTTA_LIGHT_GRAY
+        }) {
+            byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
+            Arrays.fill(blocks, material);
+            assertTrue(carver.carve(new ChunkPos(0, 0, 0), blocks, List.of(new CavePlan.Segment(8, 8, 8, 3, 3))));
+            assertEquals(BlockId.AIR, blocks[(8 * 16 + 8) * 16 + 8]);
+            assertEquals(material, blocks[0]);
+        }
+    }
+
+    @Test
     void plansOwnTheirIndexAndRejectInvalidGeometry() {
         var input = new ArrayList<>(List.of(new CavePlan.Segment(0, 0, 0, 2, 2)));
         var plan = new CavePlan(input);

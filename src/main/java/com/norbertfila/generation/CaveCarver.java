@@ -58,7 +58,13 @@ final class CaveCarver {
                 || PlantRules.supports(block)
                 || block == BlockId.CLAY
                 || block == BlockId.TERRACOTTA_RED
-                || block == BlockId.TERRACOTTA_ORANGE;
+                || block == BlockId.TERRACOTTA_ORANGE
+                || block == BlockId.TERRACOTTA
+                || block == BlockId.TERRACOTTA_YELLOW
+                || block == BlockId.TERRACOTTA_BROWN
+                || block == BlockId.TERRACOTTA_WHITE
+                || block == BlockId.TERRACOTTA_LIGHT_GRAY
+                || block == BlockId.RED_SAND;
     }
 
     boolean carves(int x, int y, int z, byte block, List<CavePlan.Segment> segments) {
