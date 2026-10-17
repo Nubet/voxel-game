@@ -18,6 +18,16 @@ public final class PlayerModel {
 
     public record PartDefinition(Part part, Part parent, PartTransform pivot, ModelCuboid cuboid, UvOrigin uvOrigin) {}
 
+    public record OuterLayer(Part part, UvOrigin uvOrigin, float inflation) {}
+
+    public static final List<OuterLayer> OUTER_LAYERS = List.of(
+            new OuterLayer(Part.BODY, new UvOrigin(16, 32), .25f),
+            new OuterLayer(Part.HEAD, new UvOrigin(32, 0), .5f),
+            new OuterLayer(Part.RIGHT_ARM, new UvOrigin(40, 32), .25f),
+            new OuterLayer(Part.LEFT_ARM, new UvOrigin(48, 48), .25f),
+            new OuterLayer(Part.RIGHT_LEG, new UvOrigin(0, 32), .25f),
+            new OuterLayer(Part.LEFT_LEG, new UvOrigin(0, 48), .25f));
+
     // Feet are at Y=0, up is +Y, forward is -Z, and the character's right is +X.
     // Head and shoulders inherit the torso; hips inherit only the external model transform.
     public static final List<PartDefinition> PARTS = List.of(

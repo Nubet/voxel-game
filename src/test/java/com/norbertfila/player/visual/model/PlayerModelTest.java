@@ -3,12 +3,72 @@ package com.norbertfila.player.visual.model;
 import static com.norbertfila.player.visual.model.PlayerModel.Part.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.WaterContact;
+import com.norbertfila.player.visual.PlayerAppearance;
+import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 class PlayerModelTest {
+    @Test
+    void outerCuboidsInflateGeometryWithoutStretchingTheUvNetAndInheritThePartPose() {
+        int[][] origins = {{16, 32}, {32, 0}, {40, 32}, {48, 48}, {0, 32}, {0, 48}};
+        var pose = PlayerPose.NEUTRAL.with(BODY, new PartTransform(1, 2, 3, .3f, .4f, .5f));
+        for (var layer : PlayerModel.OUTER_LAYERS) {
+            var part = PlayerModel.definition(layer.part());
+            var box = part.cuboid();
+            assertEquals(
+                    new UvOrigin(
+                            origins[layer.part().ordinal()][0],
+                            origins[layer.part().ordinal()][1]),
+                    layer.uvOrigin());
+            float inflation = layer.part() == HEAD ? .5f : .25f;
+            assertEquals(inflation, layer.inflation());
+            var base = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64);
+            var outer = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64, layer.inflation());
+            var transform = matrix(layer.part(), pose.with(layer.part(), new PartTransform(0, 0, 0, .6f, -.2f, .1f)));
+            for (int i = 0; i < outer.length; i += CuboidMesh.FLOATS_PER_VERTEX) {
+                for (int axis = 0; axis < 3; axis++)
+                    assertEquals(inflation, Math.abs(outer[i + axis] - base[i + axis]));
+                assertEquals(base[i + 3], outer[i + 3]);
+                assertEquals(base[i + 4], outer[i + 4]);
+                var basePoint = transform.transformPosition(new Vector3f(base[i], base[i + 1], base[i + 2]));
+                var outerPoint = transform.transformPosition(new Vector3f(outer[i], outer[i + 1], outer[i + 2]));
+                assertEquals(Math.sqrt(3) * inflation / 16, basePoint.distance(outerPoint), .000001);
+            }
+        }
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> CuboidMesh.vertices(
+                        PlayerModel.definition(HEAD).cuboid(), new UvOrigin(0, 0), 64, 64, Float.NaN));
+    }
+
+    @Test
+    void appearanceMaskIsImmutableIndependentAndPublishedInSnapshots() {
+        var source = EnumSet.allOf(PlayerModel.Part.class);
+        var appearance = new PlayerAppearance(PlayerAppearance.Model.CLASSIC, source);
+        source.clear();
+        assertEquals(6, appearance.outerLayers().size());
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> appearance.outerLayers().clear());
+        for (var part : PlayerModel.Part.values()) {
+            var changed = appearance.withOuterLayer(part, false);
+            assertEquals(5, changed.outerLayers().size());
+            assertFalse(changed.outerLayers().contains(part));
+            assertEquals(appearance, changed.withOuterLayer(part, true));
+            assertEquals(6, PlayerAppearance.DEFAULT.outerLayers().size());
+            var state = new PlayerRenderStateExtractor()
+                    .extract(new PlayerController(), 0, 0, new WaterContact.Result(0, false, true), false, changed);
+            assertEquals(changed, state.appearance());
+        }
+        assertThrows(NullPointerException.class, () -> appearance.withOuterLayer(null, true));
+    }
+
     @Test
     void classicDimensionsAndNeutralBounds() {
         assertEquals(6, PlayerModel.PARTS.size());

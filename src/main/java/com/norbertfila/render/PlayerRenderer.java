@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.PlayerSkin;
+import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.model.CuboidMesh;
 import com.norbertfila.player.visual.model.PartTransform;
@@ -15,7 +16,7 @@ import org.lwjgl.system.MemoryStack;
 
 public final class PlayerRenderer implements AutoCloseable {
     private static final float[] VERTICES = vertices();
-    private final int program, vao, vbo, vp, model;
+    private final int program, vao, vbo, vp, model, outerLayer;
     private final SkinManager skins;
     private boolean closed;
 
@@ -26,6 +27,7 @@ public final class PlayerRenderer implements AutoCloseable {
             createdProgram = ShaderPrograms.create("/shaders/player_debug.vert", "/shaders/player_debug.frag");
             vp = ShaderPrograms.uniform(createdProgram, "uVP");
             model = ShaderPrograms.uniform(createdProgram, "uModel");
+            outerLayer = ShaderPrograms.uniform(createdProgram, "uOuterLayer");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
@@ -66,15 +68,20 @@ public final class PlayerRenderer implements AutoCloseable {
         var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
         var pose = PlayerPose.NEUTRAL.with(
                 PlayerModel.Part.HEAD, new PartTransform(0, 0, 0, (float) Math.toRadians(sample.pitch()), 0, 0));
-        render(viewProjection, transform, pose);
+        render(viewProjection, transform, pose, state.appearance());
         return true;
     }
 
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose) {
+        render(viewProjection, modelToWorld, pose, PlayerAppearance.DEFAULT);
+    }
+
+    public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose, PlayerAppearance appearance) {
         if (closed) throw new IllegalStateException("Player renderer is closed");
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
         Objects.requireNonNull(pose);
+        Objects.requireNonNull(appearance);
         int texture = skins.texture();
         if (texture == 0) return;
         boolean depth = glIsEnabled(GL_DEPTH_TEST), mask = glGetBoolean(GL_DEPTH_WRITEMASK);
@@ -103,7 +110,15 @@ public final class PlayerRenderer implements AutoCloseable {
                 PlayerModel.partMatrix(part.part(), pose, partMatrix);
                 modelToWorld.mul(partMatrix, worldMatrix);
                 glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
+                glUniform1i(outerLayer, 0);
                 glDrawArrays(GL_TRIANGLES, part.part().ordinal() * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
+                if (appearance.outerLayers().contains(part.part())) {
+                    glUniform1i(outerLayer, 1);
+                    glDrawArrays(
+                            GL_TRIANGLES,
+                            (PlayerModel.PARTS.size() + part.part().ordinal()) * CuboidMesh.VERTEX_COUNT,
+                            CuboidMesh.VERTEX_COUNT);
+                }
             }
         } finally {
             glBindTexture(GL_TEXTURE_2D, previousTexture);
@@ -124,10 +139,20 @@ public final class PlayerRenderer implements AutoCloseable {
 
     private static float[] vertices() {
         int partSize = CuboidMesh.VERTEX_COUNT * CuboidMesh.FLOATS_PER_VERTEX;
-        var vertices = new float[PlayerModel.PARTS.size() * partSize];
+        var vertices = new float[(PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * partSize];
         for (var part : PlayerModel.PARTS) {
             var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), PlayerSkin.SIZE, PlayerSkin.SIZE);
             System.arraycopy(mesh, 0, vertices, part.part().ordinal() * partSize, partSize);
+        }
+        for (var layer : PlayerModel.OUTER_LAYERS) {
+            var mesh = CuboidMesh.vertices(
+                    PlayerModel.definition(layer.part()).cuboid(),
+                    layer.uvOrigin(),
+                    PlayerSkin.SIZE,
+                    PlayerSkin.SIZE,
+                    layer.inflation());
+            System.arraycopy(
+                    mesh, 0, vertices, (PlayerModel.PARTS.size() + layer.part().ordinal()) * partSize, partSize);
         }
         return vertices;
     }
