@@ -28,6 +28,7 @@ final class TerrainColumn {
     private final List<CavePlan.Segment> caves;
     private final BitSet removedSurface;
     private final BitSet snowCover;
+    private final BitSet frozenWater;
     private final int minSurface;
     private final int highestFeature;
 
@@ -42,7 +43,8 @@ final class TerrainColumn {
             List<TreeGenerator.Tree> trees,
             List<CavePlan.Segment> caves,
             BitSet removedSurface,
-            BitSet snowCover) {
+            BitSet snowCover,
+            BitSet frozenWater) {
         this.surfaceHeights = surfaceHeights;
         this.surfaceMaterials = surfaceMaterials;
         this.subsurfaceMaterials = subsurfaceMaterials;
@@ -56,6 +58,7 @@ final class TerrainColumn {
         this.caves = List.copyOf(caves);
         this.removedSurface = (BitSet) removedSurface.clone();
         this.snowCover = (BitSet) snowCover.clone();
+        this.frozenWater = (BitSet) frozenWater.clone();
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int height : surfaceHeights) {
             min = Math.min(min, height);
@@ -74,6 +77,7 @@ final class TerrainColumn {
      */
     int uniformBlock(int minY) {
         long maxY = (long) minY + Chunk.SIZE - 1;
+        if (!frozenWater.isEmpty() && minY <= maxWater && maxY >= minWater) return -1;
         if (bedrockHeight != TerrainSummary.NO_BEDROCK && maxY < bedrockHeight) return Byte.toUnsignedInt(BlockId.AIR);
         if ((bedrockHeight == TerrainSummary.NO_BEDROCK || minY > bedrockHeight) && maxY < (long) minSurface - 3) {
             byte material = materialAt(0, minY);
@@ -110,6 +114,7 @@ final class TerrainColumn {
         byte[] deep = new byte[AREA];
         BiomeType[] biomes = new BiomeType[AREA];
         BitSet snow = new BitSet(AREA);
+        BitSet ice = new BitSet(AREA);
         for (int index = 0; index < AREA; index++) {
             TerrainSummary summary = summaries[index];
             if (summary.bedrockHeight() != first.bedrockHeight())
@@ -121,6 +126,7 @@ final class TerrainColumn {
             waterLevels[index] = summary.waterLevel();
             deep[index] = summary.deepMaterial();
             if (summary.snowCover()) snow.set(index);
+            if (summary.frozenWater()) ice.set(index);
         }
         return new TerrainColumn(
                 heights,
@@ -133,7 +139,8 @@ final class TerrainColumn {
                 trees,
                 caves,
                 removedSurface,
-                snow);
+                snow,
+                ice);
     }
 
     int surfaceHeight(int index) {
@@ -169,6 +176,7 @@ final class TerrainColumn {
     }
 
     byte materialAt(int index, int worldY) {
+        if (frozenWater.get(index) && worldY == waterLevels[index]) return BlockId.ICE;
         return TerrainSummary.materialAt(
                 worldY,
                 surfaceHeights[index],

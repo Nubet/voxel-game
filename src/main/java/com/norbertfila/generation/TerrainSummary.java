@@ -16,9 +16,35 @@ public record TerrainSummary(
         BiomeType biome,
         ClimateSample climate,
         WaterKind waterKind,
-        boolean snowCover) {
+        boolean snowCover,
+        boolean frozenWater) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
+
+    public TerrainSummary(
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel,
+            BiomeType biome,
+            ClimateSample climate,
+            WaterKind waterKind,
+            boolean snowCover) {
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                biome,
+                climate,
+                waterKind,
+                snowCover,
+                false);
+    }
 
     public TerrainSummary(
             int surfaceHeight,
@@ -104,6 +130,10 @@ public record TerrainSummary(
             throw new NullPointerException("Terrain data cannot be null");
         if ((waterLevel == NO_WATER) != (waterKind == WaterKind.NONE))
             throw new IllegalArgumentException("Water kind and level disagree");
+        if (frozenWater && (waterLevel == NO_WATER || surfaceHeight >= waterLevel))
+            throw new IllegalArgumentException("Ice requires water above the ground");
+        if (snowCover && surfaceHeight < waterLevel)
+            throw new IllegalArgumentException("Ground snow cannot cover a flooded column");
         if (!BlockId.isValid(surfaceMaterial)
                 || !BlockId.isValid(subsurfaceMaterial)
                 || !BlockId.isValid(deepMaterial)
@@ -115,6 +145,7 @@ public record TerrainSummary(
     }
 
     public byte materialAt(int worldY) {
+        if (frozenWater && worldY == waterLevel) return BlockId.ICE;
         if (snowCover && (long) worldY == (long) surfaceHeight + 1) return BlockId.SNOW_LAYER;
         return materialAt(
                 worldY, surfaceHeight, surfaceMaterial, subsurfaceMaterial, deepMaterial, bedrockHeight, waterLevel);
