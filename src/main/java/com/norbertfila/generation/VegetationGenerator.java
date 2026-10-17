@@ -21,6 +21,7 @@ final class VegetationGenerator {
     private final Noise2D forest;
     private final BiomeRegistry biomes;
     private final TerrainSource terrain;
+    private final JungleVegetation jungle;
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest) {
         this(seed, density, forest, BiomeRegistry.defaults());
@@ -32,6 +33,7 @@ final class VegetationGenerator {
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest, BiomeRegistry biomes, TerrainSource terrain) {
         this.seed = seed;
+        jungle = new JungleVegetation(seed);
         this.density = density;
         this.forest = forest;
         this.biomes = biomes;
@@ -88,7 +90,14 @@ final class VegetationGenerator {
                 double t =
                         Math.clamp((sample(density, ((long) ox + x) * .012, ((long) oz + z) * .012) + .4) / .9, 0, 1);
                 if (unit(hash(seed ^ GRASS_SALT, (long) ox + x, (long) oz + z))
-                        >= .3 * profile.vegetation().grassDensity() * t * t * (3 - 2 * t)) continue;
+                        >= .3
+                                * profile.vegetation().grassDensity()
+                                * t
+                                * t
+                                * (3 - 2 * t)
+                                * (columns.biome(column) == com.norbertfila.generation.biome.BiomeType.JUNGLE
+                                        ? Math.clamp(.5 + jungle.understory(ox + x, oz + z) * 2, .05, 1)
+                                        : 1)) continue;
                 double woodland = sample(forest, ((long) ox + x) * .003, ((long) oz + z) * .003);
                 byte plant = woodland > .1
                                 && profile.vegetation().plants().contains(PlantType.FERN)

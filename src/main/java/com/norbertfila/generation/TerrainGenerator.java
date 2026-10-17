@@ -47,6 +47,8 @@ public final class TerrainGenerator implements TerrainSource {
     private final SurfaceMaterialResolver surfaceMaterials = new SurfaceMaterialResolver(new SurfaceMaterialMapper());
     private final BadlandsSurface badlandsSurface;
     private final TreeGenerator trees;
+    private final JungleVegetation jungle;
+    private final GenerationCache<List<TreeGenerator.Tree>> forestPlans = new GenerationCache<>(2048);
     private final VegetationGenerator vegetation;
     private final SnowGenerator snow = new SnowGenerator();
     private final GenerationCache<TerrainColumn> columns = new GenerationCache<>(COLUMN_CACHE_CAPACITY);
@@ -96,10 +98,11 @@ public final class TerrainGenerator implements TerrainSource {
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
         trees = new TreeGenerator(seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry);
+        jungle = new JungleVegetation(seed);
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
-        caveCarver = new CaveCarver(this);
+        caveCarver = new CaveCarver((GroundSampler) this::sampleBase);
         ores = new OreGenerator(seed);
     }
 
@@ -239,7 +242,21 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
-        return sampleBase(worldX, worldZ);
+        var base = sampleBase(worldX, worldZ);
+        if (base.biome() != BiomeType.JUNGLE) return base;
+        byte surface =
+                jungle.surface(worldX, worldZ, base, forestAt(Math.floorDiv(worldX, 16), Math.floorDiv(worldZ, 16)));
+        return new TerrainSummary(
+                base.surfaceHeight(),
+                surface,
+                base.subsurfaceMaterial(),
+                base.deepMaterial(),
+                base.bedrockHeight(),
+                base.waterLevel(),
+                base.biome(),
+                base.climate(),
+                base.waterKind(),
+                base.snowCover());
     }
 
     private TerrainSummary sampleBase(int worldX, int worldZ) {
@@ -345,6 +362,9 @@ public final class TerrainGenerator implements TerrainSource {
         if (uniform >= 0 && !carved && !mineralized)
             return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
+        boolean hasJungle = false;
+        for (int i = 0; i < TerrainColumn.AREA && !hasJungle; i++) hasJungle = column.biome(i) == BiomeType.JUNGLE;
+        if (hasJungle) jungle.generate(originX, originY, originZ, blocks, this::sampleBase, this::surfaceSupported);
         snow.generate(originX, originY, originZ, blocks, column);
         vegetation.generate(originX, originY, originZ, blocks, column);
         return tinted(new ChunkData(position, blocks), originX, originZ);
@@ -364,9 +384,7 @@ public final class TerrainGenerator implements TerrainSource {
                         originX + x, summary.surfaceHeight(), originZ + z, summary.surfaceMaterial(), segments))
                     removedSurface.set(index);
             }
-        var supportedTrees = trees.trees(originX, originZ).stream()
-                .filter(this::treeSupported)
-                .toList();
+        var supportedTrees = forestAt(Math.floorDiv(originX, 16), Math.floorDiv(originZ, 16));
         return TerrainColumn.of(summaries, supportedTrees, segments, removedSurface);
     }
 
@@ -375,14 +393,28 @@ public final class TerrainGenerator implements TerrainSource {
         for (int dz = 0; dz < width; dz++)
             for (int dx = 0; dx < width; dx++) {
                 int x = tree.x() + dx, z = tree.z() + dz;
-                if (caveCarver.carves(
-                        x,
-                        tree.baseY() - 1,
-                        z,
-                        BlockId.GRASS,
-                        cavesAt(Math.floorDiv(x, Chunk.SIZE), Math.floorDiv(z, Chunk.SIZE)))) return false;
+                if (!surfaceSupported(x, z)) return false;
             }
         return true;
+    }
+
+    private boolean surfaceSupported(int x, int z) {
+        var ground = sampleBase(x, z);
+        return !caveCarver.carves(
+                x,
+                ground.surfaceHeight(),
+                z,
+                ground.surfaceMaterial(),
+                cavesAt(Math.floorDiv(x, 16), Math.floorDiv(z, 16)));
+    }
+
+    private List<TreeGenerator.Tree> forestAt(int chunkX, int chunkZ) {
+        return forestPlans.get(
+                chunkX,
+                chunkZ,
+                () -> trees.trees(chunkX * 16, chunkZ * 16).stream()
+                        .filter(this::treeSupported)
+                        .toList());
     }
 
     private List<CavePlan.Segment> cavesAt(int chunkX, int chunkZ) {
