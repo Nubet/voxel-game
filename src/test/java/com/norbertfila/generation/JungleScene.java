@@ -6,6 +6,7 @@ import com.norbertfila.world.*;
 final class JungleScene implements TerrainSource {
     private final TreeGenerator trees = new TreeGenerator(42, (x, z) -> 1, this);
     private final boolean slope;
+    private final JungleVegetation jungle = new JungleVegetation(42);
 
     JungleScene(boolean slope) {
         this.slope = slope;
@@ -43,6 +44,7 @@ final class JungleScene implements TerrainSource {
                 for (int y = 0; y < 16; y++) blocks[(y * 16 + z) * 16 + x] = ground.materialAt(pos.y() * 16 + y);
             }
         trees.generate(pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks);
+        jungle.generate(pos.x() * 16, pos.y() * 16, pos.z() * 16, blocks, this::sample, (x, z) -> true);
         return new ChunkData(pos, blocks);
     }
 }

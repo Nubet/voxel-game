@@ -8,10 +8,14 @@ import java.util.List;
 import java.util.Objects;
 
 final class CaveCarver {
-    private final TerrainSource terrain;
+    private final GroundSampler terrain;
     private final GenerationCache<Surface> surfaces = new GenerationCache<>(2048);
 
     CaveCarver(TerrainSource terrain) {
+        this((GroundSampler) terrain::sample);
+    }
+
+    CaveCarver(GroundSampler terrain) {
         this.terrain = Objects.requireNonNull(terrain);
     }
 
