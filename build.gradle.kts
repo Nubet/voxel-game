@@ -38,6 +38,16 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("smokePlayerModel") {
+    group = "verification"
+    description = "Renders neutral and articulated colored player models and checks OpenGL state."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.PlayerModelSmoke")
+    args(layout.buildDirectory.dir("player-model-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeTerrainUniforms") {
     group = "verification"
     description = "Checks active and optimized-out uniforms in all terrain shader variants."
