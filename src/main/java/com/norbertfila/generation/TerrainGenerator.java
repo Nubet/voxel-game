@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 27;
+    private static final int GENERATOR_VERSION = 28;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -152,7 +152,13 @@ public final class TerrainGenerator implements TerrainSource {
         double slope = surfaceSlope((int) worldX, (int) worldZ, geography.elevation());
         boolean nearWater = nearWater((int) worldX, (int) worldZ, height, geography.waterLevel());
         BiomeType biome = biomeResolver.resolve(
-                climateSample, height, config.baseHeight(), slope, nearWater, geography.waterLevel());
+                climateSample,
+                height,
+                config.baseHeight(),
+                slope,
+                nearWater,
+                geography.waterLevel(),
+                geography.waterKind());
         return new ColumnSample(
                 geography.elevation(),
                 climateSample,

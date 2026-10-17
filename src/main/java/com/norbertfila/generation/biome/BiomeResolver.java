@@ -1,8 +1,23 @@
 package com.norbertfila.generation.biome;
 
+import com.norbertfila.generation.WaterKind;
+
 public final class BiomeResolver {
     public BiomeType resolve(
-            ClimateSample climate, int height, int baseHeight, double slope, boolean nearWater, int waterLevel) {
+            ClimateSample climate,
+            int height,
+            int baseHeight,
+            double slope,
+            boolean nearWater,
+            int waterLevel,
+            WaterKind waterKind) {
+        if (height < waterLevel && waterKind != WaterKind.NONE)
+            return switch (waterKind) {
+                case OCEAN -> BiomeType.OCEAN;
+                case LAKE -> BiomeType.LAKE;
+                case RIVER -> BiomeType.RIVER;
+                case NONE -> throw new IllegalStateException("Flooded column without water");
+            };
         float temperature = climate.temperature() - Math.max(0L, (long) height - baseHeight) * .004f;
         if (height > (long) baseHeight + 90 && temperature < -.25f) return BiomeType.ALPINE;
         if (temperature < -.2f) return BiomeType.TAIGA;

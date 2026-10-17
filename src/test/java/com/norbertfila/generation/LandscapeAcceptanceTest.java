@@ -3,6 +3,7 @@ package com.norbertfila.generation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.generation.biome.*;
+import com.norbertfila.world.BlockId;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +19,17 @@ class LandscapeAcceptanceTest {
                 for (int x = -4096; x <= 4096; x += 64) {
                     var sample = terrain.sample(x, z);
                     biomes.add(sample.biome());
-                    if (sample.flooded()) waters.add(sample.waterKind());
+                    if (sample.flooded()) {
+                        waters.add(sample.waterKind());
+                        assertEquals(BiomeType.valueOf(sample.waterKind().name()), sample.biome());
+                        assertTrue(
+                                Set.of(BlockId.SAND, BlockId.GRAVEL, BlockId.DIRT, BlockId.MUD)
+                                        .contains(sample.surfaceMaterial()),
+                                "Aquatic floor: " + sample);
+                    } else {
+                        assertFalse(EnumSet.of(BiomeType.OCEAN, BiomeType.LAKE, BiomeType.RIVER)
+                                .contains(sample.biome()));
+                    }
                     if (sample.surfaceHeight() < 35) low++;
                     if (sample.surfaceHeight() > 80) upland++;
                     total++;

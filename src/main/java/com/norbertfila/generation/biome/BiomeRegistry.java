@@ -76,7 +76,10 @@ public final class BiomeRegistry {
                                 0,
                                 SurfaceMaterial.SNOW,
                                 SurfaceMaterial.STONE,
-                                Set.of(PlantType.ALPINE_GRASS, PlantType.FLOWER))));
+                                Set.of(PlantType.ALPINE_GRASS, PlantType.FLOWER)),
+                BiomeType.OCEAN, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of()),
+                BiomeType.LAKE, profile(0, 0, 0, SurfaceMaterial.MUD, SurfaceMaterial.DIRT, Set.of()),
+                BiomeType.RIVER, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of())));
     }
 
     private static BiomeProfile profile(
