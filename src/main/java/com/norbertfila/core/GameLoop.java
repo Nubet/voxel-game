@@ -15,6 +15,7 @@ import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
@@ -493,6 +494,11 @@ public final class GameLoop {
                 players.render(
                         viewProjection,
                         state.playerRenderState(),
+                        PlayerAnimator.pose(
+                                state.playerRenderState(),
+                                state.interpolationAlpha(interpolationTime),
+                                camera.yaw(),
+                                camera.pitch()),
                         state.interpolationAlpha(interpolationTime),
                         camera.x(),
                         camera.y(),

@@ -7,6 +7,12 @@ import com.norbertfila.player.WaterContact;
 public final class PlayerRenderStateExtractor {
     private PlayerRenderState.Sample last;
     private long resetRevision;
+    private long tick;
+    private final PlayerAnimator animator = new PlayerAnimator();
+
+    public void swing(long tick, boolean restart) {
+        animator.swing(tick, restart);
+    }
 
     public PlayerRenderState extract(
             PlayerController player, double yaw, double pitch, WaterContact.Result water, boolean frozen) {
@@ -20,6 +26,19 @@ public final class PlayerRenderStateExtractor {
             WaterContact.Result water,
             boolean frozen,
             PlayerAppearance appearance) {
+        return extract(player, yaw, pitch, water, frozen, appearance, ++tick);
+    }
+
+    public PlayerRenderState extract(
+            PlayerController player,
+            double yaw,
+            double pitch,
+            WaterContact.Result water,
+            boolean frozen,
+            PlayerAppearance appearance,
+            long tick) {
+        if (tick < 0) throw new IllegalArgumentException("Invalid animation tick");
+        this.tick = tick;
         var state = player.state();
         var current = new PlayerRenderState.Sample(state.position(), state.eyeHeight(), yaw, pitch);
         boolean reset = last == null || resetRevision != player.interpolationResetRevision() || frozen;
@@ -48,6 +67,7 @@ public final class PlayerRenderStateExtractor {
                 water.submergedFraction(),
                 water.eyesSubmerged(),
                 water.available(),
-                frozen);
+                frozen,
+                animator.tick(player, yaw, reset, frozen, tick));
     }
 }

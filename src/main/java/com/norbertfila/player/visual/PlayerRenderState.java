@@ -19,12 +19,14 @@ public record PlayerRenderState(
         double submergedFraction,
         boolean eyesSubmerged,
         boolean waterAvailable,
-        boolean frozen) {
+        boolean frozen,
+        PlayerAnimator.Animation animation) {
     public PlayerRenderState {
         Objects.requireNonNull(appearance);
         Objects.requireNonNull(previous);
         Objects.requireNonNull(current);
         Objects.requireNonNull(mode);
+        Objects.requireNonNull(animation);
         if (!Double.isFinite(velocityX)
                 || !Double.isFinite(velocityY)
                 || !Double.isFinite(velocityZ)
