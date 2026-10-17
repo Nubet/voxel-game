@@ -18,27 +18,42 @@ class PlayerModelTest {
     void outerCuboidsInflateGeometryWithoutStretchingTheUvNetAndInheritThePartPose() {
         int[][] origins = {{16, 32}, {32, 0}, {40, 32}, {48, 48}, {0, 32}, {0, 48}};
         var pose = PlayerPose.NEUTRAL.with(BODY, new PartTransform(1, 2, 3, .3f, .4f, .5f));
-        for (var layer : PlayerModel.OUTER_LAYERS) {
-            var part = PlayerModel.definition(layer.part());
-            var box = part.cuboid();
-            assertEquals(
-                    new UvOrigin(
-                            origins[layer.part().ordinal()][0],
-                            origins[layer.part().ordinal()][1]),
-                    layer.uvOrigin());
-            float inflation = layer.part() == HEAD ? .5f : .25f;
-            assertEquals(inflation, layer.inflation());
-            var base = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64);
-            var outer = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64, layer.inflation());
-            var transform = matrix(layer.part(), pose.with(layer.part(), new PartTransform(0, 0, 0, .6f, -.2f, .1f)));
-            for (int i = 0; i < outer.length; i += CuboidMesh.FLOATS_PER_VERTEX) {
-                for (int axis = 0; axis < 3; axis++)
-                    assertEquals(inflation, Math.abs(outer[i + axis] - base[i + axis]));
-                assertEquals(base[i + 3], outer[i + 3]);
-                assertEquals(base[i + 4], outer[i + 4]);
-                var basePoint = transform.transformPosition(new Vector3f(base[i], base[i + 1], base[i + 2]));
-                var outerPoint = transform.transformPosition(new Vector3f(outer[i], outer[i + 1], outer[i + 2]));
-                assertEquals(Math.sqrt(3) * inflation / 16, basePoint.distance(outerPoint), .000001);
+        for (var variant : ModelVariant.values()) {
+            for (var layer : PlayerModel.OUTER_LAYERS) {
+                var part = PlayerModel.definition(variant, layer.part());
+                var box = part.cuboid();
+                assertEquals(
+                        new UvOrigin(
+                                origins[layer.part().ordinal()][0],
+                                origins[layer.part().ordinal()][1]),
+                        layer.uvOrigin());
+                float inflation = layer.part() == HEAD ? .5f : .25f;
+                assertEquals(inflation, layer.inflation());
+                var base = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64);
+                var outer = CuboidMesh.vertices(box, layer.uvOrigin(), 64, 64, layer.inflation());
+                var transform = PlayerModel.partMatrix(
+                        variant,
+                        layer.part(),
+                        pose.with(layer.part(), new PartTransform(0, 0, 0, .6f, -.2f, .1f)),
+                        new Matrix4f());
+                var inherited = new Matrix4f().scaling(PlayerModel.PIXEL_SCALE);
+                if (part.parent() != null) {
+                    var parent = PlayerModel.definition(variant, part.parent());
+                    parent.pivot().apply(inherited);
+                    pose.transform(part.parent()).apply(inherited);
+                }
+                part.pivot().apply(inherited);
+                new PartTransform(0, 0, 0, .6f, -.2f, .1f).apply(inherited);
+                assertEquals(inherited, transform);
+                for (int i = 0; i < outer.length; i += CuboidMesh.FLOATS_PER_VERTEX) {
+                    for (int axis = 0; axis < 3; axis++)
+                        assertEquals(inflation, Math.abs(outer[i + axis] - base[i + axis]));
+                    assertEquals(base[i + 3], outer[i + 3]);
+                    assertEquals(base[i + 4], outer[i + 4]);
+                    var basePoint = transform.transformPosition(new Vector3f(base[i], base[i + 1], base[i + 2]));
+                    var outerPoint = transform.transformPosition(new Vector3f(outer[i], outer[i + 1], outer[i + 2]));
+                    assertEquals(Math.sqrt(3) * inflation / 16, basePoint.distance(outerPoint), .000001);
+                }
             }
         }
         assertThrows(
@@ -48,9 +63,48 @@ class PlayerModelTest {
     }
 
     @Test
+    void slimChangesOnlyArmsWithCanonicalShoulderPivotsAndSymmetricBounds() {
+        for (var part : PlayerModel.Part.values()) {
+            var classic = PlayerModel.definition(ModelVariant.CLASSIC, part);
+            var slim = PlayerModel.definition(ModelVariant.SLIM, part);
+            if (part != RIGHT_ARM && part != LEFT_ARM) {
+                assertSame(classic, slim);
+                continue;
+            }
+            assertEquals(new ModelCuboid(part == RIGHT_ARM ? -1 : -2, -10, -2, 3, 12, 4), slim.cuboid());
+            assertEquals(new PartTransform(part == RIGHT_ARM ? 5 : -5, 9.5f, 0, 0, 0, 0), slim.pivot());
+            assertEquals(BODY, slim.parent());
+            assertEquals(classic.uvOrigin(), slim.uvOrigin());
+            var neutral = PlayerModel.partMatrix(ModelVariant.SLIM, part, PlayerPose.NEUTRAL, new Matrix4f());
+            vector(
+                    new Vector3f((part == RIGHT_ARM ? 5 : -5) / 16f, 21.5f / 16, 0),
+                    neutral.getTranslation(new Vector3f()));
+            var box = slim.cuboid();
+            vector(
+                    new Vector3f((part == RIGHT_ARM ? 4 : -7) / 16f, 11.5f / 16, -2f / 16),
+                    neutral.transformPosition(new Vector3f(box.x(), box.y(), box.z())));
+            vector(
+                    new Vector3f((part == RIGHT_ARM ? 7 : -4) / 16f, 23.5f / 16, 2f / 16),
+                    neutral.transformPosition(new Vector3f(box.x() + 3, box.y() + 12, box.z() + 4)));
+            var rotated = PlayerModel.partMatrix(
+                    ModelVariant.SLIM,
+                    part,
+                    PlayerPose.NEUTRAL.with(part, new PartTransform(0, 0, 0, .8f, .2f, -.3f)),
+                    new Matrix4f());
+            vector(neutral.getTranslation(new Vector3f()), rotated.getTranslation(new Vector3f()));
+        }
+        assertThrows(UnsupportedOperationException.class, () -> PlayerModel.SLIM_PARTS.clear());
+        assertThrows(NullPointerException.class, () -> PlayerModel.parts(null));
+        assertThrows(NullPointerException.class, () -> new PlayerAppearance(null));
+        var slimAppearance = new PlayerAppearance(ModelVariant.SLIM).withOuterLayer(RIGHT_ARM, false);
+        assertEquals(ModelVariant.SLIM, slimAppearance.model());
+        assertFalse(slimAppearance.outerLayers().contains(RIGHT_ARM));
+    }
+
+    @Test
     void appearanceMaskIsImmutableIndependentAndPublishedInSnapshots() {
         var source = EnumSet.allOf(PlayerModel.Part.class);
-        var appearance = new PlayerAppearance(PlayerAppearance.Model.CLASSIC, source);
+        var appearance = new PlayerAppearance(ModelVariant.CLASSIC, source);
         source.clear();
         assertEquals(6, appearance.outerLayers().size());
         assertThrows(

@@ -22,6 +22,7 @@ import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.*;
+import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.simulation.FixedSimulation;
@@ -543,7 +544,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     state.yaw(),
                                     state.pitch(),
                                     contact,
-                                    !activated || state.blocked() || state.paused() || movementWaiting || stalled);
+                                    !activated || state.blocked() || state.paused() || movementWaiting || stalled,
+                                    state.appearance());
                             long contactNanos = System.nanoTime() - contactStarted;
                             var target = activated && poseReady[0] && !interactionBlocked
                                     ? target(targeting, player, state)
@@ -850,7 +852,35 @@ public final class WorldRuntime implements AutoCloseable {
             boolean placeHeld,
             int farDistance,
             int simulationDistance,
-            boolean breakHeld) {
+            boolean breakHeld,
+            PlayerAppearance appearance) {
+        public Controls(
+                PlayerInput input,
+                double yaw,
+                double pitch,
+                boolean blocked,
+                boolean paused,
+                int renderDistance,
+                long placePressId,
+                boolean placeHeld,
+                int farDistance,
+                int simulationDistance,
+                boolean breakHeld) {
+            this(
+                    input,
+                    yaw,
+                    pitch,
+                    blocked,
+                    paused,
+                    renderDistance,
+                    placePressId,
+                    placeHeld,
+                    farDistance,
+                    simulationDistance,
+                    breakHeld,
+                    PlayerAppearance.DEFAULT);
+        }
+
         public Controls(
                 PlayerInput input,
                 double yaw,
@@ -896,6 +926,7 @@ public final class WorldRuntime implements AutoCloseable {
 
         public Controls {
             Objects.requireNonNull(input);
+            Objects.requireNonNull(appearance);
             if (input.jumpPressed()
                     || !Double.isFinite(yaw)
                     || !Double.isFinite(pitch)
