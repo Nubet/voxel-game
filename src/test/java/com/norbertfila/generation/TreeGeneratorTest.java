@@ -16,6 +16,18 @@ class TreeGeneratorTest {
     private static final TerrainSource FLAT_GRASS = terrain((x, z) -> 8);
 
     @Test
+    void taigaGrowsConifersButMountainBiomesRemainTreeless() {
+        for (var biome : new BiomeType[] {BiomeType.TAIGA, BiomeType.STONY_SLOPES, BiomeType.ALPINE}) {
+            var trees = new TreeGenerator(42, (x, z) -> 1, terrain((x, z) -> 8, BlockId.PODZOL, biome)).trees(0, 0);
+            if (biome == BiomeType.TAIGA) {
+                assertFalse(trees.isEmpty());
+                assertTrue(trees.stream()
+                        .allMatch(tree -> tree.type() == com.norbertfila.generation.biome.TreeType.CONIFER));
+            } else assertTrue(trees.isEmpty(), biome.name());
+        }
+    }
+
+    @Test
     void chunkClippingAndTreePlacementDoNotDependOnGenerationOrder() {
         TreeGenerator generator = new TreeGenerator(0, (x, z) -> 1, FLAT_GRASS);
         ChunkPos[] positions = {new ChunkPos(-1, 0, 0), new ChunkPos(0, 0, 0), new ChunkPos(1, 0, 0)};
@@ -146,6 +158,10 @@ class TreeGeneratorTest {
     }
 
     private static TerrainSource terrain(HeightField heightField, byte material) {
+        return terrain(heightField, material, BiomeType.FOREST);
+    }
+
+    private static TerrainSource terrain(HeightField heightField, byte material, BiomeType biome) {
         return new TerrainSource() {
             @Override
             public long seed() {
@@ -176,7 +192,7 @@ class TreeGeneratorTest {
                         BlockId.STONE,
                         TerrainSummary.NO_BEDROCK,
                         TerrainSummary.NO_WATER,
-                        BiomeType.FOREST,
+                        biome,
                         new ClimateSample(0, 0));
             }
         };

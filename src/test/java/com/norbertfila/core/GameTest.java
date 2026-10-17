@@ -6,6 +6,7 @@ import com.norbertfila.generation.TerrainConfig;
 import com.norbertfila.generation.TerrainGenerator;
 import com.norbertfila.player.SpawnResolver;
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.WorldBounds;
@@ -29,11 +30,27 @@ class GameTest {
     @Test
     void perlinSpawnHasSolidFloorAndFreeBody() {
         TerrainGenerator generator = new TerrainGenerator(0, TerrainConfig.defaults());
+        boolean snowCovered = false;
         for (int x : new int[] {-17, 0, 31}) {
             var spawn = new SpawnResolver(generator).resolve(x, -1);
             int spawnX = (int) Math.floor(spawn.x()), spawnZ = (int) Math.floor(spawn.z());
             int floorY = (int) spawn.y() - 1;
-            assertEquals(generator.surfaceHeight(spawnX, spawnZ) + 1, spawn.y());
+            int feetY = generator.surfaceHeight(spawnX, spawnZ) + 1;
+            byte cover = generator
+                    .generate(new ChunkPos(
+                            Math.floorDiv(spawnX, Chunk.SIZE),
+                            Math.floorDiv(feetY, Chunk.SIZE),
+                            Math.floorDiv(spawnZ, Chunk.SIZE)))
+                    .get(
+                            Math.floorMod(spawnX, Chunk.SIZE),
+                            Math.floorMod(feetY, Chunk.SIZE),
+                            Math.floorMod(spawnZ, Chunk.SIZE));
+            assertTrue(cover == BlockId.AIR || cover == BlockId.SNOW_LAYER);
+            snowCovered |= cover == BlockId.SNOW_LAYER;
+            double coverHeight = cover == BlockId.SNOW_LAYER
+                    ? BlockRegistry.DEFAULT.definition(cover).model().maxY()
+                    : 0;
+            assertEquals(feetY + coverHeight, spawn.y());
             assertEquals(
                     generator.sample(spawnX, spawnZ).surfaceMaterial(),
                     generator
@@ -49,6 +66,7 @@ class GameTest {
             assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 1));
             assertEquals(BlockId.AIR, generator.sample(spawnX, spawnZ).materialAt(floorY + 2));
         }
+        assertTrue(snowCovered, "Spawn must also support the snow-covered taiga");
     }
 
     @Test

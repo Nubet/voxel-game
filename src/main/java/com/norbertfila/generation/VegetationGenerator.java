@@ -4,6 +4,7 @@ import static com.norbertfila.generation.GenerationHash.hash;
 
 import com.norbertfila.generation.biome.BiomeProfile;
 import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.PlantType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
@@ -72,7 +73,7 @@ final class VegetationGenerator {
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
                 BiomeProfile profile = biomes.profile(columns.biome(column));
                 if (columns.surfaceMaterial(column) == BlockId.SNOW
-                        || columns.biome(column) == com.norbertfila.generation.biome.BiomeType.ALPINE
+                        || columns.biome(column) == BiomeType.ALPINE
                                 && columns.surfaceMaterial(column) == BlockId.STONE) {
                     place(x, z, oy, blocks, columns, BlockId.SNOW_LAYER);
                     continue;
@@ -104,6 +105,12 @@ final class VegetationGenerator {
                 if (plant == BlockId.SHORT_GRASS
                         && !profile.vegetation().plants().contains(PlantType.SHORT_GRASS)) plant = BlockId.FERN;
                 place(x, z, oy, blocks, columns, plant);
+            }
+        for (int z = 0; z < Chunk.SIZE; z++)
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                int column = z * Chunk.SIZE + x;
+                if (columns.biome(column) == BiomeType.TAIGA && columns.surfaceMaterial(column) == BlockId.PODZOL)
+                    place(x, z, oy, blocks, columns, BlockId.SNOW_LAYER);
             }
     }
 
