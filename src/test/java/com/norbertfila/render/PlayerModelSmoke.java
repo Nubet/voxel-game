@@ -7,8 +7,10 @@ import com.norbertfila.assets.PlayerSkin;
 import com.norbertfila.assets.SkinLoader;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.player.WaterContact;
+import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.player.visual.model.CuboidMesh.Face;
@@ -16,10 +18,13 @@ import com.norbertfila.player.visual.model.ModelVariant;
 import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
+import com.norbertfila.world.*;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -188,6 +193,7 @@ public final class PlayerModelSmoke {
                 render(renderer, front, pose, sentinelVao);
                 check(occluded.equals(capture()), "Model ignored foreground depth");
                 checkSnapshots(layerRenderer, output);
+                checkAnimationPoses(defaultRenderer, sentinelVao, output);
                 checkSwitching(renderer, skins, decodes);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 com.norbertfila.core.PlayerGameHookSmoke.run(window, skins, output);
@@ -222,6 +228,85 @@ public final class PlayerModelSmoke {
                 "Skin upload timed out or failed: " + skins.status());
     }
 
+    private static void checkAnimationPoses(PlayerRenderer renderer, int vao, Path output) throws Exception {
+        var vp = new Matrix4f().ortho(-1.4f, 1.4f, -1.4f, 1.4f, .1f, 20).lookAt(3, 2.5f, -5, 0, 1, 0, 0, 1, 0);
+        for (var variant : ModelVariant.values()) {
+            var appearance = new PlayerAppearance(variant);
+            var images = new LinkedHashMap<String, ByteBuffer>();
+            for (var entry : animationPoses().entrySet()) {
+                clear(1);
+                var empty = capture();
+                render(renderer, vp, entry.getValue(), vao, appearance);
+                var image = capture();
+                check(!empty.equals(image), "Empty animation: " + entry.getKey());
+                for (int y = 0; y < SIZE; y++)
+                    for (int x = 0; x < SIZE; x++) {
+                        int pixel = (y * SIZE + x) * 4;
+                        if (image.getInt(pixel) != empty.getInt(pixel))
+                            check(
+                                    x > 10 && x < SIZE - 10 && y > 10 && y < SIZE - 10,
+                                    "Clipped animation: " + entry.getKey());
+                    }
+                for (var previous : images.entrySet())
+                    check(
+                            !previous.getValue().equals(image),
+                            "Indistinct poses: " + previous.getKey() + "/" + entry.getKey());
+                clear(1);
+                render(renderer, vp, entry.getValue(), vao, appearance);
+                check(image.equals(capture()), "Animation render is not deterministic: " + entry.getKey());
+                images.put(entry.getKey(), image);
+                write(image, output.resolve("animation-" + variant + "-" + entry.getKey() + ".png"));
+            }
+            var repeated = animationPoses();
+            for (var entry : animationPoses().entrySet())
+                check(
+                        entry.getValue().equals(repeated.get(entry.getKey())),
+                        "CPU animation script is not deterministic");
+        }
+    }
+
+    private static Map<String, PlayerPose> animationPoses() {
+        var world = new World();
+        for (int cx = -1; cx <= 1; cx++)
+            for (int cz = -1; cz <= 1; cz++) {
+                var chunk = new Chunk();
+                for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) chunk.set(x, 0, z, BlockId.STONE);
+                world.putChunk(new ChunkPos(cx, 0, cz), chunk);
+            }
+        var player = new PlayerController();
+        player.setPosition(new PlayerState.Position(8, 1, 8));
+        var extractor = new PlayerRenderStateExtractor();
+        var dry = new WaterContact.Result(0, false, true);
+        var poses = new LinkedHashMap<String, PlayerPose>();
+        player.tick(world, PlayerInput.NONE, 1.0 / 60, 0, 0);
+        poses.put("idle-look", PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false), 1, 30, 15));
+        for (boolean sprint : new boolean[] {false, true}) {
+            for (int i = 0; i < 12; i++) {
+                player.tick(world, new PlayerInput(true, false, false, false, false, false, sprint), 1.0 / 60, 0, 0);
+                var state = extractor.extract(player, 0, 0, dry, false);
+                if (i == 11) poses.put(sprint ? "run" : "walk", PlayerAnimator.pose(state, .5));
+            }
+        }
+        player.tick(world, new PlayerInput(false, false, false, false, false, true, false), 1.0 / 60, 0, 0);
+        poses.put("crouch", PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false), 1));
+        player.tick(world, new PlayerInput(false, false, false, false, true, false, false), 1.0 / 60, 0, 0);
+        poses.put("jump", PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false), 1));
+        while (player.state().velocityY() >= 0) {
+            player.tick(world, PlayerInput.NONE, 1.0 / 60, 0, 0);
+            extractor.extract(player, 0, 0, dry, false);
+        }
+        poses.put("fall", PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false), 1));
+        player.restore(new PlayerState.Position(8, 5, 8), PlayerController.Mode.CREATIVE, true);
+        poses.put("fly", PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false), 1));
+        player.restore(new PlayerState.Position(8, 1, 8), PlayerController.Mode.SURVIVAL, false);
+        player.tick(world, PlayerInput.NONE, 1.0 / 60, 0, 0);
+        extractor.swing(100, true);
+        poses.put(
+                "action",
+                PlayerAnimator.pose(extractor.extract(player, 0, 0, dry, false, PlayerAppearance.DEFAULT, 106), 1));
+        return poses;
+    }
+
     private static void checkSnapshots(PlayerRenderer renderer, Path output) throws Exception {
         var player = new PlayerController();
         var extractor = new PlayerRenderStateExtractor();
@@ -232,7 +317,9 @@ public final class PlayerModelSmoke {
             player.setPosition(new PlayerState.Position(origin, 0, origin));
             var state = extractor.extract(player, -90, 0, water, false);
             clear(1);
-            check(renderer.render(vp, state, .5, origin, 1, origin - 5), "Visible snapshot was culled");
+            check(
+                    renderer.render(vp, state, PlayerPose.NEUTRAL, .5, origin, 1, origin - 5),
+                    "Visible snapshot was culled");
             var image = capture();
             if (reference == null) reference = image;
             else check(reference.equals(image), "Large negative coordinates lost sub-block precision");
@@ -241,16 +328,18 @@ public final class PlayerModelSmoke {
                 var masked = extractor.extract(
                         player, -90, 0, water, true, PlayerAppearance.DEFAULT.withOuterLayer(part, false));
                 clear(1);
-                renderer.render(vp, masked, .5, origin, 1, origin - 5);
+                renderer.render(vp, masked, PlayerPose.NEUTRAL, .5, origin, 1, origin - 5);
                 check(!image.equals(capture()), "Snapshot ignored layer mask: " + part);
             }
             clear(1);
             var empty = capture();
-            check(!renderer.render(vp, state, .5, origin + 100, 1, origin - 5), "Off-frustum snapshot drawn");
+            check(
+                    !renderer.render(vp, state, PlayerPose.NEUTRAL, .5, origin + 100, 1, origin - 5),
+                    "Off-frustum snapshot drawn");
             check(empty.equals(capture()), "Culled snapshot wrote pixels");
             clear(0);
             empty = capture();
-            renderer.render(vp, state, .5, origin, 1, origin - 5);
+            renderer.render(vp, state, PlayerPose.NEUTRAL, .5, origin, 1, origin - 5);
             check(empty.equals(capture()), "Snapshot ignored opaque occlusion");
             for (double yaw : new double[] {-90, 0, 90, 180}) {
                 var turned = extractor.extract(player, yaw, 0, water, true);
@@ -260,7 +349,7 @@ public final class PlayerModelSmoke {
                         .ortho(-1.3f, 1.3f, -1.3f, 1.3f, .1f, 20)
                         .lookAt(0, 0, 0, (float) -Math.cos(angle), 0, (float) -Math.sin(angle), 0, 1, 0);
                 clear(1);
-                renderer.render(facing, turned, 1, cx, 1, cz);
+                renderer.render(facing, turned, PlayerPose.NEUTRAL, 1, cx, 1, cz);
                 check(reference.equals(capture()), "Wrong gameplay-to-model yaw mapping: " + yaw);
             }
         }
@@ -347,7 +436,7 @@ public final class PlayerModelSmoke {
             var variant = i % 2 == 0 ? ModelVariant.CLASSIC : ModelVariant.SLIM;
             var state = extractor.extract(player, -90, 0, water, true, new PlayerAppearance(variant));
             clear(1);
-            check(renderer.render(vp, state, .5, 0, 1, -5), "Switch snapshot culled");
+            check(renderer.render(vp, state, PlayerPose.NEUTRAL, .5, 0, 1, -5), "Switch snapshot culled");
             var image = capture();
             if (i == 0) classic = image;
             else if (i == 1) {

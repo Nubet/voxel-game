@@ -384,6 +384,39 @@ class WorldRuntimeTest {
     Path directory;
 
     @Test
+    void acceptedAirClickSurvivesSkippedPublicationsButBlockedPausedAndSpectatorClicksDoNotSwing() throws Exception {
+        try (var runtime = start(new Flat(), directory.resolve("air-swing.vxl"))) {
+            runtime.controls(breakingControls(false, false, false));
+            var ready = await(runtime, f -> f.ready() && f.mode() == PlayerController.Mode.SURVIVAL);
+            long sequence = ready.playerRenderState().animation().swing().sequence();
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            var clicked = await(
+                    runtime, f -> f.playerRenderState().animation().swing().sequence() > sequence);
+            var event = clicked.playerRenderState().animation().swing();
+            assertTrue(clicked.target().isEmpty());
+            assertTrue(clicked.brokenBlocks().isEmpty());
+            assertTrue(event.startTick() > ready.tick());
+            var skipped = await(runtime, f -> f.tick() > event.startTick() + 15);
+            assertEquals(event, skipped.playerRenderState().animation().swing());
+            for (boolean paused : new boolean[] {false, true}) {
+                runtime.controls(breakingControls(false, true, paused));
+                var blocked = await(runtime, f -> f.playerRenderState().frozen() && f.paused() == paused);
+                assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+                var later = await(runtime, f -> f.publishedAt() > blocked.publishedAt() + 50_000_000);
+                assertEquals(event, later.playerRenderState().animation().swing());
+            }
+            runtime.controls(breakingControls(false, false, false));
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            await(runtime, f -> f.mode() == PlayerController.Mode.CREATIVE && !f.modePending());
+            assertTrue(runtime.offer(new WorldRuntime.NextMode()));
+            var spectator = await(runtime, f -> f.mode() == PlayerController.Mode.SPECTATOR && !f.modePending());
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            var later = await(runtime, f -> f.tick() > spectator.tick() + 3);
+            assertEquals(event, later.playerRenderState().animation().swing());
+        }
+    }
+
+    @Test
     void survivalTapDoesNotMineAndReleasePauseAndLookingAwayCancelProgress() throws Exception {
         Path save = directory.resolve("survival-mining.vxl");
         World world = new World();
@@ -398,6 +431,8 @@ class WorldRuntimeTest {
             assertEquals(block, tapped.target().orElseThrow().block());
             assertTrue(tapped.breaking().isEmpty());
             assertTrue(tapped.brokenBlocks().isEmpty());
+            // A tap animates even though survival mining needs a hold; sequence persists after the swing expires.
+            assertEquals(1, tapped.playerRenderState().animation().swing().sequence());
             assertEquals(0, tapped.inventory().count(0));
 
             runtime.controls(breakingControls(true, false, false));
@@ -407,6 +442,7 @@ class WorldRuntimeTest {
             assertEquals(block, mining.breaking().orElseThrow().block());
             assertEquals(0, mining.inventory().count(0));
             assertTrue(mining.brokenBlocks().isEmpty());
+            assertTrue(mining.playerRenderState().animation().swing().sequence() > 1);
             assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
             await(
                     runtime,
@@ -510,6 +546,7 @@ class WorldRuntimeTest {
             await(runtime, f -> f.target().isPresent());
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 1, true, 0, 0, true));
             var mining = await(runtime, f -> f.breaking().isPresent());
+            long miningSwing = mining.playerRenderState().animation().swing().sequence();
             assertEquals(anchor, mining.target().orElseThrow().block());
             assertEquals(1, mining.inventory().count(0));
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 2, true, 0, 0, false));
@@ -517,6 +554,12 @@ class WorldRuntimeTest {
             assertEquals(placed, result.target().orElseThrow().block());
             assertEquals(BlockId.DIRT, result.target().orElseThrow().blockId());
             assertTrue(result.breaking().isEmpty());
+            // Only changed placements swing; mining has priority over a simultaneous right click.
+            assertTrue(result.playerRenderState().animation().swing().sequence() > miningSwing);
+            var placedSwing = result.playerRenderState().animation().swing();
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 90, 0, false, false, 0, 3, true));
+            var missed = await(runtime, f -> f.tick() > result.tick() + 15);
+            assertEquals(placedSwing, missed.playerRenderState().animation().swing());
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0, 2, false));
         }
         World restored = new World();

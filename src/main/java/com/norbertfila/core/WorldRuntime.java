@@ -425,7 +425,10 @@ public final class WorldRuntime implements AutoCloseable {
                                 placementCooldown.attempted();
                                 if (!interactionBlocked && breakPress == null && !state.breakHeld())
                                     placeInventory(interaction, player, state, inventory)
-                                            .ifPresent(chunks::requestRemesh);
+                                            .ifPresent(result -> {
+                                                chunks.requestRemesh(result);
+                                                if (result.changed()) playerVisuals.swing(tick[0], true);
+                                            });
                             }
                             // UI commands can arrive after this tick sampled gameplay controls.
                             if (!interactionBlocked
@@ -436,7 +439,10 @@ public final class WorldRuntime implements AutoCloseable {
                                     && state.placeHeld()) {
                                 placementCooldown.attempted();
                                 placeInventory(interaction, player, state, inventory)
-                                        .ifPresent(chunks::requestRemesh);
+                                        .ifPresent(result -> {
+                                            chunks.requestRemesh(result);
+                                            if (result.changed()) playerVisuals.swing(tick[0], true);
+                                        });
                             }
                             if (activated && !state.paused()) {
                                 long waterStarted = System.nanoTime();
@@ -483,8 +489,16 @@ public final class WorldRuntime implements AutoCloseable {
                                         ? new Edit(true, BlockId.AIR, state.yaw(), state.pitch())
                                         : breakPress;
                                 var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
-                                if (breaking.tick(
-                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt)) {
+                                boolean completed = breaking.tick(
+                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt);
+                                if (player.mode() != PlayerController.Mode.SPECTATOR
+                                        && (breakPress != null
+                                                || completed
+                                                || breaking.progress().isPresent()
+                                                || (player.mode() == PlayerController.Mode.CREATIVE
+                                                        && miningTarget.isPresent())))
+                                    playerVisuals.swing(tick[0], breakPress != null);
+                                if (completed) {
                                     remove(interaction, player, mining, items)
                                             .filter(BlockChangeResult::changed)
                                             .ifPresent(result -> {
@@ -545,7 +559,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     state.pitch(),
                                     contact,
                                     !activated || state.blocked() || state.paused() || movementWaiting || stalled,
-                                    state.appearance());
+                                    state.appearance(),
+                                    tick[0]);
                             long contactNanos = System.nanoTime() - contactStarted;
                             var target = activated && poseReady[0] && !interactionBlocked
                                     ? target(targeting, player, state)

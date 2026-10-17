@@ -7,7 +7,6 @@ import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.model.CuboidMesh;
 import com.norbertfila.player.visual.model.ModelVariant;
-import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
 import java.util.Objects;
@@ -55,6 +54,7 @@ public final class PlayerRenderer implements AutoCloseable {
     public boolean render(
             Matrix4f viewProjection,
             PlayerRenderState state,
+            PlayerPose pose,
             double alpha,
             double cameraX,
             double cameraY,
@@ -68,8 +68,6 @@ public final class PlayerRenderer implements AutoCloseable {
         if (!new FrustumIntersection(viewProjection).testAab(x - 1, y - .5f, z - 1, x + 1, y + 2.5f, z + 1))
             return false;
         var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
-        var pose = PlayerPose.NEUTRAL.with(
-                PlayerModel.Part.HEAD, new PartTransform(0, 0, 0, (float) Math.toRadians(sample.pitch()), 0, 0));
         render(viewProjection, transform, pose, state.appearance());
         return true;
     }
