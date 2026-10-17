@@ -1,5 +1,6 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.generation.biome.BadlandsSurface;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
@@ -20,6 +21,7 @@ final class TerrainColumn {
     private final byte[] subsurfaceMaterials;
     private final BiomeType[] biomes;
     private final byte[] deepMaterials;
+    private final BadlandsSurface.Column[] badlands;
     private final int bedrockHeight;
     private final int[] waterLevels;
     private final int minWater;
@@ -38,6 +40,7 @@ final class TerrainColumn {
             byte[] subsurfaceMaterials,
             BiomeType[] biomes,
             byte[] deepMaterials,
+            BadlandsSurface.Column[] badlands,
             int bedrockHeight,
             int[] waterLevels,
             List<TreeGenerator.Tree> trees,
@@ -50,6 +53,7 @@ final class TerrainColumn {
         this.subsurfaceMaterials = subsurfaceMaterials;
         this.biomes = biomes;
         this.deepMaterials = deepMaterials;
+        this.badlands = badlands;
         this.bedrockHeight = bedrockHeight;
         this.waterLevels = waterLevels;
         minWater = java.util.Arrays.stream(waterLevels).min().orElseThrow();
@@ -83,7 +87,8 @@ final class TerrainColumn {
             byte material = materialAt(0, minY);
             boolean uniform = true;
             for (int index = 0; index < AREA && uniform; index++)
-                uniform = (deepMaterials[index] != BlockId.TERRACOTTA_RED || maxY < (long) surfaceHeights[index] - 48)
+                uniform = (badlands[index] == null
+                                || maxY < (long) surfaceHeights[index] - BadlandsSurface.TERRACOTTA_DEPTH)
                         && materialAt(index, minY) == material;
             if (uniform) return Byte.toUnsignedInt(material);
         }
@@ -112,6 +117,7 @@ final class TerrainColumn {
         int[] waterLevels = new int[AREA];
         byte[] surface = new byte[AREA], subsurface = new byte[AREA];
         byte[] deep = new byte[AREA];
+        var badlands = new BadlandsSurface.Column[AREA];
         BiomeType[] biomes = new BiomeType[AREA];
         BitSet snow = new BitSet(AREA);
         BitSet ice = new BitSet(AREA);
@@ -125,6 +131,7 @@ final class TerrainColumn {
             biomes[index] = summary.biome();
             waterLevels[index] = summary.waterLevel();
             deep[index] = summary.deepMaterial();
+            badlands[index] = summary.badlands();
             if (summary.snowCover()) snow.set(index);
             if (summary.frozenWater()) ice.set(index);
         }
@@ -134,6 +141,7 @@ final class TerrainColumn {
                 subsurface,
                 biomes,
                 deep,
+                badlands,
                 first.bedrockHeight(),
                 waterLevels,
                 trees,
@@ -184,11 +192,15 @@ final class TerrainColumn {
                 subsurfaceMaterials[index],
                 deepMaterials[index],
                 bedrockHeight,
-                waterLevels[index]);
+                waterLevels[index],
+                badlands[index]);
     }
 
     long estimatedBytes() {
-        return AREA * (2L * Integer.BYTES + 3L)
+        long layerBytes = AREA * (long) Long.BYTES;
+        for (var column : badlands) if (column != null) layerBytes += 24;
+        return layerBytes
+                + AREA * (2L * Integer.BYTES + 3L)
                 + trees.size() * 48L
                 + caves.size() * 8L
                 + (removedSurface.size() + snowCover.size() + frozenWater.size()) / 8L;
