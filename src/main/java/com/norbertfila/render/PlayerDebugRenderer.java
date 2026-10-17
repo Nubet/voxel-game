@@ -2,6 +2,8 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.assets.PlayerSkin;
+import com.norbertfila.player.visual.model.CuboidMesh;
 import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
 import java.util.Objects;
@@ -9,26 +11,44 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class PlayerDebugRenderer implements AutoCloseable {
-    private final int program, vao, vbo, vp, model, min, size, color;
+    private final int program, vao, vbo, vp, model, texture;
     private boolean closed;
 
     public PlayerDebugRenderer() {
-        int createdProgram = 0, createdVao = 0, createdVbo = 0;
+        this(PlayerSkin.loadDefault());
+    }
+
+    public PlayerDebugRenderer(PlayerSkin skin) {
+        Objects.requireNonNull(skin);
+        int createdProgram = 0, createdVao = 0, createdVbo = 0, createdTexture = 0;
         try {
             createdProgram = ShaderPrograms.create("/shaders/player_debug.vert", "/shaders/player_debug.frag");
             vp = ShaderPrograms.uniform(createdProgram, "uVP");
             model = ShaderPrograms.uniform(createdProgram, "uModel");
-            min = ShaderPrograms.uniform(createdProgram, "uMin");
-            size = ShaderPrograms.uniform(createdProgram, "uSize");
-            color = ShaderPrograms.uniform(createdProgram, "uColor");
+            glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
             glNamedBufferData(createdVbo, vertices(), GL_STATIC_DRAW);
-            glVertexArrayVertexBuffer(createdVao, 0, createdVbo, 0, 3 * Float.BYTES);
+            glVertexArrayVertexBuffer(createdVao, 0, createdVbo, 0, CuboidMesh.FLOATS_PER_VERTEX * Float.BYTES);
             glVertexArrayAttribFormat(createdVao, 0, 3, GL_FLOAT, false, 0);
             glVertexArrayAttribBinding(createdVao, 0, 0);
             glEnableVertexArrayAttrib(createdVao, 0);
+            glVertexArrayAttribFormat(createdVao, 1, 2, GL_FLOAT, false, 3 * Float.BYTES);
+            glVertexArrayAttribBinding(createdVao, 1, 0);
+            glEnableVertexArrayAttrib(createdVao, 1);
+            createdTexture = glCreateTextures(GL_TEXTURE_2D);
+            glTextureStorage2D(createdTexture, 1, GL_RGBA8, PlayerSkin.SIZE, PlayerSkin.SIZE);
+            glTextureParameteri(createdTexture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTextureParameteri(createdTexture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTextureParameteri(createdTexture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTextureParameteri(createdTexture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            try (var stack = MemoryStack.stackPush()) {
+                var pixels = stack.bytes(skin.rgba());
+                glTextureSubImage2D(
+                        createdTexture, 0, 0, 0, PlayerSkin.SIZE, PlayerSkin.SIZE, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            }
         } catch (RuntimeException | Error failure) {
+            glDeleteTextures(createdTexture);
             glDeleteBuffers(createdVbo);
             glDeleteVertexArrays(createdVao);
             glDeleteProgram(createdProgram);
@@ -37,6 +57,7 @@ public final class PlayerDebugRenderer implements AutoCloseable {
         program = createdProgram;
         vao = createdVao;
         vbo = createdVbo;
+        texture = createdTexture;
     }
 
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose) {
@@ -48,6 +69,9 @@ public final class PlayerDebugRenderer implements AutoCloseable {
         boolean blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
         int depthFunction = glGetInteger(GL_DEPTH_FUNC);
         int previousProgram = glGetInteger(GL_CURRENT_PROGRAM), previousVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+        int previousTexture = glGetIntegeri(GL_TEXTURE_BINDING_2D, 0);
+        int previousSampler = glGetIntegeri(GL_SAMPLER_BINDING, 0);
+        int previousActiveTexture = glGetInteger(GL_ACTIVE_TEXTURE);
         try (var stack = MemoryStack.stackPush()) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
@@ -56,6 +80,9 @@ public final class PlayerDebugRenderer implements AutoCloseable {
             glDisable(GL_CULL_FACE);
             glUseProgram(program);
             glBindVertexArray(vao);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glBindSampler(0, 0);
             var buffer = stack.mallocFloat(16);
             glUniformMatrix4fv(vp, false, viewProjection.get(buffer));
             var partMatrix = new Matrix4f();
@@ -64,20 +91,12 @@ public final class PlayerDebugRenderer implements AutoCloseable {
                 PlayerModel.partMatrix(part.part(), pose, partMatrix);
                 modelToWorld.mul(partMatrix, worldMatrix);
                 glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
-                var box = part.cuboid();
-                glUniform3f(min, box.x(), box.y(), box.z());
-                glUniform3f(size, box.width(), box.height(), box.depth());
-                switch (part.part()) {
-                    case HEAD -> glUniform3f(color, 1, .75f, .35f);
-                    case BODY -> glUniform3f(color, .15f, .8f, .8f);
-                    case RIGHT_ARM -> glUniform3f(color, .95f, .3f, .25f);
-                    case LEFT_ARM -> glUniform3f(color, .35f, .85f, .3f);
-                    case RIGHT_LEG -> glUniform3f(color, .3f, .4f, 1);
-                    case LEFT_LEG -> glUniform3f(color, .8f, .3f, .9f);
-                }
-                glDrawArrays(GL_TRIANGLES, 0, 36);
+                glDrawArrays(GL_TRIANGLES, part.part().ordinal() * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
             }
         } finally {
+            glBindTexture(GL_TEXTURE_2D, previousTexture);
+            glActiveTexture(previousActiveTexture);
+            glBindSampler(0, previousSampler);
             glBindVertexArray(previousVao);
             glUseProgram(previousProgram);
             if (cull) glEnable(GL_CULL_FACE);
@@ -92,20 +111,20 @@ public final class PlayerDebugRenderer implements AutoCloseable {
     }
 
     private static float[] vertices() {
-        return new float[] {
-            0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0,
-            1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1,
-            0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0,
-            1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1,
-            0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0,
-            0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1
-        };
+        int partSize = CuboidMesh.VERTEX_COUNT * CuboidMesh.FLOATS_PER_VERTEX;
+        var vertices = new float[PlayerModel.PARTS.size() * partSize];
+        for (var part : PlayerModel.PARTS) {
+            var mesh = CuboidMesh.vertices(part.cuboid(), part.uvOrigin(), PlayerSkin.SIZE, PlayerSkin.SIZE);
+            System.arraycopy(mesh, 0, vertices, part.part().ordinal() * partSize, partSize);
+        }
+        return vertices;
     }
 
     @Override
     public void close() {
         if (closed) return;
         closed = true;
+        glDeleteTextures(texture);
         glDeleteBuffers(vbo);
         glDeleteVertexArrays(vao);
         glDeleteProgram(program);
