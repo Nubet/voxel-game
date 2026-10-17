@@ -17,11 +17,15 @@ class JunglePlantTest {
         var pos = new ChunkPos(-1, 2, -1);
         world.putChunk(pos, new Chunk());
         for (int id = 150; id <= 165; id++) world.setBlock(new BlockPos(-16 + (id - 150), 34, -14), (byte) id, 64);
+        world.setBlock(new BlockPos(-16, 35, -14), BlockId.PUMPKIN, 64);
         var path = temporary.resolve("jungle.vxl");
         TestWorlds.save(path, 42, 37, world);
         var restored = new World();
         TestWorlds.restore(restored, TestWorlds.load(path), 64);
         restored.putChunk(pos, new Chunk());
+        assertEquals(
+                Byte.toUnsignedInt(BlockId.PUMPKIN),
+                restored.getBlock(new BlockPos(-16, 35, -14)).orElseThrow());
         for (int id = 150; id <= 165; id++)
             assertEquals(
                     id,

@@ -63,7 +63,32 @@ final class JungleDecorations {
                 int wx = ox + x, wz = oz + z, y = columns.surfaceHeight(index) + 1;
                 long roll = hash(seed ^ 0xA4093822299F31D0L, wx, wz);
                 double patch = jungle.understory(wx, wz);
-                if (patch > .02 && Math.floorMod(roll, 27) == 0) {
+                long cellX = Math.floorDiv(wx, 32), cellZ = Math.floorDiv(wz, 32);
+                long fruit = hash(seed ^ 0x243F6A8885A308D3L, cellX, cellZ);
+                long dx = wx - (cellX * 32 + 2 + JungleTrees.bounded(fruit, 1, 28));
+                long dz = wz - (cellZ * 32 + 2 + JungleTrees.bounded(fruit, 2, 28));
+                int count = 1 + JungleTrees.bounded(fruit, 3, 3);
+                if (Math.floorMod(fruit, 8) == 0
+                        && ((dx == 0 && dz == 0)
+                                || (count > 1 && dx == 1 && dz == 0)
+                                || (count > 2 && dx == 0 && dz == 1)))
+                    JungleVegetation.place(
+                            wx,
+                            y,
+                            wz,
+                            JungleTrees.bounded(fruit, 4, 3) == 0 ? BlockId.PUMPKIN : BlockId.MELON,
+                            ox,
+                            oy,
+                            oz,
+                            blocks);
+                else if (Math.floorMod(roll, 1024) == 0) {
+                    byte flower = switch (JungleTrees.bounded(roll, 5, 3)) {
+                        case 0 -> BlockId.DANDELION_YELLOW;
+                        case 1 -> BlockId.DANDELION_WHITE;
+                        default -> BlockId.POPPY;
+                    };
+                    JungleVegetation.place(wx, y, wz, flower, ox, oy, oz, blocks);
+                } else if (patch > .02 && Math.floorMod(roll, 27) == 0) {
                     boolean fern = Math.floorMod(roll, 5) != 0;
                     int localY = y - oy;
                     if (localY >= 0 && localY < 16 && blocks[(localY * 16 + z) * 16 + x] != BlockId.AIR) continue;
@@ -73,10 +98,7 @@ final class JungleDecorations {
                             wx, y, wz, fern ? BlockId.LARGE_FERN : BlockId.TALL_GRASS, ox, oy, oz, blocks);
                     JungleVegetation.place(
                             wx, y + 1, wz, fern ? BlockId.LARGE_FERN_TOP : BlockId.TALL_GRASS_TOP, ox, oy, oz, blocks);
-                } else if (patch > .18
-                        && Math.floorMod(hash(seed, Math.floorDiv(wx, 12), Math.floorDiv(wz, 12)), 23) == 0
-                        && Math.floorMod(roll, 5) == 0)
-                    JungleVegetation.place(wx, y, wz, BlockId.MELON, ox, oy, oz, blocks);
+                }
             }
     }
 }
