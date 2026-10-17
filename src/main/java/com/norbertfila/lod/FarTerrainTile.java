@@ -9,7 +9,7 @@ import com.norbertfila.world.BlockRegistry;
  * above it. Far terrain never feeds collision or simulation.
  *
  * <p>The heightfield represents only the topmost surface: caves, overhangs and blocks below a higher block are not
- * visible, and trees and plants are left out.
+ * visible. Planned Jungle crowns use separate geometry above this heightfield.
  */
 public final class FarTerrainTile {
     public static final int SIZE = 64;
@@ -31,6 +31,7 @@ public final class FarTerrainTile {
     private final byte[] tints;
     private final int minHeight;
     private final int maxHeight;
+    private final int[] canopyQuads;
 
     /** Takes ownership of the arrays, indexed {@code cellZ * cells + cellX}. */
     FarTerrainTile(
@@ -84,6 +85,32 @@ public final class FarTerrainTile {
             byte[] tints,
             byte[] wallMaterials,
             WallColumn[] wallColumns) {
+        this(
+                tileX,
+                tileZ,
+                sampleStep,
+                editRevision,
+                heights,
+                materials,
+                waterTops,
+                tints,
+                wallMaterials,
+                wallColumns,
+                new int[0]);
+    }
+
+    FarTerrainTile(
+            int tileX,
+            int tileZ,
+            int sampleStep,
+            long editRevision,
+            int[] heights,
+            byte[] materials,
+            int[] waterTops,
+            byte[] tints,
+            byte[] wallMaterials,
+            WallColumn[] wallColumns,
+            int[] canopyQuads) {
         if (!validStep(sampleStep)) throw new IllegalArgumentException("Sample step must divide the tile size");
         int cells = SIZE / sampleStep;
         if (heights.length != cells * cells || materials.length != heights.length || waterTops.length != heights.length)
@@ -102,6 +129,7 @@ public final class FarTerrainTile {
         this.waterTops = waterTops;
         if (tints.length != heights.length) throw new IllegalArgumentException("Invalid tint grid");
         this.tints = tints;
+        this.canopyQuads = canopyQuads;
         int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
         for (int index = 0; index < heights.length; index++) {
             int top = Math.max(heights[index], waterTops[index]);
@@ -109,8 +137,16 @@ public final class FarTerrainTile {
             min = Math.min(min, top);
             max = Math.max(max, top);
         }
+        for (int i = 0; i < canopyQuads.length; i += 3) {
+            min = Math.min(min, canopyQuads[i + 1]);
+            max = Math.max(max, canopyQuads[i + 1] + (canopyQuads[i + 2] & 0xffff) + 1);
+        }
         minHeight = min;
         maxHeight = max;
+    }
+
+    int[] canopyQuads() {
+        return canopyQuads;
     }
 
     public static boolean validStep(int sampleStep) {
@@ -186,7 +222,8 @@ public final class FarTerrainTile {
     }
 
     public long estimatedBytes() {
-        long bytes = (long) heights.length * (2 * Integer.BYTES + 3 + Long.BYTES);
+        long bytes = (long) heights.length * (2 * Integer.BYTES + 3 + Long.BYTES)
+                + (long) canopyQuads.length * Integer.BYTES;
         AreaEdits edits = null;
         for (var column : wallColumns) {
             if (column == null) continue;

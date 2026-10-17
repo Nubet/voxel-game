@@ -27,7 +27,11 @@ final class JungleTrees {
             branches.add(new TreePlan.Branch(x, by - 2, z, bx, by, bz));
             crowns.add(new TreePlan.Crown(bx, by + 1, bz, giant ? 3 : 4, 2, hash(seed, i, 9)));
         }
-        return new TreePlan(branches, crowns, BlockId.JUNGLE_LOG, BlockId.JUNGLE_LEAVES);
+        return new TreePlan(
+                branches,
+                crowns,
+                mahogany ? BlockId.MAHOGANY_LOG : BlockId.JUNGLE_LOG,
+                mahogany ? BlockId.MAHOGANY_LEAVES : BlockId.JUNGLE_LEAVES);
     }
 
     static int bounded(long seed, int index, int bound) {

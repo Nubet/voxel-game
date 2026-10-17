@@ -30,6 +30,7 @@ public final class FarTileMesher {
         IntList records = new IntList();
         tops(tile, records, false, false);
         walls(tile, border, records, false);
+        for (int value : tile.canopyQuads()) records.add(value);
         int solid = records.size() / QuadMesh.Format.FAR.ints();
         tops(tile, records, false, true);
         walls(tile, border, records, true);
@@ -233,12 +234,11 @@ public final class FarTileMesher {
         };
     }
 
-    private static void add(
-            IntList records, int x, int y, int z, int face, boolean water, int width, int height, int texture) {
+    static void add(IntList records, int x, int y, int z, int face, boolean water, int width, int height, int texture) {
         add(records, x, y, z, face, water, width, height, texture, false);
     }
 
-    private static void add(
+    static void add(
             IntList records,
             int x,
             int y,

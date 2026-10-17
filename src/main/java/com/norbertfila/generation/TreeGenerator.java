@@ -24,6 +24,7 @@ final class TreeGenerator {
     private final Noise2D forestDensity;
     private final GroundSampler terrain;
     private final BiomeRegistry biomes;
+    private final JungleVegetation jungle;
 
     TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain) {
         this(seed, forestDensity, terrain, BiomeRegistry.defaults());
@@ -35,6 +36,7 @@ final class TreeGenerator {
 
     TreeGenerator(long seed, Noise2D forestDensity, GroundSampler terrain, BiomeRegistry biomes) {
         this.seed = seed;
+        jungle = new JungleVegetation(seed);
         this.forestDensity = forestDensity;
         this.terrain = terrain;
         this.biomes = biomes;
@@ -99,7 +101,10 @@ final class TreeGenerator {
         TreeType type = biomes.profile(sample.biome()).trees().type();
         if (type == TreeType.JUNGLE) {
             int roll = JungleTrees.bounded(shapeSeed, 17, 100);
-            type = roll < 8 ? TreeType.GIANT_JUNGLE : TreeType.JUNGLE;
+            double mahogany = jungle.mahogany(x, z);
+            type = roll < 8 - 5 * mahogany
+                    ? TreeType.GIANT_JUNGLE
+                    : JungleTrees.bounded(shapeSeed, 18, 1000) < 900 * mahogany ? TreeType.MAHOGANY : TreeType.JUNGLE;
             if (x < Integer.MIN_VALUE + 10
                     || x > Integer.MAX_VALUE - 10
                     || z < Integer.MIN_VALUE + 10
@@ -258,14 +263,16 @@ final class TreeGenerator {
         return block == BlockId.LOG
                 || block == BlockId.PINE_LOG
                 || block == BlockId.SWAMP_LOG
-                || block == BlockId.JUNGLE_LOG;
+                || block == BlockId.JUNGLE_LOG
+                || block == BlockId.MAHOGANY_LOG;
     }
 
     private static boolean isLeaves(byte block) {
         return block == BlockId.LEAVES
                 || block == BlockId.PINE_NEEDLES
                 || block == BlockId.SWAMP_LEAVES
-                || block == BlockId.JUNGLE_LEAVES;
+                || block == BlockId.JUNGLE_LEAVES
+                || block == BlockId.MAHOGANY_LEAVES;
     }
 
     private static byte log(Tree tree) {

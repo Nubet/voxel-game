@@ -51,7 +51,7 @@ void main() {
         vec4 overlay = texture(uBlockTextures, vec3(uv, 49.0));
         texel.rgb = mix(texel.rgb, overlay.rgb * biomeTint(false), overlay.a);
     }
-    if (uRenderLayer == 1 && texel.a < 0.5) discard;
+    if (uRenderLayer != 2 && texel.a < 0.5) discard;
     fragColor = vec4(texel.rgb * vShade, uRenderLayer == 2 ? 0.55 : 1.0);
     if (uDistanceFogRange.y > 0.0) {
         float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));

@@ -10,12 +10,18 @@ import java.util.function.BiPredicate;
 final class JungleVegetation {
     private final Noise2D understory;
     private final Noise2D soil;
+    private final Noise2D mahogany;
     private final long seed;
 
     JungleVegetation(long seed) {
         this.seed = seed;
         understory = new PerlinNoise(seed ^ 0x517CC1B727220A95L);
         soil = new PerlinNoise(seed ^ 0x6C8E9CF570932BD5L);
+        mahogany = new PerlinNoise(seed ^ 0x082EFA98EC4E6C89L);
+    }
+
+    double mahogany(int x, int z) {
+        return com.norbertfila.generation.biome.JungleRules.smooth(mahogany.sample(x / 210d, z / 210d), -.04, .16);
     }
 
     double understory(int x, int z) {
@@ -28,7 +34,7 @@ final class JungleVegetation {
         double patch = soil.sample(x / 22d, z / 22d);
         if (ground.surfaceHeight() <= (long) ground.waterLevel() + 5 && patch < -.18) return BlockId.MUD;
         boolean shaded = TreeGenerator.canopyHeight(trees, x, z) != Long.MIN_VALUE;
-        return shaded && patch > .12 ? BlockId.PODZOL : BlockId.GRASS;
+        return shaded && patch > .12 - .12 * mahogany(x, z) ? BlockId.PODZOL : BlockId.GRASS;
     }
 
     void generate(
@@ -42,7 +48,8 @@ final class JungleVegetation {
                         || wz < Integer.MIN_VALUE + 3
                         || wz > Integer.MAX_VALUE - 3) continue;
                 int x = (int) wx, z = (int) wz;
-                if (understory(x, z) < .035 || Math.floorMod(hash(seed ^ 71, cx, cz), 4) == 0) continue;
+                if (understory(x, z) < .035 + .07 * mahogany(x, z) || Math.floorMod(hash(seed ^ 71, cx, cz), 4) == 0)
+                    continue;
                 var ground = terrain.sample(x, z);
                 int height = ground.surfaceHeight();
                 if (ground.biome() != BiomeType.JUNGLE

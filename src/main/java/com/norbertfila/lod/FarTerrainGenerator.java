@@ -85,7 +85,8 @@ public final class FarTerrainGenerator {
                 waterTops,
                 tints,
                 wallMaterials,
-                wallColumns);
+                wallColumns,
+                FarCanopyMesher.mesh(source, originX, originZ, sampleStep, edits));
     }
 
     /**
