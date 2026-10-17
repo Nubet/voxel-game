@@ -251,3 +251,13 @@ tasks.register<JavaExec>("smokeBadlands") {
     args(layout.buildDirectory.dir("badlands-smoke").get().asFile.absolutePath)
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
+
+tasks.register<JavaExec>("smokeJungle") {
+    group = "verification"
+    description = "Renders repeatable forest ground/canopy scenes and records generation and mesh costs."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.JungleSmoke")
+    args(layout.buildDirectory.dir("jungle-smoke/${findProperty("label") ?: "current"}").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
