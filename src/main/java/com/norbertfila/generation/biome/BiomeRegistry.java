@@ -47,18 +47,6 @@ public final class BiomeRegistry {
                                 SurfaceMaterial.SAND,
                                 SurfaceMaterial.SAND,
                                 Set.of(PlantType.CACTUS, PlantType.DEAD_BUSH)),
-                BiomeType.TAIGA,
-                        profile(
-                                .55f,
-                                .65f,
-                                .05f,
-                                SurfaceMaterial.PODZOL,
-                                SurfaceMaterial.COARSE_DIRT,
-                                Set.of(
-                                        PlantType.SHORT_GRASS,
-                                        PlantType.FERN,
-                                        PlantType.BERRY_BUSH,
-                                        PlantType.ALPINE_GRASS)),
                 BiomeType.SWAMP,
                         profile(
                                 .35f,
@@ -66,7 +54,8 @@ public final class BiomeRegistry {
                                 .2f,
                                 SurfaceMaterial.MUD,
                                 SurfaceMaterial.DIRT,
-                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.REED, PlantType.MUSHROOM)),
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.REED, PlantType.MUSHROOM),
+                                TreeType.SWAMP),
                 BiomeType.BADLANDS,
                         profile(0, .05f, 0, SurfaceMaterial.GRAVEL, SurfaceMaterial.STONE, Set.of(PlantType.DEAD_BUSH)),
                 BiomeType.ALPINE,
@@ -81,15 +70,6 @@ public final class BiomeRegistry {
                 BiomeType.LAKE, profile(0, 0, 0, SurfaceMaterial.MUD, SurfaceMaterial.DIRT, Set.of()),
                 BiomeType.RIVER, profile(0, 0, 0, SurfaceMaterial.SAND, SurfaceMaterial.SAND, Set.of())));
         profiles.put(BiomeType.STONY_SLOPES, profile(0, 0, 0, SurfaceMaterial.STONE, SurfaceMaterial.STONE, Set.of()));
-        profiles.put(
-                BiomeType.SNOWY_TAIGA,
-                profile(
-                        .45f,
-                        .08f,
-                        0,
-                        SurfaceMaterial.PODZOL,
-                        SurfaceMaterial.DIRT,
-                        Set.of(PlantType.FERN, PlantType.SHORT_GRASS)));
         profiles.put(
                 BiomeType.TAIGA,
                 new BiomeProfile(
@@ -118,11 +98,17 @@ public final class BiomeRegistry {
             SurfaceMaterial surface,
             SurfaceMaterial subsurface,
             Set<PlantType> plants) {
-        TreeType treeType = switch (surface) {
-            case PODZOL -> TreeType.CONIFER;
-            case MUD -> TreeType.SWAMP;
-            default -> TreeType.BROADLEAF;
-        };
+        return profile(trees, grass, flowers, surface, subsurface, plants, TreeType.BROADLEAF);
+    }
+
+    private static BiomeProfile profile(
+            float trees,
+            float grass,
+            float flowers,
+            SurfaceMaterial surface,
+            SurfaceMaterial subsurface,
+            Set<PlantType> plants,
+            TreeType treeType) {
         return new BiomeProfile(
                 new SurfaceProfile(surface, subsurface),
                 new VegetationProfile(grass, flowers, plants),

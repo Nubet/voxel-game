@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public record VegetationProfile(
-        float grassDensity, float flowerDensity, Set<PlantType> plants, float fernFraction, float specialDensity) {
+        float grassDensity, float flowerDensity, Set<PlantType> plants, float fernFraction, float mushroomDensity) {
     public VegetationProfile(float grassDensity, float flowerDensity, Set<PlantType> plants) {
         this(grassDensity, flowerDensity, plants, .2f, 1);
     }
@@ -13,7 +13,7 @@ public record VegetationProfile(
         requireDensity(grassDensity, "grassDensity");
         requireDensity(flowerDensity, "flowerDensity");
         requireDensity(fernFraction, "fernFraction");
-        requireDensity(specialDensity, "specialDensity");
+        requireDensity(mushroomDensity, "mushroomDensity");
         Objects.requireNonNull(plants);
         plants = Set.copyOf(plants);
     }

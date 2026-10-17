@@ -85,7 +85,7 @@ public final class VisibleFaceMesher implements ChunkMesher {
             case BlockId.SAND -> SAND;
             case BlockId.GRAVEL -> GRAVEL;
             case BlockId.BEDROCK -> BEDROCK;
-            case BlockId.SNOW -> SNOW;
+            case BlockId.SNOW, BlockId.SNOW_LAYER -> SNOW;
             case BlockId.LOG -> LOG;
             case BlockId.LEAVES -> LEAVES;
             case BlockId.PLANKS -> PLANKS;

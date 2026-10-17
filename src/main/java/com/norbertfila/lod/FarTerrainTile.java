@@ -22,6 +22,7 @@ public final class FarTerrainTile {
     private final long editRevision;
     private final int[] heights;
     private final byte[] materials;
+    private final byte[] wallMaterials;
     private final int[] waterTops;
     private final byte[] tints;
     private final int minHeight;
@@ -42,6 +43,19 @@ public final class FarTerrainTile {
             byte[] materials,
             int[] waterTops,
             byte[] tints) {
+        this(tileX, tileZ, sampleStep, editRevision, heights, materials, waterTops, tints, materials);
+    }
+
+    FarTerrainTile(
+            int tileX,
+            int tileZ,
+            int sampleStep,
+            long editRevision,
+            int[] heights,
+            byte[] materials,
+            int[] waterTops,
+            byte[] tints,
+            byte[] wallMaterials) {
         if (!validStep(sampleStep)) throw new IllegalArgumentException("Sample step must divide the tile size");
         int cells = SIZE / sampleStep;
         if (heights.length != cells * cells || materials.length != heights.length || waterTops.length != heights.length)
@@ -53,6 +67,8 @@ public final class FarTerrainTile {
         this.editRevision = editRevision;
         this.heights = heights;
         this.materials = materials;
+        if (wallMaterials.length != materials.length) throw new IllegalArgumentException("Invalid wall material grid");
+        this.wallMaterials = wallMaterials;
         this.waterTops = waterTops;
         if (tints.length != heights.length) throw new IllegalArgumentException("Invalid tint grid");
         this.tints = tints;
@@ -108,6 +124,10 @@ public final class FarTerrainTile {
         return materials[index(cellX, cellZ)];
     }
 
+    public byte wallMaterialAt(int x, int z) {
+        return wallMaterials[index(x, z)];
+    }
+
     public int waterTopAt(int cellX, int cellZ) {
         return waterTops[index(cellX, cellZ)];
     }
@@ -126,7 +146,7 @@ public final class FarTerrainTile {
     }
 
     public long estimatedBytes() {
-        return (long) heights.length * (2 * Integer.BYTES + 2);
+        return (long) heights.length * (2 * Integer.BYTES + 3);
     }
 
     private int index(int cellX, int cellZ) {

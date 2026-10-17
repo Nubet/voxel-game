@@ -16,6 +16,24 @@ class TexturedGreedyMesherTest {
     private final GreedyMesher mesher = new GreedyMesher();
 
     @Test
+    void grassBelowThinSnowUsesSnowySidesWithoutChangingItsBlockIdentity() {
+        var chunk = new Chunk();
+        chunk.set(3, 4, 5, BlockId.GRASS);
+        chunk.set(3, 5, 5, BlockId.SNOW_LAYER);
+        var snapshot = chunk.snapshot();
+        var mesh = GreedyMesher.meshSolids(snapshot, BlockNeighborhood.centerOnly(snapshot));
+        int snowySides = 0;
+        for (int i = 0; i < mesh.records().length; i += 2) {
+            int material = mesh.records()[i + 1];
+            if ((material & 255) != BlockRegistry.SNOWY_GRASS_SIDE_TEXTURE) continue;
+            assertEquals(BlockId.GRASS, (material >>> 16) & 255);
+            assertEquals(0, (material >>> 8) & 31);
+            snowySides++;
+        }
+        assertEquals(4, snowySides);
+    }
+
+    @Test
     void singleBlockCarriesTheRegistryTextureForEachFaceAndKeepsBaselinePositions() {
         Chunk chunk = new Chunk();
         chunk.set(3, 4, 5, BlockId.GRASS);

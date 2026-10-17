@@ -100,7 +100,11 @@ public final class GreedyMesher implements ChunkMesher {
                     int tint = com.norbertfila.generation.biome.BiomeTint.tintedTexture(TEXTURE[id][face])
                             ? scratch.snapshot.tintIndex(cell[0], cell[2])
                             : 0;
-                    mask[v * S + u] = visible ? id | tint << 8 : 0;
+                    boolean snowySide = block == BlockId.GRASS
+                            && face != 2
+                            && face != 3
+                            && grid[index + P * P] == BlockId.SNOW_LAYER;
+                    mask[v * S + u] = visible ? id | tint << 8 | (snowySide ? 1 << 13 : 0) : 0;
                 }
             for (int v = 0; v < S; v++)
                 for (int u = 0; u < S; u++) {
@@ -122,7 +126,7 @@ public final class GreedyMesher implements ChunkMesher {
                     for (int row = v; row < v + height; row++)
                         for (int column = u; column < u + width; column++) mask[row * S + column] = BlockId.AIR;
                     cell(face, depth, u, v, cell);
-                    emitQuad(scratch, face, block, width, height, material >>> 8);
+                    emitQuad(scratch, face, block, width, height, (material >>> 8) & 31, (material & (1 << 13)) != 0);
                 }
         }
     }
@@ -142,7 +146,8 @@ public final class GreedyMesher implements ChunkMesher {
         return true;
     }
 
-    private static void emitQuad(Scratch scratch, int face, byte block, int width, int height, int tint) {
+    private static void emitQuad(
+            Scratch scratch, int face, byte block, int width, int height, int tint, boolean snowySide) {
         int id = Byte.toUnsignedInt(block);
         IntList out = scratch.layer(LAYER[id]);
         int[] cell = scratch.cell;
@@ -150,7 +155,8 @@ public final class GreedyMesher implements ChunkMesher {
         out.add(QuadCodec.solidPosition(
                 cell[0] + corner[0], cell[1] + corner[1], cell[2] + corner[2], face, width, height, false));
         int top = Math.round(BlockRegistry.DEFAULT.definition(block).model().maxY() * 8) % 8;
-        out.add(QuadCodec.solidMaterial(TEXTURE[id][face] | tint << 8, id) | top << 24);
+        int texture = snowySide ? BlockRegistry.SNOWY_GRASS_SIDE_TEXTURE : TEXTURE[id][face] | tint << 8;
+        out.add(QuadCodec.solidMaterial(texture, id) | top << 24);
     }
 
     private static void appendCrossPlants(Scratch scratch) {
