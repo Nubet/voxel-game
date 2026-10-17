@@ -21,16 +21,22 @@ public final class CuboidMesh {
 
     // Interleaved XYZ/UV, outward CCW triangles; UV origin is the image's top left (no image flip).
     public static float[] vertices(ModelCuboid box, UvOrigin origin, int textureWidth, int textureHeight) {
+        return vertices(box, origin, textureWidth, textureHeight, 0);
+    }
+
+    public static float[] vertices(
+            ModelCuboid box, UvOrigin origin, int textureWidth, int textureHeight, float inflation) {
         Objects.requireNonNull(box);
         Objects.requireNonNull(origin);
+        if (!Float.isFinite(inflation) || inflation < 0) throw new IllegalArgumentException("Invalid cuboid inflation");
         float w = box.width(), h = box.height(), d = box.depth();
         if (textureWidth <= 0
                 || textureHeight <= 0
                 || origin.u() + 2 * (w + d) > textureWidth
                 || origin.v() + d + h > textureHeight)
             throw new IllegalArgumentException("Cuboid UV net exceeds texture bounds");
-        float x = box.x(), y = box.y(), z = box.z();
-        float X = x + w, Y = y + h, Z = z + d;
+        float x = box.x() - inflation, y = box.y() - inflation, z = box.z() - inflation;
+        float X = box.x() + w + inflation, Y = box.y() + h + inflation, Z = box.z() + d + inflation;
         float[][] corners = {
             {X, Y, z, x, Y, z, x, y, z, X, y, z},
             {x, Y, Z, X, Y, Z, X, y, Z, x, y, Z},

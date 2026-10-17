@@ -10,6 +10,16 @@ public final class PlayerRenderStateExtractor {
 
     public PlayerRenderState extract(
             PlayerController player, double yaw, double pitch, WaterContact.Result water, boolean frozen) {
+        return extract(player, yaw, pitch, water, frozen, PlayerAppearance.DEFAULT);
+    }
+
+    public PlayerRenderState extract(
+            PlayerController player,
+            double yaw,
+            double pitch,
+            WaterContact.Result water,
+            boolean frozen,
+            PlayerAppearance appearance) {
         var state = player.state();
         var current = new PlayerRenderState.Sample(state.position(), state.eyeHeight(), yaw, pitch);
         boolean reset = last == null || resetRevision != player.interpolationResetRevision() || frozen;
@@ -24,7 +34,7 @@ public final class PlayerRenderStateExtractor {
         last = current;
         resetRevision = player.interpolationResetRevision();
         return new PlayerRenderState(
-                PlayerAppearance.DEFAULT,
+                appearance,
                 previous,
                 current,
                 state.velocityX(),
