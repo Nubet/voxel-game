@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.PlayerSkin;
+import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.model.CuboidMesh;
@@ -17,7 +18,7 @@ import org.lwjgl.system.MemoryStack;
 public final class PlayerRenderer implements AutoCloseable {
     private static final int VERTICES_PER_MODEL =
             (PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * CuboidMesh.VERTEX_COUNT;
-    private final int program, vao, vbo, vp, model, outerLayer, worldShading, fogRange, underwater;
+    private final int program, vao, vbo, vp, model, outerLayer, worldShading, fogRange, underwater, opacity;
     private final SkinManager skins;
     private boolean closed;
 
@@ -32,6 +33,7 @@ public final class PlayerRenderer implements AutoCloseable {
             worldShading = ShaderPrograms.uniform(createdProgram, "uWorldShading");
             fogRange = ShaderPrograms.uniform(createdProgram, "uDistanceFogRange");
             underwater = ShaderPrograms.uniform(createdProgram, "uUnderwater");
+            opacity = ShaderPrograms.uniform(createdProgram, "uOpacity");
             glProgramUniform3f(
                     createdProgram,
                     ShaderPrograms.uniform(createdProgram, "uSkyColor"),
@@ -100,7 +102,14 @@ public final class PlayerRenderer implements AutoCloseable {
         // Encloses fully rotated limbs, swimming, crouching and inflated outer layers.
         if (!new FrustumIntersection(viewProjection).testAab(x - 2, y - 2, z - 2, x + 2, y + 3, z + 2)) return false;
         var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
-        render(viewProjection, transform, pose, state.appearance(), fog, water);
+        render(
+                viewProjection,
+                transform,
+                pose,
+                state.appearance(),
+                fog,
+                water,
+                state.mode() == PlayerController.Mode.SPECTATOR);
         return true;
     }
 
@@ -119,6 +128,17 @@ public final class PlayerRenderer implements AutoCloseable {
             PlayerAppearance appearance,
             DistanceFog fog,
             float water) {
+        render(viewProjection, modelToWorld, pose, appearance, fog, water, false);
+    }
+
+    private void render(
+            Matrix4f viewProjection,
+            Matrix4f modelToWorld,
+            PlayerPose pose,
+            PlayerAppearance appearance,
+            DistanceFog fog,
+            float water,
+            boolean spectator) {
         if (closed) throw new IllegalStateException("Player renderer is closed");
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
@@ -129,6 +149,12 @@ public final class PlayerRenderer implements AutoCloseable {
         boolean depth = glIsEnabled(GL_DEPTH_TEST), mask = glGetBoolean(GL_DEPTH_WRITEMASK);
         boolean blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
         int depthFunction = glGetInteger(GL_DEPTH_FUNC);
+        int cullMode = glGetInteger(GL_CULL_FACE_MODE);
+        int blendSourceRgb = glGetInteger(GL_BLEND_SRC_RGB), blendDestinationRgb = glGetInteger(GL_BLEND_DST_RGB);
+        int blendSourceAlpha = glGetInteger(GL_BLEND_SRC_ALPHA),
+                blendDestinationAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
+        int blendEquationRgb = glGetInteger(GL_BLEND_EQUATION_RGB),
+                blendEquationAlpha = glGetInteger(GL_BLEND_EQUATION_ALPHA);
         int previousProgram = glGetInteger(GL_CURRENT_PROGRAM), previousVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
         int previousTexture = glGetIntegeri(GL_TEXTURE_BINDING_2D, 0);
         int previousSampler = glGetIntegeri(GL_SAMPLER_BINDING, 0);
@@ -136,10 +162,18 @@ public final class PlayerRenderer implements AutoCloseable {
         try (var stack = MemoryStack.stackPush()) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
-            glDepthMask(true);
-            glDisable(GL_BLEND);
-            glDisable(GL_CULL_FACE);
+            glDepthMask(!spectator);
+            if (spectator) {
+                glEnable(GL_BLEND);
+                glBlendEquation(GL_FUNC_ADD);
+                glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+                glEnable(GL_CULL_FACE);
+            } else {
+                glDisable(GL_BLEND);
+                glDisable(GL_CULL_FACE);
+            }
             glUseProgram(program);
+            glUniform1f(opacity, spectator ? .35f : 1);
             glUniform1i(worldShading, fog == null ? 0 : 1);
             glUniform2f(fogRange, fog == null ? 0 : fog.start(), fog == null ? 0 : fog.end());
             glUniform1f(underwater, water);
@@ -153,21 +187,17 @@ public final class PlayerRenderer implements AutoCloseable {
             var worldMatrix = new Matrix4f();
             int firstVertex = appearance.model().ordinal() * VERTICES_PER_MODEL;
             for (var part : PlayerModel.parts(appearance.model())) {
+                if (spectator && part.part() != PlayerModel.Part.HEAD) continue;
                 PlayerModel.partMatrix(appearance.model(), part.part(), pose, partMatrix);
                 modelToWorld.mul(partMatrix, worldMatrix);
                 glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
-                glUniform1i(outerLayer, 0);
-                glDrawArrays(
-                        GL_TRIANGLES,
-                        firstVertex + part.part().ordinal() * CuboidMesh.VERTEX_COUNT,
-                        CuboidMesh.VERTEX_COUNT);
-                if (appearance.outerLayers().contains(part.part())) {
-                    glUniform1i(outerLayer, 1);
-                    glDrawArrays(
-                            GL_TRIANGLES,
-                            firstVertex
-                                    + (PlayerModel.PARTS.size() + part.part().ordinal()) * CuboidMesh.VERTEX_COUNT,
-                            CuboidMesh.VERTEX_COUNT);
+                boolean overlay = appearance.outerLayers().contains(part.part());
+                for (int pass = 0; pass < (spectator ? 2 : 1); pass++) {
+                    boolean backFaces = spectator && pass == 0;
+                    if (spectator) glCullFace(backFaces ? GL_FRONT : GL_BACK);
+                    if (overlay && backFaces) drawPart(firstVertex, part.part(), true);
+                    drawPart(firstVertex, part.part(), false);
+                    if (overlay && !backFaces) drawPart(firstVertex, part.part(), true);
                 }
             }
         } finally {
@@ -176,6 +206,9 @@ public final class PlayerRenderer implements AutoCloseable {
             glBindSampler(0, previousSampler);
             glBindVertexArray(previousVao);
             glUseProgram(previousProgram);
+            glCullFace(cullMode);
+            glBlendFuncSeparate(blendSourceRgb, blendDestinationRgb, blendSourceAlpha, blendDestinationAlpha);
+            glBlendEquationSeparate(blendEquationRgb, blendEquationAlpha);
             if (cull) glEnable(GL_CULL_FACE);
             else glDisable(GL_CULL_FACE);
             if (blend) glEnable(GL_BLEND);
@@ -185,6 +218,12 @@ public final class PlayerRenderer implements AutoCloseable {
             if (depth) glEnable(GL_DEPTH_TEST);
             else glDisable(GL_DEPTH_TEST);
         }
+    }
+
+    private void drawPart(int firstVertex, PlayerModel.Part part, boolean overlay) {
+        glUniform1i(outerLayer, overlay ? 1 : 0);
+        int index = part.ordinal() + (overlay ? PlayerModel.PARTS.size() : 0);
+        glDrawArrays(GL_TRIANGLES, firstVertex + index * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
     }
 
     private static float[] vertices() {
