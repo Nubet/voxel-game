@@ -50,6 +50,10 @@ public final class InventoryScreen implements Screen {
         var blocks = new ArrayList<Byte>();
         for (int id = 1; id < 256; id++)
             if (BlockId.isValid((byte) id)) {
+                if (id > Byte.toUnsignedInt(BlockId.VINE_EAST) && id <= Byte.toUnsignedInt(BlockId.VINE_NORTH)
+                        || id > Byte.toUnsignedInt(BlockId.COCOA_EAST) && id <= Byte.toUnsignedInt(BlockId.COCOA_NORTH)
+                        || id == Byte.toUnsignedInt(BlockId.TALL_GRASS_TOP)
+                        || id == Byte.toUnsignedInt(BlockId.LARGE_FERN_TOP)) continue;
                 BlockRegistry.DEFAULT.definition((byte) id);
                 blocks.add((byte) id);
             }

@@ -40,6 +40,28 @@ public final class WorldEdit {
         world.setBlock(position, value, waterState, farTileSize);
         Set<ChunkPos> dirty = new LinkedHashSet<>();
         dirty.add(chunk);
+        if (value == BlockId.TALL_GRASS || value == BlockId.LARGE_FERN) {
+            var upper = new BlockPos(position.x(), position.y() + 1, position.z());
+            if (world.getBlock(upper).isPresent())
+                dirty.addAll(
+                        setBlock(upper, value == BlockId.TALL_GRASS ? BlockId.TALL_GRASS_TOP : BlockId.LARGE_FERN_TOP)
+                                .dirtyChunks());
+        }
+        for (int[] d : new int[][] {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}}) {
+            long x = (long) position.x() + d[0], y = (long) position.y() + d[1], z = (long) position.z() + d[2];
+            if (x < Integer.MIN_VALUE
+                    || x > Integer.MAX_VALUE
+                    || y < Integer.MIN_VALUE
+                    || y > Integer.MAX_VALUE
+                    || z < Integer.MIN_VALUE
+                    || z > Integer.MAX_VALUE) continue;
+            var p = new BlockPos((int) x, (int) y, (int) z);
+            var neighbor = world.getBlock(p);
+            if (neighbor.isPresent()
+                    && PlantRules.isPlant((byte) neighbor.getAsInt())
+                    && PlantRules.unsupported(world, p))
+                dirty.addAll(setBlock(p, BlockId.AIR).dirtyChunks());
+        }
         BlockPos local = Coordinates.worldToLocal(position);
         for (ChunkPos neighbor : World.meshNeighbors(chunk)) {
             int dx = neighbor.x() - chunk.x(), dy = neighbor.y() - chunk.y(), dz = neighbor.z() - chunk.z();

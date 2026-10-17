@@ -159,7 +159,13 @@ public final class VoxelCollision {
         var model = BlockRegistry.DEFAULT
                 .definition((byte) world.getBlock(new BlockPos(x, y, z)).orElseThrow())
                 .model();
-        return new Aabb(x, y + model.minY(), z, x + 1.0, y + model.maxY(), z + 1.0);
+        return new Aabb(
+                x + model.minX(),
+                y + model.minY(),
+                z + model.minZ(),
+                x + model.maxX(),
+                y + model.maxY(),
+                z + model.maxZ());
     }
 
     private static double clipAgainst(

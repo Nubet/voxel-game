@@ -69,12 +69,22 @@ class InventoryScreenTest {
     }
 
     @Test
-    void creativeCatalogIncludesEveryBlockAndTargetsSelectedHotbarSlot() {
+    void creativeCatalogIncludesMaterialsButHidesPlantStatesAndTargetsSelectedHotbarSlot() {
         var screen = new InventoryScreen(true);
         screen.update(InventorySnapshot.EMPTY, 8, VIEWPORT);
         screen.updatePointer(false, false, 0, 0);
         var catalog = InventoryScreen.catalogBlocks();
-        for (int id = 1; id < 256; id++) assertEquals(BlockId.isValid((byte) id), catalog.contains((byte) id));
+        var hidden = java.util.Set.of(
+                BlockId.VINE_WEST,
+                BlockId.VINE_SOUTH,
+                BlockId.VINE_NORTH,
+                BlockId.COCOA_WEST,
+                BlockId.COCOA_SOUTH,
+                BlockId.COCOA_NORTH,
+                BlockId.TALL_GRASS_TOP,
+                BlockId.LARGE_FERN_TOP);
+        for (int id = 1; id < 256; id++)
+            assertEquals(BlockId.isValid((byte) id) && !hidden.contains((byte) id), catalog.contains((byte) id));
         for (int i = 0; i < catalog.size(); i++) {
             if (i > 0 && i % 27 == 0) screen.keyPress(UiKey.PAGE_DOWN);
             var box = screen.bounds(i % 27);

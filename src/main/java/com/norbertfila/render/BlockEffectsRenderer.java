@@ -15,7 +15,7 @@ import org.lwjgl.system.MemoryUtil;
 public final class BlockEffectsRenderer implements AutoCloseable {
     private final BlockTextureArray textures;
     private final int cracks, debris, vao, vbo;
-    private final int crackVP, crackOffset, crackProgress, crackHeight, debrisVP;
+    private final int crackVP, crackOffset, crackProgress, crackHeight, crackWidth, debrisVP;
     private FloatBuffer particles;
     private boolean closed;
 
@@ -29,6 +29,7 @@ public final class BlockEffectsRenderer implements AutoCloseable {
             crackOffset = ShaderPrograms.uniform(createdCracks, "uOffset");
             crackProgress = ShaderPrograms.uniform(createdCracks, "uProgress");
             crackHeight = ShaderPrograms.uniform(createdCracks, "uHeight");
+            crackWidth = ShaderPrograms.uniform(createdCracks, "uWidth");
             debrisVP = ShaderPrograms.uniform(createdDebris, "uVP");
             glProgramUniform1i(createdDebris, ShaderPrograms.uniform(createdDebris, "uBlockTextures"), 0);
             createdVao = glCreateVertexArrays();
@@ -108,15 +109,17 @@ public final class BlockEffectsRenderer implements AutoCloseable {
                 var mining = progress.orElseThrow();
                 var block = mining.block();
                 glUseProgram(cracks);
-                glUniform1f(
-                        crackHeight,
-                        com.norbertfila.world.BlockRegistry.DEFAULT
-                                .definition((byte) mining.blockId())
-                                .model()
-                                .maxY());
+                var model = com.norbertfila.world.BlockRegistry.DEFAULT
+                        .definition((byte) mining.blockId())
+                        .model();
+                glUniform1f(crackHeight, model.maxY() - model.minY());
+                glUniform2f(crackWidth, model.maxX() - model.minX(), model.maxZ() - model.minZ());
                 glUniformMatrix4fv(crackVP, false, matrix);
-                glUniform3f(crackOffset, (float) (block.x() - cameraX), (float) (block.y() - cameraY), (float)
-                        (block.z() - cameraZ));
+                glUniform3f(
+                        crackOffset,
+                        (float) (block.x() - cameraX + model.minX()),
+                        (float) (block.y() - cameraY + model.minY()),
+                        (float) (block.z() - cameraZ + model.minZ()));
                 glUniform1f(crackProgress, Math.min(10, 1 + (int) (mining.fraction() * 10)) / 10f);
                 glDrawArrays(GL_TRIANGLES, 0, 36);
             }
