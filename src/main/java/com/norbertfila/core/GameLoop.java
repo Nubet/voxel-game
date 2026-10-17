@@ -8,6 +8,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
 import com.norbertfila.interaction.BlockBreaking;
+import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.ViewDistancePreferences;
 import com.norbertfila.platform.Input;
@@ -19,6 +20,7 @@ import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
+import com.norbertfila.render.SkinManager;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
@@ -51,6 +53,16 @@ import java.util.Map;
 import java.util.Optional;
 
 public final class GameLoop {
+    private final SkinManager skins;
+
+    public GameLoop() {
+        this(null);
+    }
+
+    public GameLoop(SkinManager skins) {
+        this.skins = skins;
+    }
+
     private static final double MAX_DELTA_SECONDS = .1;
     private static final long FAR_UPLOAD_BYTES = 2L * 1024 * 1024;
     private static final long FAR_UPLOAD_NANOS = 1_000_000;
@@ -166,7 +178,11 @@ public final class GameLoop {
         boolean debugVisible = false;
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(
-                settings, new CrosshairPreferences()::save, () -> new ViewDistancePreferences().save(settings));
+                settings,
+                new CrosshairPreferences()::save,
+                () -> new ViewDistancePreferences().save(settings),
+                skins,
+                new AppearancePreferences()::save);
         PauseScreen pauseScreen = new PauseScreen(settings.translations());
         boolean settingsFromPause = false;
         input.discardTransientInput();
@@ -185,6 +201,7 @@ public final class GameLoop {
         int[] width = new int[1], height = new int[1];
         int[] windowWidth = new int[1], windowHeight = new int[1];
         while (!window.shouldClose() && !Thread.currentThread().isInterrupted()) {
+            if (skins != null) skins.update();
             profiler.beginFrame();
             screens.beginFrame();
             Screen previousScreen = screens.current();
@@ -677,6 +694,7 @@ public final class GameLoop {
             if (interrupted && stopping == null && session != null && session.state() == GameSession.State.LOADING)
                 session.cancelLoading();
             while (true) {
+                if (skins != null) skins.update();
                 if (session != null) {
                     session.poll();
                     if (session.state() == GameSession.State.MENU) return Screen.Action.NONE;

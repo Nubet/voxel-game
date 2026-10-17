@@ -4,6 +4,7 @@ import static com.norbertfila.player.visual.model.PlayerModel.Part.*;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.PlayerSkin;
+import com.norbertfila.assets.SkinLoader;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.visual.model.CuboidMesh.Face;
 import com.norbertfila.player.visual.model.PartTransform;
@@ -13,6 +14,7 @@ import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.Executors;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -25,10 +27,19 @@ public final class PlayerModelSmoke {
         Path output = Path.of(args[0]);
         Files.createDirectories(output);
         var debugSkin = directionalSkin();
-        var defaultSkin = PlayerSkin.loadDefault();
+        var defaultSkin = SkinLoader.loadDefault();
         try (Window window = new Window(SIZE, SIZE, "Player model smoke");
-                PlayerDebugRenderer renderer = new PlayerDebugRenderer(debugSkin);
-                PlayerDebugRenderer defaultRenderer = new PlayerDebugRenderer()) {
+                SkinManager skins = new SkinManager(
+                        Executors.newSingleThreadExecutor(),
+                        () -> new SkinLoader.Loaded(debugSkin, "directional", ""));
+                SkinManager defaults = new SkinManager(
+                        Executors.newSingleThreadExecutor(),
+                        () -> new SkinLoader.Loaded(defaultSkin, SkinLoader.BUNDLED_PATH, ""));
+                PlayerDebugRenderer renderer = new PlayerDebugRenderer(skins);
+                PlayerDebugRenderer defaultRenderer = new PlayerDebugRenderer(defaults)) {
+            awaitSkin(skins);
+            awaitSkin(defaults);
+            SkinManagerSmoke.checkLifecycle();
             int fbo = glCreateFramebuffers(), color = glCreateTextures(GL_TEXTURE_2D);
             int depth = glCreateRenderbuffers(), sentinelVao = glCreateVertexArrays();
             try {
@@ -104,6 +115,17 @@ public final class PlayerModelSmoke {
                 glDeleteFramebuffers(fbo);
             }
         }
+    }
+
+    static void awaitSkin(SkinManager skins) throws InterruptedException {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (skins.status().state() == SkinManager.State.LOADING && System.nanoTime() < deadline) {
+            skins.update();
+            Thread.sleep(1);
+        }
+        check(
+                skins.texture() != 0 && skins.status().state() != SkinManager.State.LOADING,
+                "Skin upload timed out or failed: " + skins.status());
     }
 
     private static void render(PlayerDebugRenderer renderer, Matrix4f vp, PlayerPose pose, int vao) {
