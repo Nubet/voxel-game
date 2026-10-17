@@ -85,16 +85,17 @@ class GreedyMesherEquivalenceTest {
     @Test
     void workersMeshConcurrentlyWithoutSharingScratch() throws Exception {
         Random random = new Random(7);
-        List<World> worlds = new ArrayList<>();
+        List<BlockNeighborhood> neighborhoods = new ArrayList<>();
         for (int index = 0; index < 32; index++) {
             World world = new World();
             world.putChunk(new ChunkPos(0, 0, 0), randomChunk(random, true));
-            worlds.add(world);
+            neighborhoods.add(world.blockNeighborhood(new ChunkPos(0, 0, 0)));
         }
         try (var workers = Executors.newFixedThreadPool(4)) {
             List<Future<?>> tasks = new ArrayList<>();
             for (int round = 0; round < 4; round++)
-                for (World world : worlds) tasks.add(workers.submit(() -> assertSame(world, new ChunkPos(0, 0, 0))));
+                for (var neighborhood : neighborhoods)
+                    tasks.add(workers.submit(() -> assertSame(neighborhood, new ChunkPos(0, 0, 0))));
             for (Future<?> task : tasks) task.get();
         }
     }
@@ -114,7 +115,10 @@ class GreedyMesherEquivalenceTest {
     }
 
     private static void assertSame(World world, ChunkPos position) {
-        var neighborhood = world.blockNeighborhood(position);
+        assertSame(world.blockNeighborhood(position), position);
+    }
+
+    private static void assertSame(BlockNeighborhood neighborhood, ChunkPos position) {
         var center = neighborhood.center();
         int x = position.x(), y = position.y(), z = position.z();
         assertMesh(

@@ -38,8 +38,13 @@ class TerrainGeneratorGoldenTest {
         try (var workers = Executors.newFixedThreadPool(4)) {
             List<Future<?>> tasks = new ArrayList<>();
             for (int index : order)
-                tasks.add(workers.submit(() ->
-                        blocks[index] = generator.generate(positions.get(index)).blocks()));
+                tasks.add(workers.submit(() -> {
+                    var pos = positions.get(index);
+                    var summary = generator.sample(pos.x() * 16, pos.z() * 16);
+                    assertEquals(summary.surfaceHeight(), generator.surfaceHeight(pos.x() * 16, pos.z() * 16));
+                    generator.tintIndex(pos.x() * 16, pos.z() * 16);
+                    blocks[index] = generator.generate(pos).blocks();
+                }));
             for (Future<?> task : tasks) task.get();
         }
         CRC32 shuffled = new CRC32();

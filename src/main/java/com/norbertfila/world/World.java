@@ -8,7 +8,14 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
 
+/** Mutable state confined to its creating thread; workers consume snapshots instead. */
 public final class World {
+    private final Thread owner = Thread.currentThread();
+
+    public void assertOwner() {
+        if (Thread.currentThread() != owner) throw new IllegalStateException("World accessed outside its owner thread");
+    }
+
     private final ChunkStorage storage;
     private final WorldChangeOverlay changes;
     private final Set<ChunkPos> requestedChunks = new HashSet<>();
@@ -33,6 +40,7 @@ public final class World {
     }
 
     public void putChunk(ChunkPos position, Chunk chunk) {
+        assertOwner();
         changes.applyTo(position, chunk);
         snapshotHolders.remove(position);
         storage.put(position, chunk);
@@ -41,14 +49,17 @@ public final class World {
     }
 
     public Chunk getChunk(ChunkPos position) {
+        assertOwner();
         return storage.get(position);
     }
 
     public boolean hasChunk(ChunkPos position) {
+        assertOwner();
         return storage.contains(position);
     }
 
     public Chunk removeChunk(ChunkPos position) {
+        assertOwner();
         requestedChunks.remove(Objects.requireNonNull(position));
         snapshotHolders.remove(position);
         Chunk removed = storage.remove(position);
@@ -82,10 +93,12 @@ public final class World {
     }
 
     public int residentCount() {
+        assertOwner();
         return storage.size();
     }
 
     public OptionalInt getBlock(BlockPos worldPosition) {
+        assertOwner();
         Objects.requireNonNull(worldPosition);
         OptionalInt changed = changes.get(worldPosition);
         if (changed.isPresent()) return changed;
@@ -101,6 +114,7 @@ public final class World {
     }
 
     public OptionalInt getWaterState(BlockPos worldPosition) {
+        assertOwner();
         Objects.requireNonNull(worldPosition);
         OptionalInt changed = changes.getWaterState(worldPosition);
         if (changed.isPresent()) return changed;
@@ -115,6 +129,7 @@ public final class World {
     }
 
     public OptionalInt setBlock(BlockPos worldPosition, byte value, byte waterState, int farTileSize) {
+        assertOwner();
         Objects.requireNonNull(worldPosition);
         WaterState.validate(value, waterState);
         if (farTileSize < 1) throw new IllegalArgumentException("Far tile size must be positive");
@@ -134,29 +149,35 @@ public final class World {
     }
 
     public OptionalInt removeBlockOverride(BlockPos worldPosition, int farTileSize) {
+        assertOwner();
         return changes.remove(Objects.requireNonNull(worldPosition), farTileSize);
     }
 
     public WorldChangeOverlay changes() {
+        assertOwner();
         return changes;
     }
 
     public void requestChunk(ChunkPos position) {
+        assertOwner();
         if (!storage.contains(Objects.requireNonNull(position))) {
             requestedChunks.add(position);
         }
     }
 
     public boolean isChunkRequested(ChunkPos position) {
+        assertOwner();
         return requestedChunks.contains(position);
     }
 
     public List<ChunkPos> residentPositions() {
+        assertOwner();
         return storage.positions();
     }
 
     /** Snapshots of the chunk and its resident neighbors; snapshots are shared until a chunk's content changes. */
     public BlockNeighborhood blockNeighborhood(ChunkPos position) {
+        assertOwner();
         Objects.requireNonNull(position);
         if (!storage.contains(position))
             throw new IllegalArgumentException("Center chunk is not resident: " + position);
@@ -194,12 +215,14 @@ public final class World {
 
     /** Estimated bytes of resident block data, water states and cached snapshots. */
     public long estimatedBytes() {
+        assertOwner();
         long snapshots = 0;
         for (Chunk chunk : snapshotHolders.values()) snapshots += chunk.snapshotBytes();
         return storage.estimatedBytes() + snapshots;
     }
 
     public int cachedSnapshots() {
+        assertOwner();
         return snapshotHolders.size();
     }
 }

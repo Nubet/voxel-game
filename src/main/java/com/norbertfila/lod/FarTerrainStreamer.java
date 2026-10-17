@@ -28,6 +28,12 @@ import java.util.logging.Logger;
  * replacement arrives, so changing detail never leaves a hole.
  */
 public final class FarTerrainStreamer implements AutoCloseable {
+    private final Thread owner = Thread.currentThread();
+
+    private void assertOwner() {
+        if (Thread.currentThread() != owner)
+            throw new IllegalStateException("Far streamer accessed outside its owner thread");
+    }
     /** Sample step by distance from the camera to the tile center, nearest ring first. */
     private static final int[] RING_LIMITS = {256, 512, 1024};
 
@@ -73,6 +79,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
      * draw yet. A {@code farRadiusChunks} not larger than {@code nearRadiusChunks} turns far terrain off.
      */
     public void update(double cameraBlockX, double cameraBlockZ, int nearRadiusChunks, int farRadiusChunks) {
+        assertOwner();
         int x = (int) Math.floor(cameraBlockX), z = (int) Math.floor(cameraBlockZ);
         int tileX = Math.floorDiv(x, FarTerrainTile.SIZE), tileZ = Math.floorDiv(z, FarTerrainTile.SIZE);
         int radius = farRadiusChunks > nearRadiusChunks ? farRadiusChunks * Chunk.SIZE : 0;
@@ -136,6 +143,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
 
     /** Rebuilds tiles whose edits changed; {@code tiles} come from the overlay's dirty far tiles. */
     public void markEdited(List<FarTilePos> tiles) {
+        assertOwner();
         for (FarTilePos tile : tiles) {
             if (desired.containsKey(tile)) queue.addFirst(tile);
         }
@@ -143,6 +151,7 @@ public final class FarTerrainStreamer implements AutoCloseable {
 
     /** Accepts finished tiles and starts new builds up to the in-flight bound. */
     public void process() {
+        assertOwner();
         Built built;
         while ((built = completed.poll()) != null) {
             FarTilePos key = built.key();
@@ -192,10 +201,12 @@ public final class FarTerrainStreamer implements AutoCloseable {
     }
 
     public Residency residency() {
+        assertOwner();
         return residency;
     }
 
     public Metrics metrics() {
+        assertOwner();
         return new Metrics(desired.size(), resident.size(), inFlight.size(), queue.size(), builtTiles, builtNanos);
     }
 

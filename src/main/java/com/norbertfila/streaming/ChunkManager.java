@@ -87,6 +87,7 @@ public final class ChunkManager implements AutoCloseable {
     private final Latency generationLatency = new Latency(), visibleLatency = new Latency();
 
     public Metrics metrics() {
+        world.assertOwner();
         return new Metrics(
                 generationScheduler.queuedTasks(),
                 generationScheduler.activeTasks(),
@@ -164,6 +165,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public void setChunkLifecycleListener(Consumer<ChunkPos> listener) {
+        world.assertOwner();
         chunkLifecycleListener = Objects.requireNonNull(listener);
     }
 
@@ -192,6 +194,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public UpdateResult update(ChunkPos center) {
+        world.assertOwner();
         boolean moved = viewDemand.update(center);
         if (!backlogSeeded) {
             viewDemand.requested().forEach(this::addToBacklog);
@@ -299,6 +302,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public ProcessResult processResults(int generationBudget, int meshBudget) {
+        world.assertOwner();
         if (generationBudget < 0
                 || generationBudget > RESULTS_PER_UPDATE
                 || meshBudget < 0
@@ -408,6 +412,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean markUploaded(MeshResult result) {
+        world.assertOwner();
         if (!isCurrentMesh(result)) return false;
         ChunkEntry entry = entries.get(result.position());
         if (!entry.uploaded(result.meshRevision())) return false;
@@ -421,6 +426,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean rejectUpload(MeshResult result) {
+        world.assertOwner();
         if (!matchesPendingUpload(result)) return false;
         ChunkEntry entry = entries.get(result.position());
         if (!entry.meshFailed()) return false;
@@ -430,6 +436,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean isCurrentMesh(MeshResult result) {
+        world.assertOwner();
         if (!matchesPendingUpload(result)) return false;
         Chunk chunk = world.getChunk(result.position());
         return chunk != null
@@ -451,10 +458,12 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean readyForPlayer(ChunkPos position) {
+        world.assertOwner();
         return world.hasChunk(Objects.requireNonNull(position));
     }
 
     public boolean ensureCollisionChunks(List<ChunkPos> required) {
+        world.assertOwner();
         if (required.size() > 512) throw new IllegalArgumentException("Collision demand exceeds chunk budget");
         Set<ChunkPos> next = Set.copyOf(required);
         if (!next.equals(collisionChunks)) {
@@ -504,6 +513,7 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public boolean setRenderDistance(int radius) {
+        world.assertOwner();
         if (radius < 0) throw new IllegalArgumentException("Render distance must not be negative");
         boolean changed =
                 viewDemand.configure(radius, viewDemand.minChunkY(), viewDemand.maxChunkY(), viewDemand.shape());
@@ -550,6 +560,7 @@ public final class ChunkManager implements AutoCloseable {
      * draws them. The same instance is returned until coverage or the center changes.
      */
     public Coverage coverage() {
+        world.assertOwner();
         ChunkPos center = viewDemand.center();
         int radius = hysteresisRadius;
         int minX = center.x() - radius, minZ = center.z() - radius, size = 2 * radius + 1;
@@ -585,6 +596,7 @@ public final class ChunkManager implements AutoCloseable {
 
     /** The resident chunks and their generation tokens; the same instance is returned until residency changes. */
     public Residency residency() {
+        world.assertOwner();
         if (residency.revision() != residencyRevision) {
             Map<ChunkPos, Long> tokens = new HashMap<>();
             entries.forEach((position, entry) -> {
@@ -608,11 +620,13 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     public void requestRemesh(List<ChunkPos> dirtyChunks) {
+        world.assertOwner();
         requestRemesh(dirtyChunks, ChunkMesh.ALL);
     }
 
     /** Rebuilds only water surfaces, for changes that alter water levels but not block types. */
     public void requestWaterRemesh(List<ChunkPos> dirtyChunks) {
+        world.assertOwner();
         requestRemesh(dirtyChunks, ChunkMesh.WATER);
     }
 
