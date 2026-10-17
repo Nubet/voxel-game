@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Random;
 
 public final class BadlandsSurface {
+    public static final int TERRACOTTA_DEPTH = 48;
     private static final int BAND_COUNT = 192;
     private final byte[] bands = new byte[BAND_COUNT];
     private final Noise2D offsetNoise;
@@ -53,6 +54,19 @@ public final class BadlandsSurface {
 
         public byte bandAt(int worldY) {
             return surface.bandAt((long) worldY + offset);
+        }
+
+        public byte surfaceAt(int height, int seaLevel) {
+            return height >= seaLevel && (long) height <= (long) seaLevel + 32 ? BlockId.RED_SAND : bandAt(height);
+        }
+
+        public byte materialAt(int worldY, int surfaceHeight, byte topMaterial) {
+            long depth = (long) surfaceHeight - worldY;
+            if (depth < 0) throw new IllegalArgumentException("Badlands material requested above surface");
+            if (depth == 0) return topMaterial;
+            if (depth > TERRACOTTA_DEPTH) return BlockId.STONE;
+            if (topMaterial == BlockId.RED_SAND && depth <= 3) return BlockId.TERRACOTTA_ORANGE;
+            return bandAt(worldY);
         }
     }
 }
