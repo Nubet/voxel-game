@@ -3,8 +3,11 @@ package com.norbertfila.render;
 import static com.norbertfila.player.visual.model.PlayerModel.Part.*;
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.assets.PlayerSkin;
 import com.norbertfila.platform.Window;
+import com.norbertfila.player.visual.model.CuboidMesh.Face;
 import com.norbertfila.player.visual.model.PartTransform;
+import com.norbertfila.player.visual.model.PlayerModel;
 import com.norbertfila.player.visual.model.PlayerPose;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
@@ -12,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
 
 public final class PlayerModelSmoke {
@@ -20,8 +24,11 @@ public final class PlayerModelSmoke {
     public static void main(String[] args) throws Exception {
         Path output = Path.of(args[0]);
         Files.createDirectories(output);
+        var debugSkin = directionalSkin();
+        var defaultSkin = PlayerSkin.loadDefault();
         try (Window window = new Window(SIZE, SIZE, "Player model smoke");
-                PlayerDebugRenderer renderer = new PlayerDebugRenderer()) {
+                PlayerDebugRenderer renderer = new PlayerDebugRenderer(debugSkin);
+                PlayerDebugRenderer defaultRenderer = new PlayerDebugRenderer()) {
             int fbo = glCreateFramebuffers(), color = glCreateTextures(GL_TEXTURE_2D);
             int depth = glCreateRenderbuffers(), sentinelVao = glCreateVertexArrays();
             try {
@@ -32,12 +39,20 @@ public final class PlayerModelSmoke {
                 check(glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE, "Incomplete FBO");
                 glBindFramebuffer(GL_FRAMEBUFFER, fbo);
                 glViewport(0, 0, SIZE, SIZE);
+                for (var face : Face.values()) {
+                    checkFace(renderer, debugSkin, face, sentinelVao, output.resolve("directional-" + face + ".png"));
+                    checkFace(
+                            defaultRenderer,
+                            defaultSkin,
+                            face,
+                            sentinelVao,
+                            output.resolve("default-" + face + ".png"));
+                }
                 Matrix4f front =
                         new Matrix4f().ortho(-1.3f, 1.3f, -1.3f, 1.3f, .1f, 20).lookAt(0, 1, -5, 0, 1, 0, 0, 1, 0);
                 clear(1);
                 render(renderer, front, PlayerPose.NEUTRAL, sentinelVao);
                 var neutral = capture();
-                checkColors(neutral);
                 write(neutral, output.resolve("neutral.png"));
                 clear(1);
                 render(renderer, front, PlayerPose.NEUTRAL, sentinelVao);
@@ -60,15 +75,26 @@ public final class PlayerModelSmoke {
                 clear(1);
                 render(renderer, angled, pose, sentinelVao);
                 check(articulated.equals(capture()), "Articulated render is not deterministic");
+                clear(1);
+                render(defaultRenderer, front, PlayerPose.NEUTRAL, sentinelVao);
+                var defaultImage = capture();
+                check(!defaultImage.equals(neutral), "Default skin was not used");
+                write(defaultImage, output.resolve("default.png"));
+                clear(1);
+                render(defaultRenderer, angled, pose, sentinelVao);
+                write(capture(), output.resolve("default-articulated.png"));
                 clear(0);
                 var occluded = capture();
                 render(renderer, front, pose, sentinelVao);
                 check(occluded.equals(capture()), "Model ignored foreground depth");
                 renderer.close();
                 renderer.close();
+                defaultRenderer.close();
+                defaultRenderer.close();
                 check(glGetError() == GL_NO_ERROR, "Player model GL error");
-                System.out.println("PASS six colors, articulation, deterministic images, depth, state and cleanup; GPU="
-                        + glGetString(GL_RENDERER) + "; output=" + output);
+                System.out.println(
+                        "PASS all six faces x six parts x 16 directional/default samples, nearest filtering, articulation, deterministic images, depth, state and cleanup; GPU="
+                                + glGetString(GL_RENDERER) + "; output=" + output);
             } finally {
                 glBindVertexArray(0);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -87,16 +113,35 @@ public final class PlayerModelSmoke {
         glEnable(GL_BLEND);
         glEnable(GL_CULL_FACE);
         glBindVertexArray(vao);
-        renderer.render(vp, new Matrix4f(), pose);
-        check(
-                !glIsEnabled(GL_DEPTH_TEST)
-                        && !glGetBoolean(GL_DEPTH_WRITEMASK)
-                        && glGetInteger(GL_DEPTH_FUNC) == GL_GREATER
-                        && glIsEnabled(GL_BLEND)
-                        && glIsEnabled(GL_CULL_FACE)
-                        && glGetInteger(GL_VERTEX_ARRAY_BINDING) == vao
-                        && glGetInteger(GL_CURRENT_PROGRAM) == 0,
-                "Leaked render state");
+        int texture = pose == PlayerPose.NEUTRAL ? 0 : glCreateTextures(GL_TEXTURE_2D);
+        int sampler = glCreateSamplers();
+        int array = glCreateTextures(GL_TEXTURE_2D_ARRAY);
+        glBindTextureUnit(0, texture);
+        glBindTextureUnit(0, array);
+        glBindSampler(0, sampler);
+        glActiveTexture(GL_TEXTURE3);
+        try {
+            renderer.render(vp, new Matrix4f(), pose);
+            check(
+                    !glIsEnabled(GL_DEPTH_TEST)
+                            && !glGetBoolean(GL_DEPTH_WRITEMASK)
+                            && glGetInteger(GL_DEPTH_FUNC) == GL_GREATER
+                            && glIsEnabled(GL_BLEND)
+                            && glIsEnabled(GL_CULL_FACE)
+                            && glGetInteger(GL_VERTEX_ARRAY_BINDING) == vao
+                            && glGetInteger(GL_CURRENT_PROGRAM) == 0
+                            && glGetInteger(GL_ACTIVE_TEXTURE) == GL_TEXTURE3
+                            && glGetIntegeri(GL_TEXTURE_BINDING_2D, 0) == texture
+                            && glGetIntegeri(GL_TEXTURE_BINDING_2D_ARRAY, 0) == array
+                            && glGetIntegeri(GL_SAMPLER_BINDING, 0) == sampler,
+                    "Leaked render state");
+        } finally {
+            glBindTextureUnit(0, 0);
+            glBindSampler(0, 0);
+            glDeleteSamplers(sampler);
+            glDeleteTextures(texture);
+            glDeleteTextures(array);
+        }
     }
 
     private static void clear(double depth) {
@@ -112,25 +157,97 @@ public final class PlayerModelSmoke {
         return pixels;
     }
 
-    private static void checkColors(ByteBuffer pixels) {
-        float[][] colors = {
-            {1, .75f, .35f}, {.15f, .8f, .8f}, {.95f, .3f, .25f}, {.35f, .85f, .3f}, {.3f, .4f, 1}, {.8f, .3f, .9f}
-        };
-        for (float[] color : colors) {
-            int count = 0;
-            float sum = color[0] + color[1] + color[2];
-            for (int i = 0; i < pixels.capacity(); i += 4) {
-                int r = Byte.toUnsignedInt(pixels.get(i));
-                int g = Byte.toUnsignedInt(pixels.get(i + 1));
-                int b = Byte.toUnsignedInt(pixels.get(i + 2));
-                float total = r + g + b;
-                if (total > 0
-                        && Math.abs(r / total - color[0] / sum) < .01f
-                        && Math.abs(g / total - color[1] / sum) < .01f
-                        && Math.abs(b / total - color[2] / sum) < .01f) count++;
+    private static PlayerSkin directionalSkin() {
+        byte[] rgba = new byte[64 * 64 * 4];
+        for (var part : PlayerModel.PARTS) {
+            for (var face : Face.values()) {
+                int[] rect = rectangle(part, face);
+                for (int y = 0; y < rect[3]; y++)
+                    for (int x = 0; x < rect[2]; x++) {
+                        int i = ((rect[1] + y) * 64 + rect[0] + x) * 4;
+                        rgba[i] = (byte) (30 + part.part().ordinal() * 32);
+                        rgba[i + 1] = (byte) (30 + face.ordinal() * 32);
+                        rgba[i + 2] = (byte) (40 + (x >= rect[2] / 2 ? 80 : 0) + (y >= rect[3] / 2 ? 120 : 0));
+                        rgba[i + 3] = (byte) 255;
+                    }
             }
-            check(count > 100, "Missing part color");
         }
+        return new PlayerSkin(rgba);
+    }
+
+    private static int[] rectangle(PlayerModel.PartDefinition part, Face face) {
+        int u = part.uvOrigin().u(), v = part.uvOrigin().v();
+        int w = (int) part.cuboid().width(),
+                h = (int) part.cuboid().height(),
+                d = (int) part.cuboid().depth();
+        return switch (face) {
+            case FRONT -> new int[] {u + d, v + d, w, h};
+            case BACK -> new int[] {u + 2 * d + w, v + d, w, h};
+            case RIGHT -> new int[] {u, v + d, d, h};
+            case LEFT -> new int[] {u + d + w, v + d, d, h};
+            case TOP -> new int[] {u + d, v, w, d};
+            case BOTTOM -> new int[] {u + d + w, v, w, d};
+        };
+    }
+
+    private static void checkFace(PlayerDebugRenderer renderer, PlayerSkin skin, Face face, int vao, Path path)
+            throws Exception {
+        Vector3f normal = switch (face) {
+            case FRONT -> new Vector3f(0, 0, -1);
+            case BACK -> new Vector3f(0, 0, 1);
+            case RIGHT -> new Vector3f(1, 0, 0);
+            case LEFT -> new Vector3f(-1, 0, 0);
+            case TOP -> new Vector3f(0, 1, 0);
+            case BOTTOM -> new Vector3f(0, -1, 0);
+        };
+        Vector3f up = switch (face) {
+            case TOP -> new Vector3f(0, 0, 1);
+            case BOTTOM -> new Vector3f(0, 0, -1);
+            default -> new Vector3f(0, 1, 0);
+        };
+        var right = new Vector3f(up).cross(normal);
+        var vp = new Matrix4f()
+                .ortho(-1.5f, 1.5f, -1.5f, 1.5f, .1f, 20)
+                .lookAt(new Vector3f(normal).mul(5), new Vector3f(), up);
+        var pose = PlayerPose.NEUTRAL;
+        var bodyShift = new Vector3f();
+        for (var part : PlayerModel.PARTS) {
+            int index = part.part().ordinal();
+            var box = part.cuboid();
+            var center = new Vector3f(box.x() + box.width() / 2, box.y() + box.height() / 2, box.z() + box.depth() / 2);
+            PlayerModel.partMatrix(part.part(), PlayerPose.NEUTRAL, new Matrix4f())
+                    .transformPosition(center);
+            var desired = new Vector3f(right).mul((index % 3 - 1) * .85f).fma(index < 3 ? .6f : -.6f, up);
+            var shift = desired.sub(center).mul(16);
+            if (part.parent() != null) shift.sub(bodyShift);
+            if (part.part() == BODY) bodyShift.set(shift);
+            pose = pose.with(part.part(), new PartTransform(shift.x, shift.y, shift.z, 0, 0, 0));
+        }
+        clear(1);
+        render(renderer, vp, pose, vao);
+        var pixels = capture();
+        var rgba = skin.rgba();
+        for (var part : PlayerModel.PARTS) {
+            int index = part.part().ordinal();
+            int[] rect = rectangle(part, face);
+            for (float fy : new float[] {.31f, .45f, .55f, .69f})
+                for (float fx : new float[] {.31f, .45f, .55f, .69f}) {
+                    float sx = (index % 3 - 1) * .85f + (fx - .5f) * rect[2] / 16;
+                    float sy = (index < 3 ? .6f : -.6f) + (.5f - fy) * rect[3] / 16;
+                    int offset = (((int) ((sy + 1.5f) / 3 * SIZE)) * SIZE + (int) ((sx + 1.5f) / 3 * SIZE)) * 4;
+                    float textureY = face == Face.BOTTOM ? 1 - fy : fy;
+                    int texel = ((rect[1] + (int) (textureY * rect[3])) * 64 + rect[0] + (int) (fx * rect[2])) * 4;
+                    for (int c = 0; c < 3; c++) {
+                        int expected = Byte.toUnsignedInt(rgba[texel + c]);
+                        if (Byte.toUnsignedInt(rgba[texel + 3]) < 128) expected = new int[] {15, 20, 31}[c];
+                        check(
+                                Math.abs(Byte.toUnsignedInt(pixels.get(offset + c)) - expected) <= 1,
+                                "Wrong texture direction/part/texel: " + path + " " + part.part() + " " + face + " "
+                                        + fx + "," + fy + " channel=" + c);
+                    }
+                }
+        }
+        write(pixels, path);
     }
 
     private static void write(ByteBuffer pixels, Path path) throws Exception {
