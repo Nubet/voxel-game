@@ -2,12 +2,50 @@ package com.norbertfila.generation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.world.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class VegetationGeneratorTest {
     private static final TerrainSummary GRASS = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
+
+    @Test
+    void taigaSnowCoversPodzolAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
+        var summary = new TerrainSummary(
+                15,
+                BlockId.PODZOL,
+                BlockId.COARSE_DIRT,
+                BlockId.STONE,
+                TerrainSummary.NO_BEDROCK,
+                TerrainSummary.NO_WATER,
+                BiomeType.TAIGA,
+                new ClimateSample(-.6f, 0));
+        var column = TerrainColumn.of(columns(summary), List.of());
+        var generator = new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1);
+        byte[] below = new byte[Chunk.BLOCK_BYTES];
+        generator.generate(-16, 0, -16, below, column);
+        assertArrayEquals(new byte[Chunk.BLOCK_BYTES], below);
+        byte[] above = new byte[Chunk.BLOCK_BYTES];
+        above[0] = BlockId.PINE_LOG;
+        generator.generate(-16, 16, -16, above, column);
+        assertEquals(BlockId.PINE_LOG, above[0]);
+        int snow = 0, plants = 0;
+        for (int i = 1; i < Chunk.SIZE * Chunk.SIZE; i++) {
+            if (above[i] == BlockId.SNOW_LAYER) snow++;
+            else {
+                assertTrue(PlantRules.supports(above[i], BlockId.PODZOL, false));
+                plants++;
+            }
+        }
+        assertTrue(snow > 128);
+        assertTrue(plants > 0);
+        byte[] repeat = new byte[Chunk.BLOCK_BYTES];
+        repeat[0] = BlockId.PINE_LOG;
+        generator.generate(-16, 16, -16, repeat, column);
+        assertArrayEquals(above, repeat);
+    }
 
     @Test
     void allFiveSpeciesAreDeterministicAcrossNegativeSeamsAndParallelGeneration() {

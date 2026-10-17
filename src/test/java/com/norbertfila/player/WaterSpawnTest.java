@@ -22,7 +22,12 @@ class WaterSpawnTest {
             assertTrue(Math.abs((long) x - wet[0]) <= 1024 && Math.abs((long) z - wet[1]) <= 1024);
             int feetY = (int) spawn.y();
             assertTrue(BlockRegistry.DEFAULT.isCollidable(block(terrain, x, feetY - 1, z)));
-            assertEquals(BlockId.AIR, block(terrain, x, feetY, z));
+            byte cover = block(terrain, x, feetY, z);
+            assertTrue(cover == BlockId.AIR || cover == BlockId.SNOW_LAYER);
+            double coverHeight = cover == BlockId.SNOW_LAYER
+                    ? BlockRegistry.DEFAULT.definition(cover).model().maxY()
+                    : 0;
+            assertEquals(feetY + coverHeight, spawn.y());
             assertEquals(BlockId.AIR, block(terrain, x, feetY + 1, z));
         }
     }
@@ -44,7 +49,25 @@ class WaterSpawnTest {
     @Test
     void rejectsActualCanopyVoxelsEvenWhenHeightSamplesAreDry() {
         TerrainSource terrain = flat(8, 8);
-        TerrainSource canopy = new TerrainSource() {
+        TerrainSource canopy = replacingOriginBlock(terrain, 9, BlockId.LEAVES);
+        var spawn = new SpawnResolver(canopy).resolve(0, 0);
+        assertNotEquals(.5, spawn.x());
+        assertEquals(BlockId.AIR, block(canopy, (int) Math.floor(spawn.x()), 9, (int) Math.floor(spawn.z())));
+    }
+
+    @Test
+    void spawnsOnThinSnowAcrossSectionBoundariesButRejectsMissingGround() {
+        var terrain = flat(15, 8);
+        var snow = replacingOriginBlock(terrain, 16, BlockId.SNOW_LAYER);
+        double snowHeight =
+                BlockRegistry.DEFAULT.definition(BlockId.SNOW_LAYER).model().maxY();
+        assertEquals(new PlayerState.Position(.5, 16 + snowHeight, .5), new SpawnResolver(snow).resolve(0, 0));
+        var missingFloor = replacingOriginBlock(terrain, 15, BlockId.AIR);
+        assertNotEquals(new PlayerState.Position(.5, 16, .5), new SpawnResolver(missingFloor).resolve(0, 0));
+    }
+
+    private static TerrainSource replacingOriginBlock(TerrainSource terrain, int y, byte replacement) {
+        return new TerrainSource() {
             public long seed() {
                 return terrain.seed();
             }
@@ -63,13 +86,11 @@ class WaterSpawnTest {
 
             public com.norbertfila.generation.ChunkData generate(ChunkPos position) {
                 byte[] blocks = terrain.generate(position).blocks();
-                if (position.equals(new ChunkPos(0, 0, 0))) blocks[9 * Chunk.SIZE * Chunk.SIZE] = BlockId.LEAVES;
+                if (position.equals(new ChunkPos(0, Math.floorDiv(y, Chunk.SIZE), 0)))
+                    blocks[Math.floorMod(y, Chunk.SIZE) * Chunk.SIZE * Chunk.SIZE] = replacement;
                 return new com.norbertfila.generation.ChunkData(position, blocks);
             }
         };
-        var spawn = new SpawnResolver(canopy).resolve(0, 0);
-        assertNotEquals(.5, spawn.x());
-        assertEquals(BlockId.AIR, block(canopy, (int) Math.floor(spawn.x()), 9, (int) Math.floor(spawn.z())));
     }
 
     private static TerrainGenerator flat(int height, int level) {
