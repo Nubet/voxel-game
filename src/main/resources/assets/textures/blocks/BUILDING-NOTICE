@@ -1,0 +1,106 @@
+Building textures were created by MysticTempest for REFI_Textures.
+Source: https://github.com/MysticTempest/REFI_Textures
+License: CC BY-SA 4.0. See REFI_LICENSE.txt.
+Paths below are relative to REFI_Textures/textures/.
+Destination names have the refi_ prefix and .png suffix.
+Source names also have the .png suffix unless a path already includes it.
+
+default_mcl_core/stone/:
+granite: mcl_core_granite
+polished_granite: mcl_core_granite_smooth
+diorite: mcl_core_diorite
+polished_diorite: mcl_core_diorite_smooth
+andesite: mcl_core_andesite
+polished_andesite: mcl_core_andesite_smooth
+mossy_cobble: default_mossycobble
+mossy_stone_bricks: mcl_core_stonebrick_mossy
+cracked_stone_bricks: mcl_core_stonebrick_cracked
+chiseled_stone_bricks: mcl_core_stonebrick_carved
+
+default_mcl_core/trees/:
+pine_planks: default_pine_wood
+birch_log_side: mcl_core_log_birch
+birch_log_top: mcl_core_log_birch_top
+birch_planks: mcl_core_planks_birch
+dark_oak_log_side: mcl_core_log_big_oak
+dark_oak_log_top: mcl_core_log_big_oak_top
+dark_oak_planks: mcl_core_planks_big_oak
+acacia_log_side: default_acacia_tree
+acacia_log_top: default_acacia_tree_top
+acacia_planks: default_acacia_wood
+jungle_log_side: default_jungletree
+jungle_log_top: default_jungletree_top
+jungle_planks: default_junglewood
+{birch,dark_oak,acacia,jungle}_leaves: mcla_desat_leaves/mcla_desat_leaves_{species}
+stripped_{oak,birch,dark_oak,acacia,jungle}_log_{side,top}: mcl_core_stripped_{species}_{face}
+stripped_pine_log_{side,top}: mcl_core_stripped_spruce_{face}
+
+mcl_lush_caves/:
+moss: mcl_lush_caves_moss_block
+rooted_dirt: mcl_lush_caves_rooted_dirt
+azalea_leaves: mcl_lush_caves_azalea_leaves
+flowering_azalea_leaves: mcl_lush_caves_azalea_leaves_flowering
+
+mcl_wild_update/:
+packed_mud: mcl_mud_packed_mud
+mud_bricks: mcl_mud_bricks
+
+default_mcl_core/soil/:
+mycelium_top: mcl_core_mycelium_top
+mycelium_side: mcl_core_mycelium_side
+Both mycelium textures are composited over REFI dirt to make them opaque.
+The side texture is also vertically flipped for the engine's side-face UV convention.
+These derivatives are distributed under CC BY-SA 4.0.
+
+default_mcl_core/sand/:
+red_sand: mcl_core_red_sand
+sandstone_top: mcl_core_sandstone_top
+sandstone_bottom: mcl_core_sandstone_bottom
+chiseled_sandstone: mcl_core_sandstone_carved
+smooth_sandstone: mcl_core_sandstone_smooth
+red_sandstone: mcl_core_red_sandstone_normal
+red_sandstone_top: mcl_core_red_sandstone_top
+red_sandstone_bottom: mcl_core_red_sandstone_bottom
+chiseled_red_sandstone: mcl_core_red_sandstone_carved
+smooth_red_sandstone: mcl_core_red_sandstone_smooth
+
+calcite: mcl_amethyst/mcl_amethyst_calcite_block
+dripstone: mcl_dripstone/dripstone_block
+blue_ice: default_mcl_core/mcl_core_ice_blue
+
+mcl_deepslate/ (tuff textures only):
+tuff: mcl_deepslate_tuff
+polished_tuff: mcl_deepslate_tuff_polished
+tuff_bricks: mcl_deepslate_tuff_bricks
+chiseled_tuff: mcl_deepslate_tuff_chiseled
+chiseled_tuff_top: mcl_deepslate_tuff_chiseled_top
+chiseled_tuff_bricks: mcl_deepslate_tuff_chiseled_bricks
+chiseled_tuff_bricks_top: mcl_deepslate_tuff_chiseled_bricks_top
+
+default_mcl_core/minerals_ores/:
+iron_block: default_steel_block
+gold_block: default_gold_block
+coal_block: default_coal_block
+diamond_block: default_diamond_block
+emerald_block: mcl_core_emerald_block
+lapis_block: mcl_core_lapis_block
+
+mcl_colorblocks/:
+terracotta: hardened_clay
+concrete_{color}: mcl_colorblocks_concrete_{color}
+terracotta_{color}: hardened_clay_stained_{color}
+Colors: white, orange, magenta, light_blue, yellow, lime, pink, gray,
+light_gray, cyan, purple, blue, brown, green, red, black.
+Source color names use grey for gray and silver for light_gray.
+Red and orange terracotta were imported previously and are reused.
+
+wool_mcl_wool/:
+wool_{white,orange,magenta,yellow,pink,cyan,blue,brown,red,black}: wool_{color}
+wool_light_blue: mcl_wool_light_blue
+wool_lime: mcl_wool_lime
+wool_gray: wool_dark_grey
+wool_light_gray: wool_grey
+wool_purple: wool_violet
+wool_green: wool_dark_green
+
+All other PNG files in this import are unchanged copies.
