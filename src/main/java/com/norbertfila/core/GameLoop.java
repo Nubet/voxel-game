@@ -20,6 +20,7 @@ import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
+import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.PlayerRenderer;
@@ -325,6 +326,8 @@ public final class GameLoop {
                     || state == null
                     || !pointerReady
                     || runtime.state() != WorldRuntime.State.PLAYING;
+            boolean perspectivePressed = input.perspectivePressed();
+            if (!blocked && perspectivePressed) camera.cyclePerspective();
             int slotPressed = input.hotbarSlotPressed();
             if (!blocked) {
                 if (slotPressed >= 0) hotbar.select(slotPressed);
@@ -435,7 +438,7 @@ public final class GameLoop {
                     residencyRevision = state.residency().revision();
                 }
                 var eye = state.interpolatedEye(interpolationTime);
-                camera.setPosition(eye.x(), eye.y(), eye.z());
+                state.cameraEnvironment().position(camera, eye, width[0], height[0]);
                 renderer.far().reconcile(state.far(), eye.x(), eye.z());
             }
             if (driver != null) driver.update(runtime, state, camera);
@@ -463,11 +466,10 @@ public final class GameLoop {
             metrics.recordUploads(uploads.bytesUploaded(), uploads.queueDepth(), uploads.uploadNanos());
             metrics.recordResidentChunks(residents.size());
             profiler.mark(Segment.UPLOAD);
-            if (state != null)
-                visibility.update(
-                        state.waterContact().eyesSubmerged(),
-                        state.waterContact().available(),
-                        delta);
+            if (state != null) {
+                var medium = state.cameraEnvironment().medium(camera.x(), camera.y(), camera.z());
+                visibility.update(medium.submerged(), medium.available(), delta);
+            }
             if (gpuTimer != null) gpuTimer.beginFrame(gpuListener);
             glViewport(0, 0, width[0], height[0]);
             glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
@@ -490,7 +492,8 @@ public final class GameLoop {
             if (players != null
                     && state != null
                     && state.ready()
-                    && localPlayerVisible(state, interpolationTime, camera))
+                    && (camera.perspective() != Camera.Perspective.FIRST
+                            || localPlayerVisible(state, interpolationTime, camera)))
                 players.render(
                         viewProjection,
                         state.playerRenderState(),
@@ -502,7 +505,9 @@ public final class GameLoop {
                         state.interpolationAlpha(interpolationTime),
                         camera.x(),
                         camera.y(),
-                        camera.z());
+                        camera.z(),
+                        DistanceFog.forDistances(settings.renderDistance(), settings.farDistance()),
+                        visibility.amount());
             if (gpuTimer != null) gpuTimer.stamp();
             double effectSeconds = state == null
                     ? 0

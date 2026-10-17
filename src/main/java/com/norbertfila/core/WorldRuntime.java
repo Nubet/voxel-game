@@ -574,6 +574,7 @@ public final class WorldRuntime implements AutoCloseable {
                             var inventorySnapshot = inventory.snapshot();
                             var breaks = List.copyOf(brokenBlocks);
                             var itemSnapshot = items.renderSnapshot(world);
+                            var cameraEnvironment = cameraEnvironment(world, player.renderEyePosition(1));
                             var biome = generator
                                     .sample(
                                             (int) Math.floor(
@@ -632,7 +633,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     breaks,
                                     itemSnapshot,
                                     biome,
-                                    playerRenderState));
+                                    playerRenderState,
+                                    cameraEnvironment));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1053,6 +1055,12 @@ public final class WorldRuntime implements AutoCloseable {
 
     private record Acknowledgement(ChunkManager.MeshResult mesh, boolean uploaded) {}
 
+    private static CameraEnvironment cameraEnvironment(World world, PlayerState.Position eye) {
+        var center = new ChunkPos((int) Math.floor(eye.x() / Chunk.SIZE), (int) Math.floor(eye.y() / Chunk.SIZE), (int)
+                Math.floor(eye.z() / Chunk.SIZE));
+        return new CameraEnvironment(center, world.hasChunk(center) ? world.blockNeighborhood(center) : null);
+    }
+
     public record Frame(
             long sessionId,
             boolean ready,
@@ -1080,7 +1088,8 @@ public final class WorldRuntime implements AutoCloseable {
             List<BlockBreakEvent> brokenBlocks,
             List<ItemRenderState> items,
             BiomeType biome,
-            PlayerRenderState playerRenderState) {
+            PlayerRenderState playerRenderState,
+            CameraEnvironment cameraEnvironment) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1092,6 +1101,7 @@ public final class WorldRuntime implements AutoCloseable {
             brokenBlocks = List.copyOf(brokenBlocks);
             items = List.copyOf(items);
             Objects.requireNonNull(playerRenderState);
+            Objects.requireNonNull(cameraEnvironment);
         }
 
         public Map<ChunkPos, Long> residents() {

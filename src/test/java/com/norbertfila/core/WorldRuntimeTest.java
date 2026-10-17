@@ -93,6 +93,18 @@ class WorldRuntimeTest {
                     playing.interpolatedEye(interpolationTime));
             var camera = new Camera();
             var eye = playing.interpolatedEye(interpolationTime);
+            var environment = playing.cameraEnvironment();
+            assertEquals(
+                    new ChunkPos(
+                            (int) Math.floor(playing.eye().x() / Chunk.SIZE),
+                            (int) Math.floor(playing.eye().y() / Chunk.SIZE),
+                            (int) Math.floor(playing.eye().z() / Chunk.SIZE)),
+                    environment.center());
+            assertNotNull(environment.blocks());
+            environment.position(camera, eye, 1280, 720);
+            assertEquals(eye.x(), camera.x());
+            assertEquals(eye.y(), camera.y());
+            assertEquals(eye.z(), camera.z());
             camera.setPosition(eye.x(), eye.y(), eye.z());
             assertFalse(GameLoop.localPlayerVisible(playing, interpolationTime, camera));
             camera.setPosition(eye.x() - 5, eye.y(), eye.z());
@@ -106,6 +118,8 @@ class WorldRuntimeTest {
                     blocked.playerRenderState().previous());
             assertTrue(runtime.offer(new WorldRuntime.Teleport(-500.25, 20, -800.75)));
             var teleported = await(runtime, f -> f.playerState().position().x() == -500.25);
+            assertNotEquals(environment.center(), teleported.cameraEnvironment().center());
+            assertSame(environment, playing.cameraEnvironment());
             assertEquals(
                     teleported.playerRenderState().current(),
                     teleported.playerRenderState().previous());

@@ -195,6 +195,7 @@ public final class PlayerModelSmoke {
                 checkSnapshots(layerRenderer, output);
                 checkAnimationPoses(defaultRenderer, sentinelVao, output);
                 checkSwitching(renderer, skins, decodes);
+                PlayerWorldSmoke.run();
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 com.norbertfila.core.PlayerGameHookSmoke.run(window, skins, output);
                 check(decodes.get() == 1, "Runtime setting switch reloaded skin");
