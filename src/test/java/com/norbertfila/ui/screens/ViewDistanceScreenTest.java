@@ -14,12 +14,12 @@ class ViewDistanceScreenTest {
     void keyboardControlsAllDistancesAndClampsSimulationWithoutChangingLandscape() {
         var settings = new GameSettings();
         var screen = new ViewDistanceScreen(settings);
-        assertEquals(32, settings.farDistance());
+        assertEquals(0, settings.farDistance());
         screen.keyPress(UiKey.NEXT);
-        for (int i = 0; i < 4; i++) screen.keyPress(UiKey.DECREASE);
+        for (int i = 0; i < 8; i++) screen.keyPress(UiKey.DECREASE);
         assertEquals(4, settings.renderDistance());
         assertEquals(4, settings.simulationDistance());
-        assertEquals(32, settings.farDistance());
+        assertEquals(0, settings.farDistance());
         screen.keyPress(UiKey.NEXT);
         screen.keyPress(UiKey.DECREASE);
         assertEquals(3, settings.simulationDistance());

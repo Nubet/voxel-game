@@ -34,7 +34,7 @@ class SettingsScreenTest {
         screen.keyPress(UiKey.ACTIVATE);
         screen.keyPress(UiKey.NEXT);
         screen.keyPress(UiKey.INCREASE);
-        assertEquals(9, settings.renderDistance());
+        assertEquals(13, settings.renderDistance());
         assertEquals(Screen.Action.NONE, screen.keyPress(UiKey.BACK));
         assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
     }

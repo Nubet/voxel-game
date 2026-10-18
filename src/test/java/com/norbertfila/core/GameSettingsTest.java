@@ -12,9 +12,9 @@ class GameSettingsTest {
     void changesRenderDistanceOnlyWhenValueChanges() {
         GameSettings settings = new GameSettings();
 
-        assertEquals(8, settings.renderDistance());
-        assertEquals(8, settings.simulationDistance());
-        assertFalse(settings.setRenderDistance(8));
+        assertEquals(12, settings.renderDistance());
+        assertEquals(12, settings.simulationDistance());
+        assertFalse(settings.setRenderDistance(12));
         assertTrue(settings.setRenderDistance(16));
         assertEquals(16, settings.renderDistance());
     }

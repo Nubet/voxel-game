@@ -31,15 +31,15 @@ public final class GameSettings {
     public static final float DEFAULT_ZOOM_SPEED = 12f;
     public static final int MIN_RENDER_DISTANCE = 2;
     public static final int MAX_RENDER_DISTANCE = 32;
-    public static final int DEFAULT_RENDER_DISTANCE = 8;
+    public static final int DEFAULT_RENDER_DISTANCE = 12;
     /** Block updates such as flowing water run only this many chunks from the player, at most the render distance. */
     public static final int MIN_SIMULATION_DISTANCE = 1;
 
-    public static final int DEFAULT_SIMULATION_DISTANCE = 8;
+    public static final int DEFAULT_SIMULATION_DISTANCE = 12;
     /** Far terrain radius in chunks; 0 or a value not above the render distance turns it off. */
     public static final int MAX_FAR_DISTANCE = 128;
 
-    public static final int DEFAULT_FAR_DISTANCE = 32;
+    public static final int DEFAULT_FAR_DISTANCE = 0;
     public static final int MIN_FRAME_RATE = 30;
     public static final int MAX_FRAME_RATE = 240;
     public static final int UNLIMITED_FRAME_RATE = 0;
