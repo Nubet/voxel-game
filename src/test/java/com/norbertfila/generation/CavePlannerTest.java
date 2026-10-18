@@ -52,6 +52,22 @@ class CavePlannerTest {
         assertTrue(planner.plan(Integer.MAX_VALUE, 0).segments(0, 0).isEmpty());
     }
 
+    @Test
+    void classicPathsKeepTwoAirBlocksAtTheirVoxelizedCenterInsteadOfPinchingAtTheEnds() {
+        for (long seed = 0; seed < 8; seed++) {
+            var planner = new CavePlanner(seed, -64, (x, z) -> 128);
+            for (var segment : all(planner.plan(0, 0), 0, 0)) {
+                if (segment.radiusXZ() > 2.5) continue;
+                double x = Math.floor(segment.x()) + .5;
+                double y = Math.floor(segment.y()) + .5;
+                double z = Math.floor(segment.z()) + .5;
+                assertTrue(segment.contains(x, y, z));
+                assertTrue(segment.contains(x, y + 1, z));
+                assertTrue(segment.radiusXZ() >= 1.3);
+            }
+        }
+    }
+
     private static Set<CavePlan.Segment> all(CavePlan plan, int regionX, int regionZ) {
         Set<CavePlan.Segment> result = new HashSet<>();
         for (int z = regionZ * 8 - 6; z <= regionZ * 8 + 13; z++)
