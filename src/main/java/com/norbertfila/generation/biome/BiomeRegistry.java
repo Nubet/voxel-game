@@ -106,6 +106,128 @@ public final class BiomeRegistry {
                         new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
                         new VegetationProfile(1f, 0, Set.of(PlantType.SHORT_GRASS, PlantType.FERN), .35f, 0),
                         new TreeProfile(.9f, TreeType.JUNGLE)));
+        profiles.put(
+                BiomeType.RAINFOREST,
+                new BiomeProfile(
+                        new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
+                        new VegetationProfile(
+                                .9f,
+                                .08f,
+                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER, PlantType.MUSHROOM),
+                                .55f,
+                                .12f),
+                        new TreeProfile(.95f, TreeType.BROADLEAF)));
+        profiles.put(
+                BiomeType.SEASONAL_FOREST,
+                profile(
+                        .55f,
+                        .65f,
+                        .22f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.CLASSIC_FOREST,
+                profile(
+                        .7f,
+                        .5f,
+                        .12f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER, PlantType.MUSHROOM)));
+        profiles.put(
+                BiomeType.SWAMPLAND,
+                profile(
+                        .25f,
+                        .7f,
+                        .05f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.REED, PlantType.MUSHROOM)));
+        profiles.put(
+                BiomeType.SAVANNA,
+                profile(
+                        .04f,
+                        .45f,
+                        .08f,
+                        SurfaceMaterial.DRY_GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.SHRUBLAND,
+                profile(
+                        .015f,
+                        .25f,
+                        .05f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.CLASSIC_PLAINS,
+                profile(
+                        .005f,
+                        .8f,
+                        .4f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.CLASSIC_DESERT,
+                profile(
+                        0,
+                        0,
+                        0,
+                        SurfaceMaterial.SAND,
+                        SurfaceMaterial.SAND,
+                        Set.of(PlantType.CACTUS, PlantType.DEAD_BUSH)));
+        profiles.put(
+                BiomeType.TUNDRA,
+                profile(.005f, .04f, 0, SurfaceMaterial.GRASS, SurfaceMaterial.DIRT, Set.of(PlantType.SHORT_GRASS)));
+        profiles.put(
+                BiomeType.ARCHLANDS_CLASSIC,
+                profile(
+                        .25f,
+                        .5f,
+                        .12f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.FLOATING_ISLES_CLASSIC,
+                profile(
+                        .18f,
+                        .4f,
+                        .15f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER)));
+        profiles.put(
+                BiomeType.OVERHANG_HIGHLANDS_CLASSIC,
+                profile(
+                        .35f,
+                        .45f,
+                        .08f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN)));
+        profiles.put(
+                BiomeType.HIDDEN_VALLEYS_CLASSIC,
+                profile(
+                        .7f,
+                        .85f,
+                        .3f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER, PlantType.REED)));
+        profiles.put(
+                BiomeType.COASTAL_CLIFFS_CLASSIC,
+                profile(
+                        .12f,
+                        .35f,
+                        .1f,
+                        SurfaceMaterial.GRASS,
+                        SurfaceMaterial.DIRT,
+                        Set.of(PlantType.SHORT_GRASS, PlantType.FLOWER, PlantType.REED)));
         return new BiomeRegistry(profiles);
     }
 

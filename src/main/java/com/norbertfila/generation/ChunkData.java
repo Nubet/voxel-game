@@ -4,6 +4,7 @@ import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Objects;
 
 /** Generated blocks of one chunk section. A section filled with one block stores no block array. */
@@ -14,6 +15,23 @@ public final class ChunkData {
     private final byte[] blocks;
     private final byte uniformBlock;
     private final byte[] tints;
+    private final BitSet fallingWater;
+
+    ChunkData withFallingWater(BitSet falling) {
+        if (falling.length() > BLOCK_COUNT) throw new IllegalArgumentException("Falling water outside chunk");
+        for (int index = falling.nextSetBit(0); index >= 0; index = falling.nextSetBit(index + 1))
+            if (blocks == null ? uniformBlock != BlockId.WATER : blocks[index] != BlockId.WATER)
+                throw new IllegalArgumentException("Falling water requires a water block");
+        return falling.isEmpty() ? this : new ChunkData(this, falling);
+    }
+
+    private ChunkData(ChunkData data, BitSet falling) {
+        position = data.position;
+        blocks = data.blocks;
+        uniformBlock = data.uniformBlock;
+        tints = data.tints;
+        fallingWater = (BitSet) falling.clone();
+    }
 
     ChunkData withTints(byte[] tints) {
         if (tints.length != Chunk.SIZE * Chunk.SIZE) throw new IllegalArgumentException("Invalid tint grid");
@@ -25,6 +43,7 @@ public final class ChunkData {
         blocks = data.blocks;
         uniformBlock = data.uniformBlock;
         this.tints = tints.clone();
+        fallingWater = data.fallingWater;
     }
 
     public ChunkData(ChunkPos position, byte[] blocks) {
@@ -39,6 +58,7 @@ public final class ChunkData {
         this.blocks = blocks.clone();
         uniformBlock = BlockId.AIR;
         tints = null;
+        fallingWater = null;
     }
 
     private ChunkData(ChunkPos position, byte uniformBlock) {
@@ -48,6 +68,7 @@ public final class ChunkData {
         blocks = null;
         this.uniformBlock = uniformBlock;
         tints = null;
+        fallingWater = null;
     }
 
     public static ChunkData uniform(ChunkPos position, byte block) {
@@ -83,6 +104,14 @@ public final class ChunkData {
 
     public Chunk toChunk() {
         Chunk chunk = blocks == null ? Chunk.uniform(uniformBlock) : Chunk.fromBlocks(blocks);
+        if (fallingWater != null)
+            for (int index = fallingWater.nextSetBit(0); index >= 0; index = fallingWater.nextSetBit(index + 1))
+                chunk.set(
+                        index % Chunk.SIZE,
+                        index / (Chunk.SIZE * Chunk.SIZE),
+                        index / Chunk.SIZE % Chunk.SIZE,
+                        BlockId.WATER,
+                        com.norbertfila.world.WaterState.FALLING);
         if (tints != null) chunk.setTints(tints);
         return chunk;
     }

@@ -19,6 +19,18 @@ public final class BiomeResolver {
             boolean nearWater,
             int waterLevel,
             WaterKind waterKind) {
+        return resolve(climate, height, baseHeight, slope, nearWater, waterLevel, waterKind, 0);
+    }
+
+    public BiomeType resolve(
+            ClimateSample climate,
+            int height,
+            int baseHeight,
+            double slope,
+            boolean nearWater,
+            int waterLevel,
+            WaterKind waterKind,
+            double classicness) {
         if (height < waterLevel && waterKind != WaterKind.NONE)
             return switch (waterKind) {
                 case OCEAN -> BiomeType.OCEAN;
@@ -26,7 +38,8 @@ public final class BiomeResolver {
                 case RIVER -> BiomeType.RIVER;
                 case NONE -> throw new IllegalStateException("Flooded column without water");
             };
-        BiomeType climateBiome = resolve(climate);
+        BiomeType climateBiome = resolve(climate, classicness);
+        if (climateBiome.classic()) return climateBiome;
         if (climateBiome == BiomeType.BADLANDS) return climateBiome;
         float temperature = ClimateRules.temperature(climate, height, baseHeight);
         boolean highland = height > (long) baseHeight + 48;
@@ -53,5 +66,23 @@ public final class BiomeResolver {
         if (humidity > .35f) return temperature < .4f ? BiomeType.SWAMP : BiomeType.FOREST;
         if (humidity > FOREST_HUMIDITY) return BiomeType.FOREST;
         return BiomeType.PLAINS;
+    }
+
+    public BiomeType resolve(ClimateSample climate, double classicness) {
+        if (classicness <= .5) return resolve(climate);
+        float temperature = climate.temperature();
+        float humidity = climate.humidity();
+        if (temperature < -.45f) return BiomeType.TUNDRA;
+        if (temperature < -.2f) return BiomeType.TAIGA;
+        if (humidity < -.35f) {
+            if (temperature > .3f) return BiomeType.CLASSIC_DESERT;
+            return temperature > .05f ? BiomeType.SAVANNA : BiomeType.CLASSIC_PLAINS;
+        }
+        if (humidity < -.1f) return temperature > .1f ? BiomeType.SAVANNA : BiomeType.SHRUBLAND;
+        if (humidity < .1f) return BiomeType.CLASSIC_PLAINS;
+        if (humidity > .35f && temperature < .1f) return BiomeType.SWAMPLAND;
+        if (temperature > .25f && humidity > .35f) return BiomeType.RAINFOREST;
+        if (temperature > .1f) return BiomeType.SEASONAL_FOREST;
+        return BiomeType.CLASSIC_FOREST;
     }
 }

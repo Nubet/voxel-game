@@ -7,5 +7,6 @@ public enum TreeType {
     SWAMP,
     JUNGLE,
     GIANT_JUNGLE,
-    MAHOGANY
+    MAHOGANY,
+    BIRCH
 }

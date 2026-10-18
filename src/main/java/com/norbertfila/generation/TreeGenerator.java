@@ -112,6 +112,8 @@ final class TreeGenerator {
         long shapeSeed = hash(seed ^ SHAPE_SALT, cellX, cellZ);
         TerrainSummary sample = terrain.sample(x, z);
         TreeType type = biomes.profile(sample.biome()).trees().type();
+        if (sample.biome() == BiomeType.CLASSIC_FOREST && Long.remainderUnsigned(shapeSeed, 5) == 0)
+            type = TreeType.BIRCH;
         if (type == TreeType.JUNGLE) {
             int roll = JungleTrees.bounded(shapeSeed, 17, 100);
             double mahogany = jungle.mahogany(x, z);
@@ -141,7 +143,8 @@ final class TreeGenerator {
                             9,
                             shapeSeed,
                             type,
-                            plan),
+                            plan,
+                            false),
                     sample);
         }
         int trunkHeight = type == TreeType.CONIFER
@@ -152,8 +155,23 @@ final class TreeGenerator {
         int crownRadius = type == TreeType.CONIFER
                 ? 2
                 : type == TreeType.SWAMP ? 2 : 2 + (int) Long.remainderUnsigned(hash(shapeSeed, 0, 2), 2);
+        if (sample.biome() == BiomeType.RAINFOREST) {
+            trunkHeight += 2;
+        }
+        boolean classicCrown = sample.biome().classic();
+        if (classicCrown) crownRadius = 2;
         return new Candidate(
-                new Tree(x, z, sample.surfaceHeight() + 1, trunkHeight, crownRadius, shapeSeed, type), sample);
+                new Tree(
+                        x,
+                        z,
+                        sample.surfaceHeight() + 1,
+                        trunkHeight,
+                        crownRadius,
+                        shapeSeed,
+                        type,
+                        null,
+                        classicCrown),
+                sample);
     }
 
     private boolean selected(long cellX, long cellZ, long x, long z) {
@@ -171,7 +189,10 @@ final class TreeGenerator {
             double forest = biomes.profile(BiomeType.FOREST).trees().density();
             baseDensity = plains + (forest - plains) * BiomeResolver.forestWeight(ground.climate());
         }
-        double density = baseDensity * (profile.type() == TreeType.JUNGLE ? .85 + .15 * t : t * t * (3 - 2 * t));
+        double density = baseDensity
+                * (profile.type() == TreeType.JUNGLE || ground.biome() == BiomeType.RAINFOREST
+                        ? .85 + .15 * t
+                        : t * t * (3 - 2 * t));
         density = Math.clamp(density * landscapes.sample(x, z).trees(), 0, 1);
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }
@@ -198,10 +219,11 @@ final class TreeGenerator {
                 || z < Integer.MIN_VALUE + SLOPE_SAMPLE_DISTANCE
                 || z > Integer.MAX_VALUE - SLOPE_SAMPLE_DISTANCE) return false;
         int height = terrainSample.surfaceHeight();
-        return Math.abs((long) height - terrain.surfaceHeight(x + SLOPE_SAMPLE_DISTANCE, z)) <= MAX_SLOPE
-                && Math.abs((long) height - terrain.surfaceHeight(x - SLOPE_SAMPLE_DISTANCE, z)) <= MAX_SLOPE
-                && Math.abs((long) height - terrain.surfaceHeight(x, z + SLOPE_SAMPLE_DISTANCE)) <= MAX_SLOPE
-                && Math.abs((long) height - terrain.surfaceHeight(x, z - SLOPE_SAMPLE_DISTANCE)) <= MAX_SLOPE;
+        int maxSlope = terrainSample.biome().classic() ? 6 : MAX_SLOPE;
+        return Math.abs((long) height - terrain.surfaceHeight(x + SLOPE_SAMPLE_DISTANCE, z)) <= maxSlope
+                && Math.abs((long) height - terrain.surfaceHeight(x - SLOPE_SAMPLE_DISTANCE, z)) <= maxSlope
+                && Math.abs((long) height - terrain.surfaceHeight(x, z + SLOPE_SAMPLE_DISTANCE)) <= maxSlope
+                && Math.abs((long) height - terrain.surfaceHeight(x, z - SLOPE_SAMPLE_DISTANCE)) <= maxSlope;
     }
 
     private static void placeTrunk(Tree tree, int originX, int originY, int originZ, byte[] blocks) {
@@ -213,7 +235,7 @@ final class TreeGenerator {
         int layers = crownLayers(tree);
         for (int layer = 0; layer < layers; layer++) {
             int radius = crownRadius(tree, layer);
-            long y = (long) tree.baseY + tree.trunkHeight - 2 + layer;
+            long y = crownY(tree, layer);
             for (int dz = -radius; dz <= radius; dz++)
                 for (int dx = -radius; dx <= radius; dx++) {
                     if (!hasLeaf(tree, layer, dx, dz)) continue;
@@ -244,7 +266,7 @@ final class TreeGenerator {
             if (Math.abs(dx) > tree.crownRadius || Math.abs(dz) > tree.crownRadius) continue;
             for (int layer = crownLayers(tree) - 1; layer >= 0; layer--) {
                 if (!hasLeaf(tree, layer, (int) dx, (int) dz)) continue;
-                highest = Math.max(highest, (long) tree.baseY + tree.trunkHeight - 2 + layer);
+                highest = Math.max(highest, crownY(tree, layer));
                 break;
             }
         }
@@ -252,10 +274,16 @@ final class TreeGenerator {
     }
 
     private static int crownLayers(Tree tree) {
+        if (tree.classicCrown) return 4;
         return tree.type == TreeType.CONIFER ? 6 : tree.type == TreeType.SWAMP ? 4 : 5;
     }
 
+    private static long crownY(Tree tree, int layer) {
+        return (long) tree.baseY + tree.trunkHeight - (tree.classicCrown ? 3 : 2) + layer;
+    }
+
     private static int crownRadius(Tree tree, int layer) {
+        if (tree.classicCrown) return layer < 2 ? 2 : 1;
         int layers = crownLayers(tree);
         return tree.type == TreeType.CONIFER
                 ? Math.max(0, Math.min(tree.crownRadius, (layers - 1 - layer) / 2))
@@ -264,6 +292,12 @@ final class TreeGenerator {
 
     private static boolean hasLeaf(Tree tree, int layer, int dx, int dz) {
         int radius = crownRadius(tree, layer);
+        if (tree.classicCrown)
+            return Math.abs(dx) <= radius
+                    && Math.abs(dz) <= radius
+                    && !(dx == 0 && dz == 0 && layer < 3)
+                    && (!(Math.abs(dx) == radius && Math.abs(dz) == radius)
+                            || layer < 3 && (hash(tree.shapeSeed, layer, dx * 31L + dz) & 1) != 0);
         return Math.abs(dx) <= radius
                 && Math.abs(dz) <= radius
                 && Math.abs(dx) + Math.abs(dz) <= radius + 1
@@ -282,6 +316,7 @@ final class TreeGenerator {
 
     private static boolean isLog(byte block) {
         return block == BlockId.LOG
+                || block == BlockId.BIRCH_LOG
                 || block == BlockId.PINE_LOG
                 || block == BlockId.SWAMP_LOG
                 || block == BlockId.JUNGLE_LOG
@@ -290,6 +325,7 @@ final class TreeGenerator {
 
     private static boolean isLeaves(byte block) {
         return block == BlockId.LEAVES
+                || block == BlockId.BIRCH_LEAVES
                 || block == BlockId.PINE_NEEDLES
                 || block == BlockId.SWAMP_LEAVES
                 || block == BlockId.JUNGLE_LEAVES
@@ -299,23 +335,35 @@ final class TreeGenerator {
     private static byte log(Tree tree) {
         return tree.type == TreeType.CONIFER
                 ? BlockId.PINE_LOG
-                : tree.type == TreeType.SWAMP ? BlockId.SWAMP_LOG : BlockId.LOG;
+                : tree.type == TreeType.SWAMP
+                        ? BlockId.SWAMP_LOG
+                        : tree.type == TreeType.BIRCH ? BlockId.BIRCH_LOG : BlockId.LOG;
     }
 
     private static byte leaves(Tree tree) {
         return tree.type == TreeType.CONIFER
                 ? BlockId.PINE_NEEDLES
-                : tree.type == TreeType.SWAMP ? BlockId.SWAMP_LEAVES : BlockId.LEAVES;
+                : tree.type == TreeType.SWAMP
+                        ? BlockId.SWAMP_LEAVES
+                        : tree.type == TreeType.BIRCH ? BlockId.BIRCH_LEAVES : BlockId.LEAVES;
     }
 
     record Tree(
-            int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type, TreePlan plan) {
+            int x,
+            int z,
+            int baseY,
+            int trunkHeight,
+            int crownRadius,
+            long shapeSeed,
+            TreeType type,
+            TreePlan plan,
+            boolean classicCrown) {
         Tree(int x, int z, int baseY, int trunkHeight, int crownRadius, long shapeSeed, TreeType type) {
-            this(x, z, baseY, trunkHeight, crownRadius, shapeSeed, type, null);
+            this(x, z, baseY, trunkHeight, crownRadius, shapeSeed, type, null, false);
         }
 
         int maxY() {
-            return plan == null ? baseY + trunkHeight + 4 : plan.maxY();
+            return plan == null ? baseY + trunkHeight + (classicCrown ? 0 : 4) : plan.maxY();
         }
     }
 

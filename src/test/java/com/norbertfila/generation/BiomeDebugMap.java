@@ -48,6 +48,20 @@ public final class BiomeDebugMap {
             case LAKE -> new Color(55, 125, 190);
             case RIVER -> new Color(80, 160, 210);
             case STONY_SLOPES -> new Color(130, 135, 140);
+            case RAINFOREST -> new Color(40, 170, 50);
+            case SEASONAL_FOREST -> new Color(95, 160, 45);
+            case CLASSIC_FOREST -> new Color(45, 145, 85);
+            case SWAMPLAND -> new Color(95, 120, 45);
+            case SAVANNA -> new Color(185, 180, 75);
+            case SHRUBLAND -> new Color(165, 175, 110);
+            case CLASSIC_PLAINS -> new Color(175, 220, 100);
+            case CLASSIC_DESERT -> new Color(245, 215, 145);
+            case TUNDRA -> new Color(235, 240, 215);
+            case ARCHLANDS_CLASSIC -> new Color(140, 90, 185);
+            case FLOATING_ISLES_CLASSIC -> new Color(210, 145, 240);
+            case OVERHANG_HIGHLANDS_CLASSIC -> new Color(110, 85, 135);
+            case HIDDEN_VALLEYS_CLASSIC -> new Color(40, 205, 150);
+            case COASTAL_CLIFFS_CLASSIC -> new Color(180, 160, 150);
         };
     }
 }

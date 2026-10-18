@@ -85,6 +85,7 @@ final class CaveCarver {
             int ox = Math.multiplyExact(chunkX, Chunk.SIZE), oz = Math.multiplyExact(chunkZ, Chunk.SIZE);
             int[] heights = new int[18 * 18];
             int[] water = new int[18 * 18];
+            var shapes = new TerrainShape[18 * 18];
             for (int z = 0; z < 18; z++)
                 for (int x = 0; x < 18; x++) {
                     long wx = (long) ox + x - 1, wz = (long) oz + z - 1;
@@ -99,16 +100,18 @@ final class CaveCarver {
                         var sample = terrain.sample((int) wx, (int) wz);
                         heights[index] = sample.surfaceHeight();
                         water[index] = sample.waterLevel();
+                        shapes[index] = sample.shape();
                     }
                 }
-            return new Surface(heights, water);
+            return new Surface(heights, water, shapes);
         });
     }
 
-    private record Surface(int[] heights, int[] water) {
+    private record Surface(int[] heights, int[] water, TerrainShape[] shapes) {
         boolean allows(int x, int y, int z) {
             int index = (z + 1) * 18 + x + 1;
             int height = heights[index];
+            if (shapes[index] != null && (waterAt(index, y + 1) || waterAt(index, y - 1))) return false;
             // Preserve the bed and side walls even when the adjacent water chunk has not been generated yet.
             if (height < water[index] && y > (long) height - 3 && y <= (long) water[index] + 1) return false;
             return !waterAt(index - 1, y)
@@ -118,6 +121,7 @@ final class CaveCarver {
         }
 
         private boolean waterAt(int index, int y) {
+            if (shapes[index] != null && y >= shapes[index].minY()) return shapes[index].materialAt(y) == BlockId.WATER;
             return heights[index] < y && y <= water[index];
         }
     }

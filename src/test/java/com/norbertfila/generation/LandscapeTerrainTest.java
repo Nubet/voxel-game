@@ -21,8 +21,11 @@ class LandscapeTerrainTest {
                 off,
                 new TerrainConfig.Layer(.001, 1, .5, 2, 1));
         var classic = new TerrainGenerator(42, config, (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(1));
-        var modern = new TerrainGenerator(42, config, (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(0));
-        assertTrue(classic.surfaceElevation(37, 51) > modern.surfaceElevation(37, 51) + 1);
+        var withoutDetails =
+                new TerrainConfig(32, off, off, off, config.mountains(), off, 28, off, off, config.landforms());
+        var smooth =
+                new TerrainGenerator(42, withoutDetails, (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(1));
+        assertEquals(1.5, classic.surfaceElevation(37, 51) - smooth.surfaceElevation(37, 51), .00001);
     }
 
     @Test

@@ -52,7 +52,7 @@ public final class FarTerrainGenerator {
                 materials[index] = (byte) surface;
                 wallMaterials[index] =
                         materials[index] == BlockId.SNOW_LAYER ? terrain.surfaceMaterial() : materials[index];
-                if (terrain.badlands() != null)
+                if (terrain.badlands() != null || terrain.shape() != null)
                     wallColumns[index] = new FarTerrainTile.WallColumn(terrain, edits, column);
                 waterTops[index] = waterTop(terrain, edits, column, heights[index]);
             }
@@ -129,6 +129,10 @@ public final class FarTerrainGenerator {
             } else {
                 block = terrain.materialAt((int) y);
                 if (!BLOCKS.isCollidable(block)) {
+                    if (terrain.shape() != null && y >= terrain.shape().minY() && y <= terrain.surfaceHeight()) {
+                        y--;
+                        continue;
+                    }
                     // Generated columns are air or water above the surface and air below bedrock.
                     long next = change < changes ? edits.changeY(column, change) : Long.MIN_VALUE;
                     if (y > terrain.surfaceHeight()) next = Math.max(next, terrain.surfaceHeight());

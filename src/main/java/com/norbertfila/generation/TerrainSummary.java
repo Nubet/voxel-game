@@ -19,9 +19,39 @@ public record TerrainSummary(
         WaterKind waterKind,
         boolean snowCover,
         boolean frozenWater,
-        BadlandsSurface.Column badlands) {
+        BadlandsSurface.Column badlands,
+        TerrainShape shape) {
     public static final int NO_BEDROCK = Integer.MIN_VALUE;
     public static final int NO_WATER = Integer.MIN_VALUE;
+
+    public TerrainSummary(
+            int surfaceHeight,
+            byte surfaceMaterial,
+            byte subsurfaceMaterial,
+            byte deepMaterial,
+            int bedrockHeight,
+            int waterLevel,
+            BiomeType biome,
+            ClimateSample climate,
+            WaterKind waterKind,
+            boolean snowCover,
+            boolean frozenWater,
+            BadlandsSurface.Column badlands) {
+        this(
+                surfaceHeight,
+                surfaceMaterial,
+                subsurfaceMaterial,
+                deepMaterial,
+                bedrockHeight,
+                waterLevel,
+                biome,
+                climate,
+                waterKind,
+                snowCover,
+                frozenWater,
+                badlands,
+                null);
+    }
 
     public TerrainSummary(
             int surfaceHeight,
@@ -152,6 +182,7 @@ public record TerrainSummary(
     public byte materialAt(int worldY) {
         if (frozenWater && worldY == waterLevel) return BlockId.ICE;
         if (snowCover && (long) worldY == (long) surfaceHeight + 1) return BlockId.SNOW_LAYER;
+        if (shape != null && worldY >= shape.minY()) return shape.materialAt(worldY);
         return materialAt(
                 worldY,
                 surfaceHeight,

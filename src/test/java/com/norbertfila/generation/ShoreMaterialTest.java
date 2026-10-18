@@ -33,7 +33,8 @@ class ShoreMaterialTest {
                     42,
                     config,
                     (x, z) -> Math.clamp((height - 32 + slope * (slopeAxis == 0 ? x + 16 : z + 16)) / 8, -1, 1),
-                    (x, z) -> -1);
+                    (x, z) -> -1,
+                    LandscapeTestConfig.uniform());
             TerrainSummary sample = generator.sample(-16, -16);
             assertEquals(height, sample.surfaceHeight());
             assertEquals(expected, sample.surfaceMaterial());

@@ -8,8 +8,8 @@ import com.norbertfila.world.BlockRegistry;
  * {@code sampleStep} blocks. Each cell stores its top solid block, that block's material and the top of the water
  * above it. Far terrain never feeds collision or simulation.
  *
- * <p>The heightfield represents only the topmost surface: caves, overhangs and blocks below a higher block are not
- * visible. Planned Jungle crowns use separate geometry above this heightfield.
+ * <p>Ordinary terrain uses its topmost surface; rare classic formations retain their volumetric columns.
+ * Planned Jungle crowns use separate geometry above the terrain.
  */
 public final class FarTerrainTile {
     public static final int SIZE = 64;
@@ -32,6 +32,7 @@ public final class FarTerrainTile {
     private final int minHeight;
     private final int maxHeight;
     private final int[] canopyQuads;
+    private final int volumeMinY;
 
     /** Takes ownership of the arrays, indexed {@code cellZ * cells + cellX}. */
     FarTerrainTile(
@@ -137,6 +138,15 @@ public final class FarTerrainTile {
             min = Math.min(min, top);
             max = Math.max(max, top);
         }
+        int volumeMin = Integer.MAX_VALUE;
+        for (var column : wallColumns)
+            if (column != null && column.terrain().shape() != null)
+                volumeMin = Math.min(volumeMin, column.terrain().shape().minY());
+        if (volumeMin != Integer.MAX_VALUE) {
+            for (int height : heights) if (height != NO_SURFACE) volumeMin = Math.min(volumeMin, height);
+            min = Math.min(min, volumeMin);
+        }
+        volumeMinY = volumeMin;
         for (int i = 0; i < canopyQuads.length; i += 3) {
             min = Math.min(min, canopyQuads[i + 1]);
             max = Math.max(max, canopyQuads[i + 1] + (canopyQuads[i + 2] & 0xffff) + 1);
@@ -204,6 +214,26 @@ public final class FarTerrainTile {
         return wallColumns[index(x, z)] != null;
     }
 
+    boolean volumeAt(int x, int z) {
+        if (x < 0 || z < 0 || x >= cells || z >= cells) return false;
+        var column = wallColumns[index(x, z)];
+        return column != null && column.terrain().shape() != null;
+    }
+
+    int volumeMinY() {
+        return volumeMinY;
+    }
+
+    byte volumeMaterialAt(int x, int z, int y) {
+        if (x < 0 || z < 0 || x >= cells || z >= cells) return com.norbertfila.world.BlockId.AIR;
+        int index = index(x, z);
+        var column = wallColumns[index];
+        if (column != null) return column.voxelAt(y);
+        if (heights[index] != NO_SURFACE && y <= heights[index])
+            return y == heights[index] ? materials[index] : wallMaterials[index];
+        return y <= waterTops[index] ? com.norbertfila.world.BlockId.WATER : com.norbertfila.world.BlockId.AIR;
+    }
+
     public int waterTopAt(int cellX, int cellZ) {
         return waterTops[index(cellX, cellZ)];
     }
@@ -228,6 +258,11 @@ public final class FarTerrainTile {
         for (var column : wallColumns) {
             if (column == null) continue;
             bytes += 120;
+            if (column.terrain().shape() != null)
+                bytes += 40L
+                        + column.terrain().shape().maxY()
+                        - column.terrain().shape().minY()
+                        + 1;
             edits = column.edits();
         }
         if (edits != null)
@@ -237,6 +272,16 @@ public final class FarTerrainTile {
     }
 
     record WallColumn(TerrainSummary terrain, AreaEdits edits, int editColumn) {
+        byte voxelAt(int worldY) {
+            int changes = editColumn < 0 ? 0 : edits.changeCount(editColumn);
+            for (int change = 0; change < changes; change++) {
+                int y = edits.changeY(editColumn, change);
+                if (y < worldY) break;
+                if (y == worldY) return edits.changeBlock(editColumn, change);
+            }
+            return terrain.materialAt(worldY);
+        }
+
         byte materialAt(int worldY, byte fallback) {
             int changes = editColumn < 0 ? 0 : edits.changeCount(editColumn);
             for (int change = 0; change < changes; change++) {

@@ -6,7 +6,7 @@ import java.util.Set;
 public record VegetationProfile(
         float grassDensity, float flowerDensity, Set<PlantType> plants, float fernFraction, float mushroomDensity) {
     public VegetationProfile(float grassDensity, float flowerDensity, Set<PlantType> plants) {
-        this(grassDensity, flowerDensity, plants, .2f, 1);
+        this(grassDensity, flowerDensity, plants, .2f, .1f);
     }
 
     public VegetationProfile {
