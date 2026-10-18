@@ -135,7 +135,7 @@ public final class TerrainGenerator implements TerrainSource {
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this, this.landscapes);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
-        caveCarver = new CaveCarver((GroundSampler) this::sampleBase);
+        caveCarver = new CaveCarver((GroundSampler) this::sampleBase, seed);
         ores = new OreGenerator(seed);
     }
 
@@ -465,8 +465,8 @@ public final class TerrainGenerator implements TerrainSource {
                 && !mayHaveOres
                 && (!CaveCarver.carveable((byte) uniform)
                         || column.caves().stream()
-                                .noneMatch(s -> s.y() + s.radiusY() > originY
-                                        && s.y() - s.radiusY() < (double) originY + Chunk.SIZE)))
+                                .noneMatch(s -> s.y() + s.boundRadiusY() > originY
+                                        && s.y() - s.boundRadiusY() < (double) originY + Chunk.SIZE)))
             return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
         if (uniform >= 0) Arrays.fill(blocks, (byte) uniform);

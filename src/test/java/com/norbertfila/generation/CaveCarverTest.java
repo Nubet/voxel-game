@@ -76,6 +76,46 @@ class CaveCarverTest {
         assertThrows(IllegalArgumentException.class, () -> new CavePlan.Segment(Double.NaN, 0, 0, 1, 1));
     }
 
+    @Test
+    void roughShellMatchesPointQueriesAcrossAllChunkAxesAndActuallyChangesTheShape() {
+        var segments = List.of(
+                new CavePlan.Segment(15.8, 15.9, -.2, 4.5, 3, CaveProfile.CHAMBER),
+                new CavePlan.Segment(-.1, -.2, 15.8, 1.3, 1.85, CaveProfile.SPAGHETTI));
+        var plan = new CavePlan(segments);
+        int deformed = 0;
+        for (int cy = -1; cy <= 1; cy++)
+            for (int cz = -1; cz <= 1; cz++)
+                for (int cx = -1; cx <= 1; cx++) {
+                    byte[] blocks = stone();
+                    carver.carve(new ChunkPos(cx, cy, cz), blocks, plan.segments(cx, cz));
+                    for (int y = 0; y < 16; y++)
+                        for (int z = 0; z < 16; z++)
+                            for (int x = 0; x < 16; x++) {
+                                int wx = cx * 16 + x, wy = cy * 16 + y, wz = cz * 16 + z;
+                                boolean actual = blocks[(y * 16 + z) * 16 + x] == BlockId.AIR;
+                                assertEquals(carver.carves(wx, wy, wz, BlockId.STONE, segments), actual);
+                                boolean smooth = segments.stream().anyMatch(s -> s.contains(wx + .5, wy + .5, wz + .5));
+                                if (smooth != actual) deformed++;
+                            }
+                }
+        assertTrue(deformed > 0);
+    }
+
+    @Test
+    void deformationsKeepPlayerWidthAndStandingHeightClearAlongPlannedPaths() {
+        var planner = new CavePlanner(42, -64, (x, z) -> 96);
+        var segments = new java.util.HashSet<CavePlan.Segment>();
+        var plan = planner.plan(0, 0);
+        for (int z = -7; z < 15; z++) for (int x = -7; x < 15; x++) segments.addAll(plan.segments(x, z));
+        for (var segment : segments) {
+            if (segment.profile() == CaveProfile.CHAMBER) continue;
+            for (int x = (int) Math.floor(segment.x() - .3); x <= Math.floor(segment.x() + .3); x++)
+                for (int z = (int) Math.floor(segment.z() - .3); z <= Math.floor(segment.z() + .3); z++)
+                    for (int y = (int) Math.floor(segment.y()) - 1; y <= Math.floor(segment.y()) + 1; y++)
+                        assertTrue(carver.contains(segment, x + .5, y + .5, z + .5));
+        }
+    }
+
     private static byte[] stone() {
         byte[] blocks = new byte[ChunkData.BLOCK_COUNT];
         Arrays.fill(blocks, BlockId.STONE);
