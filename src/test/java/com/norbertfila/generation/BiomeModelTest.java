@@ -17,6 +17,17 @@ class BiomeModelTest {
     private final BiomeResolver resolver = new BiomeResolver();
 
     @Test
+    void forestEdgesChangeDensityGraduallyAcrossTheBiomeBoundary() {
+        assertEquals(0, BiomeResolver.forestWeight(new ClimateSample(0, -.3f)));
+        assertEquals(1, BiomeResolver.forestWeight(new ClimateSample(0, .1f)));
+        assertEquals(.5, BiomeResolver.forestWeight(new ClimateSample(0, -.1f)), .00001);
+        assertEquals(
+                BiomeResolver.forestWeight(new ClimateSample(0, -.100001f)),
+                BiomeResolver.forestWeight(new ClimateSample(0, -.099999f)),
+                .0001);
+    }
+
+    @Test
     void badlandsDeclareTerracottaInsteadOfUsingGravelAsABiomeMarker() {
         var surface = BiomeRegistry.defaults().profile(BiomeType.BADLANDS).surface();
         assertEquals(SurfaceMaterial.TERRACOTTA_ORANGE, surface.surface());

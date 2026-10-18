@@ -6,6 +6,7 @@ import com.norbertfila.generation.biome.BiomeRegistry;
 import com.norbertfila.generation.biome.BiomeResolver;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.ClimateNoise;
+import com.norbertfila.generation.biome.ClimateRules;
 import com.norbertfila.generation.biome.ClimateSample;
 import com.norbertfila.generation.biome.JungleRules;
 import com.norbertfila.generation.biome.SurfaceMaterialMapper;
@@ -38,7 +39,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final BadlandsLandforms badlandsLandforms;
     private final RegionalHydrology hydrology;
     private final SmallWaterBodyClassifier waterBodies;
-    private final GenerationCache<BiomeType> tintBiomes = new GenerationCache<>(4096);
+    private final GenerationCache<ClimateSample> tintClimates = new GenerationCache<>(4096);
     private final GenerationCache<byte[]> tintColumns = new GenerationCache<>(2048);
     private final Noise2D shores;
     private final ClimateNoise climate;
@@ -172,21 +173,25 @@ public final class TerrainGenerator implements TerrainSource {
     public int tintIndex(int x, int z) {
         int gx = Math.floorDiv(x, 64), gz = Math.floorDiv(z, 64);
         return com.norbertfila.generation.biome.BiomeTint.blend(
-                tintBiome(gx, gz),
-                tintBiome(gx + 1, gz),
-                tintBiome(gx, gz + 1),
-                tintBiome(gx + 1, gz + 1),
+                tintClimate(gx, gz),
+                tintClimate(gx + 1, gz),
+                tintClimate(gx, gz + 1),
+                tintClimate(gx + 1, gz + 1),
                 Math.floorMod(x, 64) / 64.0,
                 Math.floorMod(z, 64) / 64.0);
     }
 
-    private BiomeType tintBiome(int x, int z) {
-        return tintBiomes.get(
-                x,
-                z,
-                () -> sample((int) Math.clamp((long) x * 64, Integer.MIN_VALUE, Integer.MAX_VALUE), (int)
-                                Math.clamp((long) z * 64, Integer.MIN_VALUE, Integer.MAX_VALUE))
-                        .biome());
+    private ClimateSample tintClimate(int x, int z) {
+        return tintClimates.get(x, z, () -> {
+            var ground = sample((int) Math.clamp((long) x * 64, Integer.MIN_VALUE, Integer.MAX_VALUE), (int)
+                    Math.clamp((long) z * 64, Integer.MIN_VALUE, Integer.MAX_VALUE));
+            return new ClimateSample(
+                    Math.clamp(
+                            ClimateRules.temperature(ground.climate(), ground.surfaceHeight(), config.baseHeight()),
+                            -1,
+                            1),
+                    ground.climate().humidity());
+        });
     }
 
     private ChunkData tinted(ChunkData data, int ox, int oz) {

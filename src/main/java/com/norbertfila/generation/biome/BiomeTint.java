@@ -5,6 +5,32 @@ import com.norbertfila.world.BlockRegistry;
 public final class BiomeTint {
     private BiomeTint() {}
 
+    public static int climateIndex(ClimateSample climate) {
+        double cold = Math.clamp((.1 - climate.temperature()) / 1.1, 0, 1);
+        double dry = Math.clamp((climate.temperature() + .25) * (.4 - climate.humidity()), 0, 1);
+        double wet = Math.clamp((climate.humidity() - .25) / .75, 0, 1) * .4;
+        int style = dry > cold ? 1 : 2;
+        double weight = Math.max(dry, cold);
+        if (wet > weight) {
+            style = 3;
+            weight = wet;
+        }
+        int strength = (int) Math.round(weight * 7);
+        return strength == 0 ? 0 : style * 8 + strength;
+    }
+
+    public static int blend(ClimateSample a, ClimateSample b, ClimateSample c, ClimateSample d, double x, double z) {
+        return climateIndex(new ClimateSample(
+                (float) (a.temperature() * (1 - x) * (1 - z)
+                        + b.temperature() * x * (1 - z)
+                        + c.temperature() * (1 - x) * z
+                        + d.temperature() * x * z),
+                (float) (a.humidity() * (1 - x) * (1 - z)
+                        + b.humidity() * x * (1 - z)
+                        + c.humidity() * (1 - x) * z
+                        + d.humidity() * x * z)));
+    }
+
     public static boolean tintedTexture(int layer) {
         return layer == BlockRegistry.GRASS_TOP_TEXTURE
                 || layer == BlockRegistry.GRASS_SIDE_TEXTURE
