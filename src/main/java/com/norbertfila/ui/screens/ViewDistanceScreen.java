@@ -11,13 +11,17 @@ public final class ViewDistanceScreen implements Screen {
     private final GameSettings settings;
     private final Translations translations;
     private final Slider detail = new Slider(
-            new UiBounds(12, 48, 280, 12), GameSettings.MIN_RENDER_DISTANCE, GameSettings.MAX_RENDER_DISTANCE, 1, 8);
+            new UiBounds(12, 48, 280, 12),
+            GameSettings.MIN_RENDER_DISTANCE,
+            GameSettings.MAX_RENDER_DISTANCE,
+            1,
+            GameSettings.DEFAULT_RENDER_DISTANCE);
     private final Slider simulation = new Slider(
             new UiBounds(12, 100, 280, 12),
             GameSettings.MIN_SIMULATION_DISTANCE,
             GameSettings.MAX_RENDER_DISTANCE,
             1,
-            8);
+            GameSettings.DEFAULT_SIMULATION_DISTANCE);
     private final Slider landscape = new Slider(
             new UiBounds(12, 152, 280, 12), 0, GameSettings.MAX_FAR_DISTANCE, 1, GameSettings.DEFAULT_FAR_DISTANCE);
     private final Button back = new Button(new UiBounds(220, 212, 76, 20), "");
