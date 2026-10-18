@@ -3,6 +3,14 @@ package com.norbertfila.generation.biome;
 import com.norbertfila.generation.WaterKind;
 
 public final class BiomeResolver {
+    private static final float FOREST_HUMIDITY = -.1f;
+    private static final double FOREST_EDGE_WIDTH = .2;
+
+    public static double forestWeight(ClimateSample climate) {
+        double t = Math.clamp((climate.humidity() - FOREST_HUMIDITY) / FOREST_EDGE_WIDTH + .5, 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
     public BiomeType resolve(
             ClimateSample climate,
             int height,
@@ -43,7 +51,7 @@ public final class BiomeResolver {
         if (temperature > .2f && humidity < .25f) return BiomeType.BADLANDS;
         if (temperature > .2f && humidity > .3f) return BiomeType.JUNGLE;
         if (humidity > .35f) return temperature < .4f ? BiomeType.SWAMP : BiomeType.FOREST;
-        if (humidity > -.1f) return BiomeType.FOREST;
+        if (humidity > FOREST_HUMIDITY) return BiomeType.FOREST;
         return BiomeType.PLAINS;
     }
 }

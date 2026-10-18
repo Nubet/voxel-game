@@ -3,6 +3,8 @@ package com.norbertfila.generation;
 import static com.norbertfila.generation.GenerationHash.hash;
 
 import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.generation.biome.BiomeResolver;
+import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.generation.biome.TreeType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
@@ -161,8 +163,15 @@ final class TreeGenerator {
         if (!Double.isFinite(densityNoise) || densityNoise < -1 || densityNoise > 1)
             throw new IllegalStateException("Forest noise must be finite and within [-1, 1]");
         double t = Math.clamp((densityNoise + .1) / .5, 0, 1);
-        var profile = biomes.profile(terrain.sample((int) x, (int) z).biome()).trees();
-        double density = profile.density() * (profile.type() == TreeType.JUNGLE ? .85 + .15 * t : t * t * (3 - 2 * t));
+        var ground = terrain.sample((int) x, (int) z);
+        var profile = biomes.profile(ground.biome()).trees();
+        double baseDensity = profile.density();
+        if (ground.biome() == BiomeType.PLAINS || ground.biome() == BiomeType.FOREST) {
+            double plains = biomes.profile(BiomeType.PLAINS).trees().density();
+            double forest = biomes.profile(BiomeType.FOREST).trees().density();
+            baseDensity = plains + (forest - plains) * BiomeResolver.forestWeight(ground.climate());
+        }
+        double density = baseDensity * (profile.type() == TreeType.JUNGLE ? .85 + .15 * t : t * t * (3 - 2 * t));
         density = Math.clamp(density * landscapes.sample(x, z).trees(), 0, 1);
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }
