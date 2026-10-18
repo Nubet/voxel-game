@@ -2,7 +2,7 @@ package com.norbertfila.streaming;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.norbertfila.fluid.WaterSimulator;
+import com.norbertfila.fluid.FluidSimulator;
 import com.norbertfila.generation.WaterTestScene;
 import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.WaterMesher;
@@ -72,7 +72,7 @@ class WaterStreamingTest {
     @Test
     void managerLifecycleFreezesAndReactivatesWaterOnItsOwnerThread() throws Exception {
         World world = new World();
-        WaterSimulator simulator = new WaterSimulator(world, 8);
+        FluidSimulator simulator = new FluidSimulator(world, 8);
         ViewDemand demand = new ViewDemand(0, 1, 1, ViewDemand.Shape.SQUARE);
         Map<ChunkPos, ChunkManager.MeshResult> uploaded = new HashMap<>();
         long[] tick = {0};

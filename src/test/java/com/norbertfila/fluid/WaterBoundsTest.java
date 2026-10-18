@@ -12,7 +12,7 @@ class WaterBoundsTest {
     @ValueSource(ints = {-65, 256})
     void outsideWorldIsBlockedRatherThanAnUnloadedDependency(int y) {
         var missing = new HashSet<ChunkPos>();
-        assertEquals(WaterFlowRules.BLOCKED, WaterFlowRules.nextState(new World(), new BlockPos(0, y, 0), missing));
+        assertEquals(FluidFlowRules.BLOCKED, FluidFlowRules.nextState(new World(), new BlockPos(0, y, 0), missing));
         assertTrue(missing.isEmpty());
     }
 
@@ -23,7 +23,7 @@ class WaterBoundsTest {
         var position = new BlockPos(8, y, 8);
         world.putChunk(Coordinates.worldToChunk(position), new Chunk());
         world.setBlock(position, BlockId.WATER, 8);
-        var simulator = new WaterSimulator(world, 8);
+        var simulator = new FluidSimulator(world, 8);
         simulator.onBlockChanged(position, 0);
         simulator.tick(15);
         assertTrue(simulator.snapshot(15).updates().stream()

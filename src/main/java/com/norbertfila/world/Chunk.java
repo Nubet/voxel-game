@@ -4,7 +4,7 @@ public final class Chunk {
     public static final int SIZE = 16;
     public static final int BLOCK_BYTES = SIZE * SIZE * SIZE;
     private LayerStorage data = new LayerStorage();
-    // Zero metadata means source for WATER and no fluid for every other block.
+    // Zero metadata means a source for either fluid and no fluid for every other block.
     private byte[] waterData;
     private int flowingBlocks;
     private int waterBlocks;
@@ -25,13 +25,13 @@ public final class Chunk {
 
     public static Chunk fromBlocks(byte[] source) {
         Chunk chunk = new Chunk(LayerStorage.fromBlocks(source));
-        for (byte block : source) if (block == BlockId.WATER) chunk.waterBlocks++;
+        for (byte block : source) if (BlockId.isFluid(Byte.toUnsignedInt(block))) chunk.waterBlocks++;
         return chunk;
     }
 
     public static Chunk uniform(byte block) {
         Chunk chunk = new Chunk(LayerStorage.uniform(block));
-        if (block == BlockId.WATER) chunk.waterBlocks = BLOCK_BYTES;
+        if (BlockId.isFluid(Byte.toUnsignedInt(block))) chunk.waterBlocks = BLOCK_BYTES;
         return chunk;
     }
 
@@ -59,7 +59,7 @@ public final class Chunk {
 
     public byte waterState(int x, int y, int z) {
         checkLocalCoordinates(x, y, z);
-        if (data.get(x, y, z) != BlockId.WATER) return WaterState.EMPTY;
+        if (!BlockId.isFluid(Byte.toUnsignedInt(data.get(x, y, z)))) return WaterState.EMPTY;
         return waterData == null ? WaterState.SOURCE : waterData[index(x, y, z)];
     }
 
@@ -68,11 +68,12 @@ public final class Chunk {
         checkLocalCoordinates(x, y, z);
         int index = index(x, y, z);
         byte previous = waterData == null ? 0 : waterData[index];
-        byte next = value == BlockId.WATER ? waterState : 0;
+        byte next = BlockId.isFluid(Byte.toUnsignedInt(value)) ? waterState : 0;
         if (data.get(x, y, z) == value && previous == next) return;
         if (next != 0 && waterData == null) waterData = new byte[BLOCK_BYTES];
         byte old = data.get(x, y, z);
-        waterBlocks += (value == BlockId.WATER ? 1 : 0) - (old == BlockId.WATER ? 1 : 0);
+        waterBlocks += (BlockId.isFluid(Byte.toUnsignedInt(value)) ? 1 : 0)
+                - (BlockId.isFluid(Byte.toUnsignedInt(old)) ? 1 : 0);
         data.set(x, y, z, value);
         if (waterData != null) {
             flowingBlocks += (next != 0 ? 1 : 0) - (previous != 0 ? 1 : 0);

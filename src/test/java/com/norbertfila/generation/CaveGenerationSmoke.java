@@ -84,7 +84,39 @@ public final class CaveGenerationSmoke {
                         output.resolve("cave-" + seed + "-entrance.png"));
                 System.out.println("PASS seed=" + seed + " interior=" + interior + " entrance=" + entrance);
             }
+            captureLava(textures, output.resolve("lava.png"));
             if (glGetError() != GL_NO_ERROR) throw new AssertionError("Cave rendering GL error");
+        }
+    }
+
+    private static void captureLava(BlockTextureArray textures, Path file) throws Exception {
+        var world = new World();
+        var chunk = new com.norbertfila.world.Chunk();
+        for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++) {
+                chunk.set(x, 0, z, BlockId.STONE);
+                if (x >= 3 && x <= 12 && z >= 3 && z <= 12) chunk.set(x, 1, z, BlockId.LAVA);
+            }
+        world.putChunk(new ChunkPos(0, 0, 0), chunk);
+        try (var renderer = new TerrainRenderer(textures)) {
+            VegetationSmoke.upload(renderer, world);
+            var eye = new Vector3f(8, 10, 18);
+            var vp = new Matrix4f()
+                    .perspective(
+                            (float) Math.toRadians(65),
+                            VegetationSmoke.WIDTH / (float) VegetationSmoke.HEIGHT,
+                            .1f,
+                            160)
+                    .lookAt(eye, new Vector3f(8, 1, 8), new Vector3f(0, 1, 0));
+            byte[] pixels = VegetationSmoke.draw(renderer, vp, eye);
+            int orange = 0;
+            for (int i = 0; i < pixels.length; i += 4)
+                if (Byte.toUnsignedInt(pixels[i]) > 180
+                        && Byte.toUnsignedInt(pixels[i + 1]) < 180
+                        && Byte.toUnsignedInt(pixels[i + 2]) < 80) orange++;
+            if (orange < 1000) throw new AssertionError("Missing opaque lava surface");
+            VegetationSmoke.write(file, pixels);
+            System.out.println("PASS lava pixels=" + orange);
         }
     }
 

@@ -6,7 +6,7 @@ import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
-import com.norbertfila.fluid.WaterSimulator;
+import com.norbertfila.fluid.FluidSimulator;
 import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.interaction.BlockBreakEvent;
@@ -180,8 +180,8 @@ public final class WorldRuntime implements AutoCloseable {
                 throw new IllegalStateException("Save does not match the world generator");
             if (stopping) return;
             World world = new World();
-            WaterSimulator water =
-                    new WaterSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
+            FluidSimulator water =
+                    new FluidSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
             long[] tick = {saved.fluids().tick()}, sequence = {saved.sequence()};
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
             water.restore(saved.fluids());
@@ -218,7 +218,7 @@ public final class WorldRuntime implements AutoCloseable {
             PlayerInputBuffer input = new PlayerInputBuffer();
             Map<Long, ChunkManager.MeshResult> outstanding = new LinkedHashMap<>();
             Map<Long, Long> issuedAt = new HashMap<>();
-            WaterSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
+            FluidSimulator.Metrics[] fluidMetrics = {water.metrics(tick[0])};
             long[] estimatedChunkBytes = {0};
             BlockBreaking breaking = new BlockBreaking(world);
             var commands = new GameCommands();
@@ -705,7 +705,7 @@ public final class WorldRuntime implements AutoCloseable {
             WorldIdentity identity,
             long sequence,
             World world,
-            WaterSimulator water,
+            FluidSimulator water,
             long tick,
             Inventory inventory,
             PlayerController player,

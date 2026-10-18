@@ -13,6 +13,7 @@ public final class WaterCurrent {
         int own = read(world, position.x(), position.y(), position.z());
         if (own == WaterSurface.UNKNOWN) return new Result(0, 0, 0, false);
         if (own < WaterState.SOURCE) return new Result(0, 0, 0, true);
+        int fluid = world.getBlock(position).orElseThrow();
         double x = 0, z = 0;
         for (int direction = 0; direction < 4; direction++) {
             int dx = direction == 0 ? -1 : direction == 1 ? 1 : 0;
@@ -20,6 +21,8 @@ public final class WaterCurrent {
             int neighbor = read(world, (long) position.x() + dx, position.y(), (long) position.z() + dz);
             if (neighbor == WaterSurface.UNKNOWN) available = false;
             if (neighbor < WaterState.SOURCE) continue;
+            long nx = (long) position.x() + dx, nz = (long) position.z() + dz;
+            if (world.getBlock(new BlockPos((int) nx, position.y(), (int) nz)).orElse(BlockId.AIR) != fluid) continue;
             int delta = WaterState.distance((byte) neighbor) - WaterState.distance((byte) own);
             x += dx * delta;
             z += dz * delta;

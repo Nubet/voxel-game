@@ -28,6 +28,7 @@ public final class TerrainRenderer implements AutoCloseable {
     private static final long DEFAULT_GPU_BUDGET_BYTES = 256L * 1024 * 1024;
     private static final long ARENA_BYTES = 1024L * 1024;
     private static final int TRANSLUCENT_SOLID_PASS = 3;
+    private static final int OPAQUE_FLUID_PASS = 4;
     private final GpuMemoryBudget memoryBudget;
     private final GpuMemoryBudget arenaBudget;
     private final QuadArenas solidArenas;
@@ -233,6 +234,10 @@ public final class TerrainRenderer implements AutoCloseable {
         commands.clear();
         addGroupedByBuffer(RenderLayer.OPAQUE, solidMeshes, visibleSolids);
         addGroupedByBuffer(RenderLayer.CUTOUT, solidMeshes, visibleSolids);
+        for (ChunkPos position : visibleChunks) {
+            GpuMesh fluid = waterMeshes.get(position);
+            if (fluid != null) add(OPAQUE_FLUID_PASS, RenderLayer.OPAQUE, fluid, position);
+        }
         for (ChunkPos position : visibleTranslucent) {
             GpuMesh water = waterMeshes.get(position), solid = solidMeshes.get(position);
             if (water != null) add(RenderLayer.TRANSLUCENT, water, position);
@@ -250,6 +255,10 @@ public final class TerrainRenderer implements AutoCloseable {
             calls += indirect.submit(commands, RenderLayer.OPAQUE.ordinal());
             solidProgram.renderLayer(RenderLayer.CUTOUT);
             calls += indirect.submit(commands, RenderLayer.CUTOUT.ordinal());
+            glDisable(GL_CULL_FACE);
+            waterProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+            waterProgram.renderLayer(RenderLayer.OPAQUE);
+            calls += indirect.submit(commands, OPAQUE_FLUID_PASS);
         } finally {
             restoreTerrainState();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);

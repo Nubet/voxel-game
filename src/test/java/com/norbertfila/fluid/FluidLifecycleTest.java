@@ -21,7 +21,7 @@ class FluidLifecycleTest {
         World world = new World();
         world.putChunk(LEFT, floor());
         world.setBlock(EDGE, BlockId.WATER, WaterState.flowing(3), 8);
-        WaterSimulator simulator = new WaterSimulator(world, 8);
+        FluidSimulator simulator = new FluidSimulator(world, 8);
         simulator.onBlockChanged(EDGE, 0);
         for (int tick = 1; tick <= 500; tick++) simulator.tick(tick);
         assertTrue(simulator.deferredUpdates() > 0);
@@ -42,7 +42,7 @@ class FluidLifecycleTest {
         world.putChunk(LEFT, floor());
         BlockPos source = new BlockPos(8, 1, 8), target = new BlockPos(9, 1, 8);
         world.setBlock(source, BlockId.WATER, 8);
-        WaterSimulator simulator = new WaterSimulator(world, 8);
+        FluidSimulator simulator = new FluidSimulator(world, 8);
         simulator.onBlockChanged(source, 0);
         simulator.tick(5);
         world.removeChunk(LEFT);
@@ -66,7 +66,7 @@ class FluidLifecycleTest {
             BlockPos source = new BlockPos(fromLeft ? 15 : 16, 1, 8);
             BlockPos target = new BlockPos(fromLeft ? 16 : 15, 1, 8);
             world.setBlock(source, BlockId.WATER, 8);
-            WaterSimulator simulator = new WaterSimulator(world, 8);
+            FluidSimulator simulator = new FluidSimulator(world, 8);
             simulator.onChunkChanged(initial, 0);
             for (int tick = 1; tick <= 100; tick++) simulator.tick(tick);
             world.putChunk(arriving, floor());
@@ -83,7 +83,7 @@ class FluidLifecycleTest {
         BlockPos corner = new BlockPos(15, 1, 15);
         ChunkPos front = new ChunkPos(0, 0, 1);
         world.setBlock(corner, BlockId.WATER, WaterState.flowing(2), 8);
-        WaterSimulator simulator = new WaterSimulator(world, 8);
+        FluidSimulator simulator = new FluidSimulator(world, 8);
         simulator.onBlockChanged(corner, 0);
         for (int tick = 1; tick <= 500; tick++) simulator.tick(tick);
         var parked = simulator.snapshot(500).updates().stream()
@@ -109,7 +109,7 @@ class FluidLifecycleTest {
         World world = new World();
         world.putChunk(LEFT, floor());
         world.setBlock(EDGE, BlockId.WATER, WaterState.flowing(3), 8);
-        WaterSimulator simulator = new WaterSimulator(world, 8);
+        FluidSimulator simulator = new FluidSimulator(world, 8);
         simulator.onBlockChanged(EDGE, 0);
         for (int tick = 1; tick <= 500; tick++) simulator.tick(tick);
         assertTrue(simulator.deferredUpdates() > 0);
@@ -127,7 +127,7 @@ class FluidLifecycleTest {
         World first = new World();
         first.putChunk(LEFT, floor());
         first.setBlock(EDGE, BlockId.WATER, WaterState.flowing(3), 8);
-        WaterSimulator original = new WaterSimulator(first, 8, 3);
+        FluidSimulator original = new FluidSimulator(first, 8, 3);
         original.onBlockChanged(EDGE, 0);
         for (int tick = 1; tick <= 30; tick++) original.tick(tick);
         BlockPos source = new BlockPos(5, 1, 8);
@@ -143,7 +143,7 @@ class FluidLifecycleTest {
         World second = new World();
         TestWorlds.restore(second, loaded, 8);
         second.putChunk(LEFT, floor());
-        WaterSimulator resumed = new WaterSimulator(second, 8, 3);
+        FluidSimulator resumed = new FluidSimulator(second, 8, 3);
         resumed.restore(loaded.fluids());
         for (int tick = 31; tick <= 500; tick++) {
             if (tick == 200) {
@@ -164,13 +164,13 @@ class FluidLifecycleTest {
         World world = new World();
         world.putChunk(LEFT, floor());
         world.setBlock(new BlockPos(8, 1, 8), BlockId.WATER, 8);
-        WaterSimulator original = new WaterSimulator(world, 8);
+        FluidSimulator original = new FluidSimulator(world, 8);
         original.onBlockChanged(new BlockPos(8, 1, 8), 0);
         var snapshot = original.snapshot(5);
         assertThrows(
                 UnsupportedOperationException.class, () -> snapshot.updates().clear());
         World empty = new World();
-        WaterSimulator resumed = new WaterSimulator(empty, 8);
+        FluidSimulator resumed = new FluidSimulator(empty, 8);
         resumed.restore(snapshot);
         assertEquals(snapshot.updates().size(), resumed.deferredUpdates());
         assertEquals(0, resumed.tick(1000).processedUpdates());

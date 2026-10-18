@@ -166,14 +166,19 @@ public final class BlockId {
             MAHOGANY_LOG = (byte) 163,
             MAHOGANY_LEAVES = (byte) 164,
             MAHOGANY_PLANKS = (byte) 165,
-            PUMPKIN = (byte) 166;
+            PUMPKIN = (byte) 166,
+            LAVA = (byte) 167;
 
     public static int toUnsignedInt(byte id) {
         return Byte.toUnsignedInt(id);
     }
 
     public static boolean isValid(byte id) {
-        return toUnsignedInt(id) <= toUnsignedInt(PUMPKIN) && id != 88;
+        return toUnsignedInt(id) <= toUnsignedInt(LAVA) && id != 88;
+    }
+
+    public static boolean isFluid(int id) {
+        return id == WATER || id == LAVA || id == toUnsignedInt(LAVA);
     }
 
     private BlockId() {}

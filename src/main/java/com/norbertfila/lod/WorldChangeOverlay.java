@@ -58,7 +58,8 @@ public final class WorldChangeOverlay {
         Objects.requireNonNull(position);
         WaterState.validate(value, waterState);
         FarTilePos dirtyTile = tile(position, tileSize);
-        short packed = (short) (BlockId.toUnsignedInt(value) | (value == BlockId.WATER ? waterState << 8 : 0));
+        short packed = (short)
+                (BlockId.toUnsignedInt(value) | (BlockId.isFluid(Byte.toUnsignedInt(value)) ? waterState << 8 : 0));
         ChunkChanges chunkChanges = changes.computeIfAbsent(Coordinates.worldToChunk(position), ChunkChanges::new);
         int previous = chunkChanges.set(localIndex(position), packed);
         if (previous < 0) size++;
@@ -204,7 +205,7 @@ public final class WorldChangeOverlay {
     }
 
     private static byte waterState(int packed) {
-        return (byte) packed == BlockId.WATER ? (byte) (packed >>> 8) : WaterState.EMPTY;
+        return BlockId.isFluid(packed & 255) ? (byte) (packed >>> 8) : WaterState.EMPTY;
     }
 
     private static final class EditedColumn {

@@ -20,7 +20,7 @@ public final class ChunkData {
     ChunkData withFallingWater(BitSet falling) {
         if (falling.length() > BLOCK_COUNT) throw new IllegalArgumentException("Falling water outside chunk");
         for (int index = falling.nextSetBit(0); index >= 0; index = falling.nextSetBit(index + 1))
-            if (blocks == null ? uniformBlock != BlockId.WATER : blocks[index] != BlockId.WATER)
+            if (!BlockId.isFluid(Byte.toUnsignedInt(blocks == null ? uniformBlock : blocks[index])))
                 throw new IllegalArgumentException("Falling water requires a water block");
         return falling.isEmpty() ? this : new ChunkData(this, falling);
     }
@@ -110,7 +110,7 @@ public final class ChunkData {
                         index % Chunk.SIZE,
                         index / (Chunk.SIZE * Chunk.SIZE),
                         index / Chunk.SIZE % Chunk.SIZE,
-                        BlockId.WATER,
+                        blocks == null ? uniformBlock : blocks[index],
                         com.norbertfila.world.WaterState.FALLING);
         if (tints != null) chunk.setTints(tints);
         return chunk;

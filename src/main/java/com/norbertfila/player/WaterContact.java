@@ -81,7 +81,8 @@ public final class WaterContact {
                     }
                 }
         int ex = coordinate(eye.x()), ey = coordinate(eye.y()), ez = coordinate(eye.z());
-        boolean eyes = read(world, ex, ey, ez, available) >= WaterState.SOURCE
+        boolean eyes = world.getBlock(new BlockPos(ex, ey, ez)).orElse(BlockId.AIR) == BlockId.WATER
+                && read(world, ex, ey, ez, available) >= WaterState.SOURCE
                 && eye.y() - ey < surface(world, ex, ey, ez, available).heightAt(eye.x() - ex, eye.z() - ez);
         double bodyVolume = (body.maxX() - body.minX()) * (body.maxY() - body.minY()) * (body.maxZ() - body.minZ());
         return new Result(
@@ -105,9 +106,21 @@ public final class WaterContact {
     }
 
     private static WaterSurface.Corners surface(World world, int x, int y, int z, boolean[] available) {
+        int fluid = world.getBlock(new BlockPos(x, y, z)).orElse(BlockId.AIR);
         // Relative samples avoid wrapping the full-int world at a corner or the cell above it.
         return WaterSurface.corners(
-                (dx, dy, dz) -> read(world, (long) x + dx, (long) y + dy, (long) z + dz, available), 0, 0, 0);
+                (dx, dy, dz) -> {
+                    long wx = (long) x + dx, wy = (long) y + dy, wz = (long) z + dz;
+                    int state = read(world, wx, wy, wz, available);
+                    if (state >= WaterState.SOURCE
+                            && world.getBlock(new BlockPos((int) wx, (int) wy, (int) wz))
+                                            .orElse(BlockId.AIR)
+                                    != fluid) return WaterSurface.SOLID;
+                    return state;
+                },
+                0,
+                0,
+                0);
     }
 
     private static int read(World world, long x, long y, long z, boolean[] available) {
@@ -123,7 +136,7 @@ public final class WaterContact {
             return WaterSurface.UNKNOWN;
         }
         byte block = (byte) world.getBlock(position).orElseThrow();
-        if (block == BlockId.WATER) return world.getWaterState(position).orElseThrow();
+        if (BlockId.isFluid(block)) return world.getWaterState(position).orElseThrow();
         return BlockRegistry.DEFAULT.occludesFullFace(block) ? WaterSurface.SOLID : WaterSurface.EMPTY;
     }
 

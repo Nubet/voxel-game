@@ -11,6 +11,7 @@ layout(std430, binding = 1) readonly buffer Draws {
 };
 
 uniform mat4 uVP;
+uniform int uRenderLayer;
 // The camera is split into an integer block and a fraction so origins are exact far from the world origin.
 uniform ivec3 uCameraBlock;
 uniform vec3 uCameraFraction;
@@ -33,7 +34,7 @@ const float SHADE[6] = float[](0.77, 0.77, 1.0, 0.56, 0.86, 0.86);
 const int FRONT[6] = int[](0, 1, 2, 0, 2, 3);
 
 void main() {
-    vTint = 0.0;
+    vTint = -1.0;
     uint quad = uint(gl_VertexID) / 6u;
     int vertex = gl_VertexID % 6;
     uint cell = quads[quad * 4u];
@@ -50,7 +51,7 @@ void main() {
     vec3 local = vec3(position.x + corner.x, float(position.y) + h, position.z + corner.z);
     vUv = face == 2 || face == 3 ? vec2(corner.x, corner.z) : vec2(face < 2 ? corner.z : corner.x, h);
     vLayer = float(cell >> 16);
-    vShade = SHADE[face];
+    vShade = uRenderLayer == 0 ? 1.0 : SHADE[face];
     vFlow = face == 2 ? unpackSnorm2x16(flow) : vec2(0.0, falling ? -1.0 : 0.0);
     vec3 chunkOrigin = vec3(chunks[gl_BaseInstance].xyz * 16 - uCameraBlock) - uCameraFraction;
     vCameraOffset = chunkOrigin + local;

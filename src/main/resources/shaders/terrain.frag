@@ -44,7 +44,7 @@ void main() {
             if (((coverage[index >> 5] >> (index & 31)) & 1u) != 0u) discard;
         }
     }
-    vec2 uv = vUv - (uRenderLayer == 2 ? vFlow * uWaterTime * 0.25 : vec2(0.0));
+    vec2 uv = vUv - (vTint < 0.0 || uRenderLayer == 2 ? vFlow * uWaterTime * 0.25 : vec2(0.0));
     vec4 texel = texture(uBlockTextures, vec3(uv, vLayer));
     bool foliage = vLayer == 11.0 || vLayer == 45.0 || vLayer == 48.0 || (vLayer >= 56.0 && vLayer <= 59.0);
     if (vLayer == 1.0 || foliage) texel.rgb *= biomeTint(foliage);

@@ -93,7 +93,7 @@ public final class ChunkSnapshot {
             throw new IllegalArgumentException("Invalid water metadata size: " + waterData.length);
         byte[] copy = waterData.clone();
         for (int index = 0; index < blocks.length; index++) {
-            if (blocks[index] == BlockId.WATER) WaterState.validate(BlockId.WATER, copy[index]);
+            if (BlockId.isFluid(Byte.toUnsignedInt(blocks[index]))) WaterState.validate(blocks[index], copy[index]);
             else if (copy[index] != 0) throw new IllegalArgumentException("Water metadata requires a water block");
         }
         return copy;
@@ -106,7 +106,8 @@ public final class ChunkSnapshot {
 
     public byte waterState(int x, int y, int z) {
         int index = index(x, y, z);
-        if ((blocks == null ? uniformBlock : blocks[index]) != BlockId.WATER) return WaterState.EMPTY;
+        if (!BlockId.isFluid(Byte.toUnsignedInt(blocks == null ? uniformBlock : blocks[index])))
+            return WaterState.EMPTY;
         return waterData == null ? WaterState.SOURCE : waterData[index];
     }
 

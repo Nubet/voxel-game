@@ -10,7 +10,7 @@ public final class BlockDropResolver {
         if (blockId < 0 || blockId > 255 || !BlockId.isValid((byte) blockId))
             throw new IllegalArgumentException("Unknown block");
         return switch (blockId) {
-            case BlockId.AIR, BlockId.WATER, BlockId.BEDROCK -> List.of();
+            case BlockId.AIR, BlockId.WATER, BlockId.LAVA & 255, BlockId.BEDROCK -> List.of();
             case BlockId.STONE -> List.of(new ItemStack(BlockId.COBBLE, 1));
             case BlockId.GRASS -> List.of(new ItemStack(BlockId.DIRT, 1));
             default -> List.of(new ItemStack(blockId, 1));
