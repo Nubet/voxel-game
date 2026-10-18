@@ -3,6 +3,7 @@ package com.norbertfila.generation;
 import com.norbertfila.world.ChunkPos;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.zip.CRC32;
 
@@ -25,15 +26,24 @@ public final class CaveGenerationProfile {
         long before = bean.getThreadAllocatedBytes(thread);
         long start = System.nanoTime();
         CRC32 crc = new CRC32();
-        for (var position : positions) crc.update(terrain.generate(position).blocks());
+        long[] durations = new long[positions.size()];
+        for (int i = 0; i < positions.size(); i++) {
+            long chunkStart = System.nanoTime();
+            var data = terrain.generate(positions.get(i));
+            durations[i] = System.nanoTime() - chunkStart;
+            crc.update(data.blocks());
+        }
         double millis = (System.nanoTime() - start) / 1e6;
         long allocated = bean.getThreadAllocatedBytes(thread) - before;
+        Arrays.sort(durations);
         System.out.printf(
-                "%s: chunks=%d ms=%.1f us/chunk=%.1f allocatedMiB=%.1f crc=%x%n",
+                "%s: chunks=%d ms=%.1f us/chunk=%.1f p50us=%.1f p95us=%.1f allocatedMiB=%.1f crc=%x%n",
                 label,
                 positions.size(),
                 millis,
                 millis * 1000 / positions.size(),
+                durations[durations.length / 2] / 1000d,
+                durations[(int) (durations.length * .95)] / 1000d,
                 allocated / 1048576d,
                 crc.getValue());
         return crc.getValue();
