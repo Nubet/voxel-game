@@ -221,6 +221,7 @@ public final class WorldRuntime implements AutoCloseable {
             long[] estimatedChunkBytes = {0};
             BlockBreaking breaking = new BlockBreaking(world);
             var commands = new GameCommands();
+            var teleports = new TeleportController();
             CommandSource commandSource = new CommandSource() {
                 @Override
                 public long seed() {
@@ -238,6 +239,11 @@ public final class WorldRuntime implements AutoCloseable {
                 @Override
                 public int give(byte block, int count) {
                     return inventory.insert(BlockId.toUnsignedInt(block), count);
+                }
+
+                @Override
+                public boolean teleport(PlayerState.Position position) {
+                    return !player.modeChangePending() && teleports.request(position, System.nanoTime());
                 }
             };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
@@ -303,6 +309,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     world, input.peekTick(), dt, state.yaw(), state.pitch()));
                             collisionDemand.addAll(player.requiredCollisionChunks(
                                     world, input.peekTick(), COLLISION_LOOKAHEAD_SECONDS, state.yaw(), state.pitch()));
+                            collisionDemand.addAll(teleports.requiredChunks());
                             long predictionNanos = System.nanoTime() - predictionStarted;
                             long streamingStarted = System.nanoTime();
                             chunks.ensureCollisionChunks(List.copyOf(collisionDemand));
@@ -377,6 +384,7 @@ public final class WorldRuntime implements AutoCloseable {
                                         inventory.select(selected.slot());
                                     }
                                     case Teleport teleport -> {
+                                        teleports.cancel();
                                         interactionBlocked = true;
                                         breaking.cancel();
                                         player.restore(
@@ -417,6 +425,15 @@ public final class WorldRuntime implements AutoCloseable {
                                     }
                                 }
                             }
+                            if (teleports.pending() && commandReplies.remainingCapacity() > 0) {
+                                interactionBlocked = true;
+                                input.clear();
+                                breaking.cancel();
+                                teleports
+                                        .update(world, player, chunks::readyForPlayer, System.nanoTime())
+                                        .ifPresent(result -> commandReplies.add(
+                                                new GameCommands.Reply(result.text(), result.error())));
+                            }
                             boolean newPress = state.placePressId() != lastPlacePress[0];
                             lastPlacePress[0] = state.placePressId();
                             boolean placementAttempted = false;
@@ -456,6 +473,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 chunks.requestWaterRemesh(waterResult.levelDirtyChunks());
                                 long playerStarted = System.nanoTime();
                                 if (!state.blocked()
+                                        && !interactionBlocked
                                         && player
                                                 .requiredCollisionChunks(
                                                         world, input.peekTick(), dt, state.yaw(), state.pitch())
