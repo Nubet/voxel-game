@@ -74,7 +74,7 @@ public final class TerrainGenerator implements TerrainSource {
         this(seed, config, noise, forestDensity, LandscapeConfig.defaults());
     }
 
-    private TerrainGenerator(
+    TerrainGenerator(
             long seed, TerrainConfig config, Noise2D noise, Noise2D forestDensity, LandscapeConfig landscapes) {
         this.seed = seed;
         this.landscapes = new LandscapeSampler(seed, landscapes);
@@ -239,20 +239,27 @@ public final class TerrainGenerator implements TerrainSource {
     }
 
     private GeographySample baseSample(double worldX, double worldZ) {
+        var landscape = landscapes.sample(
+                Math.clamp(worldX, Integer.MIN_VALUE, Integer.MAX_VALUE),
+                Math.clamp(worldZ, Integer.MIN_VALUE, Integer.MAX_VALUE));
         double x = worldX;
         double z = worldZ;
         if (config.warp().amplitude() != 0) {
-            x += layer(warpX, config.warp(), worldX, worldZ);
-            z += layer(warpZ, config.warp(), worldX, worldZ);
+            x += layer(warpX, config.warp(), worldX, worldZ) * landscape.warp();
+            z += layer(warpZ, config.warp(), worldX, worldZ) * landscape.warp();
         }
         double continentalLayer = layer(continental, config.continental(), x, z);
         RegionalLandforms.Sample region = landforms.sample(x, z);
+        double regionalElevation = region.elevation() * landscape.elevation();
+        double detailScale = region.details() + (1 - region.details()) * landscape.classicness();
         double height = config.baseHeight()
                 + continentalLayer
-                + region.elevation()
-                + region.hills() * layer(hills, config.hills(), x, z)
-                + region.details() * layer(details, config.details(), x, z)
-                + mountainHeight(x, z) * (1 - .85 * JungleRules.climateWeight(climate.sample(x, z)));
+                + regionalElevation
+                + region.hills() * landscape.hills() * layer(hills, config.hills(), x, z)
+                + detailScale * layer(details, config.details(), x, z)
+                + mountainHeight(x, z)
+                        * landscape.mountains()
+                        * (1 - .85 * (1 - landscape.classicness()) * JungleRules.climateWeight(climate.sample(x, z)));
         if (config.landforms().amplitude() > 0) {
             var weather = climate.sample(x, z);
             double aridity = mountainMask((weather.temperature() - .1) / .4, 0, 1)
@@ -261,10 +268,11 @@ public final class TerrainGenerator implements TerrainSource {
             double terrace = 4 * Math.sin(height * Math.PI / 8) * aridity;
             height +=
                     Math.clamp((dunes + terrace) / 7, -1, 1) * config.details().amplitude()
-                            - region.details() * layer(details, config.details(), x, z);
-            double regionalHeight = config.baseHeight() + continentalLayer + region.elevation();
+                            - detailScale * layer(details, config.details(), x, z);
+            double regionalHeight = config.baseHeight() + continentalLayer + regionalElevation;
             height = Math.max(height, Math.min(regionalHeight - 3, config.waterLevel() + 1.0));
             double badlandsWeight = BadlandsLandforms.weight(weather)
+                    * (1 - .75 * landscape.classicness())
                     * mountainMask(regionalHeight, waterLevel() + 2.0, waterLevel() + 18.0);
             if (badlandsWeight > 0) {
                 double eroded = Math.max(

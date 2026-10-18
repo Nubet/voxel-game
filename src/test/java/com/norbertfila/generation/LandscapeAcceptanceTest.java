@@ -37,7 +37,7 @@ class LandscapeAcceptanceTest {
         }
         assertEquals(EnumSet.allOf(BiomeType.class), biomes);
         assertTrue(waters.containsAll(EnumSet.of(WaterKind.OCEAN, WaterKind.RIVER, WaterKind.LAKE)));
-        assertTrue(low > total / 10 && upland > total / 10);
+        assertTrue(low > total / 10 && upland > total / 10, "low=" + low + "; upland=" + upland + "; total=" + total);
     }
 
     @Test
