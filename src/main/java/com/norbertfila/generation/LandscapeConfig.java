@@ -21,7 +21,7 @@ public record LandscapeConfig(
                 new Field(96, 2, .5),
                 new Field(320, 2.5, .5),
                 new Field(384, 2, .5),
-                new Style(new Range(0, 1.6), new Range(.15, 1.2), new Range(0, 1.6), new Range(.25, 1), .4, .3, .45),
+                new Style(new Range(0, 1.6), new Range(.15, 1.2), new Range(0, 1.6), new Range(.25, 1), .55, .3, .8),
                 new Style(new Range(.35, 1.35), new Range(.5, 1.5), new Range(0, 2), new Range(.4, 1), 1, 1, 1));
     }
 

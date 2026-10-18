@@ -51,7 +51,7 @@ class GeographicBiomeTest {
         int[][] rivers = {{-736, -4096, 34}, {3360, -4096, 57}, {-2816, -4096, 36}};
         var resolver = new BiomeResolver();
         for (int i = 0; i < seeds.length; i++) {
-            var terrain = new TerrainGenerator(seeds[i], TerrainConfig.defaults());
+            var terrain = new TerrainGenerator(seeds[i], TerrainConfig.defaults(), LandscapeTestConfig.uniform());
             int x = deserts[i][0], z = deserts[i][1], formerWaterY = deserts[i][2];
             var dry = terrain.sample(x, z);
             assertEquals(BiomeType.DESERT, resolver.resolve(dry.climate()));

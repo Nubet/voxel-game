@@ -93,8 +93,8 @@ class MountainTerrainTest {
                 config.waterLevel(),
                 config.temperature(),
                 config.humidity());
-        TerrainGenerator mountains = new TerrainGenerator(0, config);
-        TerrainGenerator plains = new TerrainGenerator(0, config.withoutMountains());
+        TerrainGenerator mountains = new TerrainGenerator(0, config, LandscapeTestConfig.region(0));
+        TerrainGenerator plains = new TerrainGenerator(0, config.withoutMountains(), LandscapeTestConfig.region(0));
         int samples = 0;
         int affected = 0;
         int min = Integer.MAX_VALUE;
@@ -135,7 +135,10 @@ class MountainTerrainTest {
                 disabled,
                 new TerrainConfig.Mountains(region, ridge, 0, .1, disabled, 1, 1, true));
         Noise2D alternating = (x, z) -> x < 39.2 ? -.25 : .25;
-        assertEquals(62, new TerrainGenerator(0, config, alternating).surfaceHeight(1, 0));
+        assertEquals(
+                62,
+                new TerrainGenerator(0, config, alternating, (x, z) -> -1, LandscapeTestConfig.uniform())
+                        .surfaceHeight(1, 0));
     }
 
     @Test

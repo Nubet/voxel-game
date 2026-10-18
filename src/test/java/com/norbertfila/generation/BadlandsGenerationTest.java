@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class BadlandsGenerationTest {
     @Test
     void naturalBadlandsContainTallFormationsWithTerracottaCliffs() {
-        var generator = new TerrainGenerator(42, TerrainConfig.defaults());
+        var generator = new TerrainGenerator(42, TerrainConfig.defaults(), LandscapeTestConfig.region(0));
         int formations = 0, isolated = 0;
         for (int z = -4096; z <= 4096; z += 64)
             for (int x = -4096; x <= 4096; x += 64) {
@@ -61,7 +61,7 @@ class BadlandsGenerationTest {
 
     @Test
     void realBadlandsChunksMatchTheirSummariesApartFromCarvedAir() {
-        var generator = new TerrainGenerator(42, TerrainConfig.defaults());
+        var generator = new TerrainGenerator(42, TerrainConfig.defaults(), LandscapeTestConfig.uniform());
         for (int[] site : new int[][] {{-1408, -1440}, {-2016, -1472}, {3072, -3136}, {-1664, 2560}}) {
             var center = generator.sample(site[0], site[1]);
             assertEquals(BiomeType.BADLANDS, center.biome());
