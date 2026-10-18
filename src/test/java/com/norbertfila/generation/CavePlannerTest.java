@@ -68,6 +68,29 @@ class CavePlannerTest {
         }
     }
 
+    @Test
+    void localProfilesKeepClassicTunnelsDominantAndVerticalConnectionsRare() {
+        int classic = 0, twisted = 0, vertical = 0, rooms = 0;
+        for (int seed = 0; seed < 100; seed++)
+            for (var segment : all(new CavePlanner(seed, -64, (x, z) -> 96).plan(0, 0), 0, 0)) {
+                switch (segment.profile()) {
+                    case CLASSIC -> classic++;
+                    case SPAGHETTI -> twisted++;
+                    case VERTICAL -> vertical++;
+                    case CHAMBER -> {
+                        rooms++;
+                        assertTrue(segment.radiusXZ() <= 6.1);
+                        assertTrue(segment.radiusY() <= 3.15);
+                    }
+                }
+            }
+        int paths = classic + twisted + vertical;
+        double classicShare = (double) classic / paths;
+        assertTrue(classicShare >= .8 && classicShare <= .9, "Classic share=" + classicShare);
+        assertTrue(twisted > 0 && vertical > 0 && rooms > 0);
+        assertTrue((double) vertical / paths < .02);
+    }
+
     private static Set<CavePlan.Segment> all(CavePlan plan, int regionX, int regionZ) {
         Set<CavePlan.Segment> result = new HashSet<>();
         for (int z = regionZ * 8 - 6; z <= regionZ * 8 + 13; z++)

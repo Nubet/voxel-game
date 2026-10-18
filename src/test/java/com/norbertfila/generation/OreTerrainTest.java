@@ -13,8 +13,8 @@ class OreTerrainTest {
         var ores = new OreGenerator(42);
         var seen = new java.util.HashSet<Byte>();
         int exposed = 0;
-        for (int cz = -2; cz <= 1; cz++)
-            for (int cx = -2; cx <= 1; cx++)
+        for (int cz = -4; cz <= 3; cz++)
+            for (int cx = -4; cx <= 3; cx++)
                 for (int cy = -4; cy <= 1; cy++) {
                     var position = new ChunkPos(cx, cy, cz);
                     byte[] candidates = new byte[ChunkData.BLOCK_COUNT];
