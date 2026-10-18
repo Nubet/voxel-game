@@ -65,7 +65,6 @@ chiseled_red_sandstone: mcl_core_red_sandstone_carved
 smooth_red_sandstone: mcl_core_red_sandstone_smooth
 
 calcite: mcl_amethyst/mcl_amethyst_calcite_block
-dripstone: mcl_dripstone/dripstone_block
 blue_ice: default_mcl_core/mcl_core_ice_blue
 
 mcl_deepslate/ (tuff textures only):

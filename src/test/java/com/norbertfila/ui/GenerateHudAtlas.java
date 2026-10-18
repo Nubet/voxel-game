@@ -79,6 +79,7 @@ public final class GenerateHudAtlas {
             for (int x = 1; x < 15; x++) fallback.setRGB(x, y, (x / 4 + y / 4) % 2 == 0 ? 0xffff00ff : 0xff181818);
         copy(fallback, atlas, 0, UiAtlas.ITEM_Y);
         for (int id = 1; id <= UiAtlas.LAST_ITEM; id++) {
+            if (!com.norbertfila.world.BlockId.isValid((byte) id)) continue;
             var definition = BlockRegistry.DEFAULT.definition((byte) id);
             var icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
             if (definition.shape() == BlockShape.CROSS) {
