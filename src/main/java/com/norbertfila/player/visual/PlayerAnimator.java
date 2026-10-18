@@ -99,6 +99,9 @@ public final class PlayerAnimator {
                 * intensity
                 * (sprinting ? 1.05 : .5));
         float rightArm = -arm, leftArm = arm, rightLeg = leg, leftLeg = -leg;
+        float rest = (float) (Math.sin(time / 60 * 1.4) * .08 * (1 - intensity));
+        rightArm += rest;
+        leftArm -= rest;
         boolean flying = state.flying() || state.mode() == PlayerController.Mode.SPECTATOR;
         if (flying) {
             rightArm = leftArm = -.8f;
