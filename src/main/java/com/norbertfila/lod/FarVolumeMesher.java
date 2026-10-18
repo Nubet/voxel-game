@@ -24,7 +24,7 @@ final class FarVolumeMesher {
                 for (int y = tile.volumeMinY(); y <= top; y++) {
                     byte material = tile.volumeMaterialAt(x, z, y);
                     if (!present(material, water)) continue;
-                    boolean fluid = material == BlockId.WATER;
+                    boolean fluid = BlockId.isFluid(material);
                     int wx = x * step, wz = z * step;
                     for (int face = 0; face < 6; face++) {
                         if (material == BlockId.SNOW_LAYER && face != 2) continue;
@@ -32,8 +32,7 @@ final class FarVolumeMesher {
                         int nz = z + (face == 4 ? 1 : face == 5 ? -1 : 0);
                         int ny = y + (face == 2 ? 1 : face == 3 ? -1 : 0);
                         byte neighbor = tile.volumeMaterialAt(nx, nz, ny);
-                        if (BlockRegistry.DEFAULT.isCollidable(neighbor) || fluid && neighbor == BlockId.WATER)
-                            continue;
+                        if (BlockRegistry.DEFAULT.isCollidable(neighbor) || fluid && neighbor == material) continue;
                         int texture = BlockRegistry.DEFAULT.definition(material).textureLayer(face);
                         if (!water) texture |= tile.tintAt(x, z) << 8;
                         switch (face) {
@@ -64,6 +63,6 @@ final class FarVolumeMesher {
     private static boolean present(byte block, boolean water) {
         return water
                 ? block == BlockId.WATER || block == BlockId.ICE
-                : block != BlockId.ICE && BlockRegistry.DEFAULT.isCollidable(block);
+                : block != BlockId.ICE && (BlockRegistry.DEFAULT.isCollidable(block) || block == BlockId.LAVA);
     }
 }

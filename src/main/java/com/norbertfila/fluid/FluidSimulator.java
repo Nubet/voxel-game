@@ -22,7 +22,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-public final class WaterSimulator {
+public final class FluidSimulator {
     private static final TickResult IDLE = new TickResult(0, 0, List.of(), List.of());
     private static final Comparator<ChunkPos> CHUNK_ORDER =
             Comparator.comparingInt(ChunkPos::x).thenComparingInt(ChunkPos::y).thenComparingInt(ChunkPos::z);
@@ -44,15 +44,15 @@ public final class WaterSimulator {
     private int areaRadius;
     private long currentTick;
 
-    public WaterSimulator(World world, int farTileSize) {
+    public FluidSimulator(World world, int farTileSize) {
         this(world, farTileSize, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK);
     }
 
-    public WaterSimulator(World world, int farTileSize, int maxUpdatesPerTick) {
+    public FluidSimulator(World world, int farTileSize, int maxUpdatesPerTick) {
         this(world, farTileSize, maxUpdatesPerTick, false);
     }
 
-    public WaterSimulator(World world, int farTileSize, int maxUpdatesPerTick, boolean extended) {
+    public FluidSimulator(World world, int farTileSize, int maxUpdatesPerTick, boolean extended) {
         this.world = Objects.requireNonNull(world);
         edits = new WorldEdit(world, farTileSize);
         scheduler = new FluidScheduler(maxUpdatesPerTick);
@@ -114,22 +114,24 @@ public final class WaterSimulator {
         int[] changed = {0};
         int processed = scheduler.processDue(tick, position -> {
             Set<ChunkPos> missing = new LinkedHashSet<>();
-            int next = WaterFlowRules.nextState(world, position, missing, extended);
-            if (next == WaterFlowRules.UNAVAILABLE) {
+            byte fluid = FluidFlowRules.fluidAt(world, position);
+            int next = FluidFlowRules.nextState(world, position, missing, extended, fluid);
+            if (next == FluidFlowRules.UNAVAILABLE) {
                 ChunkPos own = Coordinates.worldToChunk(position);
                 // An unloaded chunk without changes is woken by the scan when it loads; parking it would leak.
                 if (!world.hasChunk(own) && !world.changes().hasChanges(own)) return;
                 defer(new FluidSnapshot.Update(position, FluidScheduler.WATER_TICK_DELAY, List.copyOf(missing)));
                 return;
             }
-            if (next == WaterFlowRules.BLOCKED) return;
-            if (next == WaterState.EMPTY && world.getBlock(position).orElseThrow() != BlockId.WATER) return;
-            byte block = next == WaterState.EMPTY ? BlockId.AIR : BlockId.WATER;
+            if (next == FluidFlowRules.BLOCKED) return;
+            if (next == WaterState.EMPTY
+                    && !BlockId.isFluid(world.getBlock(position).orElseThrow())) return;
+            byte block = next == WaterState.EMPTY ? BlockId.AIR : fluid;
             BlockChangeResult result = edits.setBlock(position, block, (byte) next);
             if (!result.changed()) return;
             changed[0]++;
             boolean levelOnly =
-                    block == BlockId.WATER && result.previous().orElseThrow() == BlockId.toUnsignedInt(BlockId.WATER);
+                    BlockId.isFluid(block) && result.previous().orElseThrow() == BlockId.toUnsignedInt(block);
             (levelOnly ? levelDirty : dirty).addAll(result.dirtyChunks());
             scheduleNeighborhood(position, nextTick, true);
         });
@@ -238,18 +240,17 @@ public final class WaterSimulator {
                             dz = Math.floorDiv(z, Chunk.SIZE);
                     Chunk source = sources[(dy + 1) * 9 + (dz + 1) * 3 + dx + 1];
                     if (source == null
-                            || source.get(
-                                            Math.floorMod(x, Chunk.SIZE),
-                                            Math.floorMod(y, Chunk.SIZE),
-                                            Math.floorMod(z, Chunk.SIZE))
-                                    != BlockId.WATER) continue;
+                            || !BlockId.isFluid(source.get(
+                                    Math.floorMod(x, Chunk.SIZE),
+                                    Math.floorMod(y, Chunk.SIZE),
+                                    Math.floorMod(z, Chunk.SIZE)))) continue;
                     long wx = (long) chunk.x() * Chunk.SIZE + x;
                     long wy = (long) chunk.y() * Chunk.SIZE + y;
                     long wz = (long) chunk.z() * Chunk.SIZE + z;
                     BlockPos water = new BlockPos((int) wx, (int) wy, (int) wz);
                     // Open water away from shores and falls would only queue updates that change nothing, enough of
                     // them to back up the update budget while flying over the sea.
-                    if (WaterFlowRules.settledSource(world, water)) continue;
+                    if (FluidFlowRules.settledSource(world, water)) continue;
                     scheduleNeighborhood(water, nextTick(tick), false);
                 }
             }
@@ -316,14 +317,14 @@ public final class WaterSimulator {
 
     private void scheduleNeighborhood(BlockPos position, long tick, boolean dependenciesChanged) {
         schedule(position, tick, dependenciesChanged);
-        schedule(WaterFlowRules.offset(position, 0, -1, 0), tick, dependenciesChanged);
-        BlockPos above = WaterFlowRules.offset(position, 0, 1, 0);
+        schedule(FluidFlowRules.offset(position, 0, -1, 0), tick, dependenciesChanged);
+        BlockPos above = FluidFlowRules.offset(position, 0, 1, 0);
         schedule(above, tick, dependenciesChanged);
-        for (int direction = 0; direction < WaterFlowRules.DX.length; direction++) {
-            int dx = WaterFlowRules.DX[direction], dz = WaterFlowRules.DZ[direction];
-            schedule(WaterFlowRules.offset(position, dx, 0, dz), tick, dependenciesChanged);
+        for (int direction = 0; direction < FluidFlowRules.DX.length; direction++) {
+            int dx = FluidFlowRules.DX[direction], dz = FluidFlowRules.DZ[direction];
+            schedule(FluidFlowRules.offset(position, dx, 0, dz), tick, dependenciesChanged);
             // Changing support changes the lateral feed from the block above, even if its state is unchanged.
-            schedule(WaterFlowRules.offset(above, dx, 0, dz), tick, dependenciesChanged);
+            schedule(FluidFlowRules.offset(above, dx, 0, dz), tick, dependenciesChanged);
         }
         if (extended && dependenciesChanged) {
             // A terrain edit can change a donor's best route four steps away, and its recipients one step farther.
@@ -331,18 +332,18 @@ public final class WaterSimulator {
                 for (int dz = -5; dz <= 5; dz++) {
                     if (Math.abs(dx) + Math.abs(dz) > 5) continue;
                     for (int dy = 0; dy <= 1; dy++) {
-                        BlockPos affected = WaterFlowRules.offset(position, dx, dy, dz);
+                        BlockPos affected = FluidFlowRules.offset(position, dx, dy, dz);
                         if (affected != null
                                 && world.hasChunk(Coordinates.worldToChunk(affected))
-                                && world.getBlock(affected).orElseThrow() == BlockId.WATER) {
+                                && BlockId.isFluid(world.getBlock(affected).orElseThrow())) {
                             schedule(affected, tick, dependenciesChanged);
-                            for (int direction = 0; direction < WaterFlowRules.DX.length; direction++)
+                            for (int direction = 0; direction < FluidFlowRules.DX.length; direction++)
                                 schedule(
-                                        WaterFlowRules.offset(
+                                        FluidFlowRules.offset(
                                                 affected,
-                                                WaterFlowRules.DX[direction],
+                                                FluidFlowRules.DX[direction],
                                                 0,
-                                                WaterFlowRules.DZ[direction]),
+                                                FluidFlowRules.DZ[direction]),
                                         tick,
                                         dependenciesChanged);
                         }

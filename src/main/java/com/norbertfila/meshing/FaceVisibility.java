@@ -11,7 +11,7 @@ final class FaceVisibility {
     static boolean isVisible(byte block, byte neighbor) {
         return block != BlockId.AIR
                 && !BlockRegistry.DEFAULT.occludesFullFace(neighbor)
-                && !(block == neighbor && (block == BlockId.WATER || block == BlockId.ICE));
+                && !(block == neighbor && (BlockId.isFluid(block) || block == BlockId.ICE));
     }
 
     static boolean isVisible(

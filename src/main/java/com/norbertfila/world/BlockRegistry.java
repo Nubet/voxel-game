@@ -466,6 +466,18 @@ public final class BlockRegistry {
         blocks.add(leaves(textures, BlockId.MAHOGANY_LEAVES, "mahogany_leaves"));
         blocks.add(material(textures, BlockId.MAHOGANY_PLANKS, "mahogany_planks"));
         blocks.add(material(textures, BlockId.PUMPKIN, "pumpkin", "pumpkin_top", "pumpkin_top", "pumpkin_side"));
+        int lava = texture(textures, "lava");
+        blocks.add(new BlockDefinition(
+                Byte.toUnsignedInt(BlockId.LAVA),
+                "lava",
+                lava,
+                lava,
+                lava,
+                false,
+                false,
+                RenderLayer.OPAQUE,
+                false,
+                false));
         return new BlockRegistry(blocks, textures);
     }
 

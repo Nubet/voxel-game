@@ -20,13 +20,13 @@ public final class WaterState {
     }
 
     public static byte defaultFor(byte block) {
-        return block == BlockId.WATER ? SOURCE : EMPTY;
+        return BlockId.isFluid(Byte.toUnsignedInt(block)) ? SOURCE : EMPTY;
     }
 
     public static void validate(byte block, byte state) {
         if (!BlockId.isValid(block))
             throw new IllegalArgumentException("Unknown block id: " + BlockId.toUnsignedInt(block));
-        if (block == BlockId.WATER ? state < SOURCE || state > FALLING : state != EMPTY)
+        if (BlockId.isFluid(Byte.toUnsignedInt(block)) ? state < SOURCE || state > FALLING : state != EMPTY)
             throw new IllegalArgumentException(
                     "Invalid water state " + state + " for block " + BlockId.toUnsignedInt(block));
     }

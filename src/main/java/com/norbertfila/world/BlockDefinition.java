@@ -68,7 +68,7 @@ public record BlockDefinition(
                 breakable,
                 targetable,
                 BlockShape.CUBE,
-                id == BlockId.AIR || id == BlockId.WATER);
+                id == BlockId.AIR || BlockId.isFluid(id));
     }
 
     public BlockDefinition(

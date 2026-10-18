@@ -114,11 +114,16 @@ public final class BlockNeighborhood {
     }
 
     public int waterSample(int x, int y, int z) {
+        return fluidSample(x, y, z, BlockId.WATER);
+    }
+
+    public int fluidSample(int x, int y, int z, byte fluid) {
         ChunkSnapshot snapshot = chunkAt(x, y, z);
         if (snapshot == null) return WaterSurface.UNKNOWN;
         int lx = Math.floorMod(x, Chunk.SIZE), ly = Math.floorMod(y, Chunk.SIZE), lz = Math.floorMod(z, Chunk.SIZE);
         byte block = snapshot.get(lx, ly, lz);
-        if (block == BlockId.WATER) return snapshot.waterState(lx, ly, lz);
+        if (block == fluid) return snapshot.waterState(lx, ly, lz);
+        if (BlockId.isFluid(block)) return WaterSurface.SOLID;
         return BlockRegistry.DEFAULT.occludesFullFace(block) ? WaterSurface.SOLID : WaterSurface.EMPTY;
     }
 

@@ -1,6 +1,6 @@
 package com.norbertfila.diagnostics;
 
-import com.norbertfila.fluid.WaterSimulator;
+import com.norbertfila.fluid.FluidSimulator;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.streaming.ChunkManager;
@@ -15,7 +15,7 @@ public record SimulationMetrics(
         int waterProcessed,
         int waterChanged,
         int dirtyChunks,
-        WaterSimulator.Metrics fluid,
+        FluidSimulator.Metrics fluid,
         ChunkManager.Metrics streaming,
         SaveScheduler.Metrics save,
         int outstandingAcks,

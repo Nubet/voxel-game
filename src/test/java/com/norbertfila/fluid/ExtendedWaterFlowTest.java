@@ -67,7 +67,7 @@ class ExtendedWaterFlowTest {
             }
         set(world, 7, 1, 8, WaterState.SOURCE);
         set(world, 9, 1, 8, WaterState.SOURCE);
-        WaterSimulator simulator = new WaterSimulator(world, 64, 2000, true);
+        FluidSimulator simulator = new FluidSimulator(world, 64, 2000, true);
         simulator.onBlockChanged(new BlockPos(7, 1, 8), 0);
         simulator.onBlockChanged(new BlockPos(9, 1, 8), 0);
         for (int tick = 1; tick <= 500; tick++) simulator.tick(tick);
@@ -89,10 +89,10 @@ class ExtendedWaterFlowTest {
         World world = floor();
         set(world, 8, 1, 8, WaterState.SOURCE);
         world.setBlock(new BlockPos(10, 0, 8), BlockId.AIR, 64);
-        assertEquals(1, WaterFlowRules.nextState(world, new BlockPos(7, 1, 8), new HashSet<>()));
+        assertEquals(1, FluidFlowRules.nextState(world, new BlockPos(7, 1, 8), new HashSet<>()));
         set(world, 6, 1, 8, WaterState.SOURCE);
         set(world, 7, 1, 8, WaterState.flowing(1));
-        assertEquals(1, WaterFlowRules.nextState(world, new BlockPos(7, 1, 8), new HashSet<>()));
+        assertEquals(1, FluidFlowRules.nextState(world, new BlockPos(7, 1, 8), new HashSet<>()));
     }
 
     @Test
@@ -101,7 +101,7 @@ class ExtendedWaterFlowTest {
         set(world, 13, 1, 8, WaterState.SOURCE);
         var missing = new HashSet<ChunkPos>();
         assertEquals(
-                WaterFlowRules.UNAVAILABLE, WaterFlowRules.nextState(world, new BlockPos(12, 1, 8), missing, true));
+                FluidFlowRules.UNAVAILABLE, FluidFlowRules.nextState(world, new BlockPos(12, 1, 8), missing, true));
         assertTrue(missing.contains(new ChunkPos(1, 0, 0)));
         assertEquals(1, world.residentCount());
         assertFalse(world.isChunkRequested(new ChunkPos(1, 0, 0)));
@@ -121,7 +121,7 @@ class ExtendedWaterFlowTest {
                 world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
                 world.setBlock(new BlockPos(x, -1, z), BlockId.STONE, 64);
             }
-        WaterSimulator simulator = new WaterSimulator(world, 64, 2000, true);
+        FluidSimulator simulator = new FluidSimulator(world, 64, 2000, true);
         BlockPos source = new BlockPos(8, 1, 8), hole = new BlockPos(11, 0, 8);
         world.setBlock(source, BlockId.WATER, 64);
         simulator.onBlockChanged(source, 0);
@@ -140,7 +140,7 @@ class ExtendedWaterFlowTest {
     }
 
     private static int next(World world, int x, int z) {
-        return WaterFlowRules.nextState(world, new BlockPos(x, 1, z), new HashSet<>(), true);
+        return FluidFlowRules.nextState(world, new BlockPos(x, 1, z), new HashSet<>(), true);
     }
 
     private static void set(World world, int x, int y, int z, byte state) {

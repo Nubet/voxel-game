@@ -281,7 +281,7 @@ class WaterSimulatorTest {
     void nonReplaceableBlocksStopFlowAndPlantsAreWashedAway() {
         for (int id = 1; id <= 255; id++) {
             byte block = (byte) id;
-            if (!BlockId.isValid(block) || block == BlockId.WATER) continue;
+            if (!BlockId.isValid(block) || BlockId.isFluid(block)) continue;
             Scene scene = new Scene();
             scene.raw(1, 1, 0, block);
             scene.set(0, 1, 0, BlockId.WATER);
@@ -355,7 +355,7 @@ class WaterSimulatorTest {
         BlockPos edge = new BlockPos(15, 8, 8);
         edit.setBlock(edge, BlockId.WATER, WaterState.flowing(3));
         world.setBlock(new BlockPos(16, 8, 8), BlockId.AIR, 64);
-        WaterSimulator simulator = new WaterSimulator(world, 64);
+        FluidSimulator simulator = new FluidSimulator(world, 64);
         simulator.onBlockChanged(edge, 0);
         var before = world.changes().changes();
         for (int tick = 1; tick <= 60; tick++) simulator.tick(tick);
@@ -372,7 +372,7 @@ class WaterSimulatorTest {
         BlockPos source = new BlockPos(Integer.MAX_VALUE, WorldBounds.MIN_Y, Integer.MAX_VALUE);
         world.putChunk(Coordinates.worldToChunk(source), new Chunk());
         new WorldEdit(world, 64).setBlock(source, BlockId.WATER);
-        WaterSimulator simulator = new WaterSimulator(world, 64);
+        FluidSimulator simulator = new FluidSimulator(world, 64);
         simulator.onBlockChanged(source, 0);
         for (int tick = 1; simulator.pendingUpdates() > 0 && tick < 1_000; tick++) simulator.tick(tick);
         assertEquals(0, simulator.pendingUpdates());
@@ -398,7 +398,7 @@ class WaterSimulatorTest {
     private static final class Scene {
         final World world = new World();
         final WorldEdit edits = new WorldEdit(world, 64);
-        final WaterSimulator simulator;
+        final FluidSimulator simulator;
         final int centerX, centerZ;
         long time;
 
@@ -414,7 +414,7 @@ class WaterSimulatorTest {
                     for (int y = Math.floorDiv(floorY, 16) - 1; y <= Math.floorDiv(topY, 16) + 1; y++)
                         world.putChunk(new ChunkPos(x, y, z), new Chunk());
             floor(floorY);
-            simulator = new WaterSimulator(world, 64, budget);
+            simulator = new FluidSimulator(world, 64, budget);
         }
 
         void floor(int y) {
@@ -441,7 +441,7 @@ class WaterSimulatorTest {
             return world.getWaterState(new BlockPos(x, y, z)).orElseThrow();
         }
 
-        WaterSimulator.TickResult step() {
+        FluidSimulator.TickResult step() {
             return simulator.tick(++time);
         }
 
