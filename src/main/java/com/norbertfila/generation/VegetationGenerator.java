@@ -22,6 +22,7 @@ final class VegetationGenerator {
     private final BiomeRegistry biomes;
     private final TerrainSource terrain;
     private final JungleVegetation jungle;
+    private final LandscapeSampler landscapes;
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest) {
         this(seed, density, forest, BiomeRegistry.defaults());
@@ -32,12 +33,23 @@ final class VegetationGenerator {
     }
 
     VegetationGenerator(long seed, Noise2D density, Noise2D forest, BiomeRegistry biomes, TerrainSource terrain) {
+        this(seed, density, forest, biomes, terrain, new LandscapeSampler(seed, LandscapeConfig.defaults()));
+    }
+
+    VegetationGenerator(
+            long seed,
+            Noise2D density,
+            Noise2D forest,
+            BiomeRegistry biomes,
+            TerrainSource terrain,
+            LandscapeSampler landscapes) {
         this.seed = seed;
         jungle = new JungleVegetation(seed);
         this.density = density;
         this.forest = forest;
         this.biomes = biomes;
         this.terrain = terrain;
+        this.landscapes = landscapes;
     }
 
     void generate(int ox, int oy, int oz, byte[] blocks, TerrainColumn columns) {
@@ -48,7 +60,6 @@ final class VegetationGenerator {
         for (long cz = firstZ; cz <= lastZ; cz++)
             for (long cx = firstX; cx <= lastX; cx++) {
                 long patch = hash(seed ^ FLOWER_SALT, cx, cz);
-                if (unit(patch) >= .3) continue;
                 long centerX = cx * PATCH_CELL_SIZE + bounded(patch, 1, PATCH_CELL_SIZE);
                 long centerZ = cz * PATCH_CELL_SIZE + bounded(patch, 2, PATCH_CELL_SIZE);
                 byte flower = FLOWERS[bounded(patch, 3, FLOWERS.length)];
@@ -60,6 +71,9 @@ final class VegetationGenerator {
                     int column = (int) (lz * Chunk.SIZE + lx);
                     BiomeProfile profile = biomes.profile(columns.biome(column));
                     if (!profile.vegetation().plants().contains(PlantType.FLOWER)) continue;
+                    if (unit(patch)
+                            >= profile.vegetation().flowerDensity()
+                                    * landscapes.sample(x, z).flowers()) continue;
                     place((int) lx, (int) lz, oy, blocks, columns, flower);
                 }
             }
@@ -73,12 +87,14 @@ final class VegetationGenerator {
                         || columns.surfaceHeight(column) < columns.waterLevel(column)) continue;
                 if (blocks[((int) y * Chunk.SIZE + z) * Chunk.SIZE + x] != BlockId.AIR) continue;
                 BiomeProfile profile = biomes.profile(columns.biome(column));
+                var landscape = landscapes.sample((long) ox + x, (long) oz + z);
                 boolean ordinary = profile.vegetation().plants().contains(PlantType.SHORT_GRASS)
                         || profile.vegetation().plants().contains(PlantType.FERN);
                 PlantType special = specialPlant(
                         profile,
                         hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z),
-                        columns.surfaceMaterial(column));
+                        columns.surfaceMaterial(column),
+                        landscape.vegetation());
                 if (special != null) {
                     boolean nearWater = special == PlantType.REED && nearWater(ox + x, oz + z, columns, column);
                     byte plant = block(special);
@@ -92,6 +108,7 @@ final class VegetationGenerator {
                 if (unit(hash(seed ^ GRASS_SALT, (long) ox + x, (long) oz + z))
                         >= .3
                                 * profile.vegetation().grassDensity()
+                                * landscape.vegetation()
                                 * t
                                 * t
                                 * (3 - 2 * t)
@@ -131,7 +148,7 @@ final class VegetationGenerator {
         return columns.surfaceSupported(column) && columns.surfaceHeight(column) >= columns.waterLevel(column);
     }
 
-    private static PlantType specialPlant(BiomeProfile profile, long value, byte ground) {
+    private static PlantType specialPlant(BiomeProfile profile, long value, byte ground, double density) {
         var plants = profile.vegetation().plants();
         double roll = unit(value);
         for (PlantType type : PlantType.values()) {
@@ -146,6 +163,7 @@ final class VegetationGenerator {
             };
             if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
             if (type == PlantType.MUSHROOM) weight *= profile.vegetation().mushroomDensity();
+            weight *= density;
             if (roll < weight) return type;
             roll -= weight;
         }

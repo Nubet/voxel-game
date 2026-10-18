@@ -112,7 +112,7 @@ public final class TerrainGenerator implements TerrainSource {
                 seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry, this.landscapes);
         jungle = new JungleVegetation(seed);
         vegetation = new VegetationGenerator(
-                seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
+                seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this, this.landscapes);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
         caveCarver = new CaveCarver((GroundSampler) this::sampleBase);
         ores = new OreGenerator(seed);

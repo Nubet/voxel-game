@@ -12,6 +12,27 @@ class VegetationGeneratorTest {
     private static final TerrainSummary GRASS = new TerrainSummary(15, BlockId.GRASS, BlockId.DIRT, BlockId.STONE);
 
     @Test
+    void aSingleBiomeContainsDifferentPlantAndFlowerPatches() {
+        var generator = new VegetationGenerator(42, (x, z) -> 1, (x, z) -> 1);
+        int min = 256, max = 0, withFlowers = 0, withoutFlowers = 0;
+        for (int x = -128; x <= 128; x += 2) {
+            byte[] blocks = generate(generator, new ChunkPos(x, 1, -3), GRASS);
+            int plants = 0, flowers = 0;
+            for (byte block : blocks) {
+                if (block != BlockId.AIR) plants++;
+                if (block == BlockId.POPPY || block == BlockId.DANDELION_WHITE || block == BlockId.DANDELION_YELLOW)
+                    flowers++;
+            }
+            min = Math.min(min, plants);
+            max = Math.max(max, plants);
+            if (flowers > 0) withFlowers++;
+            else withoutFlowers++;
+        }
+        assertTrue(max > min * 2 + 10);
+        assertTrue(withFlowers > 10 && withoutFlowers > 10);
+    }
+
+    @Test
     void snowyTaigaCoversSoilAcrossSectionBoundariesWithoutReplacingTreeTrunks() {
         var summary = new TerrainSummary(
                 15,
