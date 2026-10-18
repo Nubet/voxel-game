@@ -4,7 +4,7 @@ final class LandscapeTestConfig {
     private LandscapeTestConfig() {}
 
     static LandscapeConfig uniform() {
-        var field = new LandscapeConfig.Field(32, 0, .5);
+        var field = new LandscapeConfig.Field(32, 0, 0);
         var range = new LandscapeConfig.Range(1, 1);
         var style = new LandscapeConfig.Style(range, range, range, range, 1, 1, 1);
         return new LandscapeConfig(field, field, field, field, field, style, style);

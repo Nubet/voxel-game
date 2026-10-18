@@ -7,6 +7,25 @@ import org.junit.jupiter.api.Test;
 
 class LandscapeTerrainTest {
     @Test
+    void classicRegionsKeepLocalDetailOutsideDeserts() {
+        var off = new TerrainConfig.Layer(.01, 1, .5, 2, 0);
+        var config = new TerrainConfig(
+                32,
+                off,
+                off,
+                new TerrainConfig.Layer(.06, 1, .5, 2, 3),
+                new TerrainConfig.Mountains(off, off, .5, .6),
+                off,
+                28,
+                off,
+                off,
+                new TerrainConfig.Layer(.001, 1, .5, 2, 1));
+        var classic = new TerrainGenerator(42, config, (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(1));
+        var modern = new TerrainGenerator(42, config, (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(0));
+        assertTrue(classic.surfaceElevation(37, 51) > modern.surfaceElevation(37, 51) + 1);
+    }
+
+    @Test
     void regionalStyleChangesReliefWithoutChangingClimateOrSeaLevel() {
         var classic = new TerrainGenerator(
                 42, TerrainConfig.classic(), (x, z) -> .5, (x, z) -> -1, LandscapeTestConfig.region(1));

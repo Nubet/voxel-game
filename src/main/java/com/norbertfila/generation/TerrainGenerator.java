@@ -257,11 +257,12 @@ public final class TerrainGenerator implements TerrainSource {
         RegionalLandforms.Sample region = landforms.sample(x, z);
         double regionalElevation = region.elevation() * landscape.elevation();
         double detailScale = region.details() + (1 - region.details()) * landscape.classicness();
+        double detailHeight = detailScale * layer(details, config.details(), x, z);
         double height = config.baseHeight()
                 + continentalLayer
                 + regionalElevation
                 + region.hills() * landscape.hills() * layer(hills, config.hills(), x, z)
-                + detailScale * layer(details, config.details(), x, z)
+                + detailHeight
                 + mountainHeight(x, z)
                         * landscape.mountains()
                         * (1 - .85 * (1 - landscape.classicness()) * JungleRules.climateWeight(climate.sample(x, z)));
@@ -271,9 +272,10 @@ public final class TerrainGenerator implements TerrainSource {
                     * mountainMask((.2 - weather.humidity()) / .4, 0, 1);
             double dunes = 3 * Math.sin(x * .035 + 2 * Math.sin(z * .006)) * aridity;
             double terrace = 4 * Math.sin(height * Math.PI / 8) * aridity;
-            height +=
-                    Math.clamp((dunes + terrace) / 7, -1, 1) * config.details().amplitude()
-                            - detailScale * layer(details, config.details(), x, z);
+            double dryDetail =
+                    Math.clamp((dunes + terrace) / 7, -1, 1) * config.details().amplitude();
+            double detailBlend = 1 - landscape.classicness() * (1 - aridity);
+            height += detailBlend * (dryDetail - detailHeight);
             double regionalHeight = config.baseHeight() + continentalLayer + regionalElevation;
             height = Math.max(height, Math.min(regionalHeight - 3, config.waterLevel() + 1.0));
             double badlandsWeight = BadlandsLandforms.weight(weather)
