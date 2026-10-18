@@ -8,18 +8,25 @@ import java.util.function.IntBinaryOperator;
 
 final class CavePlanner {
     static final int REGION_SIZE = 128;
-    static final int MAX_REACH = 96;
+    static final int MAX_REACH = 104;
     static final int MAX_SEGMENTS = 512;
-    private static final int MAX_STEPS = MAX_REACH - 8;
     private static final long SALT = 0xA24BAED4963EE407L;
     private final long seed;
     private final int bedrockY;
     private final IntBinaryOperator surfaceHeight;
+    private final CaveConfig config;
+    private final CaveRegionSampler regions;
 
     CavePlanner(long seed, int bedrockY, IntBinaryOperator surfaceHeight) {
+        this(seed, bedrockY, surfaceHeight, CaveConfig.defaults());
+    }
+
+    CavePlanner(long seed, int bedrockY, IntBinaryOperator surfaceHeight, CaveConfig config) {
         this.seed = seed;
         this.bedrockY = bedrockY;
         this.surfaceHeight = Objects.requireNonNull(surfaceHeight);
+        this.config = Objects.requireNonNull(config);
+        regions = new CaveRegionSampler(seed, config);
     }
 
     CavePlan plan(int regionX, int regionZ) {
@@ -29,33 +36,41 @@ final class CavePlanner {
                 || oz < Integer.MIN_VALUE
                 || oz + REGION_SIZE - 1 > Integer.MAX_VALUE) return new CavePlan(List.of());
         var random = new SplittableRandom(GenerationHash.hash(seed ^ SALT, regionX, regionZ));
-        List<CavePlan.Segment> segments = new ArrayList<>();
-        int systems = 4 + random.nextInt(5);
-        for (int system = 0; system < systems && segments.size() < MAX_SEGMENTS; system++) {
-            int x = (int) ox + random.nextInt(REGION_SIZE), z = (int) oz + random.nextInt(REGION_SIZE);
+        var segments = new ArrayList<CavePlan.Segment>();
+        var regional = regions.sample(ox + REGION_SIZE * .5, oz + REGION_SIZE * .5);
+        int systems = 2 + (int) Math.round(regional.density() * 4);
+        for (int system = 0; system < systems; system++) {
+            var pathRandom = random.split();
+            int x = (int) ox + pathRandom.nextInt(REGION_SIZE);
+            int z = (int) oz + pathRandom.nextInt(REGION_SIZE);
             long bottom = (long) bedrockY + 5, top = (long) surfaceHeight.applyAsInt(x, z) - 1;
             if (top < bottom) continue;
-            double y = bottom + random.nextLong(top - bottom + 1) + .5;
-            if (random.nextInt(4) == 0) {
-                double radius = random.nextDouble(4, 7);
-                segments.add(new CavePlan.Segment(x + .5, y, z + .5, radius, radius * .65));
+            double y = bottom + pathRandom.nextLong(top - bottom + 1) + .5;
+            int budget = Math.min(128, (MAX_SEGMENTS - segments.size()) / (systems - system));
+            var local = regions.sample(x, z);
+            double radius = config.minRadius() + local.width() * (config.maxRadius() - config.minRadius());
+            if (pathRandom.nextDouble() < local.chamberChance()) {
+                double chamber = pathRandom.nextDouble(4, 6);
+                segments.add(new CavePlan.Segment(x + .5, y, z + .5, chamber, chamber * .6));
+                budget--;
             }
             tunnel(
                     segments,
-                    random.split(),
+                    pathRandom,
                     x + .5,
                     y,
                     z + .5,
-                    random.nextDouble(Math.PI * 2),
-                    random.nextDouble(-.2, .2),
-                    random.nextDouble(1.5, 3.2),
-                    48 + random.nextInt(MAX_STEPS - 47),
-                    0);
+                    pathRandom.nextDouble(Math.PI * 2),
+                    pathRandom.nextDouble(-.12, .12),
+                    radius,
+                    pathRandom.nextInt(config.minLength(), config.maxLength() + 1),
+                    budget,
+                    true);
         }
         return new CavePlan(segments);
     }
 
-    private static void tunnel(
+    private void tunnel(
             List<CavePlan.Segment> segments,
             SplittableRandom random,
             double x,
@@ -65,46 +80,41 @@ final class CavePlanner {
             double pitch,
             double width,
             int steps,
-            int depth) {
-        double yawDrift = 0, pitchDrift = 0;
+            int budget,
+            boolean branching) {
+        int limit = Math.min(MAX_SEGMENTS, segments.size() + budget);
         int branch = steps / 3 + random.nextInt(Math.max(1, steps / 3));
-        for (int step = 0; step < steps && segments.size() < MAX_SEGMENTS; step++) {
-            double radius = 1 + Math.sin(Math.PI * step / steps) * width;
-            segments.add(new CavePlan.Segment(x, y, z, radius, radius * .7));
-            if (depth == 0 && step == branch && random.nextInt(3) != 0) {
-                // Children inherit the remaining path budget, keeping every branch within MAX_REACH of its source.
-                tunnel(
-                        segments,
-                        random.split(),
-                        x,
-                        y,
-                        z,
-                        yaw - Math.PI / 2,
-                        pitch / 3,
-                        width * .75,
-                        steps - step,
-                        depth + 1);
-                tunnel(
-                        segments,
-                        random.split(),
-                        x,
-                        y,
-                        z,
-                        yaw + Math.PI / 2,
-                        pitch / 3,
-                        width * .75,
-                        steps - step,
-                        depth + 1);
-                return;
+        double yawDrift = 0, pitchDrift = 0;
+        for (int step = 0; step < steps && segments.size() < limit; step++) {
+            var local = regions.sample(x, z);
+            double radius = Math.clamp(width + Math.sin(step * .17) * .18, config.minRadius(), config.maxRadius());
+            segments.add(new CavePlan.Segment(x, y, z, radius, Math.max(1.85, radius * .8)));
+            if (branching && step == branch && random.nextDouble() < local.branchChance()) {
+                int remaining = steps - step - 1;
+                int childSteps = Math.min(20, remaining);
+                int spare = limit - segments.size() - remaining;
+                if (childSteps >= 8 && spare >= childSteps)
+                    tunnel(
+                            segments,
+                            random.split(),
+                            x,
+                            y,
+                            z,
+                            yaw + (random.nextBoolean() ? 1 : -1) * random.nextDouble(.7, 1.3),
+                            pitch * .5,
+                            Math.max(config.minRadius(), width * .85),
+                            childSteps,
+                            childSteps,
+                            false);
             }
             double horizontal = Math.cos(pitch);
             x += Math.cos(yaw) * horizontal;
-            y += Math.sin(pitch);
             z += Math.sin(yaw) * horizontal;
-            yawDrift = yawDrift * .7 + random.nextDouble(-.12, .12);
-            pitchDrift = pitchDrift * .7 + random.nextDouble(-.04, .04);
+            y = Math.max((double) bedrockY + 4, y + Math.sin(pitch));
+            yawDrift = yawDrift * .75 + random.nextDouble(-.075, .075) * local.winding();
+            pitchDrift = pitchDrift * .65 + random.nextDouble(-.025, .025);
             yaw += yawDrift;
-            pitch = Math.clamp(pitch * .9 + pitchDrift, -.6, .6);
+            pitch = Math.clamp(pitch * .85 + pitchDrift, -.28, .28);
         }
     }
 }
