@@ -89,7 +89,6 @@ public final class BlockId {
             TUFF_BRICKS = 85,
             CHISELED_TUFF = 86,
             CHISELED_TUFF_BRICKS = 87,
-            DRIPSTONE = 88,
             BLUE_ICE = 89,
             AZALEA_LEAVES = 90,
             FLOWERING_AZALEA_LEAVES = 91,
@@ -174,7 +173,7 @@ public final class BlockId {
     }
 
     public static boolean isValid(byte id) {
-        return toUnsignedInt(id) <= toUnsignedInt(PUMPKIN);
+        return toUnsignedInt(id) <= toUnsignedInt(PUMPKIN) && id != 88;
     }
 
     private BlockId() {}

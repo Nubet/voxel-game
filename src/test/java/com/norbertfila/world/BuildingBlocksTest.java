@@ -60,6 +60,7 @@ class BuildingBlocksTest {
                     registry.definition(id).name());
         }
         for (int id = 47; id <= 166; id++) {
+            if (!BlockId.isValid((byte) id)) continue;
             if (id >= 150 && id < 166) continue;
             byte block = (byte) id;
             var definition = registry.definition(block);

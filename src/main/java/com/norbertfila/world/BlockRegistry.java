@@ -384,7 +384,6 @@ public final class BlockRegistry {
                         "chiseled_tuff_bricks_top",
                         "chiseled_tuff_bricks_top",
                         "chiseled_tuff_bricks"),
-                material(textures, BlockId.DRIPSTONE, "dripstone"),
                 material(textures, BlockId.BLUE_ICE, "blue_ice"),
                 leaves(textures, BlockId.AZALEA_LEAVES, "azalea_leaves"),
                 leaves(textures, BlockId.FLOWERING_AZALEA_LEAVES, "flowering_azalea_leaves"),

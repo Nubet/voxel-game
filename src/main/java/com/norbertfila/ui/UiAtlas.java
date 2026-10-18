@@ -64,7 +64,7 @@ public final class UiAtlas {
 
     public static Region item(byte block) {
         int id = Byte.toUnsignedInt(block);
-        if (id > LAST_ITEM) id = 0;
+        if (id > LAST_ITEM || !com.norbertfila.world.BlockId.isValid(block)) id = 0;
         return new Region(id % 16 * ITEM_SIZE, ITEM_Y + id / 16 * ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
     }
 
