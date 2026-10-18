@@ -64,6 +64,15 @@ public final class CloudRendererSmoke {
             clear(1);
             clouds.render(vp, period * 1_000_000, 64, -period * 1_000_000, 0, 0, CloudMode.FANCY);
             check(fancy.equals(capture()), "Large coordinates changed fancy clouds");
+            for (CloudMode mode : new CloudMode[] {CloudMode.FAST, CloudMode.FANCY}) {
+                clear(1);
+                clouds.render(vp, 0, 64, 0, 1, 0, mode);
+                ByteBuffer moved = capture();
+                check(!moved.equals(mode == CloudMode.FAST ? reference : fancy), "Static clouds in " + mode);
+                clear(1);
+                clouds.render(vp, -CloudRenderer.SPEED, 64, 0, 0, 0, mode);
+                check(moved.equals(capture()), "Wrong cloud speed or direction in " + mode);
+            }
             clear(0);
             clouds.render(vp, 0, 64, 0, 0, 0, CloudMode.FANCY);
             check(disabled.equals(capture()), "Fancy clouds ignored foreground depth");

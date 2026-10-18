@@ -13,7 +13,7 @@ public final class CloudRenderer implements AutoCloseable {
     static final float CELL_SIZE = 12;
     static final float THICKNESS = 5;
     static final float RADIUS = 704;
-    static final double SPEED = .6;
+    static final double SPEED = 2;
     private final int program;
     private final int vao;
     private final int texture;

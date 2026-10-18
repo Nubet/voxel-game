@@ -513,14 +513,9 @@ public final class GameLoop {
             double effectSeconds = state == null
                     ? 0
                     : animationSeconds(state.tick(), state.publishedAt(), state.paused(), interpolationTime);
+            // Cloud drift follows real time so simulation pauses and stalls cannot freeze it
             clouds.render(
-                    viewProjection,
-                    camera.x(),
-                    camera.y(),
-                    camera.z(),
-                    effectSeconds,
-                    visibility.amount(),
-                    settings.clouds());
+                    viewProjection, camera.x(), camera.y(), camera.z(), now, visibility.amount(), settings.clouds());
             if (gpuTimer != null) gpuTimer.stamp();
             if (state != null)
                 renderer.far()
