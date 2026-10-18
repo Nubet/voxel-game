@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.commands.BiomeSearch;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.diagnostics.SimulationMetrics;
@@ -222,6 +223,7 @@ public final class WorldRuntime implements AutoCloseable {
             BlockBreaking breaking = new BlockBreaking(world);
             var commands = new GameCommands();
             var teleports = new TeleportController();
+            var searches = new BiomeSearch(generator);
             CommandSource commandSource = new CommandSource() {
                 @Override
                 public long seed() {
@@ -245,6 +247,11 @@ public final class WorldRuntime implements AutoCloseable {
                 public boolean teleport(PlayerState.Position position) {
                     return !player.modeChangePending() && teleports.request(position, System.nanoTime());
                 }
+
+                @Override
+                public boolean locate(BiomeType biome) {
+                    return searches.request(biome, player.state().position());
+                }
             };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
             BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
@@ -252,7 +259,8 @@ public final class WorldRuntime implements AutoCloseable {
                 breaking.blockChanged(position);
             });
             BlockTargeting targeting = new BlockTargeting(world);
-            try (ChunkManager chunks = new ChunkManager(
+            try (searches;
+                    ChunkManager chunks = new ChunkManager(
                             world,
                             generator,
                             mesher,
@@ -434,6 +442,8 @@ public final class WorldRuntime implements AutoCloseable {
                                         .ifPresent(result -> commandReplies.add(
                                                 new GameCommands.Reply(result.text(), result.error())));
                             }
+                            if (commandReplies.remainingCapacity() > 0)
+                                searches.poll().ifPresent(commandReplies::add);
                             boolean newPress = state.placePressId() != lastPlacePress[0];
                             lastPlacePress[0] = state.placePressId();
                             boolean placementAttempted = false;
