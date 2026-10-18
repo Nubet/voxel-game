@@ -93,8 +93,11 @@ public final class PlayerAnimator {
                 ? -.5f
                 : (float) (-Math.toRadians(10) * lerp(a.lean(), b.lean(), alpha) - impact * .12);
         float sway = (float) (Math.sin(phase) * intensity * .025 * (1 - air));
-        float leg = (float) (Math.sin(phase) * intensity * (state.sprinting() ? 1.1 : .75));
-        float arm = (float) (Math.sin(phase * .78 - .45) * intensity * (state.sprinting() ? .62 : .5));
+        boolean sprinting = state.sprinting();
+        float leg = (float) (Math.sin(phase * (sprinting ? 1.35 : 1)) * intensity * (sprinting ? .68 : .75));
+        float arm = (float) (Math.sin(phase * (sprinting ? .55 : 1) - (sprinting ? .45 : .3))
+                * intensity
+                * (sprinting ? 1.05 : .5));
         float rightArm = -arm, leftArm = arm, rightLeg = leg, leftLeg = -leg;
         boolean flying = state.flying() || state.mode() == PlayerController.Mode.SPECTATOR;
         if (flying) {
@@ -104,10 +107,10 @@ public final class PlayerAnimator {
         } else {
             float balance = (float) (-.35 * Math.max(rise, 0) + .25 * Math.max(-rise, 0));
             float tuck = (float) (-.4 * Math.max(rise, 0) + .12 * Math.max(-rise, 0));
-            rightArm = (float) (rightArm * (1 - air * .65) + balance * air);
-            leftArm = (float) (leftArm * (1 - air * .65) + balance * air);
-            rightLeg = (float) (rightLeg * (1 - air * .6) + tuck * air - impact * .25);
-            leftLeg = (float) (leftLeg * (1 - air * .6) - tuck * air - impact * .25);
+            rightArm = (float) (rightArm * (1 - air * .15) + balance * air);
+            leftArm = (float) (leftArm * (1 - air * .15) + balance * air);
+            rightLeg = (float) (rightLeg * (1 - air * .1) + tuck * air - impact * .25);
+            leftLeg = (float) (leftLeg * (1 - air * .1) - tuck * air - impact * .25);
         }
         double age = time - state.animation().swing().startTick();
         if (state.animation().swing().sequence() > 0 && age >= 0 && age < SWING_TICKS)
