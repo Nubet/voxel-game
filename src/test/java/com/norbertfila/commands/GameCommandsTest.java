@@ -13,6 +13,20 @@ class GameCommandsTest {
     private final GameCommands commands = new GameCommands();
     private final Source source = new Source();
 
+    @Test
+    void suggestsCommandsAndBiomesWithReplacementRanges() {
+        assertEquals("locate", commands.suggest("/lo", 3).getFirst().text());
+        var suggestion = commands.suggest("/locate biome flo", 17).getFirst();
+        assertEquals("floating_isles_classic", suggestion.text());
+        assertEquals(14, suggestion.start());
+        assertEquals(17, suggestion.end());
+        assertTrue(commands.suggest("hello", 5).isEmpty());
+        assertTrue(commands.usage("/tp ").contains("<x>"));
+        assertTrue(commands.execute("/help", source).text().contains("locate biome"));
+        for (String text : new String[] {"/tp 1 2", "/tp 1 2 3 extra", "/tp NaN 2 3", "/locate biome missing"})
+            assertTrue(commands.execute(text, source).error(), text);
+    }
+
     private static final class Source implements CommandSource {
         final Inventory inventory = new Inventory();
         PlayerController.Mode mode = PlayerController.Mode.SURVIVAL;
