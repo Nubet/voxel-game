@@ -80,4 +80,16 @@ class GameSettingsTest {
         assertThrows(IllegalArgumentException.class, () -> settings.setGuiScale(-1));
         assertThrows(IllegalArgumentException.class, () -> settings.setGuiScale(5));
     }
+
+    @Test
+    void validatesFrameRateLimitAndSupportsUnlimited() {
+        GameSettings settings = new GameSettings();
+
+        assertEquals(GameSettings.DEFAULT_FRAME_RATE, settings.frameRate());
+        assertTrue(settings.setFrameRate(GameSettings.MIN_FRAME_RATE));
+        assertTrue(settings.setFrameRate(GameSettings.UNLIMITED_FRAME_RATE));
+        assertEquals(GameSettings.UNLIMITED_FRAME_RATE, settings.frameRate());
+        assertThrows(IllegalArgumentException.class, () -> settings.setFrameRate(GameSettings.MIN_FRAME_RATE - 1));
+        assertThrows(IllegalArgumentException.class, () -> settings.setFrameRate(GameSettings.MAX_FRAME_RATE + 1));
+    }
 }

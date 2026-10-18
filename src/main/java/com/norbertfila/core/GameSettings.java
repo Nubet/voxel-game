@@ -40,6 +40,10 @@ public final class GameSettings {
     public static final int MAX_FAR_DISTANCE = 128;
 
     public static final int DEFAULT_FAR_DISTANCE = 32;
+    public static final int MIN_FRAME_RATE = 30;
+    public static final int MAX_FRAME_RATE = 240;
+    public static final int UNLIMITED_FRAME_RATE = 0;
+    public static final int DEFAULT_FRAME_RATE = 120;
     public static final int GUI_SCALE_AUTO = 0;
     public static final int MIN_GUI_SCALE = 1;
     public static final int MAX_GUI_SCALE = 4;
@@ -47,6 +51,7 @@ public final class GameSettings {
     private int renderDistance = DEFAULT_RENDER_DISTANCE;
     private int simulationDistance = Math.min(DEFAULT_SIMULATION_DISTANCE, renderDistance);
     private int farDistance = DEFAULT_FAR_DISTANCE;
+    private int frameRate = DEFAULT_FRAME_RATE;
     private float fieldOfView = DEFAULT_FIELD_OF_VIEW;
     private float zoomFieldOfView = DEFAULT_ZOOM_FIELD_OF_VIEW;
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
@@ -117,6 +122,19 @@ public final class GameSettings {
             throw new IllegalArgumentException("Far distance must be between 0 and " + MAX_FAR_DISTANCE);
         if (farDistance == value) return false;
         farDistance = value;
+        return true;
+    }
+
+    public int frameRate() {
+        return frameRate;
+    }
+
+    public boolean setFrameRate(int value) {
+        if (value != UNLIMITED_FRAME_RATE && (value < MIN_FRAME_RATE || value > MAX_FRAME_RATE))
+            throw new IllegalArgumentException(
+                    "Frame rate must be Unlimited or between " + MIN_FRAME_RATE + " and " + MAX_FRAME_RATE);
+        if (frameRate == value) return false;
+        frameRate = value;
         return true;
     }
 

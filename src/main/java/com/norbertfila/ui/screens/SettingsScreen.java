@@ -12,10 +12,10 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 public final class SettingsScreen implements Screen {
-    public static final int PANEL_X = 8, PANEL_Y = 0, PANEL_WIDTH = 304, PANEL_HEIGHT = 240;
+    public static final int PANEL_X = 8, PANEL_Y = 0, PANEL_WIDTH = 304, PANEL_HEIGHT = 264;
     public static final int CAMERA_X = 144, CAMERA_WIDTH = 152;
     public static final int FOV_Y = 88, ZOOM_FOV_Y = 112, SENSITIVITY_Y = 136, ZOOM_SPEED_Y = 160;
-    public static final int GUI_SCALE_Y = 184, LANGUAGE_Y = 208;
+    public static final int FRAME_RATE_Y = 232, GUI_SCALE_Y = 184, LANGUAGE_Y = 208;
     public static final UiBounds BACK_BOUNDS = new UiBounds(220, 208, 76, 20);
     private final GameSettings settings;
     private final Translations translations;
@@ -42,6 +42,12 @@ public final class SettingsScreen implements Screen {
     private final Slider mouseSensitivity =
             new Slider(new UiBounds(CAMERA_X, SENSITIVITY_Y, CAMERA_WIDTH, 12), 1, 100, 1, 11);
     private final Slider zoomSpeed = new Slider(new UiBounds(CAMERA_X, ZOOM_SPEED_Y, CAMERA_WIDTH, 12), 1, 30, 1, 12);
+    private final Slider frameRate = new Slider(
+            new UiBounds(CAMERA_X, FRAME_RATE_Y, CAMERA_WIDTH, 12),
+            GameSettings.MIN_FRAME_RATE,
+            GameSettings.MAX_FRAME_RATE + 1,
+            1,
+            GameSettings.DEFAULT_FRAME_RATE);
     private final Button guiScale = new Button(new UiBounds(100, GUI_SCALE_Y, 100, 20), "");
     private final Button clouds = new Button(new UiBounds(208, GUI_SCALE_Y, 88, 20), "");
     private final Button language = new Button(new UiBounds(CAMERA_X, LANGUAGE_Y, 72, 20), "");
@@ -88,12 +94,13 @@ public final class SettingsScreen implements Screen {
             else if (zoomFieldOfView.bounds().contains(x, y)) focus(2);
             else if (mouseSensitivity.bounds().contains(x, y)) focus(3);
             else if (zoomSpeed.bounds().contains(x, y)) focus(4);
-            else if (guiScale.bounds().contains(x, y)) focus(5);
-            else if (clouds.bounds().contains(x, y)) focus(6);
-            else if (language.bounds().contains(x, y)) focus(7);
-            else if (appearance.bounds().contains(x, y)) focus(8);
-            else if (crosshair.bounds().contains(x, y)) focus(9);
-            else if (back.bounds().contains(x, y)) focus(10);
+            else if (frameRate.bounds().contains(x, y)) focus(5);
+            else if (guiScale.bounds().contains(x, y)) focus(6);
+            else if (clouds.bounds().contains(x, y)) focus(7);
+            else if (language.bounds().contains(x, y)) focus(8);
+            else if (appearance.bounds().contains(x, y)) focus(9);
+            else if (crosshair.bounds().contains(x, y)) focus(10);
+            else if (back.bounds().contains(x, y)) focus(11);
             else focus(-1);
         }
         if (fieldOfView.updatePointer(down, pressed, x, y)) settings.setFieldOfView(fieldOfView.value());
@@ -101,6 +108,7 @@ public final class SettingsScreen implements Screen {
         if (mouseSensitivity.updatePointer(down, pressed, x, y))
             settings.setMouseSensitivity(mouseSensitivity.value() / 100f);
         if (zoomSpeed.updatePointer(down, pressed, x, y)) settings.setZoomSpeed(zoomSpeed.value());
+        if (frameRate.updatePointer(down, pressed, x, y)) settings.setFrameRate(frameRateValue());
         if (guiScale.updatePointer(down, pressed, x, y)) cycleGuiScale();
         if (clouds.updatePointer(down, pressed, x, y)) cycleClouds();
         if (language.updatePointer(down, pressed, x, y)) cycleLanguage();
@@ -120,8 +128,8 @@ public final class SettingsScreen implements Screen {
         syncControls();
         if (key == UiKey.NEXT || key == UiKey.PREVIOUS) {
             int direction = key == UiKey.NEXT ? 1 : -1;
-            int current = focusIndex < 0 ? (direction > 0 ? -1 : 11) : focusIndex;
-            focus(Math.floorMod(current + direction, 11));
+            int current = focusIndex < 0 ? (direction > 0 ? -1 : 12) : focusIndex;
+            focus(Math.floorMod(current + direction, 12));
         } else {
             switch (focusIndex) {
                 case 0 -> {
@@ -140,21 +148,24 @@ public final class SettingsScreen implements Screen {
                     if (zoomSpeed.keyPress(key)) settings.setZoomSpeed(zoomSpeed.value());
                 }
                 case 5 -> {
-                    if (guiScale.keyPress(key)) cycleGuiScale();
+                    if (frameRate.keyPress(key)) settings.setFrameRate(frameRateValue());
                 }
                 case 6 -> {
-                    if (clouds.keyPress(key)) cycleClouds();
+                    if (guiScale.keyPress(key)) cycleGuiScale();
                 }
                 case 7 -> {
-                    if (language.keyPress(key)) cycleLanguage();
+                    if (clouds.keyPress(key)) cycleClouds();
                 }
                 case 8 -> {
-                    if (appearance.keyPress(key)) openChild(new AppearanceScreen(settings, skins));
+                    if (language.keyPress(key)) cycleLanguage();
                 }
                 case 9 -> {
-                    if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
+                    if (appearance.keyPress(key)) openChild(new AppearanceScreen(settings, skins));
                 }
                 case 10 -> {
+                    if (crosshair.keyPress(key)) openChild(new CrosshairSettingsScreen(settings));
+                }
+                case 11 -> {
                     if (back.keyPress(key)) return closeSettings();
                 }
                 default -> {}
@@ -175,6 +186,7 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.cancelInteraction();
         mouseSensitivity.cancelInteraction();
         zoomSpeed.cancelInteraction();
+        frameRate.cancelInteraction();
         guiScale.cancelInteraction();
         clouds.cancelInteraction();
         language.cancelInteraction();
@@ -200,6 +212,7 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.setPosition(CAMERA_X + dx, ZOOM_FOV_Y + dy);
         mouseSensitivity.setPosition(CAMERA_X + dx, SENSITIVITY_Y + dy);
         zoomSpeed.setPosition(CAMERA_X + dx, ZOOM_SPEED_Y + dy);
+        frameRate.setPosition(CAMERA_X + dx, FRAME_RATE_Y + dy);
         guiScale.setPosition(100 + dx, GUI_SCALE_Y + dy);
         clouds.setPosition(208 + dx, GUI_SCALE_Y + dy);
         language.setPosition(CAMERA_X + dx, LANGUAGE_Y + dy);
@@ -212,6 +225,7 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.setValue(Math.round(settings.zoomFieldOfView()));
         mouseSensitivity.setValue(Math.round(settings.mouseSensitivity() * 100));
         zoomSpeed.setValue(Math.round(settings.zoomSpeed()));
+        frameRate.setValue(frameRateSliderValue());
         guiScale.setLabel(translations.text(
                 switch (settings.guiScale()) {
                     case 1 -> "settings.size.small";
@@ -236,12 +250,13 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.setFocused(index == 2);
         mouseSensitivity.setFocused(index == 3);
         zoomSpeed.setFocused(index == 4);
-        guiScale.setFocused(index == 5);
-        clouds.setFocused(index == 6);
-        language.setFocused(index == 7);
-        appearance.setFocused(index == 8);
-        crosshair.setFocused(index == 9);
-        back.setFocused(index == 10);
+        frameRate.setFocused(index == 5);
+        guiScale.setFocused(index == 6);
+        clouds.setFocused(index == 7);
+        language.setFocused(index == 8);
+        appearance.setFocused(index == 9);
+        crosshair.setFocused(index == 10);
+        back.setFocused(index == 11);
     }
 
     private void cycleGuiScale() {
@@ -286,6 +301,7 @@ public final class SettingsScreen implements Screen {
         label(canvas, translations.text("settings.zoomFov", Math.round(settings.zoomFieldOfView())), ZOOM_FOV_Y - 4);
         label(canvas, translations.text("settings.sensitivity", settings.mouseSensitivity()), SENSITIVITY_Y - 4);
         label(canvas, translations.text("settings.zoomSpeed", Math.round(settings.zoomSpeed())), ZOOM_SPEED_Y - 4);
+        label(canvas, frameRateLabel(), FRAME_RATE_Y - 4);
         label(canvas, translations.text("settings.guiScale"), GUI_SCALE_Y + 3);
         label(canvas, translations.text("settings.language"), LANGUAGE_Y + 3);
         distances.render(canvas, BitmapFont.DEFAULT);
@@ -295,6 +311,7 @@ public final class SettingsScreen implements Screen {
         zoomFieldOfView.render(canvas);
         mouseSensitivity.render(canvas);
         zoomSpeed.render(canvas);
+        frameRate.render(canvas);
         guiScale.render(canvas, BitmapFont.DEFAULT);
         clouds.render(canvas, BitmapFont.DEFAULT);
         language.render(canvas, BitmapFont.DEFAULT);
@@ -303,6 +320,24 @@ public final class SettingsScreen implements Screen {
 
     private void label(UiCanvas canvas, String value, int offsetY) {
         canvas.textWithShadow(BitmapFont.DEFAULT, value, panelX + 8, panelY + offsetY, 1, 1, 1, 1);
+    }
+
+    private int frameRateValue() {
+        return frameRate.value() == GameSettings.MAX_FRAME_RATE + 1
+                ? GameSettings.UNLIMITED_FRAME_RATE
+                : frameRate.value();
+    }
+
+    private int frameRateSliderValue() {
+        return settings.frameRate() == GameSettings.UNLIMITED_FRAME_RATE
+                ? GameSettings.MAX_FRAME_RATE + 1
+                : settings.frameRate();
+    }
+
+    private String frameRateLabel() {
+        return settings.frameRate() == GameSettings.UNLIMITED_FRAME_RATE
+                ? translations.text("settings.frameRate.unlimited")
+                : translations.text("settings.frameRate", settings.frameRate());
     }
 
     private void openChild(Screen screen) {

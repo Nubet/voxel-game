@@ -55,6 +55,7 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.locks.LockSupport;
 
 public final class GameLoop {
     private final SkinManager skins;
@@ -628,6 +629,7 @@ public final class GameLoop {
             profiler.mark(Segment.UI);
             window.swapBuffers();
             profiler.mark(Segment.SWAP);
+            limitFrameRate(frameStarted, settings.frameRate());
             long frameEnded = System.nanoTime();
             profiler.endFrame(frameEnded - frameStarted);
             frameStarted = frameEnded;
@@ -839,6 +841,13 @@ public final class GameLoop {
 
     static double clampDelta(double deltaSeconds) {
         return Math.min(Math.max(deltaSeconds, 0), MAX_DELTA_SECONDS);
+    }
+
+    private static void limitFrameRate(long frameStarted, int frameRate) {
+        if (frameRate == GameSettings.UNLIMITED_FRAME_RATE) return;
+        long frameDuration = 1_000_000_000L / frameRate;
+        long remaining = frameDuration - (System.nanoTime() - frameStarted);
+        if (remaining > 0) LockSupport.parkNanos(remaining);
     }
 
     private static boolean sleepWhileIdle() {
