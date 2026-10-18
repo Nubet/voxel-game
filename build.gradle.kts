@@ -38,6 +38,94 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+val windowsInstallDir = layout.buildDirectory.dir("install/voxel-engine")
+val windowsJarDir = layout.buildDirectory.dir("windows-java")
+val windowsPortableDir = layout.buildDirectory.dir("windows-portable/VoxelEngine")
+
+val windowsJar = tasks.register<Jar>("windowsJar") {
+    group = "distribution"
+    description = "Builds a runnable VoxelEngine.jar with a manifest class path."
+    dependsOn(tasks.classes)
+    archiveFileName.set("VoxelEngine.jar")
+    from(sourceSets.main.get().output)
+    manifest {
+        attributes[
+                "Main-Class"] = application.mainClass.get()
+        attributes["Class-Path"] = configurations.runtimeClasspath.get().files.joinToString(" ") { "lib/${it.name}" }
+    }
+}
+
+val prepareWindowsJar = tasks.register("prepareWindowsJar") {
+    group = "distribution"
+    description = "Stages the runnable JAR and its runtime libraries without Gradle scripts."
+    dependsOn(windowsJar)
+    doLast {
+        val destination = windowsJarDir.get().asFile
+        delete(destination)
+        project.copy {
+            from(windowsJar.flatMap { it.archiveFile })
+            into(destination)
+        }
+        project.copy {
+            from(configurations.runtimeClasspath)
+            into(destination.resolve("lib"))
+        }
+    }
+}
+
+tasks.register<Zip>("packageWindowsJar") {
+    group = "distribution"
+    description = "Packages a runnable JAR and dependencies; requires Java 25 and runs with java -jar."
+    dependsOn(prepareWindowsJar)
+    from(windowsJarDir)
+    archiveBaseName.set("VoxelEngine-windows-jar")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+}
+
+val createWindowsPortableImage = tasks.register("createWindowsPortableImage") {
+    group = "distribution"
+    description = "Creates a Windows app image with a bundled Java runtime using jpackage."
+    dependsOn(tasks.installDist)
+    doLast {
+        if (!os.contains("win")) throw GradleException("Windows packages must be built on Windows.")
+        val javaHome = File(System.getProperty("java.home"))
+        val jpackage = javaHome.resolve("bin/jpackage.exe").takeIf { it.isFile }
+            ?: javaHome.resolve("bin/jpackage").takeIf { it.isFile }
+            ?: throw GradleException("jpackage was not found. Run this task with a full JDK 25.")
+        val image = windowsPortableDir.get().asFile
+        delete(image.parentFile)
+        val command = listOf(
+            jpackage.absolutePath,
+            "--type", "app-image",
+            "--name", "VoxelEngine",
+            "--input", layout.buildDirectory.dir("install/voxel-engine/lib").get().asFile.absolutePath,
+            "--main-jar", "voxel-engine.jar",
+            "--main-class", "com.norbertfila.Main",
+            "--dest", image.parentFile.absolutePath,
+            "--app-version", "1.0.0",
+            "--vendor", "Voxel Engine",
+            "--description", "Voxel Engine test build"
+        )
+        val result = ProcessBuilder(command).inheritIO().start().waitFor()
+        if (result != 0) throw GradleException("jpackage failed with exit code $result")
+    }
+}
+
+tasks.register<Zip>("packageWindowsPortable") {
+    group = "distribution"
+    description = "Packages a self-contained Windows app with a bundled Java runtime."
+    dependsOn(createWindowsPortableImage)
+    from(windowsPortableDir) { into("VoxelEngine") }
+    archiveBaseName.set("VoxelEngine-windows-portable")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+}
+
+tasks.register("packageWindows") {
+    group = "distribution"
+    description = "Builds both Windows distribution variants."
+    dependsOn("packageWindowsJar", "packageWindowsPortable")
+}
+
 tasks.register<JavaExec>("smokePlayerModel") {
     group = "verification"
     description = "Checks Classic/Slim directional skin mapping, runtime switching, outer layers and OpenGL state."
@@ -106,6 +194,15 @@ tasks.register<JavaExec>("debugBiomes") {
     dependsOn(tasks.testClasses)
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.norbertfila.generation.BiomeDebugMap")
+}
+
+tasks.register<JavaExec>("debugLandscapes") {
+    group = "verification"
+    description = "Writes aligned maps of regional styles, terrain and decoration density."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.LandscapeDebugMap")
+    args(layout.buildDirectory.dir("landscape-debug").get().asFile.absolutePath, findProperty("seed") ?: "7340215")
 }
 
 tasks.register<JavaExec>("smokeBlockModels") {
