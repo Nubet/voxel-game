@@ -44,6 +44,7 @@ public final class TextField {
     }
 
     public void replaceRange(int start, int end, String inserted) {
+        Objects.requireNonNull(inserted);
         if (start < 0
                 || end < start
                 || end > text.length()

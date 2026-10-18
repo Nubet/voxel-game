@@ -57,19 +57,7 @@ public final class GameCommands {
                 .then(RequiredArgumentBuilder.<Execution, Double>argument("x", doubleArg())
                         .then(RequiredArgumentBuilder.<Execution, Double>argument("y", doubleArg())
                                 .then(RequiredArgumentBuilder.<Execution, Double>argument("z", doubleArg())
-                                        .executes(context -> {
-                                            double x = getDouble(context, "x"),
-                                                    y = getDouble(context, "y"),
-                                                    z = getDouble(context, "z");
-                                            if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
-                                                throw error("Coordinates must be finite numbers.");
-                                            if (!context.getSource()
-                                                    .source()
-                                                    .teleport(new PlayerState.Position(x, y, z)))
-                                                throw error("Teleport unavailable or target outside world bounds.");
-                                            context.getSource().output().add("Preparing teleport...");
-                                            return 1;
-                                        })))));
+                                        .executes(GameCommands::teleport)))));
         dispatcher.register(LiteralArgumentBuilder.<Execution>literal("locate")
                 .then(LiteralArgumentBuilder.<Execution>literal("biome")
                         .then(RequiredArgumentBuilder.<Execution, String>argument("biome", word())
@@ -81,21 +69,7 @@ public final class GameCommands {
                                     }
                                     return builder.buildFuture();
                                 })
-                                .executes(context -> {
-                                    BiomeType biome;
-                                    try {
-                                        biome = BiomeType.valueOf(
-                                                getString(context, "biome").toUpperCase(Locale.ROOT));
-                                    } catch (IllegalArgumentException invalid) {
-                                        throw error("Unknown biome: " + getString(context, "biome"));
-                                    }
-                                    if (!context.getSource().source().locate(biome))
-                                        throw error("Biome search unavailable or already running.");
-                                    context.getSource()
-                                            .output()
-                                            .add("Locating " + biome.name().toLowerCase(Locale.ROOT) + "...");
-                                    return 1;
-                                }))));
+                                .executes(GameCommands::locate))));
         dispatcher.register(LiteralArgumentBuilder.<Execution>literal("give")
                 .then(LiteralArgumentBuilder.<Execution>literal("@s")
                         .then(RequiredArgumentBuilder.<Execution, String>argument("item", word())
@@ -154,6 +128,28 @@ public final class GameCommands {
             return count - remaining;
         }
         throw error("Unknown item: " + name);
+    }
+
+    private static int teleport(CommandContext<Execution> context) throws CommandSyntaxException {
+        double x = getDouble(context, "x"), y = getDouble(context, "y"), z = getDouble(context, "z");
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
+            throw error("Coordinates must be finite numbers.");
+        if (!context.getSource().source().teleport(new PlayerState.Position(x, y, z)))
+            throw error("Teleport unavailable, already pending, or target outside world bounds.");
+        context.getSource().output().add("Preparing teleport...");
+        return 1;
+    }
+
+    private static int locate(CommandContext<Execution> context) throws CommandSyntaxException {
+        BiomeType biome;
+        try {
+            biome = BiomeType.valueOf(getString(context, "biome").toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalid) {
+            throw error("Unknown biome: " + getString(context, "biome"));
+        }
+        if (!context.getSource().source().locate(biome)) throw error("Biome search unavailable or already running.");
+        context.getSource().output().add("Locating " + biome.name().toLowerCase(Locale.ROOT) + "...");
+        return 1;
     }
 
     private static CommandSyntaxException error(String text) {

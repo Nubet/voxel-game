@@ -74,4 +74,56 @@ class BiomeLocatorTest {
             Thread.interrupted();
         }
     }
+
+    @Test
+    void doesNotReturnTheCoarseHitWhenAThinCloserBiomeExists() {
+        var locator = new BiomeLocator(terrain(BiomeType.FOREST, (x, z) -> z == 0 && (x == 128 || x == 5)));
+        var result = locator.locate(BiomeType.FOREST, .5, .5, 256, Long.MAX_VALUE);
+        assertEquals(BiomeLocator.Status.FOUND, result.status());
+        assertEquals(5, result.match().orElseThrow().x());
+    }
+
+    @Test
+    void matchesExhaustiveSearchWithFractionalOriginsAndTies() {
+        var random = new java.util.Random(42);
+        for (int run = 0; run < 30; run++) {
+            var points = new java.util.HashSet<String>();
+            for (int n = 0; n < 20; n++) points.add((random.nextInt(25) - 12) + "," + (random.nextInt(25) - 12));
+            double ox = random.nextDouble(-4, 4), oz = random.nextDouble(-4, 4);
+            double nearest = Double.POSITIVE_INFINITY;
+            for (int z = -25; z <= 25; z++)
+                for (int x = -25; x <= 25; x++)
+                    if (points.contains(x + "," + z)) nearest = Math.min(nearest, Math.hypot(x + .5 - ox, z + .5 - oz));
+            var locator = new BiomeLocator(terrain(BiomeType.FOREST, (x, z) -> points.contains(x + "," + z)));
+            var result = locator.locate(BiomeType.FOREST, ox, oz, 20, Long.MAX_VALUE);
+            assertEquals(BiomeLocator.Status.FOUND, result.status());
+            assertEquals(nearest, result.match().orElseThrow().distance(), 1e-9);
+        }
+    }
+
+    @Test
+    void measuresRareBiomeSearchesAgainstTheRealGenerator() {
+        for (long seed : new long[] {0, 7340215}) {
+            var terrain = new TerrainGenerator(seed, TerrainConfig.defaults());
+            var locator = new BiomeLocator(terrain);
+            for (var biome : new BiomeType[] {BiomeType.ARCHLANDS_CLASSIC, BiomeType.FLOATING_ISLES_CLASSIC}) {
+                long start = System.nanoTime();
+                var result = locator.locate(biome, .5, .5, 32768, start + 2_000_000_000L);
+                assertTrue(result.match().isPresent(), "Expected a verified rare biome candidate");
+                result.match()
+                        .ifPresent(match -> assertEquals(
+                                biome, terrain.sample(match.x(), match.z()).biome()));
+                System.out.printf(
+                        "seed=%d biome=%s status=%s samples=%d match=%s ms=%.1f%n",
+                        seed,
+                        biome,
+                        result.status(),
+                        result.samples(),
+                        result.match(),
+                        (System.nanoTime() - start) / 1e6);
+                assertTrue(result.samples() <= 250_000);
+                assertNotEquals(BiomeLocator.Status.NOT_FOUND, result.status());
+            }
+        }
+    }
 }

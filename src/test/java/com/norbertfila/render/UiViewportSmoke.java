@@ -479,7 +479,11 @@ public final class UiViewportSmoke {
         canvas.clear();
         overlay.render(canvas, viewport, history, false, 0, 20);
         check(canvas.vertexCount() == 0, "Expired chat is still visible");
-        var screen = new ChatScreen(history, "/give @s stone 64", text -> {});
+        var screen = new ChatScreen(history, "/locate biome ", text -> {});
+        check(
+                screen.suggestions().stream().anyMatch(s -> s.text().equals("floating_isles_classic")),
+                "Rare biome suggestion missing");
+        screen.keyPress(UiKey.DOWN);
         overlay.render(canvas, viewport, history, true, 0, 20);
         screen.render(canvas, viewport);
         var geometry = FloatBuffer.allocate(canvas.floatCount());
@@ -496,6 +500,9 @@ public final class UiViewportSmoke {
                 rgb(pixels, viewport, 5 * viewport.scale(), ((int) viewport.height() - 25) * viewport.scale()) != 0,
                 "Chat input missing");
         write(output, pixels, viewport);
+        screen.field().setText("/locate biome flo");
+        screen.keyPress(UiKey.NEXT);
+        check(screen.field().text().equals("/locate biome floating_isles_classic"), "Biome completion failed");
     }
 
     private static void checkCrosshair(UiRenderer ui, UiCanvas canvas, UiViewport viewport, Path output, int index)
