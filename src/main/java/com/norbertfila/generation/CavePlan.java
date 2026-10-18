@@ -9,8 +9,10 @@ import java.util.Objects;
 
 final class CavePlan {
     private final Map<Long, List<Segment>> columns;
+    private final List<Segment> segments;
 
     CavePlan(List<Segment> segments) {
+        this.segments = List.copyOf(segments);
         Map<Long, List<Segment>> index = new HashMap<>();
         for (Segment segment : segments) {
             int minX = chunk(segment.x() - segment.boundRadiusXZ());
@@ -28,6 +30,10 @@ final class CavePlan {
 
     List<Segment> segments(int chunkX, int chunkZ) {
         return columns.getOrDefault(key(chunkX, chunkZ), List.of());
+    }
+
+    List<Segment> allSegments() {
+        return segments;
     }
 
     private static int chunk(double coordinate) {

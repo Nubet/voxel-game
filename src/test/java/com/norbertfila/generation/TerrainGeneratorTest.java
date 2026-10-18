@@ -143,9 +143,13 @@ class TerrainGeneratorTest {
     void voxelsAgreeWithBaseSamplesAndPointCarvingAcrossAllChunkBoundaries() {
         TerrainGenerator generator = new TerrainGenerator(42, TerrainConfig.defaults());
         var carver = new CaveCarver(generator);
+        var planner = new CavePlanner(generator.seed(), WorldBounds.MIN_Y, generator::surfaceHeight);
+        var features = new CaveFeatures(
+                generator.seed(), generator::sample, carver, planner::plan, (x, z) -> plannedSegments(generator, x, z));
         for (int chunkZ : new int[] {-2, -1, 0, 1})
             for (int chunkX : new int[] {-2, -1, 0, 1}) {
                 var segments = plannedSegments(generator, chunkX, chunkZ);
+                var decorations = features.at(chunkX, chunkZ);
                 for (int chunkY : new int[] {-2, -1, 0, 1, 2, 3, 4}) {
                     ChunkData data = generator.generate(new ChunkPos(chunkX, chunkY, chunkZ));
                     for (int z = 0; z < Chunk.SIZE; z++)
@@ -159,6 +163,9 @@ class TerrainGeneratorTest {
                                     expected = BlockId.AIR;
                                 if (expected == BlockId.STONE
                                         && OreGenerator.DEFAULT_ORES.stream().anyMatch(ore -> ore.block() == actual))
+                                    continue;
+                                if (matchesCaveFeature(
+                                        decorations, chunkX * 16 + x, worldY, chunkZ * 16 + z, expected, actual))
                                     continue;
                                 assertTrue(actual == expected
                                         || expected == BlockId.AIR
@@ -220,6 +227,19 @@ class TerrainGeneratorTest {
             for (int x = rx - 1; x <= rx + 1; x++)
                 segments.addAll(planner.plan(x, z).segments(chunkX, chunkZ));
         return segments;
+    }
+
+    private static boolean matchesCaveFeature(
+            List<CaveFeatures.Feature> features, int x, int y, int z, byte base, byte actual) {
+        for (var feature : features)
+            if (y >= feature.minY()
+                    && y <= feature.maxY()
+                    && feature.containsXZ(x, z)
+                    && actual == feature.material()
+                    && (base == BlockId.STONE
+                            || base == BlockId.AIR && feature.type() == CaveFeatures.Type.SPRING && y < feature.y()))
+                return true;
+        return false;
     }
 
     private static byte blockAt(TerrainGenerator generator, int x, int y, int z) {

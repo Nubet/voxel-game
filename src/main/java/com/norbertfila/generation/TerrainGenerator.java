@@ -60,6 +60,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final GenerationCache<CavePlan> cavePlans = new GenerationCache<>(128);
     private final CavePlanner cavePlanner;
     private final CaveCarver caveCarver;
+    private final CaveFeatures caveFeatures;
     private final OreGenerator ores;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
@@ -136,6 +137,7 @@ public final class TerrainGenerator implements TerrainSource {
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this, this.landscapes);
         cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
         caveCarver = new CaveCarver((GroundSampler) this::sampleBase, seed);
+        caveFeatures = new CaveFeatures(seed, this::sampleBase, caveCarver, this::cavePlanAt, this::cavesAt);
         ores = new OreGenerator(seed);
     }
 
@@ -463,6 +465,7 @@ public final class TerrainGenerator implements TerrainSource {
         boolean mayHaveOres = (uniform < 0 || uniform == BlockId.STONE) && ores.mayGenerate(originY);
         if (uniform >= 0
                 && !mayHaveOres
+                && column.caveFeatures().stream().noneMatch(f -> f.intersectsY(originY))
                 && (!CaveCarver.carveable((byte) uniform)
                         || column.caves().stream()
                                 .noneMatch(s -> s.y() + s.boundRadiusY() > originY
@@ -480,7 +483,9 @@ public final class TerrainGenerator implements TerrainSource {
         boolean carved = caveCarver.carve(position, blocks, column.caves());
         if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
         boolean mineralized = mayHaveOres && ores.generate(position, blocks);
-        if (uniform >= 0 && !carved && !mineralized)
+        var falling = column.fallingWater(originY, blocks);
+        boolean decorated = caveFeatures.apply(position, blocks, column.caveFeatures(), column.caves(), falling);
+        if (uniform >= 0 && !carved && !mineralized && !decorated)
             return tinted(ChunkData.uniform(position, (byte) uniform), originX, originZ);
         TreeGenerator.place(column.trees(), originX, originY, originZ, blocks);
         boolean hasJungle = false;
@@ -492,10 +497,7 @@ public final class TerrainGenerator implements TerrainSource {
         }
         snow.generate(originX, originY, originZ, blocks, column);
         vegetation.generate(originX, originY, originZ, blocks, column);
-        return tinted(
-                new ChunkData(position, blocks).withFallingWater(column.fallingWater(originY, blocks)),
-                originX,
-                originZ);
+        return tinted(new ChunkData(position, blocks).withFallingWater(falling), originX, originZ);
     }
 
     private TerrainColumn column(int originX, int originZ) {
@@ -513,7 +515,12 @@ public final class TerrainGenerator implements TerrainSource {
                     removedSurface.set(index);
             }
         var supportedTrees = forestAt(Math.floorDiv(originX, 16), Math.floorDiv(originZ, 16));
-        return TerrainColumn.of(summaries, supportedTrees, segments, removedSurface);
+        return TerrainColumn.of(
+                summaries,
+                supportedTrees,
+                segments,
+                removedSurface,
+                caveFeatures.at(originX / Chunk.SIZE, originZ / Chunk.SIZE));
     }
 
     private boolean treeSupported(TreeGenerator.Tree tree) {
@@ -550,16 +557,17 @@ public final class TerrainGenerator implements TerrainSource {
         int regionZ = Math.floorDiv(chunkZ, CavePlanner.REGION_SIZE / Chunk.SIZE);
         List<CavePlan.Segment> segments = new ArrayList<>();
         for (int z = regionZ - 1; z <= regionZ + 1; z++)
-            for (int x = regionX - 1; x <= regionX + 1; x++) {
-                int rx = x, rz = z;
-                segments.addAll(
-                        cavePlans.get(rx, rz, () -> cavePlanner.plan(rx, rz)).segments(chunkX, chunkZ));
-            }
+            for (int x = regionX - 1; x <= regionX + 1; x++)
+                segments.addAll(cavePlanAt(x, z).segments(chunkX, chunkZ));
         return List.copyOf(segments);
     }
 
     GenerationCache.Stats columnCacheStats() {
         return columns.stats();
+    }
+
+    private CavePlan cavePlanAt(int rx, int rz) {
+        return cavePlans.get(rx, rz, () -> cavePlanner.plan(rx, rz));
     }
 
     GenerationCache.Stats caveCacheStats() {

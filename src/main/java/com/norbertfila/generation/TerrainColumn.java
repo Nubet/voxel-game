@@ -30,6 +30,7 @@ final class TerrainColumn {
     private final int maxWater;
     private final List<TreeGenerator.Tree> trees;
     private final List<CavePlan.Segment> caves;
+    private final List<CaveFeatures.Feature> caveFeatures;
     private final BitSet removedSurface;
     private final BitSet snowCover;
     private final BitSet frozenWater;
@@ -48,6 +49,7 @@ final class TerrainColumn {
             int[] waterLevels,
             List<TreeGenerator.Tree> trees,
             List<CavePlan.Segment> caves,
+            List<CaveFeatures.Feature> caveFeatures,
             BitSet removedSurface,
             BitSet snowCover,
             BitSet frozenWater) {
@@ -72,6 +74,7 @@ final class TerrainColumn {
         maxWater = java.util.Arrays.stream(waterLevels).max().orElseThrow();
         this.trees = List.copyOf(trees);
         this.caves = List.copyOf(caves);
+        this.caveFeatures = List.copyOf(caveFeatures);
         this.removedSurface = (BitSet) removedSurface.clone();
         this.snowCover = (BitSet) snowCover.clone();
         this.frozenWater = (BitSet) frozenWater.clone();
@@ -123,6 +126,15 @@ final class TerrainColumn {
             List<TreeGenerator.Tree> trees,
             List<CavePlan.Segment> caves,
             BitSet removedSurface) {
+        return of(summaries, trees, caves, removedSurface, List.of());
+    }
+
+    static TerrainColumn of(
+            TerrainSummary[] summaries,
+            List<TreeGenerator.Tree> trees,
+            List<CavePlan.Segment> caves,
+            BitSet removedSurface,
+            List<CaveFeatures.Feature> caveFeatures) {
         if (summaries.length != AREA) throw new IllegalArgumentException("Column needs " + AREA + " summaries");
         TerrainSummary first = Objects.requireNonNull(summaries[0]);
         int[] heights = new int[AREA];
@@ -161,6 +173,7 @@ final class TerrainColumn {
                 waterLevels,
                 trees,
                 caves,
+                caveFeatures,
                 removedSurface,
                 snow,
                 ice);
@@ -188,6 +201,10 @@ final class TerrainColumn {
 
     List<CavePlan.Segment> caves() {
         return caves;
+    }
+
+    List<CaveFeatures.Feature> caveFeatures() {
+        return caveFeatures;
     }
 
     boolean surfaceSupported(int index) {
@@ -220,6 +237,7 @@ final class TerrainColumn {
                 + AREA * (2L * Integer.BYTES + 3L)
                 + trees.size() * 48L
                 + caves.size() * 8L
+                + caveFeatures.size() * 8L
                 + (removedSurface.size() + snowCover.size() + frozenWater.size()) / 8L;
     }
 
