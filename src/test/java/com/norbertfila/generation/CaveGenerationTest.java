@@ -14,17 +14,18 @@ class CaveGenerationTest {
     void cavesCutDeepStoneWithoutDiscardingUniformSections() {
         var generator = new TerrainGenerator(42, TerrainConfig.defaults());
         int carved = 0;
-        for (int z = -3; z <= 3; z++)
-            for (int x = -3; x <= 3; x++) {
-                var data = generator.generate(new ChunkPos(x, -4, z));
-                for (int lz = 0; lz < 16; lz++)
-                    for (int lx = 0; lx < 16; lx++) {
-                        var base = generator.sample(x * 16 + lx, z * 16 + lz);
-                        for (int y = 0; y < 16; y++)
-                            if (base.materialAt(y - 64) == BlockId.STONE && data.get(lx, y, lz) == BlockId.AIR)
-                                carved++;
-                    }
-            }
+        for (int cy = -4; cy <= -2; cy++)
+            for (int z = -3; z <= 3; z++)
+                for (int x = -3; x <= 3; x++) {
+                    var data = generator.generate(new ChunkPos(x, cy, z));
+                    for (int lz = 0; lz < 16; lz++)
+                        for (int lx = 0; lx < 16; lx++) {
+                            var base = generator.sample(x * 16 + lx, z * 16 + lz);
+                            for (int y = 0; y < 16; y++)
+                                if (base.materialAt(y + cy * 16) == BlockId.STONE && data.get(lx, y, lz) == BlockId.AIR)
+                                    carved++;
+                        }
+                }
         assertTrue(carved > 100, "Caves must also cut sections formerly returned as uniform stone");
         assertTrue(generator.generate(new ChunkPos(0, 15, 0)).isUniform(), "Empty sections should remain compact");
         assertTrue(

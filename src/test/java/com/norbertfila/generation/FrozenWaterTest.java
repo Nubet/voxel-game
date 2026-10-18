@@ -11,7 +11,8 @@ class FrozenWaterTest {
     @Test
     void coldRiverHasIceOverWaterInChunksAndFarTerrainAndEditsCanBreakIt() {
         var terrain = new TerrainGenerator(0, TerrainConfig.defaults());
-        int x = -3776, z = -1920;
+        var site = coldRiver(terrain);
+        int x = site.x(), z = site.z();
         var summary = terrain.sample(x, z);
         assertEquals(BiomeType.RIVER, summary.biome());
         assertTrue(summary.frozenWater());
@@ -32,6 +33,18 @@ class FrozenWaterTest {
         tile = far.generate(tx, tz, 1, overlay.edits(tx * 64, tz * 64, 64));
         assertEquals(summary.surfaceHeight(), tile.heightAt(lx, lz));
         assertEquals(y - 1, tile.waterTopAt(lx, lz));
+    }
+
+    private static BlockPos coldRiver(TerrainSource terrain) {
+        for (int z = -1952; z <= -1888; z++)
+            for (int x = -3808; x <= -3744; x++) {
+                var sample = terrain.sample(x, z);
+                if (sample.biome() == BiomeType.RIVER
+                        && sample.frozenWater()
+                        && sample.waterLevel() - sample.surfaceHeight() >= 2)
+                    return new BlockPos(x, sample.waterLevel(), z);
+            }
+        throw new AssertionError("Cold river region must contain ice over at least one water block");
     }
 
     @Test

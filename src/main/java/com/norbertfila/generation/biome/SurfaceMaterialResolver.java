@@ -24,6 +24,20 @@ public final class SurfaceMaterialResolver {
             WaterKind kind,
             boolean nearWater,
             double shoreVariation) {
+        return resolve(height, slope, waterLevel, baseHeight, climate, profile, kind, nearWater, shoreVariation, false);
+    }
+
+    public Result resolve(
+            int height,
+            double slope,
+            int waterLevel,
+            int baseHeight,
+            ClimateSample climate,
+            BiomeProfile profile,
+            WaterKind kind,
+            boolean nearWater,
+            double shoreVariation,
+            boolean classic) {
         long waterDepth = (long) waterLevel - height;
         double temperature = ClimateRules.temperature(climate, height, baseHeight);
         if (waterDepth > 3)
@@ -48,10 +62,10 @@ public final class SurfaceMaterialResolver {
             }
             return new Result(materials.surface(shore), materials.subsurface(shore));
         }
-        if (slope > 1.5)
+        if (slope > (classic ? 3.5 : 1.5))
             return new Result(materials.surface(SurfaceMaterial.STONE), materials.subsurface(SurfaceMaterial.STONE));
         SurfaceProfile surface = profile.surface();
-        if (profile.trees().type() == TreeType.CONIFER)
+        if (classic || profile.trees().type() == TreeType.CONIFER)
             return new Result(materials.surface(surface.surface()), materials.subsurface(surface.subsurface()));
         if (temperature < -.8 && height > (long) baseHeight + 150)
             return new Result(materials.surface(SurfaceMaterial.ICE), materials.subsurface(SurfaceMaterial.ICE));

@@ -26,7 +26,11 @@ class GeographicBiomeTest {
         for (int i = 0; i < centers.length; i++) {
             int x = centers[i][0], z = centers[i][1];
             var terrain = new TerrainGenerator(
-                    0, config, (nx, nz) -> Math.abs(nx - x) <= 2 && Math.abs(nz - z) <= 2 ? -1 : 1);
+                    0,
+                    config,
+                    (nx, nz) -> Math.abs(nx - x) <= 2 && Math.abs(nz - z) <= 2 ? -1 : 1,
+                    (nx, nz) -> -1,
+                    LandscapeTestConfig.uniform());
             var pool = terrain.sample(x, z);
             assertEquals(surroundings[i], terrain.sample(x + 4, z).biome());
             assertEquals(BiomeType.LAKE, pool.biome());

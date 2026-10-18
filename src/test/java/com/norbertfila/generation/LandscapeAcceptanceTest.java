@@ -35,7 +35,9 @@ class LandscapeAcceptanceTest {
                     total++;
                 }
         }
-        assertEquals(EnumSet.allOf(BiomeType.class), biomes);
+        var ordinary = EnumSet.allOf(BiomeType.class);
+        ordinary.removeIf(BiomeType::rareClassic);
+        assertTrue(biomes.containsAll(ordinary), biomes.toString());
         assertTrue(waters.containsAll(EnumSet.of(WaterKind.OCEAN, WaterKind.RIVER, WaterKind.LAKE)));
         assertTrue(low > total / 10 && upland > total / 10, "low=" + low + "; upland=" + upland + "; total=" + total);
     }

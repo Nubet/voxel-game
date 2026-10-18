@@ -30,11 +30,13 @@ public final class FarTileMesher {
         IntList records = new IntList();
         tops(tile, records, false, false);
         walls(tile, border, records, false);
+        FarVolumeMesher.mesh(tile, records, false);
         for (int value : tile.canopyQuads()) records.add(value);
         int solid = records.size() / QuadMesh.Format.FAR.ints();
         tops(tile, records, false, true);
         walls(tile, border, records, true);
         tops(tile, records, true, false);
+        FarVolumeMesher.mesh(tile, records, true);
         int water = records.size() / QuadMesh.Format.FAR.ints() - solid;
         return new QuadMesh(QuadMesh.Format.FAR, records.toArray(), new QuadRanges(solid, 0, water));
     }
@@ -100,6 +102,7 @@ public final class FarTileMesher {
     }
 
     private static boolean hasTop(FarTerrainTile tile, int x, int z, boolean water) {
+        if (FarVolumeMesher.handles(tile, x, z)) return false;
         return water
                 ? tile.waterTopAt(x, z) != FarTerrainTile.NO_WATER
                 : tile.heightAt(x, z) != FarTerrainTile.NO_SURFACE;
@@ -135,7 +138,9 @@ public final class FarTileMesher {
                 int x = xFace ? line : along, z = xFace ? along : line;
                 int height = tile.heightAt(x, z);
                 if (tile.materialAt(x, z) == BlockId.SNOW_LAYER) height--;
-                if (height != FarTerrainTile.NO_SURFACE && (tile.materialAt(x, z) == BlockId.ICE) == ice) {
+                if (!FarVolumeMesher.handles(tile, x, z)
+                        && height != FarTerrainTile.NO_SURFACE
+                        && (tile.materialAt(x, z) == BlockId.ICE) == ice) {
                     int nx = x + (face == FACE_POSITIVE_X ? 1 : face == FACE_NEGATIVE_X ? -1 : 0);
                     int nz = z + (face == FACE_POSITIVE_Z ? 1 : face == FACE_NEGATIVE_Z ? -1 : 0);
                     boolean edge = nx < 0 || nz < 0 || nx >= cells || nz >= cells;

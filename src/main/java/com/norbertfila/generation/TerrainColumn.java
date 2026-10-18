@@ -22,6 +22,8 @@ final class TerrainColumn {
     private final BiomeType[] biomes;
     private final byte[] deepMaterials;
     private final BadlandsSurface.Column[] badlands;
+    private final TerrainShape[] shapes;
+    private final int minShape, maxShape;
     private final int bedrockHeight;
     private final int[] waterLevels;
     private final int minWater;
@@ -41,6 +43,7 @@ final class TerrainColumn {
             BiomeType[] biomes,
             byte[] deepMaterials,
             BadlandsSurface.Column[] badlands,
+            TerrainShape[] shapes,
             int bedrockHeight,
             int[] waterLevels,
             List<TreeGenerator.Tree> trees,
@@ -54,6 +57,15 @@ final class TerrainColumn {
         this.biomes = biomes;
         this.deepMaterials = deepMaterials;
         this.badlands = badlands;
+        this.shapes = shapes;
+        int shapeMin = Integer.MAX_VALUE, shapeMax = Integer.MIN_VALUE;
+        for (var shape : shapes)
+            if (shape != null) {
+                shapeMin = Math.min(shapeMin, shape.minY());
+                shapeMax = Math.max(shapeMax, shape.maxY());
+            }
+        minShape = shapeMin;
+        maxShape = shapeMax;
         this.bedrockHeight = bedrockHeight;
         this.waterLevels = waterLevels;
         minWater = java.util.Arrays.stream(waterLevels).min().orElseThrow();
@@ -80,6 +92,7 @@ final class TerrainColumn {
      */
     int uniformBlock(int minY) {
         long maxY = (long) minY + Chunk.SIZE - 1;
+        if (minY <= maxShape && maxY >= minShape) return -1;
         if (!frozenWater.isEmpty() && minY <= maxWater && maxY >= minWater) return -1;
         if (bedrockHeight != TerrainSummary.NO_BEDROCK && maxY < bedrockHeight) return Byte.toUnsignedInt(BlockId.AIR);
         if ((bedrockHeight == TerrainSummary.NO_BEDROCK || minY > bedrockHeight) && maxY < (long) minSurface - 3) {
@@ -117,6 +130,7 @@ final class TerrainColumn {
         byte[] surface = new byte[AREA], subsurface = new byte[AREA];
         byte[] deep = new byte[AREA];
         var badlands = new BadlandsSurface.Column[AREA];
+        var shapes = new TerrainShape[AREA];
         BiomeType[] biomes = new BiomeType[AREA];
         BitSet snow = new BitSet(AREA);
         BitSet ice = new BitSet(AREA);
@@ -131,6 +145,7 @@ final class TerrainColumn {
             waterLevels[index] = summary.waterLevel();
             deep[index] = summary.deepMaterial();
             badlands[index] = summary.badlands();
+            shapes[index] = summary.shape();
             if (summary.snowCover()) snow.set(index);
             if (summary.frozenWater()) ice.set(index);
         }
@@ -141,6 +156,7 @@ final class TerrainColumn {
                 biomes,
                 deep,
                 badlands,
+                shapes,
                 first.bedrockHeight(),
                 waterLevels,
                 trees,
@@ -184,6 +200,7 @@ final class TerrainColumn {
 
     byte materialAt(int index, int worldY) {
         if (frozenWater.get(index) && worldY == waterLevels[index]) return BlockId.ICE;
+        if (shapes[index] != null && worldY >= shapes[index].minY()) return shapes[index].materialAt(worldY);
         return TerrainSummary.materialAt(
                 worldY,
                 surfaceHeights[index],
@@ -196,12 +213,26 @@ final class TerrainColumn {
     }
 
     long estimatedBytes() {
-        long layerBytes = AREA * (long) Long.BYTES;
+        long layerBytes = AREA * 2L * Long.BYTES;
         for (var column : badlands) if (column != null) layerBytes += 24;
+        for (var shape : shapes) if (shape != null) layerBytes += 32L + shape.maxY() - shape.minY() + 1;
         return layerBytes
                 + AREA * (2L * Integer.BYTES + 3L)
                 + trees.size() * 48L
                 + caves.size() * 8L
                 + (removedSurface.size() + snowCover.size() + frozenWater.size()) / 8L;
+    }
+
+    BitSet fallingWater(int originY, byte[] blocks) {
+        var result = new BitSet();
+        for (int column = 0; column < AREA; column++)
+            if (shapes[column] != null)
+                for (int y = 0; y < Chunk.SIZE; y++) {
+                    int index = y * AREA + column;
+                    if (blocks[index] == BlockId.WATER
+                            && shapes[column].waterState(originY + y) == com.norbertfila.world.WaterState.FALLING)
+                        result.set(index);
+                }
+        return result;
     }
 }

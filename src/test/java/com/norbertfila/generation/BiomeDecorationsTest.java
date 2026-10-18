@@ -9,10 +9,50 @@ import org.junit.jupiter.api.Test;
 
 class BiomeDecorationsTest {
     @Test
+    void mushroomsAreSparseAndLimitedToOnePerChunkColumnWhileClassicPlainsStayClear() {
+        for (long seed : new long[] {0, 42, -123456789})
+            for (var biome : List.of(BiomeType.CLASSIC_PLAINS, BiomeType.CLASSIC_FOREST, BiomeType.SWAMPLAND)) {
+                var summaries = new TerrainSummary[256];
+                Arrays.fill(
+                        summaries,
+                        new TerrainSummary(
+                                0,
+                                BlockId.GRASS,
+                                BlockId.DIRT,
+                                BlockId.STONE,
+                                TerrainSummary.NO_BEDROCK,
+                                TerrainSummary.NO_WATER,
+                                biome,
+                                new ClimateSample(0, 0)));
+                var column = TerrainColumn.of(summaries, List.of());
+                var generator = new VegetationGenerator(
+                        seed,
+                        (x, z) -> 1,
+                        (x, z) -> 1,
+                        BiomeRegistry.defaults(),
+                        null,
+                        new LandscapeSampler(seed, LandscapeTestConfig.uniform()));
+                int total = 0;
+                for (int z = -4; z < 4; z++)
+                    for (int x = -4; x < 4; x++) {
+                        byte[] blocks = new byte[Chunk.BLOCK_BYTES];
+                        generator.generate(x * 16, 0, z * 16, blocks, column);
+                        int mushrooms = 0;
+                        for (byte block : blocks) if (block == BlockId.MUSHROOM) mushrooms++;
+                        assertTrue(mushrooms <= 1, biome + " seed=" + seed + " mushrooms=" + mushrooms);
+                        total += mushrooms;
+                    }
+                if (biome == BiomeType.CLASSIC_PLAINS) assertEquals(0, total);
+                else assertTrue(total > 0 && total <= 16, biome + " seed=" + seed + " total=" + total);
+            }
+    }
+
+    @Test
     void aridBiomesHaveSparseCactiAndDeadBushes() {
         for (long seed : new long[] {0, 42, -123456789}) {
-            for (BiomeType biome : List.of(BiomeType.DESERT, BiomeType.BADLANDS)) {
-                byte ground = biome == BiomeType.DESERT ? BlockId.SAND : BlockId.GRAVEL;
+            for (BiomeType biome : List.of(BiomeType.DESERT, BiomeType.CLASSIC_DESERT, BiomeType.BADLANDS)) {
+                boolean desert = biome == BiomeType.DESERT || biome == BiomeType.CLASSIC_DESERT;
+                byte ground = desert ? BlockId.SAND : BlockId.GRAVEL;
                 var summaries = new TerrainSummary[Chunk.SIZE * Chunk.SIZE];
                 Arrays.fill(
                         summaries,
@@ -40,7 +80,7 @@ class BiomeDecorationsTest {
                 double cactusDensity = cacti / (64d * Chunk.SIZE * Chunk.SIZE);
                 double bushDensity = bushes / (64d * Chunk.SIZE * Chunk.SIZE);
                 String context = biome + " seed=" + seed;
-                if (biome == BiomeType.DESERT)
+                if (desert)
                     assertTrue(cactusDensity > .0008 && cactusDensity < .004, context + " cacti=" + cactusDensity);
                 else assertEquals(0, cacti, context);
                 assertTrue(bushDensity > .005 && bushDensity < .015, context + " dead bushes=" + bushDensity);

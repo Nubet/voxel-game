@@ -29,6 +29,7 @@ vec3 biomeTint(bool foliage) {
     int style = index / 8;
     vec3 base = foliage ? vec3(.3, .55, .22) : vec3(.32, .69, .22);
     vec3 target = base;
+    if (style == 0) target = foliage ? vec3(.24, .65, .16) : vec3(.28, .78, .16);
     if (style == 1) target = foliage ? vec3(.55, .5, .18) : vec3(.82, .72, .38);
     if (style == 2) target = foliage ? vec3(.22, .45, .18) : vec3(.38, .62, .32);
     if (style == 3) target = foliage ? vec3(.2, .42, .16) : vec3(.24, .48, .18);

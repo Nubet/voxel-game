@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 39;
+    private static final int GENERATOR_VERSION = 43;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -36,6 +36,9 @@ public final class TerrainGenerator implements TerrainSource {
     private final Noise2D warpX;
     private final Noise2D warpZ;
     private final RegionalLandforms landforms;
+    private final ClassicLandforms classicLandforms;
+    private final ClassicTerrainFeatures classicFeatures;
+    private final GenerationCache<TerrainSummary> featureSamples = new GenerationCache<>(8192);
     private final BadlandsLandforms badlandsLandforms;
     private final RegionalHydrology hydrology;
     private final SmallWaterBodyClassifier waterBodies;
@@ -97,6 +100,7 @@ public final class TerrainGenerator implements TerrainSource {
         warpX = config.warp().fractal((x, z) -> noise.sample(x + 17.1, z + 53.7));
         warpZ = config.warp().fractal((x, z) -> noise.sample(x + 121.7, z - 31.2));
         landforms = new RegionalLandforms(config.landforms(), noise);
+        classicLandforms = new ClassicLandforms(seed);
         badlandsLandforms = new BadlandsLandforms(seed);
         hydrology = new RegionalHydrology(
                 seed,
@@ -109,6 +113,22 @@ public final class TerrainGenerator implements TerrainSource {
         });
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
+        classicFeatures = new ClassicTerrainFeatures(
+                seed,
+                waterLevel(),
+                (x, z) -> geographySample(x, z).elevation(),
+                (x, z) -> {
+                    var geography = geographySample(x, z);
+                    return geography.waterKind() == WaterKind.OCEAN
+                            && geography.elevation() < geography.waterLevel()
+                            && waterBodies.classify(x, z) == WaterKind.OCEAN;
+                },
+                region -> {
+                    var weather = climate.sample(region.x(), region.z());
+                    return this.landscapes.sample(region.x(), region.z()).classicness() >= .65
+                            && weather.temperature() > -.2
+                            && weather.humidity() > -.35;
+                });
         trees = new TreeGenerator(
                 seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry, this.landscapes);
         jungle = new JungleVegetation(seed);
@@ -135,6 +155,12 @@ public final class TerrainGenerator implements TerrainSource {
 
     public LandscapeSample landscapeAt(double worldX, double worldZ) {
         return landscapes.sample(worldX, worldZ);
+    }
+
+    private LandscapeSample boundedLandscape(double worldX, double worldZ) {
+        return landscapes.sample(
+                Math.clamp(worldX, Integer.MIN_VALUE, Integer.MAX_VALUE),
+                Math.clamp(worldZ, Integer.MIN_VALUE, Integer.MAX_VALUE));
     }
 
     @Override
@@ -178,7 +204,8 @@ public final class TerrainGenerator implements TerrainSource {
                 tintClimate(gx, gz + 1),
                 tintClimate(gx + 1, gz + 1),
                 Math.floorMod(x, 64) / 64.0,
-                Math.floorMod(z, 64) / 64.0);
+                Math.floorMod(z, 64) / 64.0,
+                landscapes.sample(x, z).classicness());
     }
 
     private ClimateSample tintClimate(int x, int z) {
@@ -206,6 +233,8 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public int surfaceHeight(int worldX, int worldZ) {
+        if (config.landforms().amplitude() > 0 && classicFeatures.possible(worldX, worldZ))
+            return sampleBase(worldX, worldZ).surfaceHeight();
         return (int) Math.floor(geographySample(worldX, worldZ).elevation());
     }
 
@@ -223,7 +252,14 @@ public final class TerrainGenerator implements TerrainSource {
         double slope = surfaceSlope((int) worldX, (int) worldZ, geography.elevation());
         boolean nearWater = nearWater((int) worldX, (int) worldZ, height, geography.waterLevel());
         BiomeType biome = biomeResolver.resolve(
-                climateSample, height, config.baseHeight(), slope, nearWater, geography.waterLevel(), waterKind);
+                climateSample,
+                height,
+                config.baseHeight(),
+                slope,
+                nearWater,
+                geography.waterLevel(),
+                waterKind,
+                boundedLandscape(worldX, worldZ).classicness());
         return new ColumnSample(
                 geography.elevation(),
                 climateSample,
@@ -238,15 +274,16 @@ public final class TerrainGenerator implements TerrainSource {
     private GeographySample geographySample(double worldX, double worldZ) {
         GeographySample base = baseSample(worldX, worldZ);
         if (config.landforms().amplitude() == 0) return base;
-        boolean rivers = biomeResolver.resolve(climate.sample(base.x(), base.z())) != BiomeType.DESERT;
+        var climateBiome = biomeResolver.resolve(
+                climate.sample(base.x(), base.z()),
+                boundedLandscape(worldX, worldZ).classicness());
+        boolean rivers = climateBiome != BiomeType.DESERT && climateBiome != BiomeType.CLASSIC_DESERT;
         var water = hydrology.sample(worldX, worldZ, base.elevation(), rivers);
         return new GeographySample(boundedHeight(water.height()), base.x(), base.z(), water.waterLevel(), water.kind());
     }
 
     private GeographySample baseSample(double worldX, double worldZ) {
-        var landscape = landscapes.sample(
-                Math.clamp(worldX, Integer.MIN_VALUE, Integer.MAX_VALUE),
-                Math.clamp(worldZ, Integer.MIN_VALUE, Integer.MAX_VALUE));
+        var landscape = boundedLandscape(worldX, worldZ);
         double x = worldX;
         double z = worldZ;
         if (config.warp().amplitude() != 0) {
@@ -255,13 +292,18 @@ public final class TerrainGenerator implements TerrainSource {
         }
         double continentalLayer = layer(continental, config.continental(), x, z);
         RegionalLandforms.Sample region = landforms.sample(x, z);
-        double regionalElevation = region.elevation() * landscape.elevation();
+        double elevation = region.elevation();
+        if (config.landforms().amplitude() > 0 && landscape.classicness() > 0)
+            elevation += landscape.classicness()
+                    * (config.landforms().amplitude() * classicLandforms.sample(x, z) - elevation);
+        double regionalElevation = elevation * landscape.elevation();
+        double hillScale = region.hills() + (1 - region.hills()) * landscape.classicness();
         double detailScale = region.details() + (1 - region.details()) * landscape.classicness();
         double detailHeight = detailScale * layer(details, config.details(), x, z);
         double height = config.baseHeight()
                 + continentalLayer
                 + regionalElevation
-                + region.hills() * landscape.hills() * layer(hills, config.hills(), x, z)
+                + hillScale * landscape.hills() * layer(hills, config.hills(), x, z)
                 + detailHeight
                 + mountainHeight(x, z)
                         * landscape.mountains()
@@ -306,7 +348,7 @@ public final class TerrainGenerator implements TerrainSource {
     @Override
     public TerrainSummary sample(int worldX, int worldZ) {
         var base = sampleBase(worldX, worldZ);
-        if (base.biome() != BiomeType.JUNGLE) return base;
+        if (base.biome() != BiomeType.JUNGLE || base.shape() != null) return base;
         byte surface =
                 jungle.surface(worldX, worldZ, base, forestAt(Math.floorDiv(worldX, 16), Math.floorDiv(worldZ, 16)));
         return new TerrainSummary(
@@ -323,6 +365,19 @@ public final class TerrainGenerator implements TerrainSource {
     }
 
     private TerrainSummary sampleBase(int worldX, int worldZ) {
+        if (config.landforms().amplitude() == 0 || !classicFeatures.possible(worldX, worldZ))
+            return sampleFoundation(worldX, worldZ);
+        return featureSamples.get(
+                worldX,
+                worldZ,
+                () -> classicFeatures.apply(
+                        worldX,
+                        worldZ,
+                        sampleFoundation(worldX, worldZ),
+                        boundedLandscape(worldX, worldZ).classicness()));
+    }
+
+    private TerrainSummary sampleFoundation(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
         double slope = column.slope();
@@ -335,7 +390,8 @@ public final class TerrainGenerator implements TerrainSource {
                 column.profile(),
                 column.waterKind(),
                 column.nearWater(),
-                shores.sample(worldX * .008, worldZ * .008));
+                shores.sample(worldX * .008, worldZ * .008),
+                column.biome().classic());
         if ((column.biome() == BiomeType.TAIGA || column.biome() == BiomeType.SNOWY_TAIGA)
                 && height > column.waterLevel() + 1
                 && slope <= 1.5) {
@@ -345,7 +401,9 @@ public final class TerrainGenerator implements TerrainSource {
         byte surface = badlands == null ? materials.surface() : badlands.surfaceAt(height, waterLevel());
         byte subsurface = badlands != null
                 ? badlands.materialAt(height - 1, height, surface)
-                : column.biome() == BiomeType.DESERT ? BlockId.SANDSTONE : materials.subsurface();
+                : column.biome() == BiomeType.DESERT || column.biome() == BiomeType.CLASSIC_DESERT
+                        ? BlockId.SANDSTONE
+                        : materials.subsurface();
         return new TerrainSummary(
                 height,
                 surface,
@@ -434,7 +492,10 @@ public final class TerrainGenerator implements TerrainSource {
         }
         snow.generate(originX, originY, originZ, blocks, column);
         vegetation.generate(originX, originY, originZ, blocks, column);
-        return tinted(new ChunkData(position, blocks), originX, originZ);
+        return tinted(
+                new ChunkData(position, blocks).withFallingWater(column.fallingWater(originY, blocks)),
+                originX,
+                originZ);
     }
 
     private TerrainColumn column(int originX, int originZ) {

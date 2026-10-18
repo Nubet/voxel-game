@@ -15,6 +15,7 @@ final class VegetationGenerator {
     private static final int PATCH_ATTEMPTS = 16;
     private static final long FLOWER_SALT = 0x632BE59BD9B4E019L;
     private static final long GRASS_SALT = 0xDB4F0B9175AE2165L;
+    private static final long MUSHROOM_SALT = 0x8CB92BA72F3D8DD7L;
     private static final byte[] FLOWERS = {BlockId.DANDELION_YELLOW, BlockId.DANDELION_WHITE, BlockId.POPPY};
     private final long seed;
     private final Noise2D density;
@@ -94,7 +95,9 @@ final class VegetationGenerator {
                         profile,
                         hash(seed ^ FLOWER_SALT, (long) ox + x, (long) oz + z),
                         columns.surfaceMaterial(column),
-                        landscape.vegetation());
+                        landscape.vegetation(),
+                        (long) ox + x,
+                        (long) oz + z);
                 if (special != null) {
                     boolean nearWater = special == PlantType.REED && nearWater(ox + x, oz + z, columns, column);
                     byte plant = block(special);
@@ -148,26 +151,31 @@ final class VegetationGenerator {
         return columns.surfaceSupported(column) && columns.surfaceHeight(column) >= columns.waterLevel(column);
     }
 
-    private static PlantType specialPlant(BiomeProfile profile, long value, byte ground, double density) {
+    private PlantType specialPlant(BiomeProfile profile, long value, byte ground, double density, long x, long z) {
         var plants = profile.vegetation().plants();
         double roll = unit(value);
         for (PlantType type : PlantType.values()) {
+            if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
             double weight = switch (type) {
                 case CACTUS -> .002;
                 case DEAD_BUSH -> .01;
-                case MUSHROOM -> .06;
+                case MUSHROOM -> profile.vegetation().mushroomDensity();
                 case REED -> .08;
                 case BERRY_BUSH -> .005;
                 case ALPINE_GRASS -> .12;
                 default -> 0;
             };
-            if (!plants.contains(type) && !(type == PlantType.REED && ground == BlockId.SAND)) continue;
-            if (type == PlantType.MUSHROOM) weight *= profile.vegetation().mushroomDensity();
+            if (type == PlantType.MUSHROOM && !mushroomSite(x, z)) continue;
             weight *= density;
             if (roll < weight) return type;
             roll -= weight;
         }
         return null;
+    }
+
+    private boolean mushroomSite(long x, long z) {
+        long patch = hash(seed ^ MUSHROOM_SALT, Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+        return Math.floorMod(x, 16) == bounded(patch, 1, 16) && Math.floorMod(z, 16) == bounded(patch, 2, 16);
     }
 
     private static byte block(PlantType plant) {
