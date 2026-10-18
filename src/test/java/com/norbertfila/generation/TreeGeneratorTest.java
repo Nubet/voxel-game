@@ -29,8 +29,27 @@ class TreeGeneratorTest {
     }
 
     @Test
+    void oneForestBiomeContainsBothClearingsAndDensePatches() {
+        var generator = new TreeGenerator(42, (x, z) -> 1, FLAT_GRASS);
+        int min = Integer.MAX_VALUE, max = 0;
+        for (int chunkX = -128; chunkX <= 128; chunkX += 4) {
+            int count = countTrees(generator, chunkX, chunkX + 1);
+            min = Math.min(min, count);
+            max = Math.max(max, count);
+        }
+        assertTrue(min < 4, "A forest must contain clearings");
+        assertTrue(max > 15, "A forest must also contain dense patches");
+        assertTrue(max > min * 4);
+    }
+
+    @Test
     void chunkClippingAndTreePlacementDoNotDependOnGenerationOrder() {
-        TreeGenerator generator = new TreeGenerator(0, (x, z) -> 1, FLAT_GRASS);
+        TreeGenerator generator = new TreeGenerator(
+                0,
+                (x, z) -> 1,
+                FLAT_GRASS::sample,
+                com.norbertfila.generation.biome.BiomeRegistry.defaults(),
+                new LandscapeSampler(0, LandscapeTestConfig.uniform()));
         ChunkPos[] positions = {new ChunkPos(-1, 0, 0), new ChunkPos(0, 0, 0), new ChunkPos(1, 0, 0)};
         int[] expected = Arrays.stream(positions)
                 .mapToInt(position -> Arrays.hashCode(generate(generator, position.x() * Chunk.SIZE, 0, 0)))

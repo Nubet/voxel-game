@@ -25,6 +25,7 @@ final class TreeGenerator {
     private final GroundSampler terrain;
     private final BiomeRegistry biomes;
     private final JungleVegetation jungle;
+    private final LandscapeSampler landscapes;
 
     TreeGenerator(long seed, Noise2D forestDensity, TerrainSource terrain) {
         this(seed, forestDensity, terrain, BiomeRegistry.defaults());
@@ -35,11 +36,21 @@ final class TreeGenerator {
     }
 
     TreeGenerator(long seed, Noise2D forestDensity, GroundSampler terrain, BiomeRegistry biomes) {
+        this(seed, forestDensity, terrain, biomes, new LandscapeSampler(seed, LandscapeConfig.defaults()));
+    }
+
+    TreeGenerator(
+            long seed,
+            Noise2D forestDensity,
+            GroundSampler terrain,
+            BiomeRegistry biomes,
+            LandscapeSampler landscapes) {
         this.seed = seed;
         jungle = new JungleVegetation(seed);
         this.forestDensity = forestDensity;
         this.terrain = terrain;
         this.biomes = biomes;
+        this.landscapes = landscapes;
     }
 
     void generate(int originX, int originY, int originZ, byte[] blocks) {
@@ -152,6 +163,7 @@ final class TreeGenerator {
         double t = Math.clamp((densityNoise + .1) / .5, 0, 1);
         var profile = biomes.profile(terrain.sample((int) x, (int) z).biome()).trees();
         double density = profile.density() * (profile.type() == TreeType.JUNGLE ? .85 + .15 * t : t * t * (3 - 2 * t));
+        density = Math.clamp(density * landscapes.sample(x, z).trees(), 0, 1);
         return (hash(seed, cellX, cellZ) >>> 11) * 0x1.0p-53 < density;
     }
 

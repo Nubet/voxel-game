@@ -4,7 +4,12 @@ import com.norbertfila.generation.biome.*;
 import com.norbertfila.world.*;
 
 final class JungleScene implements TerrainSource {
-    private final TreeGenerator trees = new TreeGenerator(42, (x, z) -> 1, this);
+    private final TreeGenerator trees = new TreeGenerator(
+            42,
+            (x, z) -> 1,
+            this::sample,
+            BiomeRegistry.defaults(),
+            new LandscapeSampler(42, LandscapeTestConfig.uniform()));
     private final boolean slope;
     private final boolean tropical;
     private final JungleVegetation jungle = new JungleVegetation(42);
