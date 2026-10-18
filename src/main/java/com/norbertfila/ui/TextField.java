@@ -43,6 +43,17 @@ public final class TextField {
         bounds = new UiBounds(bounds.x(), bounds.y(), width, bounds.height());
     }
 
+    public void replaceRange(int start, int end, String inserted) {
+        if (start < 0
+                || end < start
+                || end > text.length()
+                || start > 0 && start < text.length() && Character.isLowSurrogate(text.charAt(start))
+                || end > 0 && end < text.length() && Character.isLowSurrogate(text.charAt(end)))
+            throw new IllegalArgumentException("Invalid replacement range");
+        setText(text.substring(0, start) + inserted + text.substring(end));
+        caret = start + inserted.length();
+    }
+
     public UiBounds bounds() {
         return bounds;
     }

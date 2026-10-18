@@ -123,11 +123,12 @@ public final class GameCommands {
                 || caret > input.length()
                 || input.codePointCount(0, input.length()) > ChatHistory.MAX_INPUT) return List.of();
         var parsed = dispatcher.parse(input.substring(1, caret), new Execution(null, List.of()));
+        int end = caret;
+        while (end < input.length() && !Character.isWhitespace(input.charAt(end))) end++;
+        int replacementEnd = end;
         return dispatcher.getCompletionSuggestions(parsed).join().getList().stream()
-                .map(suggestion -> new Completion(
-                        suggestion.getRange().getStart() + 1,
-                        suggestion.getRange().getEnd() + 1,
-                        suggestion.getText()))
+                .map(suggestion ->
+                        new Completion(suggestion.getRange().getStart() + 1, replacementEnd, suggestion.getText()))
                 .toList();
     }
 

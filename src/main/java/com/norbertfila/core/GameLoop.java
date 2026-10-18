@@ -199,6 +199,7 @@ public final class GameLoop {
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
         var chat = new ChatHistory();
+        var commandHints = new GameCommands();
         var chatOverlay = new ChatOverlay();
         var dropKeys = new ArrayDeque<Boolean>();
         long placePressId = 0;
@@ -295,14 +296,18 @@ public final class GameLoop {
                             && !screens.blocksGameplay()
                             && runtime.state() == WorldRuntime.State.PLAYING
                             && ChatScreen.initialText(codePoint) != null) {
-                        screens.open(new ChatScreen(chat, ChatScreen.initialText(codePoint), text -> {
-                            if (!text.startsWith("/")) chat.add(text, ChatHistory.Kind.PLAYER, window.time());
-                            else if (!runtime.offer(new WorldRuntime.ChatCommand(text)))
-                                chat.add(
-                                        "Command queue full or session closing.",
-                                        ChatHistory.Kind.ERROR,
-                                        window.time());
-                        }));
+                        screens.open(new ChatScreen(
+                                chat,
+                                ChatScreen.initialText(codePoint),
+                                text -> {
+                                    if (!text.startsWith("/")) chat.add(text, ChatHistory.Kind.PLAYER, window.time());
+                                    else if (!runtime.offer(new WorldRuntime.ChatCommand(text)))
+                                        chat.add(
+                                                "Command queue full or session closing.",
+                                                ChatHistory.Kind.ERROR,
+                                                window.time());
+                                },
+                                commandHints));
                     } else if (event instanceof UiEvent.Key(var key)
                             && (key == UiKey.DROP_ONE || key == UiKey.DROP_STACK)
                             && !screens.blocksGameplay()) dropKeys.addLast(key == UiKey.DROP_STACK);
