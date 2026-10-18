@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class TerrainGenerator implements TerrainSource {
-    private static final int GENERATOR_VERSION = 38;
+    private static final int GENERATOR_VERSION = 39;
     // Covers every column within render distance 16 plus movement margin, so all sections of a column hit the cache.
     private static final int COLUMN_CACHE_CAPACITY = 2048;
     private final long seed;
@@ -42,6 +42,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final GenerationCache<byte[]> tintColumns = new GenerationCache<>(2048);
     private final Noise2D shores;
     private final ClimateNoise climate;
+    private final LandscapeSampler landscapes;
     private final BiomeResolver biomeResolver = new BiomeResolver();
     private final BiomeRegistry biomeRegistry = BiomeRegistry.defaults();
     private final SurfaceMaterialResolver surfaceMaterials = new SurfaceMaterialResolver(new SurfaceMaterialMapper());
@@ -58,7 +59,11 @@ public final class TerrainGenerator implements TerrainSource {
     private final OreGenerator ores;
 
     public TerrainGenerator(long seed, TerrainConfig config) {
-        this(seed, config, new PerlinNoise(seed));
+        this(seed, config, LandscapeConfig.defaults());
+    }
+
+    public TerrainGenerator(long seed, TerrainConfig config, LandscapeConfig landscapes) {
+        this(seed, config, new PerlinNoise(seed), forestNoise(new PerlinNoise(seed)), landscapes);
     }
 
     public TerrainGenerator(long seed, TerrainConfig config, Noise2D noise) {
@@ -66,7 +71,13 @@ public final class TerrainGenerator implements TerrainSource {
     }
 
     TerrainGenerator(long seed, TerrainConfig config, Noise2D noise, Noise2D forestDensity) {
+        this(seed, config, noise, forestDensity, LandscapeConfig.defaults());
+    }
+
+    private TerrainGenerator(
+            long seed, TerrainConfig config, Noise2D noise, Noise2D forestDensity, LandscapeConfig landscapes) {
         this.seed = seed;
+        this.landscapes = new LandscapeSampler(seed, landscapes);
         badlandsSurface = new BadlandsSurface(seed);
         this.config = Objects.requireNonNull(config);
         Objects.requireNonNull(noise);
@@ -97,7 +108,8 @@ public final class TerrainGenerator implements TerrainSource {
         });
         shores = new PerlinNoise(seed ^ 0x3C6EF372FE94F82BL);
         climate = new ClimateNoise(seed, config);
-        trees = new TreeGenerator(seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry);
+        trees = new TreeGenerator(
+                seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry, this.landscapes);
         jungle = new JungleVegetation(seed);
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this);
@@ -118,6 +130,10 @@ public final class TerrainGenerator implements TerrainSource {
     @Override
     public int generatorVersion() {
         return GENERATOR_VERSION;
+    }
+
+    public LandscapeSample landscapeAt(double worldX, double worldZ) {
+        return landscapes.sample(worldX, worldZ);
     }
 
     @Override
