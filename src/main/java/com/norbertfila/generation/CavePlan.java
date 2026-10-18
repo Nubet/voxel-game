@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 final class CavePlan {
     private final Map<Long, List<Segment>> columns;
@@ -37,8 +38,13 @@ final class CavePlan {
         return (long) x << 32 | Integer.toUnsignedLong(z);
     }
 
-    record Segment(double x, double y, double z, double radiusXZ, double radiusY) {
+    record Segment(double x, double y, double z, double radiusXZ, double radiusY, CaveProfile profile) {
+        Segment(double x, double y, double z, double radiusXZ, double radiusY) {
+            this(x, y, z, radiusXZ, radiusY, CaveProfile.CLASSIC);
+        }
+
         Segment {
+            Objects.requireNonNull(profile);
             if (!Double.isFinite(x)
                     || !Double.isFinite(y)
                     || !Double.isFinite(z)

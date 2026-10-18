@@ -49,11 +49,6 @@ final class CavePlanner {
             int budget = Math.min(128, (MAX_SEGMENTS - segments.size()) / (systems - system));
             var local = regions.sample(x, z);
             double radius = config.minRadius() + local.width() * (config.maxRadius() - config.minRadius());
-            if (pathRandom.nextDouble() < local.chamberChance()) {
-                double chamber = pathRandom.nextDouble(4, 6);
-                segments.add(new CavePlan.Segment(x + .5, y, z + .5, chamber, chamber * .6));
-                budget--;
-            }
             tunnel(
                     segments,
                     pathRandom,
@@ -84,11 +79,46 @@ final class CavePlanner {
             boolean branching) {
         int limit = Math.min(MAX_SEGMENTS, segments.size() + budget);
         int branch = steps / 3 + random.nextInt(Math.max(1, steps / 3));
+        var variations = random.split();
+        var localStart = regions.sample(x, z);
+        int twistedStart = variations.nextDouble() < .4 * localStart.winding()
+                ? variations.nextInt(Math.max(1, steps - 12))
+                : steps;
+        int twistedEnd = Math.min(steps, twistedStart + 12 + variations.nextInt(12));
+        int verticalStart = branching && variations.nextDouble() < localStart.verticalChance() ? steps / 3 : steps;
+        int verticalEnd = Math.min(steps, verticalStart + 24);
+        boolean shaft = variations.nextInt(4) == 0;
+        boolean chamber = false;
         double yawDrift = 0, pitchDrift = 0;
         for (int step = 0; step < steps && segments.size() < limit; step++) {
             var local = regions.sample(x, z);
+            boolean vertical = step >= verticalStart && step < verticalEnd;
+            boolean twisted = !vertical && step >= twistedStart && step < twistedEnd;
+            CaveProfile profile =
+                    vertical ? CaveProfile.VERTICAL : twisted ? CaveProfile.SPAGHETTI : CaveProfile.CLASSIC;
             double radius = Math.clamp(width + Math.sin(step * .17) * .18, config.minRadius(), config.maxRadius());
-            segments.add(new CavePlan.Segment(x, y, z, radius, Math.max(1.85, radius * .8)));
+            if (twisted) radius = Math.clamp(radius - .2 + Math.sin(step * .55) * .12, config.minRadius(), 2);
+            segments.add(new CavePlan.Segment(x, y, z, radius, Math.max(1.85, radius * .8), profile));
+            if (branching
+                    && !chamber
+                    && !vertical
+                    && step >= 8
+                    && step % 18 == 8
+                    && segments.size() + steps - step + 2 <= limit
+                    && variations.nextDouble() < local.chamberChance() * 2
+                    && chamberFits(segments, x, y, z)) {
+                double room = variations.nextDouble(3.2, 6.1);
+                double height = variations.nextDouble(2.2, 3);
+                segments.add(new CavePlan.Segment(x, y + .3, z, room, height, CaveProfile.CHAMBER));
+                segments.add(new CavePlan.Segment(
+                        x + Math.cos(yaw) * .5,
+                        y - .2,
+                        z + Math.sin(yaw) * .5,
+                        room * .85,
+                        height * 1.05,
+                        CaveProfile.CHAMBER));
+                chamber = true;
+            }
             if (branching && step == branch && random.nextDouble() < local.branchChance()) {
                 int remaining = steps - step - 1;
                 int childSteps = Math.min(20, remaining);
@@ -108,13 +138,29 @@ final class CavePlanner {
                             false);
             }
             double horizontal = Math.cos(pitch);
+            if (vertical) {
+                int phase = step - verticalStart;
+                pitch = phase % 8 < 2 ? 0 : shaft && phase >= 12 && phase < 15 ? -1.05 : -.5;
+                horizontal = Math.cos(pitch);
+                yaw += .17;
+            }
             x += Math.cos(yaw) * horizontal;
             z += Math.sin(yaw) * horizontal;
             y = Math.max((double) bedrockY + 4, y + Math.sin(pitch));
-            yawDrift = yawDrift * .75 + random.nextDouble(-.075, .075) * local.winding();
-            pitchDrift = pitchDrift * .65 + random.nextDouble(-.025, .025);
+            double turn = twisted ? .18 : .075;
+            yawDrift = yawDrift * .75 + random.nextDouble(-turn, turn) * local.winding();
+            pitchDrift = pitchDrift * .65 + random.nextDouble(twisted ? -.06 : -.025, twisted ? .06 : .025);
             yaw += yawDrift;
-            pitch = Math.clamp(pitch * .85 + pitchDrift, -.28, .28);
+            pitch = Math.clamp(pitch * .85 + pitchDrift, twisted ? -.45 : -.28, twisted ? .45 : .28);
         }
+    }
+
+    private static boolean chamberFits(List<CavePlan.Segment> segments, double x, double y, double z) {
+        for (var segment : segments)
+            if (segment.profile() == CaveProfile.CHAMBER) {
+                double dx = segment.x() - x, dy = segment.y() - y, dz = segment.z() - z;
+                if (dx * dx + dy * dy + dz * dz < 24 * 24) return false;
+            }
+        return true;
     }
 }
