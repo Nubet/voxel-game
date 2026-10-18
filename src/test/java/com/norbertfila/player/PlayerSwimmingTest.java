@@ -40,7 +40,7 @@ class PlayerSwimmingTest {
     }
 
     @Test
-    void dragAndCurrentScaleWithVolumeAndRemainIndependentOfTimeStep() {
+    void dragScalesWithVolumeAndCurrentWithDepthIndependentlyOfTimeStep() {
         World world = known();
         var start = new PlayerState(new PlayerState.Position(4, 8, 4), 5, 0, 0, false, 0, false);
         var partial = new WaterContact.Result(.5, false, true);
@@ -50,7 +50,7 @@ class PlayerSwimmingTest {
         var still = PlayerState.at(start.position());
         double partialDrag = (PlayerPhysics.WATER_DRAG - Math.log(.91) / .05) / 2;
         assertEquals(
-                2 * (-Math.expm1(-partialDrag * DT) / partialDrag),
+                4 * (-Math.expm1(-partialDrag * DT) / partialDrag),
                 step(world, still, false, false, new WaterContact.Result(.5, false, true, 1, 0, 0))
                         .velocityX(),
                 1e-12);
@@ -63,6 +63,40 @@ class PlayerSwimmingTest {
         for (int i = 0; i < 3; i++) fine = step(world, fine, false, false, current);
         assertEquals(coarse.velocityX(), fine.velocityX(), 1e-12);
         assertEquals(coarse.velocityY(), fine.velocityY(), 1e-12);
+    }
+
+    @Test
+    void landingInShallowFlowCarriesPlayerDownstreamWithoutMovementInput() {
+        for (int[] direction : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            for (int ticksPerSecond : new int[] {60, 120}) {
+                World world = known();
+                for (int along = 0; along <= 7; along++)
+                    for (int across = -3; across <= 3; across++) {
+                        int x = direction[0] * along - direction[1] * across;
+                        int z = direction[1] * along + direction[0] * across;
+                        world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
+                        world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, (byte) along, 64);
+                    }
+                var player = controller(world, PlayerController.Mode.SURVIVAL);
+                var start = new PlayerState.Position(direction[0] * 6 + .5, 3, direction[1] * 6 + .5);
+                player.setPosition(start);
+                for (int tick = 0; tick < ticksPerSecond * 3; tick++) {
+                    var required = player.requiredCollisionChunks(world, PlayerInput.NONE, 1d / ticksPerSecond, 0, 0);
+                    player.tick(world, PlayerInput.NONE, 1d / ticksPerSecond, 0, 0);
+                    assertTrue(required.containsAll(
+                            VoxelCollision.requiredChunks(player.state().body())));
+                    assertTrue(
+                            new VoxelCollision().spaceFree(world, player.state().body()));
+                }
+                double downstream = (player.state().position().x() - start.x()) * direction[0]
+                        + (player.state().position().z() - start.z()) * direction[1];
+                double sideways = (player.state().position().z() - start.z()) * direction[0]
+                        - (player.state().position().x() - start.x()) * direction[1];
+                assertTrue(downstream > .25, "Shallow current barely moves the player: " + downstream);
+                assertEquals(0, sideways, 1e-12);
+                assertTrue(player.state().grounded());
+            }
+        }
     }
 
     @Test
@@ -230,6 +264,58 @@ class PlayerSwimmingTest {
                 assertFalse(player.state().crouching());
                 assertFalse(player.flying());
             }
+        }
+    }
+
+    @Test
+    void heldJumpClimbsFullBlockBankAtEveryFlowingWaterLevel() {
+        for (int level = 1; level <= WaterState.MAX_DISTANCE; level++) {
+            for (var mode :
+                    new PlayerController.Mode[] {PlayerController.Mode.SURVIVAL, PlayerController.Mode.CREATIVE}) {
+                World world = known();
+                for (int x = -4; x <= 10; x++)
+                    for (int z = -4; z <= 4; z++) {
+                        world.setBlock(new BlockPos(x, 0, z), BlockId.STONE, 64);
+                        if (x >= 4) world.setBlock(new BlockPos(x, 1, z), BlockId.STONE, 64);
+                        else world.setBlock(new BlockPos(x, 1, z), BlockId.WATER, WaterState.flowing(level), 64);
+                    }
+                var player = controller(world, mode);
+                player.setPosition(new PlayerState.Position(3.5, 1, .5));
+                for (int tick = 0; tick < 30; tick++) player.tick(world, PlayerInput.NONE, DT, 0, 0);
+                assertTrue(player.state().grounded());
+                assertTrue(WaterContact.sample(world, player.state()).submergedFraction() > 0);
+                var jump = new PlayerInput(true, false, false, false, true, false, false);
+                for (int tick = 0; tick < 240 && player.state().position().x() <= 5; tick++) {
+                    var required = player.requiredCollisionChunks(world, jump, DT, 0, 0);
+                    player.tick(world, jump, DT, 0, 0);
+                    assertTrue(required.containsAll(
+                            VoxelCollision.requiredChunks(player.state().body())));
+                    assertTrue(
+                            new VoxelCollision().spaceFree(world, player.state().body()));
+                }
+                assertTrue(
+                        player.state().position().x() > 5, "Cannot climb bank at water level " + level + " in " + mode);
+                assertTrue(player.state().position().y() >= 2);
+                assertFalse(player.flying());
+            }
+        }
+    }
+
+    @Test
+    void shallowGroundJumpPreservesCurrentAndRespectsCooldownAndSneak() {
+        World world = known();
+        var shallow = new WaterContact.Result(.1, false, true, 1, 0, 0);
+        for (boolean crouching : new boolean[] {false, true}) {
+            var start = new PlayerState(new PlayerState.Position(4, 4, 4), 0, 0, 0, true, 0, crouching);
+            var dry = physics.step(world, start, 0, 0, true, DT);
+            var wet = step(world, start, true, false, shallow);
+            assertEquals(dry.velocityY(), wet.velocityY());
+            assertEquals(dry.jumpCooldownSeconds(), wet.jumpCooldownSeconds());
+            assertTrue(wet.velocityX() > 0);
+            var cooling = new PlayerState(start.position(), 0, 0, 0, true, .25, crouching);
+            assertTrue(step(world, cooling, true, false, shallow).velocityY() < 1);
+            assertTrue(step(world, wet, true, false, shallow).velocityY() < wet.velocityY());
+            assertTrue(step(world, start, true, true, shallow).velocityY() < 0);
         }
     }
 

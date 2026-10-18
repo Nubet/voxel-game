@@ -27,7 +27,9 @@ public final class PlayerPhysics {
     public static final double SUBMERGED_GRAVITY = -2;
     public static final double SWIM_ACCELERATION = 16;
     public static final double CURRENT_ACCELERATION = 4;
+    private static final double FULL_CURRENT_DEPTH = .4;
     private static final double SHORE_EXIT_VELOCITY = 6;
+    private static final double SHALLOW_WATER_JUMP_DEPTH = .4;
     private final VoxelCollision collision = new VoxelCollision();
 
     public PlayerState step(
@@ -169,16 +171,23 @@ public final class PlayerPhysics {
                 + SWIM_SPEED * WATER_DRAG * f;
         double decay = Math.exp(-drag * dt), response = -Math.expm1(-drag * dt) / drag;
         double cooldown = Math.max(0, start.jumpCooldownSeconds() - dt);
-        double x = start.velocityX() * decay
-                + (inputX * acceleration + water.currentX() * CURRENT_ACCELERATION * f) * response;
-        double z = start.velocityZ() * decay
-                + (inputZ * acceleration + water.currentZ() * CURRENT_ACCELERATION * f) * response;
+        // Body-volume scaling makes ankle-deep currents too weak to carry a grounded player.
+        double currentAcceleration = CURRENT_ACCELERATION * Math.min(1, f * start.height() / FULL_CURRENT_DEPTH);
+        double x =
+                start.velocityX() * decay + (inputX * acceleration + water.currentX() * currentAcceleration) * response;
+        double z =
+                start.velocityZ() * decay + (inputZ * acceleration + water.currentZ() * currentAcceleration) * response;
         // Volume-weighting vertical control traps an upright body at the surface before its feet can clear a bank.
         double verticalAcceleration = SUBMERGED_GRAVITY
                 + ((jump ? 1 : 0) - (sneak ? 1 : 0)) * SWIM_ACCELERATION
                 + water.currentY() * CURRENT_ACCELERATION * f;
         double y = start.velocityY() * Math.exp(-WATER_DRAG * dt)
                 + verticalAcceleration * (-Math.expm1(-WATER_DRAG * dt) / WATER_DRAG);
+        // Thin water cannot build enough upward speed before the feet leave it; keep the ground jump impulse.
+        if (jump && !sneak && start.grounded() && cooldown <= 1e-9 && f * start.height() <= SHALLOW_WATER_JUMP_DEPTH) {
+            y = dry.y;
+            cooldown = dry.jumpCooldownSeconds;
+        }
         if (shoreExit) y = Math.max(y, SHORE_EXIT_VELOCITY);
         return new Motion(x, y, z, cooldown);
     }
