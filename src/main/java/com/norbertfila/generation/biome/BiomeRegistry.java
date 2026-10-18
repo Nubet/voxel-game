@@ -32,13 +32,19 @@ public final class BiomeRegistry {
                                 SurfaceMaterial.DIRT,
                                 Set.of(PlantType.SHORT_GRASS, PlantType.FERN, PlantType.FLOWER)),
                 BiomeType.FOREST,
-                        profile(
-                                .65f,
-                                .8f,
-                                .15f,
-                                SurfaceMaterial.GRASS,
-                                SurfaceMaterial.DIRT,
-                                Set.of(PlantType.SHORT_GRASS, PlantType.FERN)),
+                        new BiomeProfile(
+                                new SurfaceProfile(SurfaceMaterial.GRASS, SurfaceMaterial.DIRT),
+                                new VegetationProfile(
+                                        .8f,
+                                        .15f,
+                                        Set.of(
+                                                PlantType.SHORT_GRASS,
+                                                PlantType.FERN,
+                                                PlantType.FLOWER,
+                                                PlantType.MUSHROOM),
+                                        .2f,
+                                        .06f),
+                                new TreeProfile(.65f, TreeType.BROADLEAF)),
                 BiomeType.DESERT,
                         profile(
                                 0,
