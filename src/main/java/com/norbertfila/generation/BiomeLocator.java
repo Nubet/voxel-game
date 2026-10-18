@@ -54,6 +54,12 @@ public final class BiomeLocator {
         }
 
         Result run() {
+            if (limited()) return result(Status.LIMIT_REACHED);
+            sample((int) Math.floor(x), (int) Math.floor(z));
+            if (best == null
+                    && biome.rareClassic()
+                    && biome != BiomeType.COASTAL_CLIFFS_CLASSIC
+                    && radius >= ClassicRegionSampler.CELL_SIZE) sampleClassicRegions();
             // A coarse hit is only a candidate; every closer column must be checked before claiming nearest.
             for (int r = 0; r <= radius && best == null && samples < 4096; r += 128) {
                 for (int dz = -r; dz <= r && best == null; dz += 128)
@@ -77,10 +83,10 @@ public final class BiomeLocator {
                     (int) Math.min(Integer.MAX_VALUE, Math.floor(x) + radius),
                     (int) Math.min(Integer.MAX_VALUE, Math.floor(z) + radius)));
             while (!queue.isEmpty()) {
-                if (limited()) return result(Status.LIMIT_REACHED);
                 var area = queue.remove();
-                double bound = best == null ? (double) radius * radius : best.distance() * best.distance();
-                if (area.distanceSquared() > bound) continue;
+                double bound = best == null ? (double) radius * radius : Math.nextUp(best.distance() * best.distance());
+                if (area.distanceSquared() > bound) break;
+                if (limited()) return result(Status.LIMIT_REACHED);
                 if (area.minX() == area.maxX() && area.minZ() == area.maxZ()) {
                     sample(area.minX(), area.minZ());
                     continue;
@@ -96,8 +102,35 @@ public final class BiomeLocator {
             return result(best == null ? Status.NOT_FOUND : Status.FOUND);
         }
 
+        private void sampleClassicRegions() {
+            var regions = new ClassicRegionSampler(terrain.seed());
+            long cx = (long) Math.floor(x / ClassicRegionSampler.CELL_SIZE);
+            long cz = (long) Math.floor(z / ClassicRegionSampler.CELL_SIZE);
+            int cells = radius / ClassicRegionSampler.CELL_SIZE + 1;
+            for (int r = 0; r <= cells && best == null; r++)
+                for (int dz = -r; dz <= r && best == null; dz++)
+                    for (int dx = -r; dx <= r && best == null; dx++) {
+                        if (Math.abs(dx) != r && Math.abs(dz) != r) continue;
+                        if (limited()) return;
+                        double sx = (cx + dx) * (double) ClassicRegionSampler.CELL_SIZE + 512;
+                        double sz = (cz + dz) * (double) ClassicRegionSampler.CELL_SIZE + 512;
+                        var region = regions.sample(sx, sz);
+                        if (region == null || region.biome() != biome) continue;
+                        for (int oz = -128; oz <= 128 && best == null; oz += 128)
+                            for (int ox = -128; ox <= 128 && best == null; ox += 128) {
+                                if (limited()) return;
+                                long px = (long) Math.floor(region.x()) + ox, pz = (long) Math.floor(region.z()) + oz;
+                                if (px >= Integer.MIN_VALUE
+                                        && px <= Integer.MAX_VALUE
+                                        && pz >= Integer.MIN_VALUE
+                                        && pz <= Integer.MAX_VALUE) sample((int) px, (int) pz);
+                            }
+                    }
+        }
+
         private boolean limited() {
             if (Thread.currentThread().isInterrupted()) throw new CancellationException();
+            // shortcut: exact proofs stop at 250,000 columns; add conservative biome bounds for distant searches.
             return samples >= 250_000 || System.nanoTime() >= deadline;
         }
 

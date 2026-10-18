@@ -5,10 +5,56 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.world.ChunkPos;
 import java.util.Optional;
+import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 
 class BiomeSearchTest {
+    @Test
+    void closesWithoutWaitingForSearchAndInterruptsTheWorker() throws Exception {
+        var entered = new CountDownLatch(1);
+        var interrupted = new CountDownLatch(1);
+        var terrain = new TerrainSource() {
+            public long seed() {
+                return 0;
+            }
+
+            public int generatorVersion() {
+                return 1;
+            }
+
+            public int surfaceHeight(int x, int z) {
+                return 0;
+            }
+
+            public ChunkData generate(ChunkPos pos) {
+                throw new AssertionError();
+            }
+
+            public TerrainSummary sample(int x, int z) {
+                entered.countDown();
+                try {
+                    new CountDownLatch(1).await();
+                    throw new AssertionError();
+                } catch (InterruptedException cancelled) {
+                    interrupted.countDown();
+                    Thread.currentThread().interrupt();
+                    throw new CancellationException();
+                }
+            }
+        };
+        var searches = new BiomeSearch(terrain);
+        try {
+            assertTrue(searches.request(BiomeType.FOREST, new PlayerState.Position(.5, 80, .5)));
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+        } finally {
+            searches.close();
+        }
+        assertTrue(interrupted.await(2, TimeUnit.SECONDS));
+        assertTrue(searches.poll().isEmpty());
+    }
+
     @Test
     void runsOneSearchAndRejectsRequestsAfterClose() throws Exception {
         var terrain = new HillsGenerator();

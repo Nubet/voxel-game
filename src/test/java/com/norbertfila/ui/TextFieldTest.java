@@ -7,6 +7,20 @@ import org.junit.jupiter.api.Test;
 
 class TextFieldTest {
     @Test
+    void replacementPreservesSuffixAndRejectsInvalidRangesWithoutChangingText() {
+        var field = new TextField(new UiBounds(0, 0, 80, 20), 10);
+        field.setText("A🌲tail");
+        assertThrows(IllegalArgumentException.class, () -> field.replaceRange(2, 3, "x"));
+        assertThrows(IllegalArgumentException.class, () -> field.replaceRange(1, 2, "x"));
+        assertThrows(NullPointerException.class, () -> field.replaceRange(1, 3, null));
+        assertThrows(IllegalArgumentException.class, () -> field.replaceRange(1, 3, "x".repeat(10)));
+        assertEquals("A🌲tail", field.text());
+        field.replaceRange(1, 3, "ok");
+        assertEquals("Aoktail", field.text());
+        assertEquals(3, field.caret());
+    }
+
+    @Test
     void editsUnicodeScalarsWithoutSplittingSurrogates() {
         var field = new TextField(new UiBounds(10, 20, 100, 20), 64);
         field.textInput('x');

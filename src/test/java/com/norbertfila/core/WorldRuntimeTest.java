@@ -169,6 +169,47 @@ class WorldRuntimeTest {
     }
 
     @Test
+    void teleportAndLocateCommandsUseStreamingAndKeepThePlayersMode() throws Exception {
+        try (var runtime = start(new Flat(), directory.resolve("teleport-locate.vxl"))) {
+            var initial = await(runtime, f -> f.tick() >= 2);
+            runtime.controls(controls(true, false));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tp 1024.5 5 -2048.5")));
+            assertTrue(awaitReply(runtime).text().contains("Preparing teleport"));
+            assertTrue(awaitReply(runtime).text().contains("Teleported to"));
+            var moved = await(runtime, f -> f.playerState().position().x() == 1024.5);
+            assertEquals(initial.mode(), moved.mode());
+            assertEquals(5, moved.playerState().position().y());
+            assertEquals(-2048.5, moved.playerState().position().z());
+            assertEquals(
+                    moved.playerRenderState().previous(),
+                    moved.playerRenderState().current());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand(
+                    "/locate biome " + moved.biome().name().toLowerCase(java.util.Locale.ROOT))));
+            assertTrue(awaitReply(runtime).text().contains("Locating"));
+            var located = awaitReply(runtime);
+            assertFalse(located.error());
+            assertTrue(located.text().contains("Nearest"));
+            assertTrue(located.text().contains("X=1024 Z=-2049"));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tp 4096 0 4096")));
+            assertTrue(awaitReply(runtime).text().contains("Preparing teleport"));
+            assertTrue(awaitReply(runtime).error());
+            assertEquals(
+                    moved.playerState().position(),
+                    runtime.frame().playerState().position());
+        }
+    }
+
+    private static com.norbertfila.commands.GameCommands.Reply awaitReply(WorldRuntime runtime) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        do {
+            var reply = runtime.pollCommandReply();
+            if (reply != null) return reply;
+            Thread.sleep(2);
+        } while (System.nanoTime() < deadline);
+        throw new AssertionError("Command did not reply");
+    }
+
+    @Test
     void thrownStacksAndTheirRemainingPickupDelaySurviveRestartWithoutDuplication() throws Exception {
         Path save = directory.resolve("throw-restart.vxl");
         var inventory = new Inventory();
