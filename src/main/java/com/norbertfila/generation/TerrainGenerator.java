@@ -137,7 +137,8 @@ public final class TerrainGenerator implements TerrainSource {
         jungle = new JungleVegetation(seed);
         vegetation = new VegetationGenerator(
                 seed, new PerlinNoise(seed ^ 0xDB4F0B9175AE2165L), forestDensity, biomeRegistry, this, this.landscapes);
-        cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::surfaceHeight);
+        // Rifts expose existing tunnels instead of pushing their plans below the new floor.
+        cavePlanner = new CavePlanner(seed, WorldBounds.MIN_Y, this::landformHeight);
         caveCarver = new CaveCarver((GroundSampler) this::sampleBase, seed);
         caveFeatures = new CaveFeatures(seed, this::sampleBase, caveCarver, this::cavePlanAt, this::cavesAt);
         ores = new OreGenerator(seed);
@@ -237,10 +238,19 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public int surfaceHeight(int worldX, int worldZ) {
-        if (config.landforms().amplitude() > 0
-                && (classicFeatures.possible(worldX, worldZ) || rifts.possible(worldX, worldZ)))
+        if (config.landforms().amplitude() > 0 && rifts.possible(worldX, worldZ))
             return sampleBase(worldX, worldZ).surfaceHeight();
+        return landformHeight(worldX, worldZ);
+    }
+
+    private int landformHeight(int worldX, int worldZ) {
+        if (config.landforms().amplitude() > 0 && classicFeatures.possible(worldX, worldZ))
+            return sampleLandforms(worldX, worldZ).surfaceHeight();
         return (int) Math.floor(geographySample(worldX, worldZ).elevation());
+    }
+
+    RiftPlanner.Plan riftAt(int x, int z) {
+        return config.landforms().amplitude() == 0 ? null : rifts.planAt(x, z);
     }
 
     double surfaceElevation(double worldX, double worldZ) {
