@@ -9,6 +9,18 @@ import org.junit.jupiter.api.Test;
 
 class ChatScreenTest {
     @Test
+    void inputAndSuggestionPanelsBlockClicksOnHistoryBehindThem() {
+        var screen = new ChatScreen(new ChatHistory(), "/locate biome ", text -> fail("Unexpected submission"));
+        screen.layout(new UiViewport(640, 360, 640, 360));
+        assertTrue(screen.coversHistory(8, 340));
+        assertTrue(screen.coversHistory(8, 300));
+        assertFalse(screen.coversHistory(8, 100));
+        screen.field().setText("");
+        assertFalse(screen.coversHistory(8, 300));
+        assertFalse(screen.coversHistory(-1, 340));
+    }
+
+    @Test
     void completesBiomeNamesAndKeepsHistoryAndEscapeSeparate() {
         var history = new ChatHistory();
         history.remember("hello");

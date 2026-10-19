@@ -4,6 +4,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowSize;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.core.GameSettings;
 import com.norbertfila.core.Hotbar;
 import com.norbertfila.diagnostics.FrameMetrics;
@@ -475,6 +476,16 @@ public final class UiViewportSmoke {
         var history = new ChatHistory();
         history.add("Zażółć gęślą jaźń: chat wrapping across narrow viewports.", ChatHistory.Kind.PLAYER, 0);
         history.add("Unknown command. Try /help.", ChatHistory.Kind.ERROR, 0);
+        String prefix = "Saved screenshot as ";
+        String screenshot = prefix + "2026-10-19_12.30.45.png";
+        history.add(
+                screenshot,
+                ChatHistory.Kind.SYSTEM,
+                0,
+                new ChatLink(
+                        prefix.length(),
+                        screenshot.length(),
+                        new ChatLink.OpenFile(Path.of("screenshots", "2026-10-19_12.30.45.png"))));
         var overlay = new ChatOverlay();
         canvas.clear();
         overlay.render(canvas, viewport, history, false, 0, 20);

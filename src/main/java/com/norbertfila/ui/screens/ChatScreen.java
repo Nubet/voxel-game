@@ -51,6 +51,17 @@ public final class ChatScreen implements Screen {
         scroll = Math.max(0, value);
     }
 
+    public boolean coversHistory(double x, double y) {
+        int rowHeight = BitmapFont.LINE_HEIGHT + 4;
+        int top = field.bounds().y() - 2;
+        if (!commands.usage(field.text()).isEmpty() && top >= rowHeight) top -= rowHeight;
+        top -= Math.min(Math.min(6, suggestions().size()), Math.max(0, top / rowHeight)) * rowHeight;
+        return x >= field.bounds().x()
+                && x < field.bounds().x() + field.bounds().width()
+                && y >= top
+                && y < field.bounds().y() + field.bounds().height();
+    }
+
     @Override
     public Action scroll(double amount, double x, double y) {
         scroll = (int) Math.clamp(scroll + amount * 3, 0, 51200);

@@ -17,17 +17,25 @@ public final class ChatHistory {
         ERROR
     }
 
-    public record Message(String text, Kind kind, double time) {
+    public record Message(String text, Kind kind, double time, ChatLink link) {
+        public Message {
+            if (text == null || kind == null || !Double.isFinite(time) || link != null && link.end() > text.length())
+                throw new IllegalArgumentException("Invalid message");
+        }
+
         public boolean visible(double now) {
             return now - time < VISIBLE_SECONDS;
         }
     }
 
     public void add(String text, Kind kind, double now) {
-        if (text == null || kind == null || !Double.isFinite(now))
-            throw new IllegalArgumentException("Invalid message");
+        add(text, kind, now, null);
+    }
+
+    public void add(String text, Kind kind, double now, ChatLink link) {
+        var message = new Message(text, kind, now, link);
         if (messages.size() == 200) messages.removeFirst();
-        messages.add(new Message(text, kind, now));
+        messages.add(message);
     }
 
     public List<Message> messages() {

@@ -3,6 +3,7 @@ package com.norbertfila.core;
 import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
@@ -12,6 +13,7 @@ import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.ScreenshotWriter;
 import com.norbertfila.persistence.ViewDistancePreferences;
+import com.norbertfila.platform.DesktopFiles;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
@@ -208,6 +210,7 @@ public final class GameLoop {
         Hotbar hotbar = new Hotbar();
         var chat = new ChatHistory();
         var screenshotResults = new ArrayDeque<CompletableFuture<Path>>();
+        CompletableFuture<Void> openingFile = null;
         var commandHints = new GameCommands();
         var chatOverlay = new ChatOverlay();
         var dropKeys = new ArrayDeque<Boolean>();
@@ -232,13 +235,30 @@ public final class GameLoop {
             while (!screenshotResults.isEmpty() && screenshotResults.peekFirst().isDone()) {
                 try {
                     Path file = screenshotResults.removeFirst().join();
-                    chat.add("Saved screenshot as " + file.getFileName(), ChatHistory.Kind.SYSTEM, now);
+                    String prefix = "Saved screenshot as ";
+                    String message = prefix + file.getFileName();
+                    chat.add(
+                            message,
+                            ChatHistory.Kind.SYSTEM,
+                            now,
+                            new ChatLink(prefix.length(), message.length(), new ChatLink.OpenFile(file)));
                 } catch (CompletionException failure) {
                     chat.add(
                             "Could not save screenshot: " + failure.getCause().getMessage(),
                             ChatHistory.Kind.ERROR,
                             now);
                 }
+            }
+            if (openingFile != null && openingFile.isDone()) {
+                try {
+                    openingFile.join();
+                } catch (CompletionException failure) {
+                    chat.add(
+                            "Could not open screenshot: " + failure.getCause().getMessage(),
+                            ChatHistory.Kind.ERROR,
+                            now);
+                }
+                openingFile = null;
             }
             boolean debugPressed = input.debugPressed();
             if (input.focused() && debugPressed) debugVisible = !debugVisible;
@@ -296,6 +316,14 @@ public final class GameLoop {
                 }
             }
             if (!minimized && input.focused()) {
+                if (input.leftMousePressed() && screens.current() instanceof ChatScreen currentChat) {
+                    double x = viewport.cursorX(input.cursorX()), y = viewport.cursorY(input.cursorY());
+                    var action = currentChat.coversHistory(x, y)
+                            ? null
+                            : chatOverlay.actionAt(viewport, chat, currentChat.scrollOffset(), now, x, y);
+                    if (action instanceof ChatLink.OpenFile file && openingFile == null)
+                        openingFile = DesktopFiles.open(file.path());
+                }
                 screens.updatePointer(new Screen.Pointer(
                         input.leftMouseDown(),
                         input.leftMousePressed(),
