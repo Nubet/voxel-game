@@ -185,7 +185,7 @@ public final class GameLoop {
         WorldRuntime runtime = session.runtime();
         double previous = window.time();
         Map<ChunkPos, Long> residents = Map.of();
-        long residencyRevision = 0;
+        long residencyRevision = 0, evictionRevision = 0;
         Map<ChunkPos, WorldRuntime.SessionMesh> pending = new HashMap<>();
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
@@ -489,11 +489,14 @@ public final class GameLoop {
             if (state != null) {
                 if (state.residency().revision() != residencyRevision) {
                     var current = state.residents();
-                    for (var entry : residents.entrySet()) {
-                        if (entry.getValue().equals(current.get(entry.getKey()))) continue;
-                        var removed = pending.remove(entry.getKey());
-                        if (removed != null) runtime.acknowledge(removed, false);
-                        renderer.remove(entry.getKey());
+                    if (state.residency().evictionRevision() != evictionRevision) {
+                        for (var entry : residents.entrySet()) {
+                            if (entry.getValue().equals(current.get(entry.getKey()))) continue;
+                            var removed = pending.remove(entry.getKey());
+                            if (removed != null) runtime.acknowledge(removed, false);
+                            renderer.remove(entry.getKey());
+                        }
+                        evictionRevision = state.residency().evictionRevision();
                     }
                     residents = current;
                     residencyRevision = state.residency().revision();
