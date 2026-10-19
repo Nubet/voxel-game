@@ -31,6 +31,7 @@ class GameCommandsTest {
         final Inventory inventory = new Inventory();
         PlayerController.Mode mode = PlayerController.Mode.SURVIVAL;
         boolean allowMode = true;
+        boolean allowRift;
         long seed;
 
         @Override
@@ -48,6 +49,11 @@ class GameCommandsTest {
         @Override
         public int give(byte block, int count) {
             return inventory.insert(Byte.toUnsignedInt(block), count);
+        }
+
+        @Override
+        public boolean locateRift() {
+            return allowRift;
         }
     }
 
@@ -109,5 +115,17 @@ class GameCommandsTest {
         assertTrue(result.text().contains("no space for 62"));
         assertTrue(commands.execute("/give @s dirt", source).text().contains("Added 0"));
         assertEquals(BlockId.STONE, source.inventory.stack(35).orElseThrow().itemId());
+    }
+
+    @Test
+    void locatesRiftsAndIncludesThemInHelpAndCompletion() {
+        assertEquals("rift", commands.suggest("/locate r", 9).getFirst().text());
+        assertTrue(commands.execute("/help", source).text().contains("locate rift"));
+        assertTrue(commands.execute("/locate rift", source).error());
+        source.allowRift = true;
+        var reply = commands.execute("/locate rift", source);
+        assertFalse(reply.error());
+        assertEquals("Locating rift...", reply.text());
+        assertTrue(commands.execute("/locate rift extra", source).error());
     }
 }

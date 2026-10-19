@@ -1,9 +1,9 @@
 package com.norbertfila.core;
 
 import com.norbertfila.chat.ChatHistory;
-import com.norbertfila.commands.BiomeSearch;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
+import com.norbertfila.commands.LocationSearch;
 import com.norbertfila.diagnostics.SimulationMetrics;
 import com.norbertfila.fluid.FluidScheduler;
 import com.norbertfila.fluid.FluidSimulator;
@@ -223,7 +223,7 @@ public final class WorldRuntime implements AutoCloseable {
             BlockBreaking breaking = new BlockBreaking(world);
             var commands = new GameCommands();
             var teleports = new TeleportController();
-            var searches = new BiomeSearch(generator);
+            var searches = new LocationSearch(generator);
             CommandSource commandSource = new CommandSource() {
                 @Override
                 public long seed() {
@@ -251,6 +251,11 @@ public final class WorldRuntime implements AutoCloseable {
                 @Override
                 public boolean locate(BiomeType biome) {
                     return searches.request(biome, player.state().position());
+                }
+
+                @Override
+                public boolean locateRift() {
+                    return searches.requestRift(player.state().position());
                 }
             };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();

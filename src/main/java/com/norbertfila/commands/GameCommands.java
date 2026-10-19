@@ -59,6 +59,12 @@ public final class GameCommands {
                                 .then(RequiredArgumentBuilder.<Execution, Double>argument("z", doubleArg())
                                         .executes(GameCommands::teleport)))));
         dispatcher.register(LiteralArgumentBuilder.<Execution>literal("locate")
+                .then(LiteralArgumentBuilder.<Execution>literal("rift").executes(context -> {
+                    if (!context.getSource().source().locateRift())
+                        throw error("Rift search unavailable or already running.");
+                    context.getSource().output().add("Locating rift...");
+                    return 1;
+                }))
                 .then(LiteralArgumentBuilder.<Execution>literal("biome")
                         .then(RequiredArgumentBuilder.<Execution, String>argument("biome", word())
                                 .suggests((context, builder) -> {
