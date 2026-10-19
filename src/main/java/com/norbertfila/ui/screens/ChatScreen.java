@@ -43,6 +43,14 @@ public final class ChatScreen implements Screen {
         return field;
     }
 
+    public void suggestCommand(String command) {
+        field.setText(command);
+        field.setFocused(true);
+        scroll = 0;
+        observedCaret = -1;
+        refreshSuggestions();
+    }
+
     public int scrollOffset() {
         return scroll;
     }

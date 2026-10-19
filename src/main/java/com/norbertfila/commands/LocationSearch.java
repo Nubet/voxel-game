@@ -1,5 +1,6 @@
 package com.norbertfila.commands;
 
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.BiomeLocator;
 import com.norbertfila.generation.RiftLocator;
 import com.norbertfila.generation.TerrainGenerator;
@@ -74,13 +75,19 @@ public final class LocationSearch implements AutoCloseable {
         if (result.match().isPresent()) {
             var match = result.match().orElseThrow();
             boolean nearest = result.status() == BiomeLocator.Status.FOUND;
+            String prefix = (nearest ? "Nearest " : "Search limit reached; found ") + name + " at ";
+            String coordinates = "X=" + match.x() + " Z=" + match.z();
+            String command = "/tp " + (match.x() + .5) + " " + ((long) match.surfaceY() + 1) + " " + (match.z() + .5);
             return new GameCommands.Reply(
-                    (nearest ? "Nearest " : "Search limit reached; found ") + name
-                            + " at X=" + match.x() + " Z=" + match.z()
+                    prefix + coordinates
                             + String.format(Locale.ROOT, " (%.1f blocks).", match.distance())
                             + (nearest ? "" : " Nearest not confirmed.")
                             + " Surface Y=" + match.surfaceY() + ".",
-                    false);
+                    false,
+                    new ChatLink(
+                            prefix.length(),
+                            prefix.length() + coordinates.length(),
+                            new ChatLink.SuggestCommand(command)));
         }
         return new GameCommands.Reply(
                 result.status() == BiomeLocator.Status.NOT_FOUND

@@ -486,6 +486,16 @@ public final class UiViewportSmoke {
                         prefix.length(),
                         screenshot.length(),
                         new ChatLink.OpenFile(Path.of("screenshots", "2026-10-19_12.30.45.png"))));
+        String locatedPrefix = "Nearest forest at ";
+        String coordinates = "X=-10 Z=20";
+        history.add(
+                locatedPrefix + coordinates + " (22.0 blocks). Surface Y=70.",
+                ChatHistory.Kind.SYSTEM,
+                0,
+                new ChatLink(
+                        locatedPrefix.length(),
+                        locatedPrefix.length() + coordinates.length(),
+                        new ChatLink.SuggestCommand("/tp -9.5 71 20.5")));
         var overlay = new ChatOverlay();
         canvas.clear();
         overlay.render(canvas, viewport, history, false, 0, 20);

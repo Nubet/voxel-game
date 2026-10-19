@@ -3,11 +3,34 @@ package com.norbertfila.ui.screens;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.ui.*;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
 class ChatScreenTest {
+    @Test
+    void coordinateLinkFillsEditableTeleportWithoutSubmittingUntilEnter() {
+        var history = new ChatHistory();
+        var sent = new ArrayList<String>();
+        var screen = new ChatScreen(history, "/locate biome forest", sent::add);
+        screen.setScrollOffset(100);
+        var suggestion = new ChatLink.SuggestCommand("/tp -9.5 71 20.5");
+        screen.suggestCommand(suggestion.command());
+        assertTrue(sent.isEmpty());
+        assertEquals(suggestion.command(), screen.field().text());
+        assertEquals(suggestion.command().length(), screen.field().caret());
+        assertTrue(screen.field().focused());
+        assertEquals(0, screen.scrollOffset());
+        screen.keyPress(UiKey.HOME);
+        screen.keyPress(UiKey.END);
+        screen.textInput('0');
+        assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.ACTIVATE));
+        assertEquals(java.util.List.of("/tp -9.5 71 20.50"), sent);
+        assertThrows(IllegalArgumentException.class, () -> new ChatLink.SuggestCommand("/tp 1\n2 3"));
+        assertThrows(IllegalArgumentException.class, () -> new ChatLink.SuggestCommand("tp 1 2 3"));
+    }
+
     @Test
     void inputAndSuggestionPanelsBlockClicksOnHistoryBehindThem() {
         var screen = new ChatScreen(new ChatHistory(), "/locate biome ", text -> fail("Unexpected submission"));

@@ -11,6 +11,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
@@ -21,7 +22,11 @@ import java.util.List;
 import java.util.Locale;
 
 public final class GameCommands {
-    public record Reply(String text, boolean error) {}
+    public record Reply(String text, boolean error, ChatLink link) {
+        public Reply(String text, boolean error) {
+            this(text, error, null);
+        }
+    }
 
     public record Completion(int start, int end, String text) {}
 

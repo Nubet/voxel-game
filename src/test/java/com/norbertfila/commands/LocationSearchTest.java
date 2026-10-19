@@ -2,6 +2,7 @@ package com.norbertfila.commands;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.*;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerState;
@@ -11,6 +12,25 @@ import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 
 class LocationSearchTest {
+    @Test
+    void biomeCoordinatesSuggestTeleportAboveTheMatchedColumnForExactAndLimitedResults() {
+        for (var status : new BiomeLocator.Status[] {BiomeLocator.Status.FOUND, BiomeLocator.Status.LIMIT_REACHED}) {
+            var reply = LocationSearch.reply(new BiomeLocator.Result(
+                    BiomeType.FOREST, status, Optional.of(new BiomeLocator.Match(-10, 20, 70, 22)), 100));
+            assertFalse(reply.error());
+            assertEquals(
+                    "X=-10 Z=20",
+                    reply.text().substring(reply.link().start(), reply.link().end()));
+            var suggestion =
+                    assertInstanceOf(ChatLink.SuggestCommand.class, reply.link().action());
+            assertEquals("/tp -9.5 71 20.5", suggestion.command());
+        }
+        var missing = LocationSearch.reply(
+                new BiomeLocator.Result(BiomeType.FOREST, BiomeLocator.Status.NOT_FOUND, Optional.empty(), 100));
+        assertTrue(missing.error());
+        assertNull(missing.link());
+    }
+
     @Test
     void closesWithoutWaitingForSearchAndInterruptsTheWorker() throws Exception {
         var entered = new CountDownLatch(1);

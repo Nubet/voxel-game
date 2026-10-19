@@ -10,6 +10,26 @@ import org.junit.jupiter.api.Test;
 
 class ChatOverlayTest {
     @Test
+    void clickingBiomeCoordinatesReturnsTheSuggestedTeleport() {
+        var history = new ChatHistory();
+        String prefix = "Nearest forest at ";
+        String coordinates = "X=-10 Z=20";
+        var suggestion = new ChatLink.SuggestCommand("/tp -9.5 71 20.5");
+        history.add(
+                prefix + coordinates + " Surface Y=70.",
+                ChatHistory.Kind.SYSTEM,
+                0,
+                new ChatLink(prefix.length(), prefix.length() + coordinates.length(), suggestion));
+        var viewport = new UiViewport(640, 360, 1280, 720);
+        int y = (int) viewport.height() - HudMetrics.HOTBAR_HEIGHT - 10 - BitmapFont.LINE_HEIGHT;
+        int x = 8 + BitmapFont.DEFAULT.width(prefix);
+        var overlay = new ChatOverlay();
+        assertEquals(suggestion, overlay.actionAt(viewport, history, 0, 0, x, y));
+        assertNull(overlay.actionAt(viewport, history, 0, 0, x - 1, y));
+        assertNull(overlay.actionAt(viewport, history, 0, 0, x + BitmapFont.DEFAULT.width(coordinates), y));
+    }
+
+    @Test
     void linksKeepTheirActionAndExactHitBoundsAcrossWrappedRowsAndScroll() {
         var history = new ChatHistory();
         var action = new ChatLink.OpenFile(Path.of("screenshots", "2026-10-19_12.30.45.png"));

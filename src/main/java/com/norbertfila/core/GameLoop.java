@@ -266,7 +266,11 @@ public final class GameLoop {
             WorldRuntime.Frame state = runtime.frame();
             GameCommands.Reply reply;
             while ((reply = runtime.pollCommandReply()) != null)
-                chat.add(reply.text(), reply.error() ? ChatHistory.Kind.ERROR : ChatHistory.Kind.SYSTEM, now);
+                chat.add(
+                        reply.text(),
+                        reply.error() ? ChatHistory.Kind.ERROR : ChatHistory.Kind.SYSTEM,
+                        now,
+                        reply.link());
             if (state != null) {
                 hotbar.inventory(state.inventory());
                 if (!inventoryInitialized) {
@@ -323,6 +327,8 @@ public final class GameLoop {
                             : chatOverlay.actionAt(viewport, chat, currentChat.scrollOffset(), now, x, y);
                     if (action instanceof ChatLink.OpenFile file && openingFile == null)
                         openingFile = DesktopFiles.open(file.path());
+                    else if (action instanceof ChatLink.SuggestCommand suggestion)
+                        currentChat.suggestCommand(suggestion.command());
                 }
                 screens.updatePointer(new Screen.Pointer(
                         input.leftMouseDown(),
