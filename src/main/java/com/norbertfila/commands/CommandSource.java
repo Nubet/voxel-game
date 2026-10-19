@@ -18,4 +18,8 @@ public interface CommandSource {
     default boolean locate(BiomeType biome) {
         return false;
     }
+
+    default boolean locateRift() {
+        return false;
+    }
 }

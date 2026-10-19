@@ -29,8 +29,21 @@ public final class RiftGenerationSmoke {
                 var textures = new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures())) {
             for (long seed : new long[] {0, 42, -123456789}) {
                 var terrain = new TerrainGenerator(seed, TerrainConfig.defaults());
+                long start = System.nanoTime();
+                var found = new RiftLocator(terrain).locate(.5, .5, 32768, start + 10_000_000_000L);
+                if (found.status() != RiftLocator.Status.FOUND)
+                    throw new AssertionError("Rift search failed: " + found);
+                var match = found.match().orElseThrow();
+                System.out.printf(
+                        "locate seed=%d x=%d y=%d z=%d distance=%.1f ms=%.1f%n",
+                        seed,
+                        match.x(),
+                        match.surfaceY(),
+                        match.z(),
+                        match.distance(),
+                        (System.nanoTime() - start) / 1e6);
                 distribution(terrain);
-                scene(terrain, RiftGenerationTest.find(terrain), textures, output, "rift-" + seed);
+                scene(terrain, terrain.riftAt(match.x(), match.z()), textures, output, "rift-" + seed);
             }
             var bank = new WaterBankScene();
             scene(bank, WaterBankScene.PLAN, textures, output, "dry-rift-near-water");

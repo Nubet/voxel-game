@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 
-class BiomeSearchTest {
+class LocationSearchTest {
     @Test
     void closesWithoutWaitingForSearchAndInterruptsTheWorker() throws Exception {
         var entered = new CountDownLatch(1);
@@ -44,7 +44,7 @@ class BiomeSearchTest {
                 }
             }
         };
-        var searches = new BiomeSearch(terrain);
+        var searches = new LocationSearch(terrain);
         try {
             assertTrue(searches.request(BiomeType.FOREST, new PlayerState.Position(.5, 80, .5)));
             assertTrue(entered.await(2, TimeUnit.SECONDS));
@@ -60,7 +60,7 @@ class BiomeSearchTest {
         var terrain = new HillsGenerator();
         var origin = new PlayerState.Position(.5, 80, .5);
         var biome = terrain.sample(0, 0).biome();
-        var searches = new BiomeSearch(terrain);
+        var searches = new LocationSearch(terrain);
         try (searches) {
             assertTrue(searches.request(biome, origin));
             assertFalse(searches.request(biome, origin));
@@ -81,16 +81,47 @@ class BiomeSearchTest {
 
     @Test
     void neverCallsBudgetLimitedCandidateNearest() {
-        var reply = BiomeSearch.reply(new BiomeLocator.Result(
+        var reply = LocationSearch.reply(new BiomeLocator.Result(
                 BiomeType.FOREST,
                 BiomeLocator.Status.LIMIT_REACHED,
                 Optional.of(new BiomeLocator.Match(10, 20, 70, 22)),
                 100));
         assertTrue(reply.text().contains("Nearest not confirmed"));
         assertTrue(reply.text().contains("X=10 Z=20"));
-        assertTrue(BiomeSearch.reply(new BiomeLocator.Result(
+        assertTrue(LocationSearch.reply(new BiomeLocator.Result(
                         BiomeType.FOREST, BiomeLocator.Status.LIMIT_REACHED, Optional.empty(), 100))
                 .text()
                 .contains("incomplete"));
+    }
+
+    @Test
+    void riftsShareTheSearchWorkerAndReportRealCoordinates() throws Exception {
+        var origin = new PlayerState.Position(.5, 80, .5);
+        var searches = new LocationSearch(new TerrainGenerator(42, TerrainConfig.defaults()));
+        try (searches) {
+            assertTrue(searches.requestRift(origin));
+            assertFalse(searches.request(BiomeType.FOREST, origin));
+            assertFalse(searches.requestRift(origin));
+            GameCommands.Reply reply = null;
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            while (reply == null && System.nanoTime() < deadline) {
+                reply = searches.poll().orElse(null);
+                Thread.sleep(1);
+            }
+            assertNotNull(reply);
+            assertFalse(reply.error(), reply.text());
+            assertTrue(reply.text().startsWith("Rift at X="));
+            assertTrue(reply.text().contains("Floor Y="));
+        }
+        assertFalse(searches.requestRift(origin));
+        try (var unsupported = new LocationSearch(new HillsGenerator())) {
+            assertFalse(unsupported.requestRift(origin));
+        }
+        assertTrue(LocationSearch.reply(new RiftLocator.Result(
+                        RiftLocator.Status.LIMIT_REACHED, Optional.of(new RiftLocator.Match(10, 20, 40, 22))))
+                .text()
+                .contains("incomplete"));
+        assertTrue(LocationSearch.reply(new RiftLocator.Result(RiftLocator.Status.NOT_FOUND, Optional.empty()))
+                .error());
     }
 }
