@@ -15,6 +15,7 @@ final class CaveFeatures {
     private final long seed;
     private final GroundSampler ground;
     private final CaveCarver carver;
+    private final OreGenerator ores;
     private final BiFunction<Integer, Integer, CavePlan> regionalPlans;
     private final BiFunction<Integer, Integer, List<CavePlan.Segment>> caves;
     private final GenerationCache<List<Feature>> plans = new GenerationCache<>(128);
@@ -26,6 +27,7 @@ final class CaveFeatures {
             BiFunction<Integer, Integer, CavePlan> regionalPlans,
             BiFunction<Integer, Integer, List<CavePlan.Segment>> caves) {
         this.seed = seed;
+        ores = new OreGenerator(seed);
         this.ground = ground;
         this.carver = carver;
         this.regionalPlans = regionalPlans;
@@ -113,8 +115,9 @@ final class CaveFeatures {
     }
 
     private boolean springFits(Feature spring, int floor, Probe probe) {
-        if (!probe.solid(spring.x(), spring.y(), spring.z()) || probe.core(spring.x(), spring.y(), spring.z()))
-            return false;
+        if (!probe.solid(spring.x(), spring.y(), spring.z())
+                || probe.core(spring.x(), spring.y(), spring.z())
+                || probe.ore(spring.x(), spring.y(), spring.z())) return false;
         for (int y = spring.minY(); y < spring.y(); y++)
             if (probe.block(spring.x(), y, spring.z()) != BlockId.AIR || probe.core(spring.x(), y, spring.z()))
                 return false;
@@ -163,6 +166,19 @@ final class CaveFeatures {
     private final class Probe {
         private final Map<Long, TerrainSummary> groundColumns = new HashMap<>();
         private final Map<Long, List<CavePlan.Segment>> caveColumns = new HashMap<>();
+        private final Map<ChunkPos, byte[]> oreChunks = new HashMap<>();
+
+        boolean ore(int x, int y, int z) {
+            var chunk = new ChunkPos(Math.floorDiv(x, 16), Math.floorDiv(y, 16), Math.floorDiv(z, 16));
+            byte[] blocks = oreChunks.computeIfAbsent(chunk, position -> {
+                byte[] candidates = new byte[ChunkData.BLOCK_COUNT];
+                java.util.Arrays.fill(candidates, BlockId.STONE);
+                ores.generate(position, candidates);
+                return candidates;
+            });
+            return blocks[(Math.floorMod(y, 16) * 16 + Math.floorMod(z, 16)) * 16 + Math.floorMod(x, 16)]
+                    != BlockId.STONE;
+        }
 
         byte block(int x, int y, int z) {
             long key = (long) x << 32 | Integer.toUnsignedLong(z);
