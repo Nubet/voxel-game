@@ -71,7 +71,7 @@ public final class GameBenchmark {
     private static final long SOAK_TIME_LIMIT_NANOS = 600_000_000_000L;
     private static final long SOAK_REPORT_NANOS = 30_000_000_000L;
     private static final long SETTLE_STABLE_NANOS = 1_000_000_000L;
-    private static final long SETTLE_TIMEOUT_NANOS = 60_000_000_000L;
+    private static final long SETTLE_TIMEOUT_NANOS = 120_000_000_000L;
     private static final long WARMUP_NANOS = 2_000_000_000L;
     private static final int PROFILER_CAPACITY = 1 << 17;
     private static final int GL_NVX_CURRENT_AVAILABLE_VIDMEM = 0x9049;
@@ -196,6 +196,12 @@ public final class GameBenchmark {
                                 "tickP95Ms",
                                 "tickMaxMs",
                                 "genJobsPerS",
+                                "genAvgMs",
+                                "genWaitAvgMs",
+                                "meshAvgMs",
+                                "meshWaitAvgMs",
+                                "generationQueueMax",
+                                "meshQueueMax",
                                 "visibleLatencyAvgMs",
                                 "worldAllocMBps",
                                 "retainedHeapMB"));
