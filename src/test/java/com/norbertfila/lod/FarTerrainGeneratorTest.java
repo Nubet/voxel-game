@@ -163,7 +163,27 @@ class FarTerrainGeneratorTest {
                 tileX, tileZ, step, overlay.edits(tileX * FarTerrainTile.SIZE, tileZ * FarTerrainTile.SIZE, 64));
     }
 
-    private static final class FlatSource implements TerrainSource {
+    @Test
+    void shiftedSamplesKeepCenterEditsAndLayeredWalls() {
+        var source = new FlatSource() {
+            @Override
+            public SurfaceSample sampleArea(int ox, int oz, int size) {
+                return new SurfaceSample(ox, oz, sample(ox, oz), true);
+            }
+        };
+        var far = new FarTerrainGenerator(source);
+        var plain = far.generate(0, 0, 4, AreaEdits.none(0, 0, 64));
+        assertEquals(BlockId.GRASS, plain.materialAt(0, 0));
+        assertEquals(BlockId.DIRT, plain.wallMaterialAt(0, 0, SURFACE - 2));
+        assertEquals(BlockId.STONE, plain.wallMaterialAt(0, 0, SURFACE - 4));
+        overlay.set(new BlockPos(2, 50, 2), BlockId.BRICKS, 64);
+        var edited = far.generate(0, 0, 4, overlay.edits(0, 0, 64));
+        assertEquals(50, edited.heightAt(0, 0));
+        assertEquals(BlockId.BRICKS, edited.materialAt(0, 0));
+        assertEquals(BlockId.BRICKS, edited.wallMaterialAt(0, 0, 50));
+    }
+
+    private static class FlatSource implements TerrainSource {
         @Override
         public int surfaceHeight(int worldX, int worldZ) {
             return SURFACE;

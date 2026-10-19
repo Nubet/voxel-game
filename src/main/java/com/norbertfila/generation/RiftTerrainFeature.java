@@ -32,6 +32,37 @@ final class RiftTerrainFeature {
         return allowed ? plan : null;
     }
 
+    TerrainSource.SurfaceSample sampleArea(int ox, int oz, int size, TerrainSource.SurfaceSample center) {
+        int endX = ox + size - 1, endZ = oz + size - 1;
+        var selected = center;
+        for (int rz = Math.floorDiv(oz, RiftPlanner.REGION_SIZE);
+                rz <= Math.floorDiv(endZ, RiftPlanner.REGION_SIZE);
+                rz++)
+            for (int rx = Math.floorDiv(ox, RiftPlanner.REGION_SIZE);
+                    rx <= Math.floorDiv(endX, RiftPlanner.REGION_SIZE);
+                    rx++) {
+                var candidate = planner.plan(rx, rz);
+                if (candidate.isEmpty()) continue;
+                var p = candidate.get();
+                if (endX < p.minX() - size
+                        || ox > p.maxX() + size
+                        || endZ < p.minZ() - size
+                        || oz > p.maxZ() + size
+                        || planAt(p.minX(), p.minZ()) == null) continue;
+                selected = new TerrainSource.SurfaceSample(selected.x(), selected.z(), selected.terrain(), true);
+                for (int z = Math.max(oz, p.minZ()); z <= Math.min(endZ, p.maxZ()); z++)
+                    for (int x = Math.max(ox, p.minX()); x <= Math.min(endX, p.maxX()); x++) {
+                        if (p.section(x + .5, z + .5) == null) continue;
+                        var base = ground.sample(x, z);
+                        var cut = carve(p, x, z, base);
+                        if (cut.surfaceHeight() < base.surfaceHeight()
+                                && cut.surfaceHeight() < selected.terrain().surfaceHeight())
+                            selected = new TerrainSource.SurfaceSample(x, z, cut, true);
+                    }
+            }
+        return selected;
+    }
+
     private boolean suitable(RiftPlanner.Plan plan) {
         int low = Integer.MAX_VALUE, high = Integer.MIN_VALUE;
         // Check every column plus a dry bank so even one-block streams cannot leak into the cut.
