@@ -50,6 +50,7 @@ final class RiftTerrainFeature {
                         || oz > p.maxZ() + size
                         || planAt(p.minX(), p.minZ()) == null) continue;
                 selected = new TerrainSource.SurfaceSample(selected.x(), selected.z(), selected.terrain(), true);
+                if (size == 1) continue;
                 for (int z = Math.max(oz, p.minZ()); z <= Math.min(endZ, p.maxZ()); z++)
                     for (int x = Math.max(ox, p.minX()); x <= Math.min(endX, p.maxX()); x++) {
                         if (p.section(x + .5, z + .5) == null) continue;

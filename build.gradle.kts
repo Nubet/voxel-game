@@ -305,6 +305,16 @@ tasks.register<JavaExec>("benchmarkGame") {
     findProperty("out")?.let { systemProperty("voxel.benchmark.out", it) }
 }
 
+tasks.register<JavaExec>("smokeRifts") {
+    group = "verification"
+    description = "Checks rift rarity, generation timings, nearby water and near/far views for three seeds."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.RiftGenerationSmoke")
+    args(layout.buildDirectory.dir("rift-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeOres") {
     group = "verification"
     description = "Renders the five ore blocks with their REFI textures."
