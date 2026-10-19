@@ -51,6 +51,38 @@ class CaveSystemTest {
     }
 
     @Test
+    void archAndDryRiverHaveDistinctGeometryAndSinkholesStayRare() {
+        var arch = system(42, CaveProfile.ARCH).system();
+        var archRoute = arch.routes().stream()
+                .filter(route -> route.profile() == CaveProfile.ARCH)
+                .findFirst()
+                .orElseThrow();
+        assertTrue(arch.routes().size() >= 6);
+        assertTrue(archRoute.points().size() >= 3);
+
+        var river = system(42, CaveProfile.DRY_RIVER).system();
+        var riverRoute = river.routes().stream()
+                .filter(route -> route.profile() == CaveProfile.DRY_RIVER)
+                .findFirst()
+                .orElseThrow();
+        var riverSegments = system(42, CaveProfile.DRY_RIVER).segments().stream()
+                .filter(segment -> segment.profile() == CaveProfile.DRY_RIVER)
+                .toList();
+        assertFalse(riverSegments.isEmpty());
+        assertTrue(riverSegments.stream().anyMatch(segment -> segment.radiusY() < segment.radiusX()));
+        assertTrue(riverRoute.points().getFirst().y()
+                > riverRoute.points().get(riverRoute.points().size() / 2).y());
+
+        int sinkholes = 0;
+        for (int seed = 0; seed < 256; seed++)
+            for (var system :
+                    new CavePlanner(seed, -64, (x, z) -> 96).plan(0, 0).systems())
+                sinkholes += system.sinkholes().size();
+        assertTrue(sinkholes > 0);
+        assertTrue(sinkholes < 32);
+    }
+
+    @Test
     void floodedPassageHasDryBanksCrossesChunksAndDoesNotSpreadWhenSimulationStarts() {
         CaveSystemPlanner.Result result = null;
         CaveFeatures features = null;

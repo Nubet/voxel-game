@@ -44,9 +44,18 @@ public final class CaveGenerationProfile {
         long flooded = features.stream()
                 .filter(f -> f.type() == CaveFeatures.Type.FLOODED)
                 .count();
+        long rubble = features.stream()
+                .filter(f -> f.type() == CaveFeatures.Type.RUBBLE)
+                .count();
+        long sinkholes = 0;
+        for (int rz = -2; rz <= 2; rz++)
+            for (int rx = -2; rx <= 2; rx++)
+                sinkholes += planner.plan(rx, rz).systems().stream()
+                        .mapToLong(system -> system.sinkholes().size())
+                        .sum();
         System.out.println("profiles " + Arrays.toString(CaveProfile.values()) + "=" + Arrays.toString(profiles)
                 + " flooded=" + flooded + " features=" + features.size() + " pools=" + pools + " lavaPools=" + lava
-                + " springs=" + springs);
+                + " springs=" + springs + " rubble=" + rubble + " sinkholes=" + sinkholes);
         List<ChunkPos> deep = new ArrayList<>();
         for (int z = -8; z < 8; z++)
             for (int x = -8; x < 8; x++) for (int y = -4; y <= -2; y++) deep.add(new ChunkPos(x, y, z));

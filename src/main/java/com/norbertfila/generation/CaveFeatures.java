@@ -147,6 +147,17 @@ final class CaveFeatures {
             int direction = (int) (hash >>> 8) & 3;
             int dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
             int dz = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+            if ((segment.profile() == CaveProfile.ARCH || segment.profile() == CaveProfile.DRY_RIVER)
+                    && (hash >>> 40 & 3) == 0) {
+                int rubbleX = (int) Math.floor(segment.x() + dx * segment.radiusX() * .65);
+                int rubbleZ = (int) Math.floor(segment.z() + dz * segment.radiusZ() * .65);
+                int floor = probe.floor(rubbleX, y, rubbleZ);
+                if (floor != Integer.MIN_VALUE) {
+                    var rubble = new Feature(
+                            rubbleX, floor + 1, rubbleZ, floor + 1, floor + 2, 1, Type.RUBBLE, BlockId.GRAVEL);
+                    if (rubbleFits(rubble, probe)) addSpaced(result, rubble);
+                }
+            }
             if ((hash & 63) == 0) {
                 int wallX = (int) Math.floor(segment.x() + dx * segment.radiusX());
                 int wallZ = (int) Math.floor(segment.z() + dz * segment.radiusZ());
@@ -194,6 +205,15 @@ final class CaveFeatures {
                     if (!pool.containsXZ(x + d[0], z + d[1]) && !probe.solid(x + d[0], pool.y(), z + d[1]))
                         return false;
             }
+        return true;
+    }
+
+    private boolean rubbleFits(Feature rubble, Probe probe) {
+        for (int z = rubble.z() - rubble.radius(); z <= rubble.z() + rubble.radius(); z++)
+            for (int x = rubble.x() - rubble.radius(); x <= rubble.x() + rubble.radius(); x++)
+                if (rubble.containsXZ(x, z)
+                        && (probe.core(x, rubble.y(), z) || probe.block(x, rubble.y(), z) == BlockId.WATER))
+                    return false;
         return true;
     }
 
@@ -246,10 +266,12 @@ final class CaveFeatures {
                         if (!feature.containsXZ(x, z)) continue;
                         int index = ((y - oy) * 16 + z - oz) * 16 + x - ox;
                         byte previous = blocks[index];
+                        boolean rubble = feature.type() == Type.RUBBLE;
                         if (previous != BlockId.STONE
+                                && !(rubble && previous == BlockId.AIR)
                                 && !(feature.type() == Type.SPRING && y < feature.y() && previous == BlockId.AIR))
                             continue;
-                        if (feature.type() == Type.GRAVEL && protectedCore(segments, x, y, z)) continue;
+                        if ((feature.type() == Type.GRAVEL || rubble) && protectedCore(segments, x, y, z)) continue;
                         blocks[index] = feature.material();
                         if (feature.type() == Type.SPRING && y < feature.y()) falling.set(index);
                         changed = true;
@@ -322,6 +344,7 @@ final class CaveFeatures {
 
     enum Type {
         GRAVEL,
+        RUBBLE,
         POOL,
         SPRING,
         FLOODED
