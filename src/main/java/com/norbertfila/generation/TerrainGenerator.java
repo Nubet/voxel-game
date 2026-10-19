@@ -131,7 +131,7 @@ public final class TerrainGenerator implements TerrainSource {
                             && weather.temperature() > -.2
                             && weather.humidity() > -.35;
                 });
-        rifts = new RiftTerrainFeature(seed);
+        rifts = new RiftTerrainFeature(seed, this::sampleLandforms);
         trees = new TreeGenerator(
                 seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry, this.landscapes);
         jungle = new JungleVegetation(seed);

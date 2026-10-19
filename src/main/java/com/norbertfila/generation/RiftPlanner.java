@@ -73,6 +73,10 @@ final class RiftPlanner {
         }
 
         Section section(double x, double z) {
+            return section(x, z, 0);
+        }
+
+        Section section(double x, double z, double margin) {
             double nearest = Double.POSITIVE_INFINITY;
             Section selected = null;
             for (int i = 0; i < nodes.size() - 1; i++) {
@@ -93,7 +97,7 @@ final class RiftPlanner {
                         width,
                         (a.depth + t * (b.depth - a.depth)) * taper);
             }
-            return selected != null && nearest < selected.halfWidth ? selected : null;
+            return selected != null && nearest < selected.halfWidth + margin ? selected : null;
         }
 
         private static int lower(List<Node> nodes, boolean x) {

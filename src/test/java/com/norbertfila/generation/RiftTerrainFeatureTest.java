@@ -49,4 +49,34 @@ class RiftTerrainFeatureTest {
             if (x > -48) assertTrue(Math.abs(cuts[x + 48] - cuts[x + 47]) <= 4);
         }
     }
+
+    @Test
+    void ledgesExposeStoneWithoutReplacingTheUncutGrass() {
+        assertEquals(
+                RiftTerrainFeature.carve(STRAIGHT, 0, -3, GROUND).surfaceHeight(),
+                RiftTerrainFeature.carve(STRAIGHT, 0, -4, GROUND).surfaceHeight());
+        assertEquals(
+                BlockId.STONE, RiftTerrainFeature.carve(STRAIGHT, 0, -3, GROUND).surfaceMaterial());
+        assertSame(GROUND, RiftTerrainFeature.carve(STRAIGHT, 0, 5, GROUND));
+    }
+
+    @Test
+    void rejectsTheWholeRiftForSingleBlockWaterOrSteepTerrainOnItsRoute() {
+        var plan = new RiftPlanner(42).plan(-99, 0);
+        for (int x = -100; x < 100 && plan.isEmpty(); x++) plan = new RiftPlanner(42).plan(x, 0);
+        var p = plan.orElseThrow();
+        var node = p.nodes().get(3);
+        int cx = (int) node.x(), cz = (int) node.z();
+        var dry = new RiftTerrainFeature(42, (x, z) -> GROUND);
+        assertEquals(p, dry.planAt(cx, cz));
+        var water = new TerrainSummary(60, BlockId.GRAVEL, BlockId.STONE, BlockId.STONE, -64, 62);
+        var wet = new RiftTerrainFeature(42, (x, z) -> x == cx && z == cz ? water : GROUND);
+        assertNull(wet.planAt(cx, cz));
+        var cliff = new RiftTerrainFeature(
+                42,
+                (x, z) -> x == cx && z == cz
+                        ? new TerrainSummary(100, BlockId.GRASS, BlockId.DIRT, BlockId.STONE, -64)
+                        : GROUND);
+        assertNull(cliff.planAt(cx, cz));
+    }
 }
