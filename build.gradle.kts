@@ -325,6 +325,16 @@ tasks.register<JavaExec>("smokeRifts") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeClassicWater") {
+    group = "verification"
+    description = "Renders the seed-123 ARCHLANDS water regression from the reported camera."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.ClassicWaterSmoke")
+    args(layout.buildDirectory.dir("classic-water-smoke/${findProperty("label") ?: "current"}").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeOres") {
     group = "verification"
     description = "Renders the five ore blocks with their REFI textures."

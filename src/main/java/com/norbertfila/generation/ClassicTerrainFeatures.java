@@ -72,10 +72,14 @@ final class ClassicTerrainFeatures {
         WaterKind kind = level == sea + 7 && profile.biome() == BiomeType.HIDDEN_VALLEYS_CLASSIC
                 ? WaterKind.LAKE
                 : base.waterKind();
+        // Elevated hydrology was planned before 3D carving; its bed and banks must still contain the source water.
+        int protectedFloor =
+                base.waterLevel() > sea ? Math.min(base.surfaceHeight(), base.waterLevel() + 1) : Integer.MIN_VALUE;
         int top = minY - 1;
         for (int y = minY; y < WorldBounds.MAX_Y_EXCLUSIVE; y++) {
             double density = coastalField == null ? base.surfaceHeight() - y : coastalField.density(y);
             if (field != null) density = field.density(y, density);
+            density = Math.max(density, (double) protectedFloor - y);
             if (density >= 0) {
                 blocks[y - minY] = BlockId.STONE;
                 top = y;

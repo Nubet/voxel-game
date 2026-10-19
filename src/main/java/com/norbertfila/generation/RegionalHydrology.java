@@ -51,6 +51,11 @@ final class RegionalHydrology {
             if (candidate != null) height = Math.min(height, candidate.height());
             if (candidate != null && (result == null || result.kind() != WaterKind.RIVER)) result = candidate;
         }
+        if (result != null) {
+            // Keep the selected channel and its banks together; other valleys may only blend outside them.
+            double bank = smooth((1.3 - result.proximity()) / .3);
+            height += bank * (result.height() - height);
+        }
         return result == null
                 ? new Sample(ground, seaLevel, WaterKind.OCEAN, Double.POSITIVE_INFINITY)
                 : new Sample(height, Math.max(seaLevel, result.waterLevel()), result.kind(), result.proximity());
