@@ -72,6 +72,18 @@ class RiftTerrainFeatureTest {
         var water = new TerrainSummary(60, BlockId.GRAVEL, BlockId.STONE, BlockId.STONE, -64, 62);
         var wet = new RiftTerrainFeature(42, (x, z) -> x == cx && z == cz ? water : GROUND);
         assertNull(wet.planAt(cx, cz));
+        int[] bank = null;
+        search:
+        for (int z = p.minZ() - 6; z <= p.maxZ() + 6; z++)
+            for (int x = p.minX() - 6; x <= p.maxX() + 6; x++)
+                if (p.section(x + .5, z + .5) == null && p.section(x + .5, z + .5, 6) != null) {
+                    bank = new int[] {x, z};
+                    break search;
+                }
+        assertNotNull(bank);
+        int bankX = bank[0], bankZ = bank[1];
+        var wetBank = new RiftTerrainFeature(42, (x, z) -> x == bankX && z == bankZ ? water : GROUND);
+        assertNull(wetBank.planAt(cx, cz));
         var cliff = new RiftTerrainFeature(
                 42,
                 (x, z) -> x == cx && z == cz
