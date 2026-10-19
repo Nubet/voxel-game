@@ -23,6 +23,9 @@ class RegionalHydrologyTest {
                 assertTrue(sample.height() <= ground, "Hydrology must never build an embankment");
                 if (sample.kind() == WaterKind.RIVER) {
                     assertTrue(sample.waterLevel() <= ground, "Water must not sit above the original hillside");
+                    assertTrue(
+                            sample.waterLevel() - sample.height() <= 5,
+                            "Another valley must not remove the selected river's bed");
                     if (sample.height() < sample.waterLevel()) channels++;
                 }
                 var adjacent = water.sample(x + .001, z, terrain.applyAsDouble(x + .001, z));
