@@ -14,20 +14,8 @@ final class CaveRegionSampler {
     Sample sample(double x, double z) {
         double amount = Math.clamp(.5 + density.sample(x / scale + .37, z / scale - .61) * 1.8, 0, 1);
         double style = Math.clamp(.5 + character.sample(x / scale - 4.7, z / scale + 8.1) * 1.5, 0, 1);
-        return new Sample(
-                amount,
-                .7 + style * .6,
-                .12 + amount * .24,
-                .3 + style * .5,
-                .025 + amount * .045,
-                .008 + style * .012);
+        return new Sample(amount, .7 + style * .6, .3 + style * .5);
     }
 
-    record Sample(
-            double density,
-            double winding,
-            double branchChance,
-            double width,
-            double chamberChance,
-            double verticalChance) {}
+    record Sample(double density, double winding, double width) {}
 }

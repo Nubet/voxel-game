@@ -39,16 +39,17 @@ final class CaveCarver {
             int maxY = upper(segment.y() + segment.boundRadiusY(), oy);
             int minZ = lower(segment.z() - segment.boundRadiusXZ(), oz);
             int maxZ = upper(segment.z() + segment.boundRadiusXZ(), oz);
-            double outer = 1 + segment.roughness() / Math.max(segment.radiusXZ(), segment.radiusY());
+            double outer = 1
+                    + segment.roughness() / Math.max(segment.radiusZ(), Math.max(segment.radiusX(), segment.radiusY()));
             for (int y = minY; y <= maxY; y++) {
                 double ny = (oy + (double) y + .5 - segment.y()) / segment.radiusY();
                 double ny2 = ny * ny;
                 for (int z = minZ; z <= maxZ; z++) {
-                    double nz = (oz + (double) z + .5 - segment.z()) / segment.radiusXZ();
+                    double nz = (oz + (double) z + .5 - segment.z()) / segment.radiusZ();
                     double yz2 = ny2 + nz * nz;
                     if (yz2 >= outer * outer) continue;
                     for (int x = minX; x <= maxX; x++) {
-                        double nx = (ox + (double) x + .5 - segment.x()) / segment.radiusXZ();
+                        double nx = (ox + (double) x + .5 - segment.x()) / segment.radiusX();
                         int index = (y * Chunk.SIZE + z) * Chunk.SIZE + x;
                         if (carveable(blocks[index])
                                 && contains(
@@ -94,16 +95,17 @@ final class CaveCarver {
     }
 
     boolean contains(CavePlan.Segment segment, double x, double y, double z) {
-        double nx = (x - segment.x()) / segment.radiusXZ();
+        double nx = (x - segment.x()) / segment.radiusX();
         double ny = (y - segment.y()) / segment.radiusY();
-        double nz = (z - segment.z()) / segment.radiusXZ();
+        double nz = (z - segment.z()) / segment.radiusZ();
         return contains(segment, x, y, z, nx * nx + ny * ny + nz * nz);
     }
 
     private boolean contains(CavePlan.Segment segment, double x, double y, double z, double distanceSquared) {
         if (segment.coreContains(x, y, z)) return true;
         if (segment.roughness() == 0) return distanceSquared < 1;
-        double amplitude = segment.roughness() / Math.max(segment.radiusXZ(), segment.radiusY());
+        double amplitude =
+                segment.roughness() / Math.max(segment.radiusZ(), Math.max(segment.radiusX(), segment.radiusY()));
         if (distanceSquared < (1 - amplitude) * (1 - amplitude)) return true;
         if (distanceSquared >= (1 + amplitude) * (1 + amplitude)) return false;
         double boundary = 1 + amplitude * Math.clamp(roughness.sample(x * .18, y * .18, z * .18) * 2, -1, 1);

@@ -1,12 +1,16 @@
 package com.norbertfila.generation;
 
 import com.norbertfila.world.BlockId;
+import com.norbertfila.world.BlockPos;
+import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.WorldBounds;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -19,6 +23,7 @@ final class CaveFeatures {
     private final BiFunction<Integer, Integer, CavePlan> regionalPlans;
     private final BiFunction<Integer, Integer, List<CavePlan.Segment>> caves;
     private final GenerationCache<List<Feature>> plans = new GenerationCache<>(128);
+    private final GenerationCache<List<Feature>> floodedPlans = new GenerationCache<>(128);
 
     CaveFeatures(
             long seed,
@@ -37,23 +42,104 @@ final class CaveFeatures {
     List<Feature> at(int chunkX, int chunkZ) {
         int regionChunks = CavePlanner.REGION_SIZE / Chunk.SIZE;
         int rx = Math.floorDiv(chunkX, regionChunks), rz = Math.floorDiv(chunkZ, regionChunks);
-        return plans.get(rx, rz, () -> plan(rx, rz)).stream()
-                .filter(f -> f.intersectsColumn(chunkX, chunkZ))
-                .toList();
+        var result = new ArrayList<Feature>();
+        for (var feature : plans.get(rx, rz, () -> plan(rx, rz)))
+            if (feature.intersectsColumn(chunkX, chunkZ)) result.add(feature);
+        for (int z = rz - 1; z <= rz + 1; z++)
+            for (int x = rx - 1; x <= rx + 1; x++) {
+                int ownerX = x, ownerZ = z;
+                for (var feature : floodedPlans.get(x, z, () -> flooded(ownerX, ownerZ)))
+                    if (feature.intersectsColumn(chunkX, chunkZ)) result.add(feature);
+            }
+        return List.copyOf(result);
+    }
+
+    private List<Feature> flooded(int rx, int rz) {
+        var result = new ArrayList<Feature>();
+        var probe = new Probe();
+        for (var system : regionalPlans.apply(rx, rz).systems())
+            for (var flood : system.floods()) {
+                var feature = flooded(flood, probe);
+                if (feature != null) result.add(feature);
+            }
+        return List.copyOf(result);
+    }
+
+    private Feature flooded(CaveSystem.Flood flood, Probe probe) {
+        var cells = containedWater(flood.seed(), flood.waterLevel(), 12, 6, probe);
+        if (cells.size() < 20) return null;
+        int minY = cells.stream().mapToInt(BlockPos::y).min().orElseThrow();
+        if (minY == flood.waterLevel()) return null;
+        return new Feature(
+                (int) Math.floor(flood.seed().x()),
+                flood.waterLevel(),
+                (int) Math.floor(flood.seed().z()),
+                minY,
+                flood.waterLevel(),
+                12,
+                Type.FLOODED,
+                BlockId.WATER,
+                cells);
+    }
+
+    private List<BlockPos> containedWater(CaveSystem.Point seed, int level, int radius, int depth, Probe probe) {
+        double sx = seed.x(), sz = seed.z();
+        if (sx < Integer.MIN_VALUE + 16.0
+                || sx > Integer.MAX_VALUE - 16.0
+                || sz < Integer.MIN_VALUE + 16.0
+                || sz > Integer.MAX_VALUE - 16.0) return List.of();
+        int x = (int) Math.floor(sx), z = (int) Math.floor(sz);
+        if (level < WorldBounds.MIN_Y + 6 || level > ground.sample(x, z).surfaceHeight() - 10) return List.of();
+        var queue = new ArrayDeque<BlockPos>();
+        var visited = new HashSet<BlockPos>();
+        var cells = new ArrayList<BlockPos>();
+        queue.add(new BlockPos(x, level, z));
+        while (!queue.isEmpty()) {
+            var cell = queue.removeFirst();
+            if (cell.y() > level || !visited.add(cell)) continue;
+            byte block = probe.block(cell.x(), cell.y(), cell.z());
+            if (block != BlockId.AIR) {
+                if (!BlockRegistry.DEFAULT.occludesFullFace(block)) return List.of();
+                continue;
+            }
+            // Reject the entire connected water volume if another tunnel opens its containment boundary.
+            if (Math.abs(cell.x() - x) > radius
+                    || Math.abs(cell.z() - z) > radius
+                    || cell.y() < level - depth
+                    || cells.size() >= 512) return List.of();
+            cells.add(cell);
+            for (int[] d : SIDES) queue.add(new BlockPos(cell.x() + d[0], cell.y(), cell.z() + d[1]));
+            queue.add(new BlockPos(cell.x(), cell.y() - 1, cell.z()));
+            queue.add(new BlockPos(cell.x(), cell.y() + 1, cell.z()));
+        }
+        return List.copyOf(cells);
     }
 
     private List<Feature> plan(int rx, int rz) {
         var result = new ArrayList<Feature>();
         var probe = new Probe();
         for (var segment : regionalPlans.apply(rx, rz).allSegments()) {
+            if (segment.profile() != CaveProfile.CHAMBER) continue;
+            int x = (int) Math.floor(segment.x()), y = (int) Math.floor(segment.y()), z = (int) Math.floor(segment.z());
+            if (!owned(rx, rz, x, z) || y > ground.sample(x, z).surfaceHeight() - 10) continue;
+            long hash = GenerationHash.hash(seed ^ 0x789B1CE239F36C6DL, x, z);
+            if ((hash & 1) != 0) continue;
+            int direction = (int) (hash >>> 8) & 3;
+            int sx = (int)
+                    Math.floor(segment.x() + (direction == 0 ? 1 : direction == 1 ? -1 : 0) * segment.radiusX() * .7);
+            int sz = (int)
+                    Math.floor(segment.z() + (direction == 2 ? 1 : direction == 3 ? -1 : 0) * segment.radiusZ() * .7);
+            int sy = probe.ceiling(sx, y, sz), floor = probe.floor(sx, y, sz);
+            if (floor == Integer.MIN_VALUE || sy == Integer.MIN_VALUE || sy - floor < 2 || sy - floor > 6) continue;
+            var spring = new Feature(sx, sy, sz, floor + 1, sy, 0, Type.SPRING, BlockId.WATER);
+            if (springFits(spring, floor, probe)) addSpaced(result, spring);
+            if (result.size() >= 2) break;
+        }
+        for (var segment : regionalPlans.apply(rx, rz).allSegments()) {
             if (result.size() >= 6) break;
             int x = (int) Math.floor(segment.x()), y = (int) Math.floor(segment.y());
             int z = (int) Math.floor(segment.z());
-            // Disjoint regional interiors give neighboring feature plans a deterministic ownership boundary.
-            long lx = (long) x - (long) rx * CavePlanner.REGION_SIZE;
-            long lz = (long) z - (long) rz * CavePlanner.REGION_SIZE;
-            if (lx < 10 || lx >= CavePlanner.REGION_SIZE - 10 || lz < 10 || lz >= CavePlanner.REGION_SIZE - 10)
-                continue;
+            if (!owned(rx, rz, x, z)) continue;
             long hash = GenerationHash.hash(GenerationHash.hash(seed ^ 0xC6BC279692B5CC83L, x, z), y, 0);
             boolean chamber = segment.profile() == CaveProfile.CHAMBER;
             if (!chamber && (hash & 63) != 0 && (hash >>> 16 & 31) != 0) continue;
@@ -62,13 +148,13 @@ final class CaveFeatures {
             int dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
             int dz = direction == 2 ? 1 : direction == 3 ? -1 : 0;
             if ((hash & 63) == 0) {
-                int wallX = (int) Math.floor(segment.x() + dx * segment.radiusXZ());
-                int wallZ = (int) Math.floor(segment.z() + dz * segment.radiusXZ());
+                int wallX = (int) Math.floor(segment.x() + dx * segment.radiusX());
+                int wallZ = (int) Math.floor(segment.z() + dz * segment.radiusZ());
                 addSpaced(result, new Feature(wallX, y, wallZ, y - 1, y + 1, 2, Type.GRAVEL, BlockId.GRAVEL));
             }
             if ((chamber || (hash >>> 16 & 31) == 0) && (!chamber || (hash >>> 32 & 3) != 0)) {
-                int px = (int) Math.floor(segment.x() + dx * segment.radiusXZ() * .35);
-                int pz = (int) Math.floor(segment.z() + dz * segment.radiusXZ() * .35);
+                int px = (int) Math.floor(segment.x() + dx * segment.radiusX() * .35);
+                int pz = (int) Math.floor(segment.z() + dz * segment.radiusZ() * .35);
                 int floor = probe.floor(px, y, pz);
                 if (floor != Integer.MIN_VALUE) {
                     int radius = chamber && (hash >>> 24 & 1) == 0 ? 2 : 1;
@@ -77,18 +163,15 @@ final class CaveFeatures {
                     if (poolFits(pool, probe)) addSpaced(result, pool);
                 }
             }
-            if (chamber && (hash >>> 32 & 3) == 0) {
-                int sx = (int) Math.floor(segment.x() + dx * segment.radiusXZ() * .55);
-                int sz = (int) Math.floor(segment.z() + dz * segment.radiusXZ() * .55);
-                int sy = y + 3;
-                int floor = probe.floor(sx, sy - 1, sz);
-                if (floor != Integer.MIN_VALUE && sy - floor >= 2 && sy - floor <= 6) {
-                    var spring = new Feature(sx, sy, sz, floor + 1, sy, 0, Type.SPRING, BlockId.WATER);
-                    if (springFits(spring, floor, probe)) addSpaced(result, spring);
-                }
-            }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean owned(int rx, int rz, int x, int z) {
+        // Insets keep floor decorations in their owning region; flooded volumes use neighboring plans instead.
+        long lx = (long) x - (long) rx * CavePlanner.REGION_SIZE;
+        long lz = (long) z - (long) rz * CavePlanner.REGION_SIZE;
+        return lx >= 10 && lx < CavePlanner.REGION_SIZE - 10 && lz >= 10 && lz < CavePlanner.REGION_SIZE - 10;
     }
 
     private static void addSpaced(List<Feature> features, Feature candidate) {
@@ -115,15 +198,22 @@ final class CaveFeatures {
     }
 
     private boolean springFits(Feature spring, int floor, Probe probe) {
+        if ((long) spring.x() - 16 < Integer.MIN_VALUE
+                || (long) spring.x() + 16 > Integer.MAX_VALUE
+                || (long) spring.z() - 16 < Integer.MIN_VALUE
+                || (long) spring.z() + 16 > Integer.MAX_VALUE) return false;
         if (!probe.solid(spring.x(), spring.y(), spring.z())
                 || probe.core(spring.x(), spring.y(), spring.z())
                 || probe.ore(spring.x(), spring.y(), spring.z())) return false;
         for (int y = spring.minY(); y < spring.y(); y++)
             if (probe.block(spring.x(), y, spring.z()) != BlockId.AIR || probe.core(spring.x(), y, spring.z()))
                 return false;
-        // A solid landing across the entire horizontal flow reach prevents cascades into lower tunnels.
-        for (int z = spring.z() - 8; z <= spring.z() + 8; z++)
-            for (int x = spring.x() - 8; x <= spring.x() + 8; x++) if (!probe.solid(x, floor, z)) return false;
+        // One possible landing step permits two seven-block runs, so validate support over their full reach.
+        for (int dz = -16; dz <= 16; dz++)
+            for (int dx = -16; dx <= 16; dx++) {
+                if (Math.abs(dx) + Math.abs(dz) > 16) continue;
+                if (!probe.solid(spring.x() + dx, floor - 1, spring.z() + dz)) return false;
+            }
         return true;
     }
 
@@ -134,6 +224,18 @@ final class CaveFeatures {
         boolean changed = false;
         for (var feature : features) {
             if (!feature.intersectsY(oy)) continue;
+            if (feature.type() == Type.FLOODED) {
+                for (var cell : feature.cells()) {
+                    int x = cell.x() - ox, y = cell.y() - oy, z = cell.z() - oz;
+                    if (x < 0 || x >= 16 || y < 0 || y >= 16 || z < 0 || z >= 16) continue;
+                    int index = (y * 16 + z) * 16 + x;
+                    if (blocks[index] == BlockId.AIR) {
+                        blocks[index] = BlockId.WATER;
+                        changed = true;
+                    }
+                }
+                continue;
+            }
             for (int y = Math.max(oy, feature.minY()); y <= Math.min(oy + 15, feature.maxY()); y++)
                 for (int z = Math.max(oz, feature.z() - feature.radius());
                         z <= Math.min(oz + 15, feature.z() + feature.radius());
@@ -210,15 +312,31 @@ final class CaveFeatures {
             }
             return Integer.MIN_VALUE;
         }
+
+        int ceiling(int x, int y, int z) {
+            if (block(x, y, z) != BlockId.AIR) return Integer.MIN_VALUE;
+            for (int height = 1; height <= 6; height++) if (solid(x, y + height, z)) return y + height;
+            return Integer.MIN_VALUE;
+        }
     }
 
     enum Type {
         GRAVEL,
         POOL,
-        SPRING
+        SPRING,
+        FLOODED
     }
 
-    record Feature(int x, int y, int z, int minY, int maxY, int radius, Type type, byte material) {
+    record Feature(
+            int x, int y, int z, int minY, int maxY, int radius, Type type, byte material, List<BlockPos> cells) {
+        Feature(int x, int y, int z, int minY, int maxY, int radius, Type type, byte material) {
+            this(x, y, z, minY, maxY, radius, type, material, List.of());
+        }
+
+        Feature {
+            cells = List.copyOf(cells);
+        }
+
         boolean containsXZ(int wx, int wz) {
             long dx = (long) wx - x, dz = (long) wz - z;
             return dx * dx + dz * dz <= radius * radius;
