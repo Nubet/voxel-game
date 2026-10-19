@@ -3,6 +3,8 @@ package com.norbertfila.generation;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.generation.biome.BiomeRegistry;
+import com.norbertfila.lod.AreaEdits;
+import com.norbertfila.lod.FarTerrainGenerator;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.PlantRules;
@@ -82,5 +84,22 @@ class RiftGenerationTest {
                     count++;
                 }
         assertTrue(count > 0);
+    }
+
+    @Test
+    void coarseLodPreservesTheCutAndSharesSamplesWithTileBorders() {
+        var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
+        var p = find(terrain).nodes().get(3);
+        int x = (int) p.x(), z = (int) p.z();
+        int tx = Math.floorDiv(x, 64), tz = Math.floorDiv(z, 64);
+        var far = new FarTerrainGenerator(terrain);
+        for (int step : new int[] {1, 2, 4, 8, 16}) {
+            var tile = far.generate(tx, tz, step, AreaEdits.none(tx * 64, tz * 64, 64));
+            int cellX = Math.floorMod(x, 64) / step, cellZ = Math.floorMod(z, 64) / step;
+            assertTrue(tile.heightAt(cellX, cellZ) <= terrain.surfaceHeight(x, z));
+            var border = far.border(tx - 1, tz, step);
+            int cells = 64 / step;
+            for (int i = 0; i < cells; i++) assertEquals(tile.heightAt(0, i), border[cells + i]);
+        }
     }
 }

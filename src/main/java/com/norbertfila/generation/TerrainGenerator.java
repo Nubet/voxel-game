@@ -253,6 +253,12 @@ public final class TerrainGenerator implements TerrainSource {
         return config.landforms().amplitude() == 0 ? null : rifts.planAt(x, z);
     }
 
+    @Override
+    public SurfaceSample sampleArea(int originX, int originZ, int size) {
+        var center = TerrainSource.super.sampleArea(originX, originZ, size);
+        return config.landforms().amplitude() == 0 ? center : rifts.sampleArea(originX, originZ, size, center);
+    }
+
     double surfaceElevation(double worldX, double worldZ) {
         return geographySample(worldX, worldZ).elevation();
     }

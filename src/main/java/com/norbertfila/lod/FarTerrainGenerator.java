@@ -11,8 +11,8 @@ import java.util.Objects;
  * Builds far tiles from per-column terrain summaries and an edit snapshot, without generating any chunk. Safe to call
  * from worker threads: the source is thread-safe and the edits are immutable.
  *
- * <p>Each cell takes the generated column at its center with that column's edits applied. Edited columns elsewhere in
- * the cell can only raise it, so buildings stay visible from afar, while digging off the center column is not shown.
+ * <p>The source selects a column per cell so narrow landmarks survive coarse sampling. Edits on that column apply
+ * directly; edits elsewhere can only raise the cell so buildings stay visible from afar.
  */
 public final class FarTerrainGenerator {
     private static final BlockRegistry BLOCKS = BlockRegistry.DEFAULT;
@@ -38,12 +38,12 @@ public final class FarTerrainGenerator {
         int[] waterTops = new int[heights.length];
         byte[] tints = new byte[heights.length];
         Arrays.fill(waterTops, FarTerrainTile.NO_WATER);
-        int center = sampleStep / 2;
         for (int cellZ = 0; cellZ < cells; cellZ++)
             for (int cellX = 0; cellX < cells; cellX++) {
                 if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
-                int x = originX + cellX * sampleStep + center, z = originZ + cellZ * sampleStep + center;
-                TerrainSummary terrain = source.sample(x, z);
+                var sample = source.sampleArea(originX + cellX * sampleStep, originZ + cellZ * sampleStep, sampleStep);
+                int x = sample.x(), z = sample.z();
+                TerrainSummary terrain = sample.terrain();
                 int column = edits.find(x, z);
                 int index = cellZ * cells + cellX;
                 tints[index] = (byte) source.tintIndex(x, z);
@@ -52,13 +52,12 @@ public final class FarTerrainGenerator {
                 materials[index] = (byte) surface;
                 wallMaterials[index] =
                         materials[index] == BlockId.SNOW_LAYER ? terrain.surfaceMaterial() : materials[index];
-                if (terrain.badlands() != null || terrain.shape() != null)
+                if (terrain.badlands() != null || terrain.shape() != null || sample.detailedWalls())
                     wallColumns[index] = new FarTerrainTile.WallColumn(terrain, edits, column);
                 waterTops[index] = waterTop(terrain, edits, column, heights[index]);
             }
         for (int column = 0; column < edits.columnCount(); column++) {
             int localX = edits.columnX(column) - originX, localZ = edits.columnZ(column) - originZ;
-            if (localX % sampleStep == center && localZ % sampleStep == center) continue;
             int index = localZ / sampleStep * cells + localX / sampleStep;
             for (int change = 0; change < edits.changeCount(column); change++) {
                 byte block = edits.changeBlock(column, change);
@@ -96,17 +95,25 @@ public final class FarTerrainGenerator {
     public int[] border(int tileX, int tileZ, int sampleStep) {
         if (!FarTerrainTile.validStep(sampleStep))
             throw new IllegalArgumentException("Sample step must divide the tile size");
-        int cells = FarTerrainTile.SIZE / sampleStep, center = sampleStep / 2;
-        int originX = Math.multiplyExact(tileX, FarTerrainTile.SIZE) + center;
-        int originZ = Math.multiplyExact(tileZ, FarTerrainTile.SIZE) + center;
+        int cells = FarTerrainTile.SIZE / sampleStep;
+        int originX = Math.multiplyExact(tileX, FarTerrainTile.SIZE);
+        int originZ = Math.multiplyExact(tileZ, FarTerrainTile.SIZE);
         int[] border = new int[4 * cells];
         for (int cell = 0; cell < cells; cell++) {
             if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
             int along = cell * sampleStep;
-            border[cell] = source.surfaceHeight(originX - sampleStep, originZ + along);
-            border[cells + cell] = source.surfaceHeight(originX + FarTerrainTile.SIZE, originZ + along);
-            border[2 * cells + cell] = source.surfaceHeight(originX + along, originZ - sampleStep);
-            border[3 * cells + cell] = source.surfaceHeight(originX + along, originZ + FarTerrainTile.SIZE);
+            border[cell] = source.sampleArea(originX - sampleStep, originZ + along, sampleStep)
+                    .terrain()
+                    .surfaceHeight();
+            border[cells + cell] = source.sampleArea(originX + FarTerrainTile.SIZE, originZ + along, sampleStep)
+                    .terrain()
+                    .surfaceHeight();
+            border[2 * cells + cell] = source.sampleArea(originX + along, originZ - sampleStep, sampleStep)
+                    .terrain()
+                    .surfaceHeight();
+            border[3 * cells + cell] = source.sampleArea(originX + along, originZ + FarTerrainTile.SIZE, sampleStep)
+                    .terrain()
+                    .surfaceHeight();
         }
         return border;
     }
