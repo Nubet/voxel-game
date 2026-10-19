@@ -38,6 +38,16 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<JavaExec>("smokeScreenshots") {
+    group = "verification"
+    description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.ScreenshotSmoke")
+    args(layout.buildDirectory.dir("screenshot-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 val windowsInstallDir = layout.buildDirectory.dir("install/voxel-engine")
 val windowsJarDir = layout.buildDirectory.dir("windows-java")
 val windowsPortableDir = layout.buildDirectory.dir("windows-portable/VoxelEngine")

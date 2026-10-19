@@ -11,6 +11,21 @@ import org.junit.jupiter.api.Test;
 
 class InputTest {
     @Test
+    void screenshotTapIsConsumedOnceWithoutRepeatsAndDiscardedOnSessionChange() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_F12, GLFW_PRESS, 0, 1);
+        input.keyEvent(GLFW_KEY_F12, GLFW_RELEASE, 0, 2);
+        assertTrue(input.screenshotPressed());
+        assertFalse(input.screenshotPressed());
+        input.keyEvent(GLFW_KEY_F12, GLFW_REPEAT, 0, 3);
+        assertFalse(input.screenshotPressed());
+        input.keyEvent(GLFW_KEY_F12, GLFW_PRESS, 0, 4);
+        input.discardTransientInput();
+        assertFalse(input.screenshotPressed());
+        assertEquals(null, input.pollUiEvent());
+    }
+
+    @Test
     void perspectiveTapIsConsumedOnceWithoutRepeatsOrUiEvents() {
         var input = new Input();
         input.keyEvent(GLFW_KEY_F5, GLFW_PRESS, 0, 1);

@@ -10,6 +10,7 @@ import com.norbertfila.diagnostics.FrameProfiler.Segment;
 import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
+import com.norbertfila.persistence.ScreenshotWriter;
 import com.norbertfila.persistence.ViewDistancePreferences;
 import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
@@ -21,6 +22,7 @@ import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.DistanceFog;
+import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.PlayerRenderer;
@@ -51,10 +53,13 @@ import com.norbertfila.ui.screens.SettingsScreen;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.locks.LockSupport;
 
 public final class GameLoop {
@@ -131,6 +136,7 @@ public final class GameLoop {
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
                 CloudRenderer clouds = new CloudRenderer();
+                ScreenshotWriter screenshots = new ScreenshotWriter(Path.of("screenshots"));
                 PlayerRenderer players = skins == null ? null : new PlayerRenderer(skins)) {
             return run(
                     window,
@@ -148,7 +154,8 @@ public final class GameLoop {
                     effects,
                     items,
                     clouds,
-                    players);
+                    players,
+                    screenshots);
         }
     }
 
@@ -168,7 +175,8 @@ public final class GameLoop {
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
             CloudRenderer clouds,
-            PlayerRenderer players) {
+            PlayerRenderer players,
+            ScreenshotWriter screenshots) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -199,6 +207,7 @@ public final class GameLoop {
         boolean pointerReady = !input.leftMouseDown() && !input.rightMouseDown();
         Hotbar hotbar = new Hotbar();
         var chat = new ChatHistory();
+        var screenshotResults = new ArrayDeque<CompletableFuture<Path>>();
         var commandHints = new GameCommands();
         var chatOverlay = new ChatOverlay();
         var dropKeys = new ArrayDeque<Boolean>();
@@ -219,6 +228,18 @@ public final class GameLoop {
             double now = window.time(), frameDelta = Math.max(0, now - previous), delta = clampDelta(frameDelta);
             previous = now;
             input.update();
+            boolean screenshotPressed = input.screenshotPressed() && input.focused();
+            while (!screenshotResults.isEmpty() && screenshotResults.peekFirst().isDone()) {
+                try {
+                    Path file = screenshotResults.removeFirst().join();
+                    chat.add("Saved screenshot as " + file.getFileName(), ChatHistory.Kind.SYSTEM, now);
+                } catch (CompletionException failure) {
+                    chat.add(
+                            "Could not save screenshot: " + failure.getCause().getMessage(),
+                            ChatHistory.Kind.ERROR,
+                            now);
+                }
+            }
             boolean debugPressed = input.debugPressed();
             if (input.focused() && debugPressed) debugVisible = !debugVisible;
             if (!input.leftMouseDown() && !input.rightMouseDown()) pointerReady = true;
@@ -627,6 +648,17 @@ public final class GameLoop {
                 gpuTimer.endFrame();
             }
             profiler.mark(Segment.UI);
+            if (screenshotPressed) {
+                if (screenshotResults.size() >= 2) {
+                    chat.add("Could not save screenshot: screenshot queue is full", ChatHistory.Kind.ERROR, now);
+                } else {
+                    try {
+                        screenshotResults.addLast(screenshots.save(FramebufferCapture.capture(width[0], height[0])));
+                    } catch (RuntimeException failure) {
+                        chat.add("Could not save screenshot: " + failure.getMessage(), ChatHistory.Kind.ERROR, now);
+                    }
+                }
+            }
             window.swapBuffers();
             profiler.mark(Segment.SWAP);
             limitFrameRate(frameStarted, settings.frameRate());

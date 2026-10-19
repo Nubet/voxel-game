@@ -42,6 +42,7 @@ public final class Input implements AutoCloseable {
     private boolean inventoryPressed;
     private boolean debugPressed;
     private boolean perspectivePressed;
+    private boolean screenshotPressed;
     private boolean shift;
 
     public Input(long window) {
@@ -64,6 +65,7 @@ public final class Input implements AutoCloseable {
         if (key == GLFW_KEY_E && action == GLFW_PRESS) inventoryPressed = true;
         if (key == GLFW_KEY_F3 && action == GLFW_PRESS) debugPressed = true;
         if (key == GLFW_KEY_F5 && action == GLFW_PRESS) perspectivePressed = true;
+        if (key == GLFW_KEY_F12 && action == GLFW_PRESS) screenshotPressed = true;
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
         if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
         UiKey uiKey = switch (key) {
@@ -123,6 +125,12 @@ public final class Input implements AutoCloseable {
 
     void scrollEvent(double yOffset) {
         scrollDeltaY += yOffset;
+    }
+
+    public boolean screenshotPressed() {
+        boolean pressed = screenshotPressed;
+        screenshotPressed = false;
+        return pressed;
     }
 
     public PlayerInput nextPlayerTick() {
@@ -283,6 +291,7 @@ public final class Input implements AutoCloseable {
         debugPressed = false;
         perspectivePressed = false;
         previousLeftMouse = leftMouse;
+        screenshotPressed = false;
         previousRightMouse = rightMouse;
         previousHotbarKeys = hotbarKeys;
         previousToggleMode = toggleMode;
