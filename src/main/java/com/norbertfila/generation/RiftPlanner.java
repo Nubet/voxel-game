@@ -28,7 +28,7 @@ final class RiftPlanner {
 
     private Optional<Plan> create(int regionX, int regionZ) {
         long hash = GenerationHash.hash(seed ^ 0x6A09E667F3BCC909L, regionX, regionZ);
-        if (Math.floorMod(hash, 12) != 0) return Optional.empty();
+        if (Math.floorMod(hash, 4) != 0) return Optional.empty();
         long ox = (long) regionX * REGION_SIZE, oz = (long) regionZ * REGION_SIZE;
         if (ox < Integer.MIN_VALUE
                 || ox + REGION_SIZE - 1 > Integer.MAX_VALUE
