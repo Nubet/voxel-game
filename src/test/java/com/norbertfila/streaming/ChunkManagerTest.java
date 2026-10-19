@@ -38,6 +38,24 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ChunkManagerTest {
+    @Test
+    void resultIntakeRefillsGenerationWithoutAnotherDemandUpdate() throws Exception {
+        World world = new World();
+        ViewDemand demand = new ViewDemand(6, 0, 0, ViewDemand.Shape.SQUARE);
+        try (ChunkManager manager = new ChunkManager(world, emptyGenerator(), demand)) {
+            manager.update(new ChunkPos(0, 0, 0));
+            assertTrue(manager.metrics().generationOutstanding() < demand.size());
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (world.residentCount() < demand.size()) {
+                assertTrue(System.nanoTime() < deadline, "Generation stopped after the first admitted batch");
+                manager.processResults(ChunkManager.RESULTS_PER_UPDATE, 0);
+                assertTrue(manager.metrics().generationOutstanding() <= 128);
+                Thread.sleep(1);
+            }
+            assertTrue(demand.requested().stream().allMatch(world::hasChunk));
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({"0,0,false", "-1,-1,false", "0,0,true", "-1,-1,true"})
     void reloadsPlacedAndRemovedBlocksBeforeMeshing(int chunkX, int chunkZ, boolean perlin) {

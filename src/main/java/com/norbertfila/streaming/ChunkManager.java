@@ -32,9 +32,9 @@ import java.util.logging.Logger;
 
 public final class ChunkManager implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(ChunkManager.class.getName());
-    private static final int TASK_QUEUE_CAPACITY = 64;
-    private static final int READY_QUEUE_CAPACITY = 64;
-    public static final int RESULTS_PER_UPDATE = 32;
+    private static final int TASK_QUEUE_CAPACITY = 128;
+    private static final int READY_QUEUE_CAPACITY = 128;
+    public static final int RESULTS_PER_UPDATE = 128;
     /**
      * Chunks stay loaded this many columns past the render distance, so walking back and forth across the edge does
      * not load and evict the same chunks over and over.
@@ -366,6 +366,8 @@ public final class ChunkManager implements AutoCloseable {
             generated++;
         }
 
+        // Refill released slots before meshing so generators do not wait for the next simulation tick.
+        if (generated > 0) admitGeneration();
         List<MeshResult> meshes = new ArrayList<>();
         for (int index = 0; index < meshBudget; index++) {
             ChunkTask.Outcome<ChunkMesh> outcome = meshingScheduler.pollReady();
