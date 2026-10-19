@@ -13,9 +13,10 @@ class CaveFeatureIntegrationTest {
     void naturalLavaAndWaterfallsSurviveParallelGenerationWithIdenticalFluidMetadata() throws Exception {
         var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
         var features = new HashSet<CaveFeatures.Feature>();
-        for (int z = -16; z < 24; z++) for (int x = -16; x < 24; x++) features.addAll(terrain.caveFeatures(x, z));
+        for (int z = -32; z < 32; z++) for (int x = -32; x < 32; x++) features.addAll(terrain.caveFeatures(x, z));
         assertTrue(features.stream().anyMatch(f -> f.material() == BlockId.LAVA));
         assertTrue(features.stream().anyMatch(f -> f.type() == CaveFeatures.Type.SPRING));
+        assertTrue(features.stream().anyMatch(f -> f.type() == CaveFeatures.Type.FLOODED));
         for (var feature : features)
             if (feature.type() == CaveFeatures.Type.SPRING) {
                 var source = new BlockPos(feature.x(), feature.y(), feature.z());
@@ -36,6 +37,15 @@ class CaveFeatureIntegrationTest {
                         positions.add(new ChunkPos(x, y, z));
         var ordered = new ArrayList<>(positions);
         var expected = ordered.stream().map(p -> terrain.generate(p).toChunk()).toList();
+        for (var feature : features)
+            if (feature.type() == CaveFeatures.Type.FLOODED)
+                for (var cell : feature.cells()) {
+                    var local = Coordinates.worldToLocal(cell);
+                    assertEquals(
+                            BlockId.WATER,
+                            terrain.generate(Coordinates.worldToChunk(cell)).get(local.x(), local.y(), local.z()),
+                            cell.toString());
+                }
         var parallel = new TerrainGenerator(42, TerrainConfig.defaults());
         int lava = 0, falling = 0;
         try (var workers = Executors.newFixedThreadPool(4)) {

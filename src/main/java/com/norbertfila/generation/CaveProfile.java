@@ -4,5 +4,7 @@ enum CaveProfile {
     CLASSIC,
     SPAGHETTI,
     CHAMBER,
-    VERTICAL
+    VERTICAL,
+    FLOODED,
+    INTERCONNECTED
 }

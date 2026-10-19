@@ -10,9 +10,15 @@ import java.util.Objects;
 final class CavePlan {
     private final Map<Long, List<Segment>> columns;
     private final List<Segment> segments;
+    private final List<CaveSystem> systems;
 
     CavePlan(List<Segment> segments) {
+        this(segments, List.of());
+    }
+
+    CavePlan(List<Segment> segments, List<CaveSystem> systems) {
         this.segments = List.copyOf(segments);
+        this.systems = List.copyOf(systems);
         Map<Long, List<Segment>> index = new HashMap<>();
         for (Segment segment : segments) {
             int minX = chunk(segment.x() - segment.boundRadiusXZ());
@@ -36,6 +42,10 @@ final class CavePlan {
         return segments;
     }
 
+    List<CaveSystem> systems() {
+        return systems;
+    }
+
     private static int chunk(double coordinate) {
         return (int) Math.floor(Math.clamp(coordinate, Integer.MIN_VALUE, Integer.MAX_VALUE) / Chunk.SIZE);
     }
@@ -45,13 +55,24 @@ final class CavePlan {
     }
 
     record Segment(
-            double x, double y, double z, double radiusXZ, double radiusY, CaveProfile profile, double roughness) {
-        Segment(double x, double y, double z, double radiusXZ, double radiusY) {
-            this(x, y, z, radiusXZ, radiusY, CaveProfile.CLASSIC, 0);
+            double x,
+            double y,
+            double z,
+            double radiusX,
+            double radiusY,
+            double radiusZ,
+            CaveProfile profile,
+            double roughness) {
+        Segment(double x, double y, double z, double radiusX, double radiusY, CaveProfile profile, double roughness) {
+            this(x, y, z, radiusX, radiusY, radiusX, profile, roughness);
         }
 
-        Segment(double x, double y, double z, double radiusXZ, double radiusY, CaveProfile profile) {
-            this(x, y, z, radiusXZ, radiusY, profile, profile == CaveProfile.SPAGHETTI ? .3 : .22);
+        Segment(double x, double y, double z, double radiusX, double radiusY) {
+            this(x, y, z, radiusX, radiusY, CaveProfile.CLASSIC, 0);
+        }
+
+        Segment(double x, double y, double z, double radiusX, double radiusY, CaveProfile profile) {
+            this(x, y, z, radiusX, radiusY, profile, profile == CaveProfile.SPAGHETTI ? .3 : .22);
         }
 
         Segment {
@@ -59,19 +80,22 @@ final class CavePlan {
             if (!Double.isFinite(x)
                     || !Double.isFinite(y)
                     || !Double.isFinite(z)
-                    || !Double.isFinite(radiusXZ)
+                    || !Double.isFinite(radiusX)
                     || !Double.isFinite(radiusY)
-                    || radiusXZ <= 0
-                    || radiusXZ > 8
+                    || radiusX <= 0
+                    || radiusX > 8
                     || radiusY <= 0
                     || radiusY > 8
+                    || !Double.isFinite(radiusZ)
+                    || radiusZ <= 0
+                    || radiusZ > 8
                     || !Double.isFinite(roughness)
                     || roughness < 0
-                    || roughness > .35) throw new IllegalArgumentException("Invalid cave ellipsoid");
+                    || roughness > .65) throw new IllegalArgumentException("Invalid cave ellipsoid");
         }
 
         double boundRadiusXZ() {
-            return radiusXZ + roughness;
+            return Math.max(radiusX, radiusZ) + roughness;
         }
 
         double boundRadiusY() {
@@ -87,9 +111,9 @@ final class CavePlan {
         }
 
         boolean contains(double px, double py, double pz) {
-            double nx = (px - x) / radiusXZ;
+            double nx = (px - x) / radiusX;
             double ny = (py - y) / radiusY;
-            double nz = (pz - z) / radiusXZ;
+            double nz = (pz - z) / radiusZ;
             return nx * nx + ny * ny + nz * nz < 1;
         }
     }

@@ -27,9 +27,9 @@ class CaveCarverTest {
                             for (int x = 0; x < 16; x++) {
                                 double wx = cx * 16 + x + .5, wy = cy * 16 + y + .5, wz = cz * 16 + z + .5;
                                 boolean inside = segments.stream()
-                                        .anyMatch(s -> Math.pow((wx - s.x()) / s.radiusXZ(), 2)
+                                        .anyMatch(s -> Math.pow((wx - s.x()) / s.radiusX(), 2)
                                                         + Math.pow((wy - s.y()) / s.radiusY(), 2)
-                                                        + Math.pow((wz - s.z()) / s.radiusXZ(), 2)
+                                                        + Math.pow((wz - s.z()) / s.radiusZ(), 2)
                                                 < 1);
                                 assertEquals(inside ? BlockId.AIR : BlockId.STONE, blocks[(y * 16 + z) * 16 + x]);
                             }
@@ -79,8 +79,8 @@ class CaveCarverTest {
     @Test
     void roughShellMatchesPointQueriesAcrossAllChunkAxesAndActuallyChangesTheShape() {
         var segments = List.of(
-                new CavePlan.Segment(15.8, 15.9, -.2, 4.5, 3, CaveProfile.CHAMBER),
-                new CavePlan.Segment(-.1, -.2, 15.8, 1.3, 1.85, CaveProfile.SPAGHETTI));
+                new CavePlan.Segment(15.8, 15.9, -.2, 4.5, 3, 3.2, CaveProfile.CHAMBER, .6),
+                new CavePlan.Segment(-.1, -.2, 15.8, 1.3, 1.85, 2, CaveProfile.SPAGHETTI, .35));
         var plan = new CavePlan(segments);
         int deformed = 0;
         for (int cy = -1; cy <= 1; cy++)
@@ -105,8 +105,10 @@ class CaveCarverTest {
     void deformationsKeepPlayerWidthAndStandingHeightClearAlongPlannedPaths() {
         var planner = new CavePlanner(42, -64, (x, z) -> 96);
         var segments = new java.util.HashSet<CavePlan.Segment>();
-        var plan = planner.plan(0, 0);
-        for (int z = -7; z < 15; z++) for (int x = -7; x < 15; x++) segments.addAll(plan.segments(x, z));
+        for (int rz = -1; rz <= 1; rz++)
+            for (int rx = -1; rx <= 1; rx++)
+                segments.addAll(planner.plan(rx, rz).allSegments());
+        assertFalse(segments.isEmpty());
         for (var segment : segments) {
             if (segment.profile() == CaveProfile.CHAMBER) continue;
             for (int x = (int) Math.floor(segment.x() - .3); x <= Math.floor(segment.x() + .3); x++)

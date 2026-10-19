@@ -42,7 +42,7 @@ public final class CaveGenerationSmoke {
                                         int x = (int) Math.floor(segment.x()),
                                                 y = (int) Math.floor(segment.y()),
                                                 z = (int) Math.floor(segment.z());
-                                        if ((chamber == null || segment.radiusXZ() > chamber.radiusXZ())
+                                        if ((chamber == null || segment.radiusX() > chamber.radiusX())
                                                 && carver.carves(
                                                         x,
                                                         y,
@@ -86,8 +86,86 @@ public final class CaveGenerationSmoke {
             }
             captureLava(textures, output.resolve("lava.png"));
             captureNaturalLava(textures, output.resolve("natural-lava.png"));
+            captureProfiles(textures, output);
             if (glGetError() != GL_NO_ERROR) throw new AssertionError("Cave rendering GL error");
         }
+    }
+
+    private static void captureProfiles(BlockTextureArray textures, Path output) throws Exception {
+        var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
+        var planner = new CavePlanner(42, com.norbertfila.world.WorldBounds.MIN_Y, terrain::surfaceHeight);
+        var captured = java.util.EnumSet.noneOf(CaveProfile.class);
+        var atlases = java.util.EnumSet.noneOf(CaveProfile.class);
+        for (int rz = -3; rz <= 3; rz++)
+            for (int rx = -3; rx <= 3; rx++) {
+                var plan = planner.plan(rx, rz);
+                for (var system : plan.systems()) {
+                    boolean underground = system.junctions().stream()
+                            .allMatch(p -> p.y()
+                                    < terrain.surfaceHeight((int) Math.floor(p.x()), (int) Math.floor(p.z())) - 8);
+                    if (!underground) continue;
+                    if (atlases.add(system.character())) {
+                        CaveGenerationAtlas.write(
+                                terrain,
+                                plan,
+                                output.resolve("atlas-"
+                                        + system.character().name().toLowerCase(java.util.Locale.ROOT) + ".png"));
+                    }
+                    for (var route : system.routes()) {
+                        if (route.profile() == CaveProfile.FLOODED || captured.contains(route.profile())) continue;
+                        var points = route.points();
+                        var p = points.get(points.size() / 4);
+                        var target = points.get(Math.min(points.size() - 1, points.size() / 4 + 10));
+                        capture(
+                                terrain,
+                                textures,
+                                vector(p).add(0, .25f, 0),
+                                vector(target),
+                                output.resolve("profile-"
+                                        + route.profile().name().toLowerCase(java.util.Locale.ROOT) + ".png"));
+                        captured.add(route.profile());
+                        System.out.println("PASS profile=" + route.profile() + " seed=42 eye=" + vector(p));
+                    }
+                }
+                if (!captured.contains(CaveProfile.CHAMBER))
+                    for (var segment : plan.allSegments()) {
+                        if (segment.profile() != CaveProfile.CHAMBER
+                                || segment.y() > terrain.surfaceHeight((int) segment.x(), (int) segment.z()) - 8)
+                            continue;
+                        var target = new Vector3f((float) segment.x(), (float) segment.y(), (float) segment.z());
+                        capture(
+                                terrain,
+                                textures,
+                                new Vector3f(target).add((float) (-segment.radiusX() * .5), .2f, 0),
+                                new Vector3f(target).add(2, 0, 1),
+                                output.resolve("profile-chamber.png"));
+                        captured.add(CaveProfile.CHAMBER);
+                        System.out.println("PASS profile=CHAMBER seed=42 center=" + target);
+                        break;
+                    }
+                if (!captured.contains(CaveProfile.FLOODED))
+                    for (int z = rz * 8; z < rz * 8 + 8; z++)
+                        for (int x = rx * 8; x < rx * 8 + 8; x++)
+                            for (var feature : terrain.caveFeatures(x, z)) {
+                                if (captured.contains(CaveProfile.FLOODED)
+                                        || feature.type() != CaveFeatures.Type.FLOODED) continue;
+                                var target = new Vector3f(feature.x() + .5f, feature.y() + .5f, feature.z() + .5f);
+                                capture(
+                                        terrain,
+                                        textures,
+                                        new Vector3f(target).add(-3, 1.5f, 0),
+                                        target,
+                                        output.resolve("profile-flooded.png"));
+                                captured.add(CaveProfile.FLOODED);
+                                System.out.println("PASS profile=FLOODED seed=42 water=" + target);
+                            }
+                if (captured.size() == CaveProfile.values().length && atlases.size() == 3) return;
+            }
+        throw new AssertionError("Missing cave acceptance profiles: " + captured);
+    }
+
+    private static Vector3f vector(CaveSystem.Point point) {
+        return new Vector3f((float) point.x(), (float) point.y(), (float) point.z());
     }
 
     private static void captureLava(BlockTextureArray textures, Path file) throws Exception {

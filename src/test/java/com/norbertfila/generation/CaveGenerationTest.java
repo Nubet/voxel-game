@@ -15,8 +15,8 @@ class CaveGenerationTest {
         var generator = new TerrainGenerator(42, TerrainConfig.defaults());
         int carved = 0;
         for (int cy = -4; cy <= -2; cy++)
-            for (int z = -3; z <= 3; z++)
-                for (int x = -3; x <= 3; x++) {
+            for (int z = -8; z <= 8; z++)
+                for (int x = -8; x <= 8; x++) {
                     var data = generator.generate(new ChunkPos(x, cy, z));
                     for (int lz = 0; lz < 16; lz++)
                         for (int lx = 0; lx < 16; lx++) {

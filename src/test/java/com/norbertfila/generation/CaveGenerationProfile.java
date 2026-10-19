@@ -41,8 +41,12 @@ public final class CaveGenerationProfile {
         long springs = features.stream()
                 .filter(f -> f.type() == CaveFeatures.Type.SPRING)
                 .count();
-        System.out.println("profiles classic/spaghetti/chamber/vertical=" + Arrays.toString(profiles) + " features="
-                + features.size() + " pools=" + pools + " lavaPools=" + lava + " springs=" + springs);
+        long flooded = features.stream()
+                .filter(f -> f.type() == CaveFeatures.Type.FLOODED)
+                .count();
+        System.out.println("profiles " + Arrays.toString(CaveProfile.values()) + "=" + Arrays.toString(profiles)
+                + " flooded=" + flooded + " features=" + features.size() + " pools=" + pools + " lavaPools=" + lava
+                + " springs=" + springs);
         List<ChunkPos> deep = new ArrayList<>();
         for (int z = -8; z < 8; z++)
             for (int x = -8; x < 8; x++) for (int y = -4; y <= -2; y++) deep.add(new ChunkPos(x, y, z));

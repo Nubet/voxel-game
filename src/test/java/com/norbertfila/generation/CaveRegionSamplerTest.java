@@ -15,7 +15,7 @@ class CaveRegionSamplerTest {
             assertEquals(a.density(), b.density(), .001);
             assertEquals(a.winding(), b.winding(), .001);
             assertTrue(a.density() >= 0 && a.density() <= 1);
-            assertTrue(a.verticalChance() < .03);
+            assertTrue(a.width() > 0 && a.width() < 1);
             low = Math.min(low, a.density());
             high = Math.max(high, a.density());
         }
