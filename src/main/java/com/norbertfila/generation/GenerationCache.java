@@ -26,7 +26,8 @@ final class GenerationCache<T> {
 
     T get(int chunkX, int chunkZ, Supplier<T> compute) {
         Objects.requireNonNull(compute);
-        long key = (long) chunkX << 32 | Integer.toUnsignedLong(chunkZ);
+        // Odd multiplication preserves unique coordinates while avoiding Long.hashCode's x ^ z grid collisions.
+        long key = ((long) chunkX << 32 | Integer.toUnsignedLong(chunkZ)) * 0x9E3779B97F4A7C15L;
         FutureTask<T> task;
         boolean owner = false;
         synchronized (entries) {
