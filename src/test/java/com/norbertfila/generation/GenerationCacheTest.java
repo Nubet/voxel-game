@@ -15,6 +15,32 @@ import org.junit.jupiter.api.Test;
 
 class GenerationCacheTest {
     @Test
+    void denseGridsAndExtremeCoordinatesKeepDistinctCachedValues() {
+        var cache = new GenerationCache<Long>(8192);
+        for (int z = -32; z <= 32; z++)
+            for (int x = -32; x <= 32; x++) {
+                long value = (long) x << 32 | Integer.toUnsignedLong(z);
+                cache.get(x, z, () -> value);
+            }
+        for (int z = 32; z >= -32; z--)
+            for (int x = 32; x >= -32; x--) {
+                long expected = (long) x << 32 | Integer.toUnsignedLong(z);
+                assertEquals(expected, cache.get(x, z, () -> {
+                    throw new AssertionError("Cache miss");
+                }));
+            }
+        for (int x : new int[] {Integer.MIN_VALUE, Integer.MAX_VALUE})
+            for (int z : new int[] {Integer.MIN_VALUE, Integer.MAX_VALUE}) {
+                long expected = (long) x << 32 | Integer.toUnsignedLong(z);
+                assertEquals(expected, cache.get(x, z, () -> expected));
+                assertEquals(expected, cache.get(x, z, () -> {
+                    throw new AssertionError("Cache miss");
+                }));
+            }
+        assertEquals(4229, cache.stats().misses());
+    }
+
+    @Test
     void concurrentRequestsForOneColumnComputeItOnce() throws Exception {
         var cache = new GenerationCache<Object>(4);
         AtomicInteger computations = new AtomicInteger();
