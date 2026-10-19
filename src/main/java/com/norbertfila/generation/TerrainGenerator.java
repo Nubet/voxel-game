@@ -38,6 +38,7 @@ public final class TerrainGenerator implements TerrainSource {
     private final RegionalLandforms landforms;
     private final ClassicLandforms classicLandforms;
     private final ClassicTerrainFeatures classicFeatures;
+    private final RiftTerrainFeature rifts;
     private final GenerationCache<TerrainSummary> featureSamples = new GenerationCache<>(8192);
     private final BadlandsLandforms badlandsLandforms;
     private final RegionalHydrology hydrology;
@@ -130,6 +131,7 @@ public final class TerrainGenerator implements TerrainSource {
                             && weather.temperature() > -.2
                             && weather.humidity() > -.35;
                 });
+        rifts = new RiftTerrainFeature(seed);
         trees = new TreeGenerator(
                 seed, forestDensity, (GroundSampler) this::sampleBase, biomeRegistry, this.landscapes);
         jungle = new JungleVegetation(seed);
@@ -235,7 +237,8 @@ public final class TerrainGenerator implements TerrainSource {
 
     @Override
     public int surfaceHeight(int worldX, int worldZ) {
-        if (config.landforms().amplitude() > 0 && classicFeatures.possible(worldX, worldZ))
+        if (config.landforms().amplitude() > 0
+                && (classicFeatures.possible(worldX, worldZ) || rifts.possible(worldX, worldZ)))
             return sampleBase(worldX, worldZ).surfaceHeight();
         return (int) Math.floor(geographySample(worldX, worldZ).elevation());
     }
@@ -367,6 +370,11 @@ public final class TerrainGenerator implements TerrainSource {
     }
 
     private TerrainSummary sampleBase(int worldX, int worldZ) {
+        var base = sampleLandforms(worldX, worldZ);
+        return config.landforms().amplitude() == 0 ? base : rifts.apply(worldX, worldZ, base);
+    }
+
+    private TerrainSummary sampleLandforms(int worldX, int worldZ) {
         if (config.landforms().amplitude() == 0 || !classicFeatures.possible(worldX, worldZ))
             return sampleFoundation(worldX, worldZ);
         return featureSamples.get(
