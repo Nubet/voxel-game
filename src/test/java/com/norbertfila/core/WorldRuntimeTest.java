@@ -880,7 +880,7 @@ class WorldRuntimeTest {
     }
 
     @Test
-    void swimmingCrossesChunkBoundaryWithSixtyFourMeshesAwaitingAck() throws Exception {
+    void swimmingCrossesChunkBoundaryWithSaturatedMeshPublication() throws Exception {
         Path save = directory.resolve("swim-backpressure.vxl");
         World world = new World();
         for (int x = -2; x <= 36; x++)
@@ -888,12 +888,12 @@ class WorldRuntimeTest {
                 for (int z = -2; z <= 2; z++) world.setBlock(new BlockPos(x, y, z), BlockId.WATER, 64);
         TestWorlds.save(save, 42, 1, world);
         try (WorldRuntime runtime = new WorldRuntime(
-                new Flat(), new WaterMesher(), new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE), save)) {
+                new Flat(), new WaterMesher(), new ViewDemand(4, -1, 0, ViewDemand.Shape.SQUARE), save)) {
             var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             await(runtime, f -> {
                 WorldRuntime.SessionMesh mesh;
                 while ((mesh = runtime.pollMesh()) != null) held.add(mesh);
-                return held.size() == 64 && f.waterContact().available();
+                return held.size() == 128 && f.waterContact().available();
             });
             runtime.controls(new WorldRuntime.Controls(
                     new PlayerInput(true, false, false, false, false, false, false), 0, 0, false, false, 4));
@@ -910,7 +910,7 @@ class WorldRuntimeTest {
                 previous = next;
             }
             assertTrue(previous.playerState().position().x() > 16);
-            assertEquals(64, held.size());
+            assertEquals(128, held.size());
         }
         assertTrue(TestWorlds.load(save).fluids().tick() > 390);
     }
@@ -972,17 +972,17 @@ class WorldRuntimeTest {
     @Test
     void stalledRendererBoundsMeshPublicationWithoutStoppingWorldTicks() throws Exception {
         try (WorldRuntime runtime = start(new Flat(), directory.resolve("backpressure.vxl"))) {
-            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, true, false, 3));
+            runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, true, false, 6));
             var blocked = await(runtime, f -> f.tick() >= 60);
-            assertTrue(blocked.metrics().streaming().meshOutstanding() <= 64);
-            assertTrue(blocked.metrics().outstandingAcks() <= 64);
+            assertTrue(blocked.metrics().streaming().meshOutstanding() <= 128);
+            assertTrue(blocked.metrics().outstandingAcks() <= 128);
             assertTrue(blocked.metrics().outstandingMeshBytes() >= 0);
             var held = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             WorldRuntime.SessionMesh mesh;
             while ((mesh = runtime.pollMesh()) != null) {
                 held.add(mesh);
             }
-            assertTrue(!held.isEmpty() && held.size() <= 64);
+            assertTrue(!held.isEmpty() && held.size() <= 128);
             held.forEach(result -> runtime.acknowledge(result, true));
             assertTrue(await(runtime, f -> {
                                 var next = runtime.pollMesh();
@@ -1033,14 +1033,14 @@ class WorldRuntimeTest {
         try (WorldRuntime runtime = new WorldRuntime(
                 new Flat(),
                 new WaterMesher(),
-                new ViewDemand(4, 0, 0, ViewDemand.Shape.SQUARE),
+                new ViewDemand(4, -1, 0, ViewDemand.Shape.SQUARE),
                 TestWorlds.prepare(directory.resolve("continuous.vxl"), 42, 1))) {
             runtime.controls(new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 4));
             var heldMeshes = new java.util.ArrayList<WorldRuntime.SessionMesh>();
             await(runtime, f -> {
                 WorldRuntime.SessionMesh mesh;
                 while ((mesh = runtime.pollMesh()) != null) heldMeshes.add(mesh);
-                return heldMeshes.size() == 64;
+                return heldMeshes.size() == 128;
             });
             assertTrue(runtime.offer(new WorldRuntime.NextMode()));
             await(runtime, f -> f.mode() == PlayerController.Mode.CREATIVE);
@@ -1063,7 +1063,7 @@ class WorldRuntimeTest {
             }
             assertTrue(previous.tick() >= end);
             assertTrue(previous.playerState().position().y() > 16);
-            assertEquals(64, heldMeshes.size());
+            assertEquals(128, heldMeshes.size());
         }
     }
 

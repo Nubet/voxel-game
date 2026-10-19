@@ -51,13 +51,14 @@ public final class WorldRuntime implements AutoCloseable {
 
     private static final AtomicLong SESSION_IDS = new AtomicLong();
     private static final int CAPACITY = 64;
+    private static final int MESH_CAPACITY = 128;
     private static final int FAR_TILE_SIZE = FarTerrainTile.SIZE;
     private static final double COLLISION_LOOKAHEAD_SECONDS = .5;
     private static final Logger LOG = Logger.getLogger(WorldRuntime.class.getName());
     private final ArrayBlockingQueue<Action> actions = new ArrayBlockingQueue<>(CAPACITY);
     private final ArrayBlockingQueue<GameCommands.Reply> commandReplies = new ArrayBlockingQueue<>(CAPACITY);
-    private final ArrayBlockingQueue<Acknowledgement> acknowledgements = new ArrayBlockingQueue<>(CAPACITY);
-    private final ArrayBlockingQueue<SessionMesh> meshes = new ArrayBlockingQueue<>(CAPACITY);
+    private final ArrayBlockingQueue<Acknowledgement> acknowledgements = new ArrayBlockingQueue<>(MESH_CAPACITY);
+    private final ArrayBlockingQueue<SessionMesh> meshes = new ArrayBlockingQueue<>(MESH_CAPACITY);
     private final AtomicReference<Controls> controls =
             new AtomicReference<>(new Controls(PlayerInput.NONE, -90, -25, true, false, 4));
     private final AtomicReference<Frame> frame = new AtomicReference<>();
@@ -334,7 +335,7 @@ public final class WorldRuntime implements AutoCloseable {
                             // Upload backpressure must not prevent collision-data admission.
                             int meshBudget = Math.min(
                                     ChunkManager.RESULTS_PER_UPDATE,
-                                    Math.min(CAPACITY - outstanding.size(), meshes.remainingCapacity()));
+                                    Math.min(MESH_CAPACITY - outstanding.size(), meshes.remainingCapacity()));
                             List<ChunkManager.MeshResult> ready = chunks.processResults(
                                             ChunkManager.RESULTS_PER_UPDATE, meshBudget)
                                     .meshes();
