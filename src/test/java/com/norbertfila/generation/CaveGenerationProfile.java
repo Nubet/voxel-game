@@ -1,9 +1,11 @@
 package com.norbertfila.generation;
 
+import com.norbertfila.world.BlockId;
 import com.norbertfila.world.ChunkPos;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.zip.CRC32;
 
@@ -18,6 +20,36 @@ public final class CaveGenerationProfile {
         long warm = run(terrain, positions, "warm");
         if (cold != warm) throw new AssertionError("Cache changed generated terrain");
         System.out.println("caveCache=" + terrain.caveCacheStats() + " columns=" + terrain.columnCacheStats());
+        describeUnderground(terrain);
+    }
+
+    private static void describeUnderground(TerrainGenerator terrain) {
+        int[] profiles = new int[CaveProfile.values().length];
+        var planner = new CavePlanner(terrain.seed(), -64, terrain::surfaceHeight);
+        var features = new HashSet<CaveFeatures.Feature>();
+        for (int rz = -2; rz <= 2; rz++)
+            for (int rx = -2; rx <= 2; rx++) {
+                for (var segment : planner.plan(rx, rz).allSegments())
+                    profiles[segment.profile().ordinal()]++;
+                for (int z = rz * 8; z < rz * 8 + 8; z++)
+                    for (int x = rx * 8; x < rx * 8 + 8; x++) features.addAll(terrain.caveFeatures(x, z));
+            }
+        long lava = features.stream().filter(f -> f.material() == BlockId.LAVA).count();
+        long pools = features.stream()
+                .filter(f -> f.type() == CaveFeatures.Type.POOL)
+                .count();
+        long springs = features.stream()
+                .filter(f -> f.type() == CaveFeatures.Type.SPRING)
+                .count();
+        System.out.println("profiles classic/spaghetti/chamber/vertical=" + Arrays.toString(profiles) + " features="
+                + features.size() + " pools=" + pools + " lavaPools=" + lava + " springs=" + springs);
+        List<ChunkPos> deep = new ArrayList<>();
+        for (int z = -8; z < 8; z++)
+            for (int x = -8; x < 8; x++) for (int y = -4; y <= -2; y++) deep.add(new ChunkPos(x, y, z));
+        long first = run(terrain, deep, "deep-first");
+        long repeat = run(terrain, deep, "deep-repeat");
+        if (first != repeat || lava == 0 || pools == 0)
+            throw new AssertionError("Missing or nondeterministic cave features");
     }
 
     private static long run(TerrainGenerator terrain, List<ChunkPos> positions, String label) {

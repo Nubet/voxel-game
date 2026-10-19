@@ -51,7 +51,7 @@ public final class WaterMesher implements LayeredMesher {
                         if (face != 2 && neighborhood.chunkAt(x + normal[0], y + normal[1], z + normal[2]) == null)
                             continue;
                         byte neighbor = neighborhood.block(x + normal[0], y + normal[1], z + normal[2]);
-                        if (neighbor == fluid || fluid == BlockId.WATER && neighbor == BlockId.LAVA) continue;
+                        if (neighbor == fluid) continue;
                         if (BlockRegistry.DEFAULT.occludesFullFace(neighbor)
                                 && (face != 2
                                         || heights.h00() == 1

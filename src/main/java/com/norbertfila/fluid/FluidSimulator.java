@@ -114,8 +114,9 @@ public final class FluidSimulator {
         int[] changed = {0};
         int processed = scheduler.processDue(tick, position -> {
             Set<ChunkPos> missing = new LinkedHashSet<>();
-            byte fluid = FluidFlowRules.fluidAt(world, position);
-            int next = FluidFlowRules.nextState(world, position, missing, extended, fluid);
+            var update = FluidFlowRules.nextUpdate(world, position, missing, extended);
+            byte fluid = update.fluid();
+            int next = update.state();
             if (next == FluidFlowRules.UNAVAILABLE) {
                 ChunkPos own = Coordinates.worldToChunk(position);
                 // An unloaded chunk without changes is woken by the scan when it loads; parking it would leak.

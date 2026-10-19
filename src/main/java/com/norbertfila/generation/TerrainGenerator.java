@@ -520,7 +520,7 @@ public final class TerrainGenerator implements TerrainSource {
                 supportedTrees,
                 segments,
                 removedSurface,
-                caveFeatures.at(originX / Chunk.SIZE, originZ / Chunk.SIZE));
+                caveFeatures(originX / Chunk.SIZE, originZ / Chunk.SIZE));
     }
 
     private boolean treeSupported(TreeGenerator.Tree tree) {
@@ -568,6 +568,10 @@ public final class TerrainGenerator implements TerrainSource {
 
     private CavePlan cavePlanAt(int rx, int rz) {
         return cavePlans.get(rx, rz, () -> cavePlanner.plan(rx, rz));
+    }
+
+    List<CaveFeatures.Feature> caveFeatures(int chunkX, int chunkZ) {
+        return caveFeatures.at(chunkX, chunkZ);
     }
 
     GenerationCache.Stats caveCacheStats() {

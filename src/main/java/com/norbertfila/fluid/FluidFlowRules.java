@@ -25,8 +25,22 @@ final class FluidFlowRules {
     }
 
     static int nextState(World world, BlockPos position, Set<ChunkPos> missing, boolean extended) {
-        return nextState(world, position, missing, extended, fluidAt(world, position));
+        return nextUpdate(world, position, missing, extended).state();
     }
+
+    static Update nextUpdate(World world, BlockPos position, Set<ChunkPos> missing, boolean extended) {
+        byte fluid = fluidAt(world, position);
+        int state = nextState(world, position, missing, extended, fluid);
+        if (state == WaterState.EMPTY
+                && !BlockId.isFluid(world.getBlock(position).orElse(BlockId.AIR))) {
+            byte other = fluid == BlockId.WATER ? BlockId.LAVA : BlockId.WATER;
+            int alternative = nextState(world, position, missing, extended, other);
+            if (alternative >= WaterState.SOURCE || alternative == UNAVAILABLE) return new Update(other, alternative);
+        }
+        return new Update(fluid, state);
+    }
+
+    record Update(byte fluid, int state) {}
 
     static byte fluidAt(World world, BlockPos position) {
         int own = world.getBlock(position).orElse(BlockId.AIR);
@@ -46,7 +60,7 @@ final class FluidFlowRules {
         return lava ? BlockId.LAVA : BlockId.WATER;
     }
 
-    static int nextState(World world, BlockPos position, Set<ChunkPos> missing, boolean extended, byte fluid) {
+    private static int nextState(World world, BlockPos position, Set<ChunkPos> missing, boolean extended, byte fluid) {
         int current = read(world, position, missing, fluid);
         if (current == BLOCKED || current == UNAVAILABLE || current == WaterState.SOURCE) return current;
         if (extended && current >= WaterState.SOURCE) {

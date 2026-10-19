@@ -85,6 +85,7 @@ public final class CaveGenerationSmoke {
                 System.out.println("PASS seed=" + seed + " interior=" + interior + " entrance=" + entrance);
             }
             captureLava(textures, output.resolve("lava.png"));
+            captureNaturalLava(textures, output.resolve("natural-lava.png"));
             if (glGetError() != GL_NO_ERROR) throw new AssertionError("Cave rendering GL error");
         }
     }
@@ -118,6 +119,29 @@ public final class CaveGenerationSmoke {
             VegetationSmoke.write(file, pixels);
             System.out.println("PASS lava pixels=" + orange);
         }
+    }
+
+    private static void captureNaturalLava(BlockTextureArray textures, Path file) throws Exception {
+        var terrain = new TerrainGenerator(42, TerrainConfig.defaults());
+        for (int z = -16; z < 16; z++)
+            for (int x = -16; x < 16; x++)
+                for (var feature : terrain.caveFeatures(x, z)) {
+                    if (feature.material() != BlockId.LAVA) continue;
+                    var data = terrain.generate(new ChunkPos(
+                            Math.floorDiv(feature.x(), 16),
+                            Math.floorDiv(feature.y(), 16),
+                            Math.floorDiv(feature.z(), 16)));
+                    if (data.get(
+                                    Math.floorMod(feature.x(), 16),
+                                    Math.floorMod(feature.y(), 16),
+                                    Math.floorMod(feature.z(), 16))
+                            != BlockId.LAVA) continue;
+                    var target = new Vector3f(feature.x() + .5f, feature.y() + .5f, feature.z() + .5f);
+                    capture(terrain, textures, new Vector3f(target).add(0, 2.5f, 0), target, file);
+                    System.out.println("PASS natural lava=" + target);
+                    return;
+                }
+        throw new AssertionError("Missing naturally generated lava in acceptance area");
     }
 
     private static void capture(

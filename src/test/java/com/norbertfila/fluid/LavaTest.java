@@ -57,6 +57,12 @@ class LavaTest {
         assertEquals(BlockId.LAVA, FluidFlowRules.fluidAt(world, target));
         world.setBlock(new BlockPos(7, 1, 8), BlockId.AIR, 8);
         assertEquals(WaterState.EMPTY, FluidFlowRules.nextState(world, target, new java.util.HashSet<>()));
+        world.setBlock(target, BlockId.AIR, 8);
+        world.setBlock(new BlockPos(7, 1, 8), BlockId.LAVA, 8);
+        world.setBlock(new BlockPos(9, 1, 8), BlockId.WATER, WaterState.flowing(7), 8);
+        var update = FluidFlowRules.nextUpdate(world, target, new java.util.HashSet<>(), false);
+        assertEquals(BlockId.LAVA, update.fluid());
+        assertEquals(1, update.state());
     }
 
     @Test
@@ -89,7 +95,7 @@ class LavaTest {
         var mesh = new WaterMesher().mesh(snapshot, neighbors, 0, 0, 0, ChunkMesh.ALL);
         assertEquals(0, mesh.solid().quadCount());
         assertEquals(6, mesh.water().ranges().opaque());
-        assertEquals(5, mesh.water().ranges().translucent());
+        assertEquals(6, mesh.water().ranges().translucent());
         assertEquals(WaterSurface.SOLID, neighbors.fluidSample(9, 1, 8, BlockId.LAVA));
         var world = floorWorld();
         world.setBlock(new BlockPos(8, 1, 8), BlockId.LAVA, 8);
