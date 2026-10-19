@@ -15,6 +15,7 @@ final class CaveSystemPlanner {
     private final List<Point> nodes = new ArrayList<>();
     private final List<CaveSystem.Route> routes = new ArrayList<>();
     private final List<CaveSystem.Flood> floods = new ArrayList<>();
+    private final List<CaveSystem.Sinkhole> sinkholes = new ArrayList<>();
     private final List<CavePlan.Segment> segments = new ArrayList<>();
 
     CaveSystemPlanner(
@@ -46,6 +47,15 @@ final class CaveSystemPlanner {
             route(1, a, character, 0);
             route(a, b, character, 0);
             route(b, 2, character, 0);
+        } else if (character == CaveProfile.ARCH) {
+            arch(1, 2, side);
+        } else if (character == CaveProfile.DRY_RIVER) {
+            int bank = node(offset(nodes.get(1), side, random.nextDouble(10, 18), -1));
+            int farBank = node(offset(nodes.get(2), side, random.nextDouble(10, 18), -1));
+            var river = route(bank, farBank, CaveProfile.DRY_RIVER, 1.5);
+            if (random.nextDouble() < .45)
+                floods.add(new CaveSystem.Flood(river.get(river.size() / 2), (int)
+                        Math.floor(nodes.get(bank).y() - 1.5)));
         } else if (random.nextDouble() < .7) {
             int end = node(offset(nodes.get(1), side, random.nextDouble(10, 22), random.nextDouble(-2, 2)));
             route(1, end, CaveProfile.CLASSIC, 0);
@@ -65,6 +75,7 @@ final class CaveSystemPlanner {
             route(lower, end, CaveProfile.CLASSIC, 0);
         }
         if (random.nextDouble() < .55) chamber(nodes.get(1 + random.nextInt(2)), yaw);
+        if (character == CaveProfile.CLASSIC && random.nextDouble() < .06) sinkhole(1, yaw);
         if (random.nextDouble() < .28 && y > bedrockY + 14) {
             int bank = node(offset(nodes.get(1), side + Math.PI, 9, 0));
             int farBank = node(offset(nodes.get(bank), side + Math.PI, 11, 0));
@@ -75,7 +86,30 @@ final class CaveSystemPlanner {
             int end = node(offset(nodes.get(farBank), yaw, 8, 1));
             route(farBank, end, CaveProfile.CLASSIC, 0);
         }
-        return new Result(new CaveSystem(character, nodes, routes, floods), List.copyOf(segments));
+        return new Result(new CaveSystem(character, nodes, routes, floods, sinkholes), List.copyOf(segments));
+    }
+
+    private void arch(int fromIndex, int toIndex, double side) {
+        double offset = random.nextDouble(4.5, 6.5);
+        Point from = nodes.get(fromIndex), to = nodes.get(toIndex);
+        int near = node(offset(from, side, offset, .2));
+        int far = node(offset(to, side, offset, -.2));
+        route(fromIndex, near, CaveProfile.CLASSIC, 0);
+        route(near, far, CaveProfile.ARCH, 0);
+        route(far, toIndex, CaveProfile.CLASSIC, 0);
+    }
+
+    private void sinkhole(int undergroundIndex, double yaw) {
+        Point underground = nodes.get(undergroundIndex);
+        double length = random.nextDouble(10, 18);
+        Point surface = offset(underground, yaw, length, 0);
+        int x = (int) Math.floor(surface.x()), z = (int) Math.floor(surface.z());
+        int height = surfaceHeight.applyAsInt(x, z);
+        if (height <= underground.y() + 6 || height > underground.y() + 28) return;
+        Point opening = new Point(surface.x(), height + .5, surface.z());
+        int end = node(opening);
+        route(undergroundIndex, end, CaveProfile.SINKHOLE, 0);
+        sinkholes.add(new CaveSystem.Sinkhole(underground, opening));
     }
 
     private int node(Point point) {
@@ -111,7 +145,12 @@ final class CaveSystemPlanner {
         var points = new ArrayList<Point>();
         for (int i = 0; i <= steps; i++) {
             double t = i / (double) steps, envelope = Math.sin(Math.PI * t);
-            double twist = profile == CaveProfile.SPAGHETTI ? 2.2 : .65;
+            double twist = switch (profile) {
+                case SPAGHETTI -> 2.2;
+                case DRY_RIVER -> 1.45;
+                case ARCH -> .3;
+                default -> .65;
+            };
             double lateral = envelope * (bend + Math.sin(t * Math.PI * 2 + phase) * twist);
             double y = a.y()
                     + (b.y() - a.y()) * t
@@ -126,14 +165,18 @@ final class CaveSystemPlanner {
                     profile == CaveProfile.SPAGHETTI
                             ? Math.max(config.minRadius(), Math.min(2, config.maxRadius()))
                             : config.maxRadius());
+            if (profile == CaveProfile.DRY_RIVER)
+                radius = Math.clamp(radius * .95, config.minRadius(), config.maxRadius());
             double rz = Math.clamp(
                     radius * (.9 + .15 * Math.sin(t * Math.PI * 2 + phase)), config.minRadius(), config.maxRadius());
+            double radiusY =
+                    profile == CaveProfile.DRY_RIVER ? Math.max(1.85, radius * .72) : Math.max(1.85, radius * .9);
             segments.add(new CavePlan.Segment(
                     point.x(),
                     point.y(),
                     point.z(),
                     radius,
-                    Math.max(1.85, radius * .9),
+                    radiusY,
                     rz,
                     profile,
                     profile == CaveProfile.SPAGHETTI ? .35 : .25));

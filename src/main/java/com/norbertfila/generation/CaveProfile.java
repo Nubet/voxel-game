@@ -6,5 +6,8 @@ enum CaveProfile {
     CHAMBER,
     VERTICAL,
     FLOODED,
-    INTERCONNECTED
+    INTERCONNECTED,
+    ARCH,
+    DRY_RIVER,
+    SINKHOLE
 }

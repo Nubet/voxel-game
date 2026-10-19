@@ -48,9 +48,13 @@ final class CavePlanner {
             if (top < bottom) continue;
             double y = bottom + pathRandom.nextLong(top - bottom + 1) + .5;
             double style = pathRandom.nextDouble();
-            CaveProfile character = style < .15
-                    ? CaveProfile.INTERCONNECTED
-                    : style < .35 ? CaveProfile.SPAGHETTI : CaveProfile.CLASSIC;
+            CaveProfile character = style < .08
+                    ? CaveProfile.ARCH
+                    : style < .16
+                            ? CaveProfile.INTERCONNECTED
+                            : style < .32
+                                    ? CaveProfile.SPAGHETTI
+                                    : style < .42 ? CaveProfile.DRY_RIVER : CaveProfile.CLASSIC;
             var result = new CaveSystemPlanner(pathRandom, config, bedrockY, regions.sample(x, z), surfaceHeight)
                     .plan(x + .5, y, z + .5, character);
             if (segments.size() + result.segments().size() > MAX_SEGMENTS) continue;

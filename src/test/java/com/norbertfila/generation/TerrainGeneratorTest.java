@@ -96,7 +96,7 @@ class TerrainGeneratorTest {
         long[] seeds = {0, 42};
         for (long seed : seeds) {
             TerrainGenerator generator = new TerrainGenerator(seed, TerrainConfig.classic());
-            assertEquals(45, generator.generatorVersion());
+            assertEquals(46, generator.generatorVersion());
             for (ChunkPos position : positions) {
                 byte[] blocks = generator.generate(position).blocks();
                 byte[] repeat = generator.generate(position).blocks();
@@ -199,7 +199,7 @@ class TerrainGeneratorTest {
             assertEquals(
                     expected.get(i).intValue(),
                     Arrays.hashCode(same.generate(positions.get(i)).blocks()));
-        assertEquals(45, generator.generatorVersion());
+        assertEquals(46, generator.generatorVersion());
     }
 
     @Test
@@ -232,13 +232,18 @@ class TerrainGeneratorTest {
     private static boolean matchesCaveFeature(
             List<CaveFeatures.Feature> features, int x, int y, int z, byte base, byte actual) {
         for (var feature : features)
+            if (feature.type() == CaveFeatures.Type.FLOODED
+                    && feature.cells().contains(new com.norbertfila.world.BlockPos(x, y, z))
+                    && actual == feature.material()) return true;
+        for (var feature : features)
             if (y >= feature.minY()
                     && y <= feature.maxY()
                     && feature.containsXZ(x, z)
                     && actual == feature.material()
                     && (base == BlockId.STONE
-                            || base == BlockId.AIR && feature.type() == CaveFeatures.Type.SPRING && y < feature.y()))
-                return true;
+                            || base == BlockId.AIR
+                                    && (feature.type() == CaveFeatures.Type.SPRING && y < feature.y()
+                                            || feature.type() == CaveFeatures.Type.RUBBLE))) return true;
         return false;
     }
 

@@ -13,6 +13,22 @@ import org.junit.jupiter.api.Test;
 
 class CaveFeaturesTest {
     @Test
+    void rubbleFillsOnlyAPlannedAirPocketAndRespectsTheProtectedRoute() {
+        var fixture = fixture(42);
+        var rubble = new CaveFeatures.Feature(8, -45, 8, -45, -44, 1, CaveFeatures.Type.RUBBLE, BlockId.GRAVEL);
+        byte[] blocks = new byte[4096];
+        Arrays.fill(blocks, BlockId.AIR);
+        fixture.features.apply(new ChunkPos(0, -3, 0), blocks, List.of(rubble), List.of(), new BitSet());
+        assertEquals(BlockId.GRAVEL, blocks[((3 * 16 + 8) * 16) + 8]);
+
+        var protectedSegment = new CavePlan.Segment(8.5, -44.5, 8.5, 1.5, 1.85, CaveProfile.CLASSIC);
+        Arrays.fill(blocks, BlockId.AIR);
+        fixture.features.apply(
+                new ChunkPos(0, -3, 0), blocks, List.of(rubble), List.of(protectedSegment), new BitSet());
+        assertEquals(BlockId.AIR, blocks[((3 * 16 + 8) * 16) + 8]);
+    }
+
+    @Test
     void boundedPoolsAreSealedAndReproduceAcrossChunkBoundaries() {
         var fixture = fixture(42);
         var planned = new HashSet<CaveFeatures.Feature>();

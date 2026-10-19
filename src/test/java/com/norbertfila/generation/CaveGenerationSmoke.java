@@ -161,6 +161,31 @@ public final class CaveGenerationSmoke {
                             }
                 if (captured.size() == CaveProfile.values().length && atlases.size() == 3) return;
             }
+        if (!captured.contains(CaveProfile.SINKHOLE))
+            for (long seed = 0; seed < 64 && !captured.contains(CaveProfile.SINKHOLE); seed++) {
+                var candidateTerrain = new TerrainGenerator(seed, TerrainConfig.defaults());
+                var candidatePlanner =
+                        new CavePlanner(seed, com.norbertfila.world.WorldBounds.MIN_Y, candidateTerrain::surfaceHeight);
+                for (int rz = -4; rz <= 4 && !captured.contains(CaveProfile.SINKHOLE); rz++)
+                    for (int rx = -4; rx <= 4 && !captured.contains(CaveProfile.SINKHOLE); rx++)
+                        for (var system : candidatePlanner.plan(rx, rz).systems())
+                            for (var route : system.routes())
+                                if (route.profile() == CaveProfile.SINKHOLE) {
+                                    var point =
+                                            route.points().get(route.points().size() / 2);
+                                    var target = route.points().getLast();
+                                    capture(
+                                            candidateTerrain,
+                                            textures,
+                                            vector(point).add(0, .5f, 0),
+                                            vector(target),
+                                            output.resolve("profile-sinkhole.png"));
+                                    captured.add(CaveProfile.SINKHOLE);
+                                    System.out.println(
+                                            "PASS profile=SINKHOLE seed=" + seed + " surface=" + vector(target));
+                                }
+            }
+        if (captured.size() == CaveProfile.values().length) return;
         throw new AssertionError("Missing cave acceptance profiles: " + captured);
     }
 
