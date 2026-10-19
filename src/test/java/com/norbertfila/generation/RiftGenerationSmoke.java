@@ -227,7 +227,7 @@ public final class RiftGenerationSmoke {
 
         @Override
         public int generatorVersion() {
-            return 47;
+            return 48;
         }
 
         @Override

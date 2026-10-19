@@ -29,7 +29,7 @@ class RiftPlannerTest {
                 }
             }
         assertTrue(
-                count > 400 && count < 650, "One candidate per twelve square regions before terrain checks: " + count);
+                count > 1450 && count < 1800, "One candidate per four square regions before terrain checks: " + count);
         IntStream.range(-40, 40).parallel().forEach(x -> assertEquals(other.plan(x, -3), planner.plan(x, -3)));
     }
 
