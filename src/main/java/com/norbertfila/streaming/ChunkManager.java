@@ -54,6 +54,7 @@ public final class ChunkManager implements AutoCloseable {
     private final ChunkScheduler<ChunkData> generationScheduler;
     private final ChunkScheduler<ChunkMesh> meshingScheduler;
     private final Map<ChunkPos, ChunkEntry> entries = new HashMap<>();
+    private final Map<ChunkPos, Long> residentTokens = new HashMap<>();
     private final Map<ChunkPos, Long> meshTokens = new HashMap<>();
     // Mesh parts (ChunkMesh.SOLID, ChunkMesh.WATER) still to rebuild per chunk, and the parts of the task in flight.
     private final Map<ChunkPos, Integer> pendingRemesh = new HashMap<>();
@@ -70,6 +71,7 @@ public final class ChunkManager implements AutoCloseable {
     private final Set<ChunkPos> releasedCollisionChunks = new HashSet<>();
     private ChunkPos evictionCenter;
     private long residencyRevision;
+    private long evictionRevision;
     private Residency residency = Residency.EMPTY;
     // Sections with an uploaded mesh per chunk column, counted over the demanded height range; a column is drawn by
     // near terrain once every section of it is.
@@ -282,6 +284,7 @@ public final class ChunkManager implements AutoCloseable {
         for (ChunkPos position : candidates) {
             if (!entries.containsKey(position) || withinHysteresis(position, center)) continue;
             sectionUndrawn(entries.remove(position));
+            residentTokens.remove(position);
             meshTokens.remove(position);
             meshingParts.remove(position);
             pendingRemesh.remove(position);
@@ -289,6 +292,7 @@ public final class ChunkManager implements AutoCloseable {
             generationBacklog.remove(position);
             if (world.removeChunk(position) != null) {
                 residencyRevision++;
+                evictionRevision = residencyRevision;
                 chunkLifecycleListener.accept(position);
             }
             evicted.add(position);
@@ -350,6 +354,7 @@ public final class ChunkManager implements AutoCloseable {
             ChunkData data = outcome.result();
             Chunk chunk = data.toChunk();
             world.putChunk(outcome.position(), chunk);
+            residentTokens.put(outcome.position(), entry.generationToken());
             residencyRevision++;
             chunkLifecycleListener.accept(outcome.position());
             entry.generated(chunk.revision());
@@ -612,11 +617,7 @@ public final class ChunkManager implements AutoCloseable {
     public Residency residency() {
         world.assertOwner();
         if (residency.revision() != residencyRevision) {
-            Map<ChunkPos, Long> tokens = new HashMap<>();
-            entries.forEach((position, entry) -> {
-                if (world.hasChunk(position)) tokens.put(position, entry.generationToken());
-            });
-            residency = new Residency(residencyRevision, Map.copyOf(tokens));
+            residency = new Residency(residencyRevision, evictionRevision, residentTokens);
         }
         return residency;
     }
@@ -624,9 +625,10 @@ public final class ChunkManager implements AutoCloseable {
     /**
      * Immutable residency snapshot. The revision changes whenever a chunk is loaded or evicted, and a reload of the
      * same position gets a new token, so a consumer that saw an older snapshot can tell the incarnations apart.
+     * The last eviction revision lets consumers skip removal checks for additions-only snapshots, even after missed frames.
      */
-    public record Residency(long revision, Map<ChunkPos, Long> tokens) {
-        public static final Residency EMPTY = new Residency(0, Map.of());
+    public record Residency(long revision, long evictionRevision, Map<ChunkPos, Long> tokens) {
+        public static final Residency EMPTY = new Residency(0, 0, Map.of());
 
         public Residency {
             tokens = Map.copyOf(tokens);

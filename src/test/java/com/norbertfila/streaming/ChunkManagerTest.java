@@ -604,6 +604,7 @@ class ChunkManagerTest {
             manager.update(origin);
             manager.awaitGeneration(Duration.ofSeconds(5));
             var loaded = manager.residency();
+            assertEquals(0, loaded.evictionRevision());
             assertEquals(Set.of(origin), loaded.tokens().keySet());
             manager.update(origin);
             manager.processResults();
@@ -612,13 +613,20 @@ class ChunkManagerTest {
             manager.update(new ChunkPos(5, 0, 0));
             var away = manager.residency();
             assertTrue(away.revision() > loaded.revision());
+            assertTrue(away.evictionRevision() > loaded.evictionRevision());
             assertFalse(away.tokens().containsKey(origin));
             manager.awaitGeneration(Duration.ofSeconds(5));
+            assertEquals(
+                    away.evictionRevision(),
+                    manager.residency().evictionRevision(),
+                    "Loading new chunks must not invalidate removal checks");
+            assertTrue(loaded.tokens().containsKey(origin), "Published snapshots must remain immutable");
 
             manager.update(origin);
             manager.awaitGeneration(Duration.ofSeconds(5));
             var reloaded = manager.residency();
             assertTrue(reloaded.revision() > away.revision());
+            assertTrue(reloaded.evictionRevision() > away.evictionRevision());
             assertTrue(
                     !reloaded.tokens().get(origin).equals(loaded.tokens().get(origin)),
                     "a reload must carry a new token so stale removals cannot hit it");
