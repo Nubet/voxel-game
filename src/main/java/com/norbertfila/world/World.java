@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /** Mutable state confined to its creating thread; workers consume snapshots instead. */
 public final class World {
@@ -19,6 +20,12 @@ public final class World {
     private final ChunkStorage storage;
     private final WorldChangeOverlay changes;
     private final Set<ChunkPos> requestedChunks = new HashSet<>();
+    private Consumer<BlockMutation> blockChangeListener;
+
+    public void setBlockChangeListener(Consumer<BlockMutation> listener) {
+        assertOwner();
+        blockChangeListener = Objects.requireNonNull(listener);
+    }
     // Chunks whose cached meshing snapshot holds block arrays, least recently used first. Snapshots are a cache:
     // dropping one only costs a copy the next time a mesh task needs that chunk.
     private static final int DEFAULT_SNAPSHOT_LIMIT = 4096;
@@ -136,15 +143,18 @@ public final class World {
         if (!WorldBounds.containsY(worldPosition.y()))
             throw new IllegalArgumentException("Block Y is outside world bounds");
         OptionalInt previous = getBlock(worldPosition);
+        OptionalInt previousWater = getWaterState(worldPosition);
         if (previous.isPresent()
                 && previous.getAsInt() == BlockId.toUnsignedInt(value)
-                && getWaterState(worldPosition).orElseThrow() == waterState) return previous;
+                && previousWater.orElseThrow() == waterState) return previous;
         Chunk chunk = storage.get(Coordinates.worldToChunk(worldPosition));
         if (chunk != null) {
             BlockPos local = Coordinates.worldToLocal(worldPosition);
             chunk.set(local.x(), local.y(), local.z(), value, waterState);
         }
         changes.set(worldPosition, value, waterState, farTileSize);
+        if (blockChangeListener != null)
+            blockChangeListener.accept(new BlockMutation(worldPosition, previous, previousWater, value, waterState));
         return previous;
     }
 
