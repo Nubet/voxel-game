@@ -27,6 +27,7 @@ import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.PlayerRenderStateExtractor;
 import com.norbertfila.simulation.FixedSimulation;
+import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.streaming.WorkerCounts;
@@ -184,6 +185,8 @@ public final class WorldRuntime implements AutoCloseable {
             FluidSimulator water =
                     new FluidSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
             long[] tick = {saved.fluids().tick()}, sequence = {saved.sequence()};
+            WorldTime[] time = {saved.time()}, previousTime = {saved.time()};
+            FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
@@ -229,6 +232,27 @@ public final class WorldRuntime implements AutoCloseable {
                 @Override
                 public long seed() {
                     return identity.seed();
+                }
+
+                @Override
+                public WorldTime worldTime() {
+                    return time[0];
+                }
+
+                @Override
+                public void setTime(int minecraftTime) {
+                    time[0] = time[0].withMinecraftTime(minecraftTime);
+                    previousTime[0] = time[0];
+                }
+
+                @Override
+                public double tickRate() {
+                    return clock.tickRate();
+                }
+
+                @Override
+                public void setTickRate(double rate) {
+                    clock.setTickRate(rate);
                 }
 
                 @Override
@@ -280,7 +304,6 @@ public final class WorldRuntime implements AutoCloseable {
                     chunks.requestRemesh(plantEdits.validatePlants(position));
                     water.onChunkChanged(position, tick[0]);
                 });
-                FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};
                 long previous = System.nanoTime();
@@ -296,6 +319,8 @@ public final class WorldRuntime implements AutoCloseable {
                             int processed = 0, changed = 0, dirty = 0;
                             boolean movementWaiting = false;
                             Controls state = controls.get();
+                            previousTime[0] = time[0];
+                            if (activated && !state.paused()) time[0] = time[0].tick();
                             if (activated && !state.paused()) tick[0] = Math.incrementExact(tick[0]);
                             if (activated && !state.paused()) placementCooldown.tick();
                             Acknowledgement ack;
@@ -569,7 +594,8 @@ public final class WorldRuntime implements AutoCloseable {
                                         inventory,
                                         player,
                                         state,
-                                        items));
+                                        items,
+                                        time[0]));
                                 captureNanos = System.nanoTime() - captureStarted;
                             }
                             saves.poll();
@@ -668,7 +694,10 @@ public final class WorldRuntime implements AutoCloseable {
                                     itemSnapshot,
                                     biome,
                                     playerRenderState,
-                                    cameraEnvironment));
+                                    cameraEnvironment,
+                                    previousTime[0],
+                                    time[0],
+                                    clock.tickRate()));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -687,7 +716,8 @@ public final class WorldRuntime implements AutoCloseable {
                                 inventory,
                                 player,
                                 controls.get(),
-                                items);
+                                items,
+                                time[0]);
                 }
             }
         } catch (Throwable problem) {
@@ -716,7 +746,8 @@ public final class WorldRuntime implements AutoCloseable {
             Inventory inventory,
             PlayerController player,
             Controls controls,
-            ItemSystem items) {
+            ItemSystem items,
+            WorldTime time) {
         var position = player.state().position();
         return WorldSnapshots.capture(
                 identity,
@@ -732,7 +763,8 @@ public final class WorldRuntime implements AutoCloseable {
                         (float) controls.pitch(),
                         player.mode(),
                         player.flying()),
-                items.snapshot());
+                items.snapshot(),
+                time);
     }
 
     public long sessionId() {
@@ -1123,7 +1155,10 @@ public final class WorldRuntime implements AutoCloseable {
             List<ItemRenderState> items,
             BiomeType biome,
             PlayerRenderState playerRenderState,
-            CameraEnvironment cameraEnvironment) {
+            CameraEnvironment cameraEnvironment,
+            WorldTime previousTime,
+            WorldTime worldTime,
+            double tickRate) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1136,6 +1171,8 @@ public final class WorldRuntime implements AutoCloseable {
             items = List.copyOf(items);
             Objects.requireNonNull(playerRenderState);
             Objects.requireNonNull(cameraEnvironment);
+            Objects.requireNonNull(previousTime);
+            Objects.requireNonNull(worldTime);
         }
 
         public Map<ChunkPos, Long> residents() {
@@ -1155,7 +1192,7 @@ public final class WorldRuntime implements AutoCloseable {
         }
 
         public double interpolationAlpha(long now) {
-            return Math.clamp((now - publishedAt) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
+            return Math.clamp((now - publishedAt) * 1e-9 * tickRate, 0, 1);
         }
     }
 }

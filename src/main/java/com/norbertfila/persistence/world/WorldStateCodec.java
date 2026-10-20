@@ -6,6 +6,7 @@ import com.norbertfila.items.ItemState;
 import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.player.PlayerController.Mode;
+import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -25,7 +26,8 @@ import java.util.zip.CheckedOutputStream;
 
 public final class WorldStateCodec {
     private static final int MAGIC = 0x56585731;
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
+    private static final int TIME_BYTES = Integer.BYTES + 1;
     private static final int ITEM_BYTES = 73;
     private static final long MAX_FILE_BYTES = 64L * 1024 * 1024;
     private static final int FIXED_HEADER_BYTES = 65;
@@ -58,7 +60,7 @@ public final class WorldStateCodec {
                 new Header(snapshot.identity(), snapshot.sequence(), snapshot.lastSavedAt(), payloadBytes(snapshot));
         AtomicFile.replace(target, channel -> {
             var output = new DataOutputStream(new BufferedOutputStream(Channels.newOutputStream(channel)));
-            byte[] headerBytes = encodeHeader(header);
+            byte[] headerBytes = encodeHeader(header, FORMAT_VERSION);
             output.write(headerBytes);
             output.writeInt(checksum(headerBytes));
             var checksum = new CRC32C();
@@ -74,7 +76,7 @@ public final class WorldStateCodec {
         try (var channel = FileChannel.open(source)) {
             var input = new DataInputStream(
                     new BufferedInputStream(Channels.newInputStream(channel), FIXED_HEADER_BYTES + 64));
-            return readHeader(input, channel.size());
+            return readFileHeader(input, channel.size()).header();
         } catch (IllegalArgumentException | ArithmeticException malformed) {
             throw new IOException("Invalid world state header", malformed);
         }
@@ -84,12 +86,14 @@ public final class WorldStateCodec {
         Objects.requireNonNull(expected);
         try (var channel = FileChannel.open(source)) {
             var input = new DataInputStream(new BufferedInputStream(Channels.newInputStream(channel)));
-            Header header = readHeader(input, channel.size());
+            var fileHeader = readFileHeader(input, channel.size());
+            Header header = fileHeader.header();
             header.requireIdentity(expected);
             var checksum = new CRC32C();
             var payload = new DataInputStream(new CheckedInputStream(input, checksum));
-            WorldSnapshot snapshot = readPayload(payload, header);
-            if (payloadBytes(snapshot) != header.payloadBytes() || input.readInt() != (int) checksum.getValue())
+            WorldSnapshot snapshot = readPayload(payload, header, fileHeader.version());
+            long expectedBytes = payloadBytes(snapshot) - (fileHeader.version() == 3 ? TIME_BYTES : 0);
+            if (expectedBytes != header.payloadBytes() || input.readInt() != (int) checksum.getValue())
                 throw new IOException("World state payload length/checksum mismatch");
             if (input.read() != -1) throw new IOException("Trailing world state bytes");
             return snapshot;
@@ -98,11 +102,11 @@ public final class WorldStateCodec {
         }
     }
 
-    private static byte[] encodeHeader(Header header) throws IOException {
+    private static byte[] encodeHeader(Header header, int version) throws IOException {
         var bytes = new ByteArrayOutputStream(128);
         var output = new DataOutputStream(bytes);
         output.writeInt(MAGIC);
-        output.writeInt(FORMAT_VERSION);
+        output.writeInt(version);
         var identity = header.identity();
         output.writeLong(identity.id().getMostSignificantBits());
         output.writeLong(identity.id().getLeastSignificantBits());
@@ -117,10 +121,13 @@ public final class WorldStateCodec {
         return bytes.toByteArray();
     }
 
-    private static Header readHeader(DataInputStream input, long fileBytes) throws IOException {
+    private record FileHeader(Header header, int version) {}
+
+    private static FileHeader readFileHeader(DataInputStream input, long fileBytes) throws IOException {
         if (fileBytes > MAX_FILE_BYTES) throw new IOException("World state exceeds size limit");
         if (input.readInt() != MAGIC) throw new IOException("Invalid world state magic");
-        if (input.readInt() != FORMAT_VERSION)
+        int version = input.readInt();
+        if (version != 3 && version != FORMAT_VERSION)
             throw new UnsupportedWorldFormatException("Unsupported world state format");
         UUID id = new UUID(input.readLong(), input.readLong());
         long seed = input.readLong();
@@ -130,11 +137,13 @@ public final class WorldStateCodec {
         input.readFully(generator);
         var identity = new WorldIdentity(id, seed, new String(generator, StandardCharsets.US_ASCII), input.readInt());
         var header = new Header(identity, input.readLong(), Instant.ofEpochMilli(input.readLong()), input.readLong());
-        if (input.readInt() != checksum(encodeHeader(header)))
+        if (input.readInt() != checksum(encodeHeader(header, version)))
             throw new IOException("World state header checksum mismatch");
         if (fileBytes != fileBytes(identity, header.payloadBytes()))
             throw new IOException("World state length mismatch");
-        return header;
+        if (version == FORMAT_VERSION && header.payloadBytes() < MIN_PAYLOAD_BYTES + TIME_BYTES)
+            throw new IOException("World state payload is too short");
+        return new FileHeader(header, version);
     }
 
     private static long fileBytes(WorldIdentity identity, long payloadBytes) {
@@ -149,6 +158,7 @@ public final class WorldStateCodec {
 
     private static long payloadBytes(WorldSnapshot snapshot) {
         long bytes = MIN_PAYLOAD_BYTES
+                + TIME_BYTES
                 + (snapshot.player().isPresent() ? PLAYER_BYTES : 0)
                 + (long) ITEM_BYTES * snapshot.items().entities().size();
         for (var delta : snapshot.deltas()) bytes += 16L + 4L * delta.size();
@@ -209,9 +219,11 @@ public final class WorldStateCodec {
             output.writeInt(item.ageTicks());
             output.writeBoolean(item.onGround());
         }
+        output.writeInt(snapshot.time().tickOfDay());
+        output.writeBoolean(snapshot.time().cycleEnabled());
     }
 
-    private static WorldSnapshot readPayload(DataInputStream input, Header header) throws IOException {
+    private static WorldSnapshot readPayload(DataInputStream input, Header header, int version) throws IOException {
         int deltaCount = count(input, (int) (header.payloadBytes() / 30));
         var deltas = new ArrayList<ChunkDelta>();
         for (int d = 0; d < deltaCount; d++) {
@@ -272,8 +284,17 @@ public final class WorldStateCodec {
                     input.readInt(),
                     readBoolean(input)));
         var items = new ItemState(nextId, entities);
+        var time = version == 3 ? WorldTime.INITIAL : new WorldTime(input.readInt(), readBoolean(input));
         return new WorldSnapshot(
-                header.identity(), header.sequence(), header.lastSavedAt(), deltas, fluids, inventory, player, items);
+                header.identity(),
+                header.sequence(),
+                header.lastSavedAt(),
+                deltas,
+                fluids,
+                inventory,
+                player,
+                items,
+                time);
     }
 
     private static int count(DataInputStream input, int maximum) throws IOException {

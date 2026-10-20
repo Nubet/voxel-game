@@ -10,6 +10,7 @@ import com.norbertfila.items.ItemState;
 import com.norbertfila.items.ItemSystem;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.TestWorlds;
+import com.norbertfila.persistence.world.WorldStateCodec;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
@@ -30,6 +31,59 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
+    @Test
+    void timeAndTickCommandsRunOnTheOwnerAndSaveTimeButResetTheSessionRate() throws Exception {
+        Path save = directory.resolve("time-commands.vxl");
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(com.norbertfila.simulation.WorldTime.INITIAL, paused.worldTime());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/time set midnight")));
+            var midnight = await(runtime, f -> f.worldTime().minecraftTime() == 18000);
+            assertEquals(paused.tick(), midnight.tick());
+            assertEquals(midnight.worldTime(), midnight.previousTime());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tick rate 120")));
+            var faster = await(runtime, f -> f.tickRate() == 120);
+            assertEquals(midnight.tick(), faster.tick());
+            assertEquals(midnight.worldTime(), faster.worldTime());
+            assertEquals(.5, faster.interpolationAlpha(faster.publishedAt() + 4_166_667), 1e-6);
+            runtime.controls(controls(true, false));
+            var running = await(runtime, f -> f.tick() >= faster.tick() + 12);
+            assertEquals(
+                    running.tick() - faster.tick(),
+                    running.worldTime().tickOfDay() - faster.worldTime().tickOfDay());
+            runtime.controls(controls(true, true));
+            var frozen = await(runtime, WorldRuntime.Frame::paused);
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tick rate 0")));
+            var reply = awaitReply(runtime, true);
+            assertTrue(reply.error());
+            assertEquals(120, runtime.frame().tickRate());
+            assertEquals(frozen.worldTime(), runtime.frame().worldTime());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/time set noon")));
+            await(runtime, f -> f.worldTime().minecraftTime() == 6000);
+        }
+        var saved = WorldStateCodec.read(save, WorldStateCodec.readHeader(save).identity());
+        assertEquals(18000, saved.time().tickOfDay());
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var restored = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(saved.time(), restored.worldTime());
+            assertEquals(60, restored.tickRate());
+            assertEquals(saved.fluids().tick(), restored.tick());
+        }
+    }
+
+    private static com.norbertfila.commands.GameCommands.Reply awaitReply(WorldRuntime runtime, boolean error)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            var reply = runtime.pollCommandReply();
+            if (reply != null && reply.error() == error) return reply;
+            Thread.sleep(2);
+        }
+        throw new AssertionError("Expected command reply");
+    }
+
     @Test
     void appearanceSettingsReachFrozenSnapshotsWithoutChangingOrPersistingGameplay() throws Exception {
         var settings = new GameSettings();

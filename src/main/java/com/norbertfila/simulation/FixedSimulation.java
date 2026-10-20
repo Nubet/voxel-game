@@ -6,7 +6,11 @@ import java.util.function.DoubleConsumer;
 public final class FixedSimulation {
     public static final int TICKS_PER_SECOND = 60;
     public static final double TICK_SECONDS = 1.0 / TICKS_PER_SECOND;
+    public static final double MIN_TICK_RATE = 1;
+    public static final double MAX_TICK_RATE = 10000;
     private final double fixedDeltaSeconds;
+    // Tick rate changes wall-clock scheduling, not the fixed physics step.
+    private double tickIntervalSeconds;
     private final int maxCatchUpTicks;
     private double accumulator;
     private long tickCount;
@@ -16,6 +20,7 @@ public final class FixedSimulation {
             throw new IllegalArgumentException("Invalid fixed simulation configuration");
         }
         this.fixedDeltaSeconds = fixedDeltaSeconds;
+        this.tickIntervalSeconds = fixedDeltaSeconds;
         this.maxCatchUpTicks = maxCatchUpTicks;
     }
 
@@ -24,11 +29,11 @@ public final class FixedSimulation {
         if (!Double.isFinite(frameDeltaSeconds) || frameDeltaSeconds < 0) {
             throw new IllegalArgumentException("Frame delta must be finite and non-negative");
         }
-        accumulator = Math.min(accumulator + frameDeltaSeconds, fixedDeltaSeconds * maxCatchUpTicks);
+        accumulator = Math.min(accumulator + frameDeltaSeconds, tickIntervalSeconds * maxCatchUpTicks);
         int ticks = 0;
-        while (accumulator >= fixedDeltaSeconds && ticks < maxCatchUpTicks) {
+        while (accumulator >= tickIntervalSeconds && ticks < maxCatchUpTicks) {
             tickCount = Math.incrementExact(tickCount);
-            accumulator -= fixedDeltaSeconds;
+            accumulator -= tickIntervalSeconds;
             ticks++;
             tick.accept(fixedDeltaSeconds);
         }
@@ -36,7 +41,19 @@ public final class FixedSimulation {
     }
 
     public double interpolationAlpha() {
-        return accumulator / fixedDeltaSeconds;
+        return accumulator / tickIntervalSeconds;
+    }
+
+    public double tickRate() {
+        return 1.0 / tickIntervalSeconds;
+    }
+
+    public void setTickRate(double rate) {
+        if (!Double.isFinite(rate) || rate < MIN_TICK_RATE || rate > MAX_TICK_RATE)
+            throw new IllegalArgumentException("Tick rate must be finite and in [1, 10000]");
+        double progress = Math.clamp(interpolationAlpha(), 0, 1);
+        tickIntervalSeconds = 1.0 / rate;
+        accumulator = progress * tickIntervalSeconds;
     }
 
     public long tickCount() {

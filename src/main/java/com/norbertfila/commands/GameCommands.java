@@ -15,6 +15,8 @@ import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
+import com.norbertfila.simulation.FixedSimulation;
+import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 import java.util.ArrayList;
@@ -35,6 +37,39 @@ public final class GameCommands {
     private final CommandDispatcher<Execution> dispatcher = new CommandDispatcher<>();
 
     public GameCommands() {
+        var timeSet = LiteralArgumentBuilder.<Execution>literal("set");
+        String[] times = {"day", "noon", "night", "midnight"};
+        int[] values = {1000, 6000, 13000, 18000};
+        for (int i = 0; i < times.length; i++) {
+            int value = values[i];
+            timeSet.then(
+                    LiteralArgumentBuilder.<Execution>literal(times[i]).executes(context -> setTime(context, value)));
+        }
+        timeSet.then(RequiredArgumentBuilder.<Execution, Integer>argument("time", integer(0))
+                .executes(context -> setTime(context, getInteger(context, "time"))));
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("time")
+                .then(timeSet)
+                .then(LiteralArgumentBuilder.<Execution>literal("query")
+                        .then(LiteralArgumentBuilder.<Execution>literal("daytime")
+                                .executes(context -> {
+                                    int value = context.getSource()
+                                            .source()
+                                            .worldTime()
+                                            .minecraftTime();
+                                    context.getSource().output().add("Daytime: " + value);
+                                    return value;
+                                }))));
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("tick")
+                .then(LiteralArgumentBuilder.<Execution>literal("rate")
+                        .executes(GameCommands::tickRate)
+                        .then(RequiredArgumentBuilder.<Execution, Double>argument(
+                                        "rate", doubleArg(FixedSimulation.MIN_TICK_RATE, FixedSimulation.MAX_TICK_RATE))
+                                .executes(context -> {
+                                    double rate = getDouble(context, "rate");
+                                    if (!Double.isFinite(rate)) throw error("Tick rate must be finite.");
+                                    context.getSource().source().setTickRate(rate);
+                                    return tickRate(context);
+                                }))));
         dispatcher.register(LiteralArgumentBuilder.<Execution>literal("seed").executes(context -> {
             context.getSource()
                     .output()
@@ -99,6 +134,20 @@ public final class GameCommands {
         } catch (CommandSyntaxException invalid) {
             return new Reply(invalid.getMessage(), true);
         }
+    }
+
+    private static int setTime(CommandContext<Execution> context, int value) {
+        int time = value % WorldTime.MINECRAFT_TICKS_PER_DAY;
+        context.getSource().source().setTime(time);
+        context.getSource().output().add("Time set to " + time);
+        return time;
+    }
+
+    private static int tickRate(CommandContext<Execution> context) {
+        context.getSource()
+                .output()
+                .add("Tick rate: " + context.getSource().source().tickRate() + " TPS");
+        return 1;
     }
 
     public List<Completion> suggest(String input, int caret) {

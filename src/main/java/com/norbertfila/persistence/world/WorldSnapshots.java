@@ -3,6 +3,7 @@ package com.norbertfila.persistence.world;
 import com.norbertfila.fluid.FluidSnapshot;
 import com.norbertfila.items.ItemState;
 import com.norbertfila.player.InventorySnapshot;
+import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.world.*;
 import java.time.Instant;
 import java.util.*;
@@ -28,9 +29,21 @@ public final class WorldSnapshots {
             InventorySnapshot inventory,
             SavedPlayerState player,
             ItemState items) {
+        return capture(identity, sequence, world, fluids, inventory, player, items, WorldTime.INITIAL);
+    }
+
+    public static WorldSnapshot capture(
+            WorldIdentity identity,
+            long sequence,
+            World world,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory,
+            SavedPlayerState player,
+            ItemState items,
+            WorldTime time) {
         var deltas = world.changes().deltas();
         return new WorldSnapshot(
-                identity, sequence, Instant.now(), deltas, fluids, inventory, Optional.of(player), items);
+                identity, sequence, Instant.now(), deltas, fluids, inventory, Optional.of(player), items, time);
     }
 
     public static void restore(World world, WorldSnapshot snapshot, int farTileSize) {

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
+import com.norbertfila.simulation.FixedSimulation;
+import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.world.BlockId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -33,6 +35,28 @@ class GameCommandsTest {
         boolean allowMode = true;
         boolean allowRift;
         long seed;
+        WorldTime time = WorldTime.INITIAL;
+        final FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
+
+        @Override
+        public WorldTime worldTime() {
+            return time;
+        }
+
+        @Override
+        public void setTime(int minecraftTime) {
+            time = time.withMinecraftTime(minecraftTime);
+        }
+
+        @Override
+        public double tickRate() {
+            return clock.tickRate();
+        }
+
+        @Override
+        public void setTickRate(double rate) {
+            clock.setTickRate(rate);
+        }
 
         @Override
         public long seed() {
@@ -127,5 +151,48 @@ class GameCommandsTest {
         assertFalse(reply.error());
         assertEquals("Locating rift...", reply.text());
         assertTrue(commands.execute("/locate rift extra", source).error());
+    }
+
+    @Test
+    void setsNamedAndNumericTimesWithoutChangingTickRateOrTheCycleRule() {
+        source.time = source.time.withCycleEnabled(false);
+        String[] names = {"day", "noon", "night", "midnight", "0", "23999", "24000", "2147483647"};
+        int[] expected = {1000, 6000, 13000, 18000, 0, 23999, 0, Integer.MAX_VALUE % 24000};
+        for (int i = 0; i < names.length; i++) {
+            assertFalse(commands.execute("/time set " + names[i], source).error());
+            assertEquals(expected[i], source.time.minecraftTime());
+            assertEquals(
+                    "Daytime: " + expected[i],
+                    commands.execute("/time query daytime", source).text());
+            assertFalse(source.time.cycleEnabled());
+            assertEquals(60, source.tickRate());
+        }
+        assertEquals(
+                "midnight", commands.suggest("/time set mid", 13).getFirst().text());
+        assertTrue(commands.execute("/help", source).text().contains("time set"));
+    }
+
+    @Test
+    void setsAndQueriesFractionalTickRatesAndRejectsInvalidCommandsWithoutSideEffects() {
+        assertEquals(
+                "Tick rate: 60.0 TPS", commands.execute("/tick rate", source).text());
+        for (String rate : new String[] {"1", "20", "60", "120.5", "10000"}) {
+            assertFalse(commands.execute("/tick rate " + rate, source).error());
+            assertEquals(Double.parseDouble(rate), source.tickRate(), 1e-9);
+            assertEquals(WorldTime.INITIAL, source.time);
+        }
+        assertFalse(commands.execute("/tick rate 30", source).error());
+        assertFalse(commands.execute("/time set noon", source).error());
+        for (String command : new String[] {
+            "/time set", "/time set -1", "/time set 1.5", "/time set 2147483648", "/time set noon extra",
+            "/time query missing", "/tick rate 0", "/tick rate -1", "/tick rate 10001", "/tick rate NaN",
+            "/tick rate Infinity", "/tick rate 120 extra", "/tick rate nope"
+        }) {
+            assertTrue(commands.execute(command, source).error(), command);
+            assertEquals(30, source.tickRate(), command);
+            assertEquals(6000, source.time.minecraftTime(), command);
+        }
+        assertEquals("rate", commands.suggest("/tick r", 7).getFirst().text());
+        assertTrue(commands.usage("/tick").contains("rate"));
     }
 }

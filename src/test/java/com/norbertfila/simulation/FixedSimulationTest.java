@@ -69,4 +69,35 @@ class FixedSimulationTest {
         assertEquals(0, simulation.advance(0, ignored -> fail()));
         simulation.advance(.25, ignored -> assertEquals(2, simulation.tickCount()));
     }
+
+    @Test
+    void tickRateChangesSchedulingButNotThePhysicsStep() {
+        for (double rate : new double[] {1, 20, 60, 120.5, 10000}) {
+            var simulation = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
+            simulation.setTickRate(rate);
+            int ticks = 0;
+            for (int frame = 0; frame < 100; frame++)
+                ticks += simulation.advance(1.0 / rate, dt -> assertEquals(FixedSimulation.TICK_SECONDS, dt));
+            assertEquals(100, ticks);
+            assertEquals(rate, simulation.tickRate(), 1e-9);
+            assertEquals(5, simulation.advance(10, ignored -> {}));
+        }
+    }
+
+    @Test
+    void changingRatePreservesFractionalProgressAndRejectsInvalidRates() {
+        var simulation = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
+        simulation.advance(FixedSimulation.TICK_SECONDS * .5, ignored -> fail());
+        simulation.setTickRate(1);
+        assertEquals(.5, simulation.interpolationAlpha());
+        assertEquals(0, simulation.advance(.49, ignored -> fail()));
+        assertEquals(1, simulation.advance(.02, ignored -> {}));
+        for (double rate :
+                new double[] {Double.NaN, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, .99, 10001}) {
+            double progress = simulation.interpolationAlpha();
+            assertThrows(IllegalArgumentException.class, () -> simulation.setTickRate(rate));
+            assertEquals(1, simulation.tickRate());
+            assertEquals(progress, simulation.interpolationAlpha());
+        }
+    }
 }

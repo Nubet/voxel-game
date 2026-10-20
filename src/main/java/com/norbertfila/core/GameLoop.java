@@ -575,7 +575,8 @@ public final class GameLoop {
             if (gpuTimer != null) gpuTimer.stamp();
             double effectSeconds = state == null
                     ? 0
-                    : animationSeconds(state.tick(), state.publishedAt(), state.paused(), interpolationTime);
+                    : animationSeconds(
+                            state.tick(), state.publishedAt(), state.paused(), interpolationTime, state.tickRate());
             // Cloud drift follows real time so simulation pauses and stalls cannot freeze it
             clouds.render(
                     viewProjection, camera.x(), camera.y(), camera.z(), now, visibility.amount(), settings.clouds());
@@ -605,10 +606,7 @@ public final class GameLoop {
                                 progress.block().equals(selected.block()) && progress.blockId() == selected.blockId());
             }
             if (state != null) {
-                double itemAlpha = state.paused()
-                        ? 0
-                        : Math.clamp(
-                                (interpolationTime - state.publishedAt()) / (1e9 * FixedSimulation.TICK_SECONDS), 0, 1);
+                double itemAlpha = state.paused() ? 0 : state.interpolationAlpha(interpolationTime);
                 items.render(viewProjection, state.items(), itemAlpha, camera.x(), camera.y(), camera.z());
                 effects.render(
                         viewProjection,
@@ -716,9 +714,9 @@ public final class GameLoop {
         return Math.max(800f, (farDistanceChunks + 4) * Chunk.SIZE * 1.5f);
     }
 
-    static double animationSeconds(long tick, long publishedAt, boolean paused, long now) {
+    static double animationSeconds(long tick, long publishedAt, boolean paused, long now, double tickRate) {
         return tick * FixedSimulation.TICK_SECONDS
-                + (paused ? 0 : Math.clamp((now - publishedAt) * 1e-9, 0, FixedSimulation.TICK_SECONDS));
+                + (paused ? 0 : Math.clamp((now - publishedAt) * 1e-9 * tickRate, 0, 1) * FixedSimulation.TICK_SECONDS);
     }
 
     public Screen.Action runMenu(Window window, Input input, UiRenderer renderer, GameSettings settings, Screen menu) {
