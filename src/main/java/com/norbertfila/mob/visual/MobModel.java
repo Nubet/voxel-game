@@ -6,10 +6,7 @@ import com.norbertfila.player.visual.model.UvOrigin;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Static cuboid model in pixels: feet at Y = 0, forward is -Z. Each part's cuboid is relative to its pivot, so a
- * future animation only has to rotate pivots.
- */
+/** Cuboid model in pixels with feet at Y = 0 and forward along -Z; each cuboid is relative to its part's pivot. */
 public record MobModel(String texture, int textureWidth, int textureHeight, List<Part> parts) {
     public record Part(PartTransform pivot, ModelCuboid cuboid, UvOrigin uv) {
         public Part {

@@ -2,7 +2,7 @@ package com.norbertfila.mob;
 
 import java.util.List;
 
-/** Feet position of a player that mobs spawn and despawn around. */
+/** Feet position of a player. */
 public record PlayerPosition(double x, double y, double z) {
     public PlayerPosition {
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))

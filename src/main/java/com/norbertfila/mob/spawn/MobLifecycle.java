@@ -17,7 +17,9 @@ import com.norbertfila.weather.WeatherSample;
 import com.norbertfila.world.BlockMutation;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
+import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
+import com.norbertfila.world.WorldBounds;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -53,7 +55,6 @@ public final class MobLifecycle {
         sky.onChunkChanged(chunk);
     }
 
-    /** Advances one world tick; spawning and despawning run every {@code cycleTicks}. */
     public void tick(
             long tick,
             double dt,
@@ -71,11 +72,13 @@ public final class MobLifecycle {
         if (naturalSpawning) spawner.spawn(environment, population, players, random);
     }
 
+    /** Places a mob regardless of spawn rules; empty when the position is outside the world or not loaded. */
     public Optional<Mob> summon(MobType type, double x, double y, double z) {
         world.assertOwner();
         var feet = new BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
-        var skyLight = light.skyLight(feet);
-        var zone = skyLight.isPresent() && skyLight.getAsInt() == 0 ? SpawnZone.CAVE : SpawnZone.SURFACE;
+        if (!WorldBounds.containsY(feet.y()) || !world.hasChunk(Coordinates.worldToChunk(feet)))
+            return Optional.empty();
+        var zone = SpawnZone.fromSkyLight(light.skyLight(feet).orElse(LightLevels.MAX_LEVEL));
         return population.spawn(type, zone, x, y, z, random.nextFloat() * 360);
     }
 

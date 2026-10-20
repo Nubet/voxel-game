@@ -13,7 +13,6 @@ final class EnvironmentTexture {
         return loadResource("/assets/textures/environment/" + name + ".png");
     }
 
-    /** Loads a classpath PNG as a nearest-filtered RGBA texture. */
     static int loadResource(String resource) {
         try (var stream = EnvironmentTexture.class.getResourceAsStream(resource)) {
             if (stream == null) throw new IOException("Missing " + resource);

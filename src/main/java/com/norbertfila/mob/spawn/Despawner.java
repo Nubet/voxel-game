@@ -6,10 +6,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 
-/**
- * Minecraft's despawn rules for naturally spawned mobs: gone at once beyond the despawn distance, never close to a
- * player, and in between only by chance after staying away from players for a while.
- */
 public final class Despawner {
     private final SpawnSettings settings;
 
@@ -17,7 +13,7 @@ public final class Despawner {
         this.settings = Objects.requireNonNull(settings);
     }
 
-    /** Runs once per spawn cycle and returns how many mobs were removed. */
+    /** Call once per spawn cycle because the random despawn chance is defined per cycle. */
     public int despawn(MobPopulation population, List<PlayerPosition> players, RandomGenerator random) {
         if (players.isEmpty()) return 0;
         int removed = 0;

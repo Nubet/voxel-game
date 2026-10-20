@@ -6,6 +6,7 @@ import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldBounds;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.OptionalInt;
 
@@ -86,10 +87,7 @@ public final class LightProbe implements LightLevels {
         return strongest;
     }
 
-    /**
-     * Breadth-first search from the position. Block light keeps the best {@code level - steps} over marked emitters;
-     * sky light stops at the first open-sky cell, which is the nearest one.
-     */
+    /** Breadth-first order lets sky light stop at the first open-sky cell, because that one is the nearest. */
     private OptionalInt search(BlockPos center, boolean blockLight, int strongest) {
         if (!blockLight) nextStamp();
         reader.reset();
@@ -137,8 +135,8 @@ public final class LightProbe implements LightLevels {
 
     private void nextStamp() {
         if (++stamp == 0) {
-            java.util.Arrays.fill(visited, 0);
-            java.util.Arrays.fill(emitterStamp, 0);
+            Arrays.fill(visited, 0);
+            Arrays.fill(emitterStamp, 0);
             stamp = 1;
         }
     }

@@ -330,13 +330,9 @@ public final class WorldRuntime implements AutoCloseable {
 
                 @Override
                 public boolean summon(MobType type, PlayerState.Position position) {
-                    var block = new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
-                            Math.floor(position.z()));
-                    return WorldBounds.containsY(block.y())
-                            && world.hasChunk(Coordinates.worldToChunk(block))
-                            && mobLifecycle
-                                    .summon(type, position.x(), position.y(), position.z())
-                                    .isPresent();
+                    return mobLifecycle
+                            .summon(type, position.x(), position.y(), position.z())
+                            .isPresent();
                 }
 
                 @Override

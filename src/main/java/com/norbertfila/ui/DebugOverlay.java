@@ -9,6 +9,7 @@ import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.Chunk;
 import java.util.List;
 import java.util.Locale;
+import java.util.OptionalInt;
 
 public final class DebugOverlay {
     private static final BitmapFont FONT = BitmapFont.DEFAULT;
@@ -203,7 +204,7 @@ public final class DebugOverlay {
         return census.naturalSpawning() ? text : text + " (off)";
     }
 
-    private static String level(java.util.OptionalInt level) {
+    private static String level(OptionalInt level) {
         return level.isPresent() ? Integer.toString(level.getAsInt()) : "?";
     }
 

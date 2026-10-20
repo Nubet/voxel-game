@@ -15,7 +15,6 @@ import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
-/** Draws mobs with the entity shader shared with the player, one static mesh and texture per mob type. */
 public final class MobRenderer implements AutoCloseable {
     private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight;
     private final Map<MobType, Integer> textures = new EnumMap<>(MobType.class);
@@ -125,10 +124,9 @@ public final class MobRenderer implements AutoCloseable {
                 float x = (float) (mob.interpolatedX(alpha) - cameraX);
                 float y = (float) (mob.interpolatedY(alpha) - cameraY);
                 float z = (float) (mob.interpolatedZ(alpha) - cameraZ);
-                double half = mob.type().width();
-                if (!frustum.testAab(
-                        (float) (x - half), y, (float) (z - half), (float) (x + half), y + 2.5f, (float) (z + half)))
-                    continue;
+                // A yawed model can reach past its collision box, so test a box as wide as the mob is tall.
+                float reach = (float) mob.type().height();
+                if (!frustum.testAab(x - reach, y, z - reach, x + reach, y + reach, z + reach)) continue;
                 glBindTexture(GL_TEXTURE_2D, textures.get(mob.type()));
                 base.translation(x, y, z)
                         .rotateY((float) Math.toRadians(-mob.yaw()))

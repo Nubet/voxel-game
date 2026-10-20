@@ -7,7 +7,6 @@ import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.WorldBounds;
 
-/** Building blocks for {@link SpawnRules}. */
 public final class SpawnConditions {
     private SpawnConditions() {}
 
@@ -59,14 +58,9 @@ public final class SpawnConditions {
                 attempt.zone().filter(attempt.entry().zones()::contains).isPresent();
     }
 
-    /** The zone's cap, scaled by the active columns, still has room. */
     public static SpawnCondition zoneHasRoom() {
-        return attempt -> attempt.populationKey()
-                .filter(key -> {
-                    var context = attempt.context();
-                    return context.population().count(key) < context.settings().scaledCap(key, context.activeColumns());
-                })
-                .isPresent();
+        return attempt ->
+                attempt.populationKey().filter(attempt.context()::hasRoom).isPresent();
     }
 
     public static SpawnCondition nightOnSurface() {
