@@ -222,11 +222,7 @@ public final class ChunkManager implements AutoCloseable {
         if (moved) backlogUnsorted = true;
         boolean changed = moved || collisionDemandChanged;
         collisionDemandChanged = false;
-        int scheduled = 0;
-        for (ChunkPos position : collisionChunks) {
-            if (scheduleGeneration(position, ChunkPriority.collision())) scheduled++;
-        }
-        scheduled += admitGeneration();
+        int scheduled = admitGeneration();
 
         List<ChunkPos> evicted = List.of();
         if (changed) {
@@ -246,7 +242,12 @@ public final class ChunkManager implements AutoCloseable {
     }
 
     private int admitGeneration() {
-        if (generationBacklog.isEmpty() || !generationScheduler.hasCapacity()) return 0;
+        int admitted = 0;
+        // Result intake also refills slots, so collision and teleport demand must precede visual work on every refill.
+        for (ChunkPos position : collisionChunks) {
+            if (scheduleGeneration(position, ChunkPriority.collision())) admitted++;
+        }
+        if (generationBacklog.isEmpty() || !generationScheduler.hasCapacity()) return admitted;
         if (backlogUnsorted || backlogCursor == backlogOrder.size()) {
             ChunkPos center = viewDemand.center();
             List<ChunkPos> order = new ArrayList<>(generationBacklog);
@@ -255,7 +256,6 @@ public final class ChunkManager implements AutoCloseable {
             backlogCursor = 0;
             backlogUnsorted = false;
         }
-        int admitted = 0;
         while (backlogCursor < backlogOrder.size()) {
             ChunkPos position = backlogOrder.get(backlogCursor);
             if (!generationBacklog.contains(position)) {

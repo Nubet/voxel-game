@@ -15,6 +15,9 @@ import com.norbertfila.generation.TerrainSource;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.WaterMesher;
+import com.norbertfila.player.PlayerController;
+import com.norbertfila.player.PlayerState;
+import com.norbertfila.player.TeleportController;
 import com.norbertfila.render.UploadQueue;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -38,6 +41,44 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ChunkManagerTest {
+    @Test
+    void teleportDestinationGetsFreedGenerationSlotsBeforeNear32VisualBacklog() throws Exception {
+        var world = new World();
+        var center = new ChunkPos(0, 24, 0);
+        var teleports = new TeleportController();
+        var destination = new PlayerState.Position(4096.5, 85, -2048.5);
+        assertTrue(teleports.request(destination, 0));
+        var required = teleports.requiredChunks();
+        assertEquals(1, required.size());
+        var demand = new ViewDemand(32, 0, 15, ViewDemand.Shape.SQUARE);
+        try (var manager = new ChunkManager(world, emptyGenerator(), demand)) {
+            manager.update(center);
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (manager.metrics().generationCompleted() < 128) {
+                assertTrue(System.nanoTime() < deadline, "Initial generation queue did not fill");
+                Thread.sleep(1);
+            }
+            assertEquals(128, manager.metrics().generationOutstanding());
+            assertFalse(manager.ensureCollisionChunks(required));
+            while (manager.metrics().generatedResults() < 129) {
+                assertTrue(System.nanoTime() < deadline, "Generation results did not arrive");
+                manager.ensureCollisionChunks(required);
+                manager.update(center);
+                manager.processResults(1, 0);
+                Thread.sleep(1);
+            }
+            assertTrue(
+                    required.stream().allMatch(manager::readyForPlayer), "Visual refills starved teleport generation");
+            var player = new PlayerController();
+            assertFalse(teleports
+                    .update(world, player, manager::readyForPlayer, 1)
+                    .orElseThrow()
+                    .error());
+            assertEquals(destination, player.state().position());
+            assertTrue(world.residentCount() < demand.size());
+        }
+    }
+
     @Test
     void resultIntakeRefillsGenerationWithoutAnotherDemandUpdate() throws Exception {
         World world = new World();
