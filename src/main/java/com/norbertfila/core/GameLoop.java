@@ -551,8 +551,17 @@ public final class GameLoop {
                     : state.previousWeather()
                             .mix(state.weather(), state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
             sky = SkyModel.weather(sky, weather);
+            float localAmount = state == null
+                    ? 1
+                    : Math.min(
+                            1,
+                            state.localWeather().rain() + state.localWeather().snow());
             var distanceFog = DistanceFog.forDistances(settings.renderDistance(), settings.farDistance())
-                    .weather(weather);
+                    .weather(new com.norbertfila.weather.WeatherSample(
+                            weather.clouds(),
+                            weather.precipitation() * localAmount,
+                            weather.storm() * localAmount,
+                            weather.flash()));
             glViewport(0, 0, width[0], height[0]);
             glClearColor(
                     sky.horizon().red(), sky.horizon().green(), sky.horizon().blue(), 1f);

@@ -32,6 +32,10 @@ import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.streaming.WorkerCounts;
 import com.norbertfila.vegetation.PlantGrowthSystem;
+import com.norbertfila.weather.BiomeWeather;
+import com.norbertfila.weather.LocalWeather;
+import com.norbertfila.weather.PrecipitationColumn;
+import com.norbertfila.weather.PrecipitationField;
 import com.norbertfila.weather.WeatherSample;
 import com.norbertfila.weather.WeatherSystem;
 import com.norbertfila.weather.WeatherType;
@@ -197,7 +201,12 @@ public final class WorldRuntime implements AutoCloseable {
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
             var growth = new PlantGrowthSystem(world, FAR_TILE_SIZE, identity.seed());
             growth.restore(saved.growth(), tick[0]);
-            world.setBlockChangeListener(growth::onBlockChanged);
+            var biomeWeather = new BiomeWeather(generator);
+            var precipitation = new PrecipitationField(world, biomeWeather);
+            world.setBlockChangeListener(mutation -> {
+                growth.onBlockChanged(mutation);
+                precipitation.onBlockChanged(mutation);
+            });
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
             var playerVisuals = new PlayerRenderStateExtractor();
@@ -324,6 +333,7 @@ public final class WorldRuntime implements AutoCloseable {
                     chunks.requestRemesh(plantEdits.validatePlants(position));
                     water.onChunkChanged(position, tick[0]);
                     growth.onChunkChanged(position);
+                    precipitation.onChunkChanged(position);
                 });
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};
@@ -663,6 +673,10 @@ public final class WorldRuntime implements AutoCloseable {
                             var breaks = List.copyOf(brokenBlocks);
                             var itemSnapshot = items.renderSnapshot(world);
                             var cameraEnvironment = cameraEnvironment(world, player.renderEyePosition(1));
+                            var weatherSample = weather.sample(tick[0]);
+                            var weatherEye = player.renderEyePosition(1);
+                            precipitation.update(weatherEye.x(), weatherEye.z(), weatherSample.precipitation() > 0);
+                            var localWeather = biomeWeather.sample(weatherEye.x(), weatherEye.z());
                             var biome = generator
                                     .sample(
                                             (int) Math.floor(
@@ -726,7 +740,9 @@ public final class WorldRuntime implements AutoCloseable {
                                     previousTime[0],
                                     time[0],
                                     previousWeather[0],
-                                    weather.sample(tick[0]),
+                                    weatherSample,
+                                    localWeather,
+                                    precipitation.snapshot(),
                                     clock.tickRate()));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -1196,6 +1212,8 @@ public final class WorldRuntime implements AutoCloseable {
             WorldTime worldTime,
             WeatherSample previousWeather,
             WeatherSample weather,
+            LocalWeather localWeather,
+            List<PrecipitationColumn> precipitation,
             double tickRate) {
         public Frame {
             Objects.requireNonNull(residency);
@@ -1213,6 +1231,8 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(worldTime);
             Objects.requireNonNull(previousWeather);
             Objects.requireNonNull(weather);
+            Objects.requireNonNull(localWeather);
+            precipitation = List.copyOf(precipitation);
         }
 
         public Map<ChunkPos, Long> residents() {
