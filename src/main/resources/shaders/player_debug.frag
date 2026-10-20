@@ -13,6 +13,7 @@ uniform vec3 uWaterColor;
 uniform float uUnderwater;
 uniform float uOpacity;
 uniform float uDaylight = 1.0;
+uniform float uBlockLight = 0.0;
 out vec4 fragColor;
 
 void main() {
@@ -20,7 +21,12 @@ void main() {
     if (uOuterLayer && fragColor.a < 0.5) discard;
     fragColor.a = uOpacity;
     if (uWorldShading) {
-        fragColor.rgb *= vShade * uDaylight;
+        // Same curve and tint as terrain.frag so entities match the ground they stand on.
+        float fraction = uBlockLight / 15.0;
+        float curve = fraction / (4.0 - 3.0 * fraction);
+        float inverse = 1.0 - curve;
+        vec3 torch = vec3(1.0, 0.86, 0.66) * mix(curve, 1.0 - inverse * inverse * inverse * inverse, 0.5);
+        fragColor.rgb *= vShade * max(vec3(uDaylight), torch);
         float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));
         fragColor.rgb = mix(fragColor.rgb, uSkyColor, haze * (1.0 - uUnderwater));
         float distanceInWater = max(length(vCameraOffset) - uWaterFogRange.x, 0.0);

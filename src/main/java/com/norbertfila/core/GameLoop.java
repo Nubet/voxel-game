@@ -9,6 +9,7 @@ import com.norbertfila.diagnostics.FrameMetrics;
 import com.norbertfila.diagnostics.FrameProfiler;
 import com.norbertfila.diagnostics.FrameProfiler.Segment;
 import com.norbertfila.interaction.BlockBreaking;
+import com.norbertfila.light.BlockLightState;
 import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
 import com.norbertfila.persistence.ScreenshotWriter;
@@ -592,11 +593,16 @@ public final class GameLoop {
                     camera.relativeViewProjection(width[0], height[0], .1f, farPlane(settings.farDistance()));
             skyRenderer.render(viewProjection, sky, visibility.amount());
             renderer.environment(sky);
+            var blockLight = state == null ? BlockLightState.NONE : state.blockLight();
+            renderer.blockLight(blockLight);
             clouds.environment(sky);
             items.environment(sky);
             mobs.environment(sky);
             effects.environment(sky);
             if (players != null) players.environment(sky);
+            if (players != null && state != null)
+                players.blockLight(blockLight.level(
+                        (int) Math.floor(camera.x()), (int) Math.floor(camera.y()), (int) Math.floor(camera.z())));
             renderer.distanceFog(distanceFog);
             if (state != null) {
                 renderer.far()
@@ -673,7 +679,8 @@ public final class GameLoop {
                         camera.y(),
                         camera.z(),
                         distanceFog,
-                        visibility.amount());
+                        visibility.amount(),
+                        blockLight);
                 if (hitboxesVisible) {
                     var boxes = Hitboxes.of(state.mobs(), state.items(), itemAlpha);
                     if (camera.perspective() != Camera.Perspective.FIRST)

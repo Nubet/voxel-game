@@ -3,6 +3,7 @@ package com.norbertfila.render;
 import static com.norbertfila.render.ShaderPrograms.uniform;
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.light.BlockLightVolume;
 import com.norbertfila.world.RenderLayer;
 import java.nio.FloatBuffer;
 import org.joml.Matrix4f;
@@ -23,6 +24,7 @@ final class TerrainProgram implements AutoCloseable {
     private float light = 1;
     private final int coverageOrigin;
     private final int coverageSize;
+    private final int placedLightOrigin, placedLightSize, heldLightOrigin, heldLightSize;
 
     TerrainProgram(String vertexShader) {
         int linked = ShaderPrograms.create(vertexShader, "/shaders/terrain.frag");
@@ -39,10 +41,18 @@ final class TerrainProgram implements AutoCloseable {
             daylight = uniform(linked, "uDaylight");
             coverageOrigin = uniform(linked, "uCoverageOrigin");
             coverageSize = uniform(linked, "uCoverageSize");
+            placedLightOrigin = uniform(linked, "uPlacedLightOrigin");
+            placedLightSize = uniform(linked, "uPlacedLightSize");
+            heldLightOrigin = uniform(linked, "uHeldLightOrigin");
+            heldLightSize = uniform(linked, "uHeldLightSize");
             int sampler = uniform(linked, "uBlockTextures");
             int fogRange = uniform(linked, "uWaterFogRange");
             glUseProgram(linked);
             glUniform1i(sampler, 0);
+            // Every program sets these, even far terrain that never samples them, because two sampler types left on
+            // the same default unit make draws fail.
+            glUniform1i(uniform(linked, "uPlacedLight"), BlockLightTextures.PLACED_UNIT);
+            glUniform1i(uniform(linked, "uHeldLight"), BlockLightTextures.HELD_UNIT);
             glUniform2f(fogRange, UnderwaterVisibility.CLEAR_DISTANCE, UnderwaterVisibility.FOG_DENSITY);
             glUniform3f(
                     distanceFogColor,
@@ -75,6 +85,18 @@ final class TerrainProgram implements AutoCloseable {
                 UnderwaterVisibility.FOG_BLUE * light,
                 underwater);
         glUniform1i(coverageSize, 0);
+    }
+
+    void blockLight(BlockLightTextures textures, double cameraX, double cameraY, double cameraZ) {
+        volume(placedLightOrigin, placedLightSize, textures.placed(), cameraX, cameraY, cameraZ);
+        volume(heldLightOrigin, heldLightSize, textures.held(), cameraX, cameraY, cameraZ);
+    }
+
+    private static void volume(
+            int origin, int size, BlockLightVolume volume, double cameraX, double cameraY, double cameraZ) {
+        glUniform3f(origin, (float) (volume.originX() - cameraX), (float) (volume.originY() - cameraY), (float)
+                (volume.originZ() - cameraZ));
+        glUniform3i(size, volume.sizeX(), volume.sizeY(), volume.sizeZ());
     }
 
     void renderLayer(RenderLayer layer) {

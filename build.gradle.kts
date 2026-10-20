@@ -93,6 +93,15 @@ tasks.register<JavaExec>("benchmarkMobSpawning") {
     mainClass.set("com.norbertfila.mob.spawn.MobSpawnBenchmark")
 }
 
+tasks.register<JavaExec>("smokeBlockLight") {
+    group = "verification"
+    description = "Checks torch light on terrain at night, wall occlusion and OpenGL errors."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.BlockLightSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeScreenshots") {
     group = "verification"
     description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."

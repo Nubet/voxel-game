@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.light.BlockLightState;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.visual.MobModel;
@@ -16,7 +17,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class MobRenderer implements AutoCloseable {
-    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight;
+    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight;
     private final Map<MobType, Integer> textures = new EnumMap<>(MobType.class);
     private final Map<MobType, Integer> firstVertex = new EnumMap<>(MobType.class);
     private boolean closed;
@@ -31,6 +32,7 @@ public final class MobRenderer implements AutoCloseable {
             underwater = ShaderPrograms.uniform(createdProgram, "uUnderwater");
             skyColor = ShaderPrograms.uniform(createdProgram, "uSkyColor");
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
+            blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uOuterLayer"), 0);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uWorldShading"), 1);
             glProgramUniform1f(createdProgram, ShaderPrograms.uniform(createdProgram, "uOpacity"), 1);
@@ -91,8 +93,10 @@ public final class MobRenderer implements AutoCloseable {
             double cameraY,
             double cameraZ,
             DistanceFog fog,
-            float water) {
+            float water,
+            BlockLightState light) {
         if (closed) throw new IllegalStateException("Mob renderer is closed");
+        Objects.requireNonNull(light);
         Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(fog);
         if (mobs.isEmpty()) return;
@@ -128,6 +132,13 @@ public final class MobRenderer implements AutoCloseable {
                 float reach = (float) mob.type().height();
                 if (!frustum.testAab(x - reach, y, z - reach, x + reach, y + reach, z + reach)) continue;
                 glBindTexture(GL_TEXTURE_2D, textures.get(mob.type()));
+                glUniform1f(
+                        blockLight,
+                        light.level(
+                                (int) Math.floor(mob.interpolatedX(alpha)),
+                                (int) Math.floor(
+                                        mob.interpolatedY(alpha) + mob.type().height() * .5),
+                                (int) Math.floor(mob.interpolatedZ(alpha))));
                 base.translation(x, y, z)
                         .rotateY((float) Math.toRadians(-mob.yaw()))
                         .scale(1f / 16);

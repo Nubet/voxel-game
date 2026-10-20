@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.light.BlockLightState;
 import com.norbertfila.meshing.ChunkMesh;
 import com.norbertfila.meshing.QuadMesh;
 import com.norbertfila.streaming.ChunkManager.MeshResult;
@@ -46,6 +47,7 @@ public final class TerrainRenderer implements AutoCloseable {
     private final RegionIndex regionIndex;
     private final RegionCuller regionCuller = new RegionCuller();
     private final BlockTextureArray blockTextures;
+    private final BlockLightTextures blockLight = new BlockLightTextures();
     private final TerrainProgram solidProgram;
     private final TerrainProgram waterProgram;
     private final int emptyVertexArray;
@@ -69,6 +71,10 @@ public final class TerrainRenderer implements AutoCloseable {
         solidProgram.distanceFog(fog);
         waterProgram.distanceFog(fog);
         far.distanceFog(fog);
+    }
+
+    public void blockLight(BlockLightState state) {
+        blockLight.update(state);
     }
 
     public void environment(SkyState sky) {
@@ -254,18 +260,21 @@ public final class TerrainRenderer implements AutoCloseable {
         }
         float time = (float) ((System.nanoTime() - startedAt) / 1e9 % 4096);
         blockTextures.bind(0);
+        blockLight.bind();
         glBindVertexArray(emptyVertexArray);
         int calls = 0;
         try {
             indirect.bind(commands);
             restoreTerrainState();
             solidProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+            solidProgram.blockLight(blockLight, cameraX, cameraY, cameraZ);
             solidProgram.renderLayer(RenderLayer.OPAQUE);
             calls += indirect.submit(commands, RenderLayer.OPAQUE.ordinal());
             solidProgram.renderLayer(RenderLayer.CUTOUT);
             calls += indirect.submit(commands, RenderLayer.CUTOUT.ordinal());
             glDisable(GL_CULL_FACE);
             waterProgram.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+            waterProgram.blockLight(blockLight, cameraX, cameraY, cameraZ);
             waterProgram.renderLayer(RenderLayer.OPAQUE);
             calls += indirect.submit(commands, OPAQUE_FLUID_PASS);
         } finally {
@@ -282,6 +291,7 @@ public final class TerrainRenderer implements AutoCloseable {
         try {
             if (!visibleTranslucent.isEmpty()) {
                 blockTextures.bind(0);
+                blockLight.bind();
                 glBindVertexArray(emptyVertexArray);
                 indirect.bind(commands);
                 restoreTerrainState();
@@ -297,6 +307,7 @@ public final class TerrainRenderer implements AutoCloseable {
                     if (activePass != pass) {
                         TerrainProgram program = pass == TRANSLUCENT_SOLID_PASS ? solidProgram : waterProgram;
                         program.use(viewProjection, underwater, time, cameraX, cameraY, cameraZ);
+                        program.blockLight(blockLight, cameraX, cameraY, cameraZ);
                         program.renderLayer(RenderLayer.TRANSLUCENT);
                         activePass = pass;
                     }
@@ -414,6 +425,7 @@ public final class TerrainRenderer implements AutoCloseable {
         waterArenas.close();
         solidProgram.close();
         waterProgram.close();
+        blockLight.close();
         glDeleteVertexArrays(emptyVertexArray);
         indirect.close();
         far.close();

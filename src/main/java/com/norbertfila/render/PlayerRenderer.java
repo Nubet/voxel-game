@@ -19,7 +19,7 @@ public final class PlayerRenderer implements AutoCloseable {
     private static final int VERTICES_PER_MODEL =
             (PlayerModel.PARTS.size() + PlayerModel.OUTER_LAYERS.size()) * CuboidMesh.VERTEX_COUNT;
     private final int program, vao, vbo, vp, model, outerLayer, worldShading, fogRange, underwater, opacity;
-    private final int skyColor, daylight;
+    private final int skyColor, daylight, blockLight;
     private final SkinManager skins;
     private boolean closed;
 
@@ -37,6 +37,7 @@ public final class PlayerRenderer implements AutoCloseable {
             opacity = ShaderPrograms.uniform(createdProgram, "uOpacity");
             skyColor = ShaderPrograms.uniform(createdProgram, "uSkyColor");
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
+            blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
             glProgramUniform3f(
                     createdProgram,
                     skyColor,
@@ -227,6 +228,11 @@ public final class PlayerRenderer implements AutoCloseable {
         var color = sky.horizon();
         glProgramUniform3f(program, skyColor, color.red(), color.green(), color.blue());
         glProgramUniform1f(program, daylight, sky.light());
+    }
+
+    /** Block light level in [0, 15] at the player, applied to world-shaded draws. */
+    public void blockLight(int level) {
+        glProgramUniform1f(program, blockLight, level);
     }
 
     private void drawPart(int firstVertex, PlayerModel.Part part, boolean overlay) {

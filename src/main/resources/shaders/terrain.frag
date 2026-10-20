@@ -15,6 +15,13 @@ uniform vec2 uWaterFogRange;
 uniform vec2 uDistanceFogRange;
 uniform vec3 uDistanceFogColor;
 uniform float uDaylight = 1.0;
+// Block light volumes (placed emitters and held light); a zero size disables a volume, as on far terrain.
+uniform usampler3D uPlacedLight;
+uniform usampler3D uHeldLight;
+uniform vec3 uPlacedLightOrigin;
+uniform ivec3 uPlacedLightSize;
+uniform vec3 uHeldLightOrigin;
+uniform ivec3 uHeldLightSize;
 // Chunk columns that near terrain fully draws, one bit each, row-major over uCoverageSize columns. Far terrain hides
 // there. uCoverageOrigin is the first column's corner relative to the camera; near terrain passes size 0.
 layout(std430, binding = 2) readonly buffer Coverage {
@@ -37,7 +44,34 @@ vec3 biomeTint(bool foliage) {
     return mix(base, target, float(index % 8) / 7.0);
 }
 
+float lightLevel(usampler3D volume, vec3 origin, ivec3 size, vec3 position) {
+    if (size.x == 0) return 0.0;
+    ivec3 cell = ivec3(floor(position - origin));
+    if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size))) return 0.0;
+    return float(texelFetch(volume, cell, 0).r);
+}
+
+// Minecraft's light curve at its default 50% brightness setting, tinted warm like torch light.
+vec3 torchLight(float level) {
+    float fraction = level / 15.0;
+    float curve = fraction / (4.0 - 3.0 * fraction);
+    float inverse = 1.0 - curve;
+    return vec3(1.0, 0.86, 0.66) * mix(curve, 1.0 - inverse * inverse * inverse * inverse, 0.5);
+}
+
+// Block light for the fragment. Faces read the cell in front of them, found from the screen-space
+// normal, so derivatives must run before any discard.
+vec3 blockLight(vec3 normal) {
+    vec3 position = vCameraOffset + normal * 0.5;
+    float level = max(
+        lightLevel(uPlacedLight, uPlacedLightOrigin, uPlacedLightSize, position),
+        lightLevel(uHeldLight, uHeldLightOrigin, uHeldLightSize, position));
+    return torchLight(level);
+}
+
 void main() {
+    vec3 normal = normalize(cross(dFdx(vCameraOffset), dFdy(vCameraOffset)));
+    if (dot(normal, vCameraOffset) > 0.0) normal = -normal;
     if (uCoverageSize > 0) {
         ivec2 column = ivec2(floor((vCameraOffset.xz - uCoverageOrigin) / 16.0));
         if (all(greaterThanEqual(column, ivec2(0))) && all(lessThan(column, ivec2(uCoverageSize)))) {
@@ -54,7 +88,8 @@ void main() {
         texel.rgb = mix(texel.rgb, overlay.rgb * biomeTint(false), overlay.a);
     }
     if (uRenderLayer != 2 && texel.a < 0.5) discard;
-    fragColor = vec4(texel.rgb * vShade * uDaylight, uRenderLayer == 2 ? 0.55 : 1.0);
+    vec3 light = max(vec3(uDaylight), blockLight(normal));
+    fragColor = vec4(texel.rgb * vShade * light, uRenderLayer == 2 ? 0.55 : 1.0);
     if (uDistanceFogRange.y > 0.0) {
         float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));
         haze *= 1.0 - uWaterFog.a;
