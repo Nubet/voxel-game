@@ -41,6 +41,9 @@ public final class Input implements AutoCloseable {
     private boolean previousSettings;
     private boolean inventoryPressed;
     private boolean debugPressed;
+    private boolean debugHeld;
+    private boolean debugComboUsed;
+    private boolean hitboxesPressed;
     private boolean perspectivePressed;
     private boolean screenshotPressed;
     private boolean shift;
@@ -63,7 +66,7 @@ public final class Input implements AutoCloseable {
 
     void keyEvent(int key, int action, int mods, double timeSeconds) {
         if (key == GLFW_KEY_E && action == GLFW_PRESS) inventoryPressed = true;
-        if (key == GLFW_KEY_F3 && action == GLFW_PRESS) debugPressed = true;
+        debugKeys(key, action);
         if (key == GLFW_KEY_F5 && action == GLFW_PRESS) perspectivePressed = true;
         if (key == GLFW_KEY_F12 && action == GLFW_PRESS) screenshotPressed = true;
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) playerInput.pressJump(timeSeconds);
@@ -91,6 +94,20 @@ public final class Input implements AutoCloseable {
         if (uiKey != null && uiEvents.size() < MAX_UI_KEYS) uiEvents.addLast(new UiEvent.Key(uiKey));
     }
 
+    /** F3 toggles the overlay on release, so that an F3 combination such as F3+B does not also open it. */
+    private void debugKeys(int key, int action) {
+        if (key == GLFW_KEY_F3 && action == GLFW_PRESS) {
+            debugHeld = true;
+            debugComboUsed = false;
+        } else if (key == GLFW_KEY_F3 && action == GLFW_RELEASE && debugHeld) {
+            debugHeld = false;
+            if (!debugComboUsed) debugPressed = true;
+        } else if (key == GLFW_KEY_B && action == GLFW_PRESS && debugHeld) {
+            debugComboUsed = true;
+            hitboxesPressed = true;
+        }
+    }
+
     void characterEvent(int codePoint) {
         if (Character.isValidCodePoint(codePoint)
                 && !(codePoint >= 0xD800 && codePoint <= 0xDFFF)
@@ -114,6 +131,12 @@ public final class Input implements AutoCloseable {
     public boolean debugPressed() {
         boolean pressed = debugPressed;
         debugPressed = false;
+        return pressed;
+    }
+
+    public boolean hitboxesPressed() {
+        boolean pressed = hitboxesPressed;
+        hitboxesPressed = false;
         return pressed;
     }
 
@@ -289,6 +312,8 @@ public final class Input implements AutoCloseable {
         inventoryPressed = false;
         scrollDeltaY = 0;
         debugPressed = false;
+        debugHeld = false;
+        hitboxesPressed = false;
         perspectivePressed = false;
         previousLeftMouse = leftMouse;
         screenshotPressed = false;

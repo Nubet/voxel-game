@@ -56,6 +56,26 @@ class InputTest {
     }
 
     @Test
+    void f3PlusBTogglesHitboxesWithoutTogglingTheOverlay() {
+        var input = new Input();
+        input.keyEvent(GLFW_KEY_B, GLFW_PRESS, 0, 1);
+        assertFalse(input.hitboxesPressed());
+        input.keyEvent(GLFW_KEY_F3, GLFW_PRESS, 0, 2);
+        input.keyEvent(GLFW_KEY_B, GLFW_PRESS, 0, 3);
+        input.keyEvent(GLFW_KEY_F3, GLFW_RELEASE, 0, 4);
+        assertTrue(input.hitboxesPressed());
+        assertFalse(input.hitboxesPressed());
+        assertFalse(input.debugPressed());
+        input.keyEvent(GLFW_KEY_F3, GLFW_PRESS, 0, 5);
+        input.keyEvent(GLFW_KEY_F3, GLFW_RELEASE, 0, 6);
+        assertTrue(input.debugPressed());
+        input.keyEvent(GLFW_KEY_F3, GLFW_PRESS, 0, 7);
+        input.discardTransientInput();
+        input.keyEvent(GLFW_KEY_F3, GLFW_RELEASE, 0, 8);
+        assertFalse(input.debugPressed());
+    }
+
+    @Test
     void dropKeysCaptureControlAtPressTimeAndIgnoreRepeatsAndRelease() {
         var input = new Input();
         input.keyEvent(GLFW_KEY_Q, GLFW_PRESS, 0, 1);

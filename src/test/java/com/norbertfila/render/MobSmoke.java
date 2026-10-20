@@ -21,7 +21,8 @@ public final class MobSmoke {
     public static void main(String[] args) throws Exception {
         Files.createDirectories(OUTPUT);
         try (var window = new Window(SIZE, SIZE, "Mob regression");
-                var renderer = new MobRenderer()) {
+                var renderer = new MobRenderer();
+                var hitboxes = new HitboxRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
             var view = new Matrix4f()
                     .perspective((float) Math.toRadians(60), 1, .1f, 128)
@@ -45,6 +46,11 @@ public final class MobSmoke {
             check(columnsWithPixels(day, SIZE / 3, 2 * SIZE / 3) > 20, "Zombie not visible");
             check(columnsWithPixels(day, 2 * SIZE / 3, SIZE) > 10, "Skeleton not visible");
             write(day, "day");
+            hitboxes.render(view, Hitboxes.of(mobs, List.of(), 1), 0, 0, 0);
+            check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Hitboxes leaked state");
+            var boxed = capture();
+            check(total(boxed) > total(day), "Hitboxes not visible");
+            write(boxed, "hitboxes");
             clear();
             renderer.environment(SkyModel.at(com.norbertfila.simulation.WorldTime.TICKS_PER_DAY * .75));
             renderer.render(view, mobs, 1, 0, 0, 0, fog, 0);
