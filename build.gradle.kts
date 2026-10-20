@@ -45,6 +45,15 @@ tasks.register<Copy>("importSkyTextures") {
     into("src/main/resources/assets/textures/environment")
 }
 
+tasks.register<JavaExec>("smokeDayNight") {
+    group = "verification"
+    description = "Checks day/night sky, celestial textures, world lighting and OpenGL state."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.DayNightSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeScreenshots") {
     group = "verification"
     description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."

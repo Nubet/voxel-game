@@ -83,9 +83,34 @@ final class PlayerWorldSmoke {
                 }
                 check(glGetBoolean(GL_DEPTH_WRITEMASK) && !glIsEnabled(GL_BLEND), "Water state leaked");
             }
+            var night = SkyModel.at(54000);
+            player.environment(night);
+            draw(player, vp, new Matrix4f().translation(0, -1, 5), fog, 0);
+            float shaded = .86f * night.light();
+            near(pixel(), new float[] {shaded, shaded, shaded}, "Player night lighting");
+            draw(player, vp, new Matrix4f().translation(0, -1, 80), fog, 0);
+            near(
+                    pixel(),
+                    new float[] {
+                        night.horizon().red(),
+                        night.horizon().green(),
+                        night.horizon().blue()
+                    },
+                    "Player night distance fog");
+            draw(player, vp, new Matrix4f().translation(0, -1, 80), fog, 1);
+            near(
+                    pixel(),
+                    new float[] {
+                        UnderwaterVisibility.FOG_RED * night.light(),
+                        UnderwaterVisibility.FOG_GREEN * night.light(),
+                        UnderwaterVisibility.FOG_BLUE * night.light()
+                    },
+                    "Player night water fog");
+            draw(player, vp, new Matrix4f().translation(0, -1, 5), null, 0);
+            near(pixel(), new float[] {1, 1, 1}, "Skin preview must ignore night lighting");
             check(glGetError() == GL_NO_ERROR, "Player world shading GL error");
             System.out.println(
-                    "PASS player world shading: directional normals, distance/underwater fog, water before/behind depth");
+                    "PASS player world shading: directional normals, distance/underwater fog, water depth, night lighting and neutral skin preview");
         }
     }
 

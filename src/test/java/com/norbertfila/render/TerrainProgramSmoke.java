@@ -14,7 +14,12 @@ public final class TerrainProgramSmoke {
                 String vertex = "/shaders/terrain_" + variant + ".vert";
                 try (TerrainProgram program = new TerrainProgram(vertex)) {
                     program.distanceFog(DistanceFog.forDistances(4, 32));
+                    var night = SkyModel.at(54000);
+                    program.environment(night);
                     program.use(new Matrix4f(), 0.5f, 1.0f, 0, 0, 0);
+                    int active = glGetInteger(GL_CURRENT_PROGRAM);
+                    if (glGetUniformf(active, ShaderPrograms.uniform(active, "uDaylight")) != night.light())
+                        throw new AssertionError("Missing night light: " + variant);
                     for (RenderLayer layer : RenderLayer.values()) program.renderLayer(layer);
                     program.coverage(0, 0, 0);
                     if (glGetError() != GL_NO_ERROR) throw new AssertionError("GL error: " + variant);

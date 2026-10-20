@@ -60,7 +60,7 @@ public final class PlayerGameHookSmoke {
                             controls.yaw(),
                             controls.pitch(),
                             true,
-                            false,
+                            true,
                             2,
                             0,
                             false,
@@ -72,8 +72,11 @@ public final class PlayerGameHookSmoke {
 
                 @Override
                 public void update(WorldRuntime runtime, WorldRuntime.Frame state, Camera view) {
-                    if (state == null || !state.ready()) return;
+                    if (state == null || !state.ready() || runtime.state() != WorldRuntime.State.PLAYING) return;
                     if (!lookInitialized) {
+                        // Pixel fixtures below assume full daylight, independent of the world's initial dawn.
+                        if (!runtime.offer(new WorldRuntime.ChatCommand("/time set noon")))
+                            throw new AssertionError("Time command queue is full");
                         view.restoreLook(-90, 0);
                         lookInitialized = true;
                     }
@@ -82,13 +85,23 @@ public final class PlayerGameHookSmoke {
                 @Override
                 public boolean frameCompleted(
                         WorldRuntime runtime, WorldRuntime.Frame state, TerrainRenderer.RenderStats stats, int queue) {
-                    if (System.nanoTime() > deadline) throw new AssertionError("Production player hook timed out");
+                    if (System.nanoTime() > deadline)
+                        throw new AssertionError("Production player hook timed out: stage=" + switches + " time="
+                                + (state == null ? "unpublished" : state.worldTime()));
                     if (runtime.state() != WorldRuntime.State.PLAYING || state == null || ++frames < 10) return false;
+                    if (state.worldTime().minecraftTime() != (switches == 7 ? 18000 : 6000)) return false;
                     if (state.playerRenderState().appearance().model() != settings.modelVariant()) return false;
                     var pixels = BufferUtils.createByteBuffer(512 * 512 * 4);
                     glReadBuffer(GL_FRONT);
                     glReadPixels(0, 0, 512, 512, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
                     glReadBuffer(GL_BACK);
+                    if (switches == 7) {
+                        int p = (450 * 512 + 256) * 4;
+                        if (Byte.toUnsignedInt(pixels.get(p + 2)) > 50)
+                            throw new AssertionError("Production sky stayed blue after /time set midnight");
+                        displacedChecked = true;
+                        return true;
+                    }
                     int bodyPixels = 0;
                     for (int y = 200; y < 300; y++)
                         for (int x = 200; x < 300; x++) {
@@ -113,8 +126,11 @@ public final class PlayerGameHookSmoke {
                     if (switches == 6) {
                         if (camera.perspective() != Camera.Perspective.FIRST || bodyPixels != 0)
                             throw new AssertionError("F5 loop did not restore hidden first person");
-                        displacedChecked = true;
-                        return true;
+                        if (!runtime.offer(new WorldRuntime.ChatCommand("/time set midnight")))
+                            throw new AssertionError("Time command queue is full");
+                        switches = 7;
+                        frames = 0;
+                        return false;
                     }
                     if (switches == 4) {
                         if (camera.perspective() != Camera.Perspective.FRONT)
@@ -192,7 +208,7 @@ public final class PlayerGameHookSmoke {
                 if (!driver.displacedChecked) throw new AssertionError("Production player hook was not exercised");
                 if (glGetError() != GL_NO_ERROR) throw new AssertionError("Production player hook GL error");
                 System.out.println(
-                        "PASS production GameLoop: F5 first/rear/front/first, repeat suppression, UI blocking, Classic/Slim/Classic");
+                        "PASS production GameLoop: F5 first/rear/front/first, repeat suppression, UI blocking, Classic/Slim/Classic, paused time commands change sky");
             } finally {
                 session.saveAndQuit();
                 loop.awaitStop(window, input, ui, settings, session);
