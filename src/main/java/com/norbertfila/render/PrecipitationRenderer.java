@@ -89,7 +89,7 @@ public final class PrecipitationRenderer implements AutoCloseable {
             glUniform3f(offset, (float) (originX - cameraX), (float) -cameraY, (float) (originZ - cameraZ));
             // Both fall speeds and snow drift repeat after 256 seconds, preserving motion in old worlds.
             glUniform1f(seconds, (float) (time % 256));
-            glUniform1f(base, (float) (Math.floor(cameraY / 16) * 16 - 16));
+            glUniform1f(base, (float) (cameraY - 16));
             glUniform1f(intensity, weather.precipitation());
             glUniform1f(visibility, 1 - underwater);
             glUniform1f(light, sky.light());
