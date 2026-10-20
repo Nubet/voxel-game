@@ -17,6 +17,8 @@ import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.items.ItemSystem;
 import com.norbertfila.items.ItemThrower;
+import com.norbertfila.light.BlockLightState;
+import com.norbertfila.light.BlockLighting;
 import com.norbertfila.light.LightSample;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
@@ -212,10 +214,12 @@ public final class WorldRuntime implements AutoCloseable {
             var precipitation = new PrecipitationField(world, biomeWeather);
             var mobLifecycle = new MobLifecycle(world, NaturalSpawner.overworld(), identity.seed());
             LightSample[] feetLight = {LightSample.UNKNOWN};
+            var blockLighting = new BlockLighting(world);
             world.setBlockChangeListener(mutation -> {
                 growth.onBlockChanged(mutation);
                 precipitation.onBlockChanged(mutation);
                 mobLifecycle.onBlockChanged(mutation);
+                blockLighting.onBlockChanged(mutation);
             });
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
@@ -373,6 +377,7 @@ public final class WorldRuntime implements AutoCloseable {
                     growth.onChunkChanged(position);
                     precipitation.onChunkChanged(position);
                     mobLifecycle.onChunkChanged(position);
+                    blockLighting.onChunkChanged(position);
                 });
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};
@@ -680,6 +685,17 @@ public final class WorldRuntime implements AutoCloseable {
                                                 (int) Math.floor(standing.x()), (int) Math.floor(standing.y()), (int)
                                                         Math.floor(standing.z())));
                             long mobNanos = System.nanoTime() - mobStarted;
+                            long lightStarted = System.nanoTime();
+                            var lightEye = player.renderEyePosition(1);
+                            var blockLight = blockLighting.update(
+                                    new BlockPos((int) Math.floor(standing.x()), (int) Math.floor(standing.y()), (int)
+                                            Math.floor(standing.z())),
+                                    new BlockPos((int) Math.floor(lightEye.x()), (int) Math.floor(lightEye.y()), (int)
+                                            Math.floor(lightEye.z())),
+                                    player.mode() == PlayerController.Mode.SPECTATOR
+                                            ? 0
+                                            : BlockRegistry.DEFAULT.lightEmission(inventory.selectedBlock()));
+                            long lightNanos = System.nanoTime() - lightStarted;
                             if (activated && !state.paused() && tick[0] % 300 == 0) {
                                 long captureStarted = System.nanoTime();
                                 saves.request(capture(
@@ -770,7 +786,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     far.metrics(),
                                     outstandingBytes,
                                     mobNanos,
-                                    mobLifecycle.size());
+                                    mobLifecycle.size(),
+                                    lightNanos);
                             frame.set(new Frame(
                                     sessionId,
                                     poseReady[0],
@@ -809,7 +826,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     clock.tickRate(),
                                     mobLifecycle.renderSnapshot(),
                                     mobLifecycle.census(),
-                                    feetLight[0]));
+                                    feetLight[0],
+                                    blockLight));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1283,7 +1301,8 @@ public final class WorldRuntime implements AutoCloseable {
             double tickRate,
             List<MobRenderState> mobs,
             MobCensus mobCensus,
-            LightSample feetLight) {
+            LightSample feetLight,
+            BlockLightState blockLight) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1305,6 +1324,7 @@ public final class WorldRuntime implements AutoCloseable {
             mobs = List.copyOf(mobs);
             Objects.requireNonNull(mobCensus);
             Objects.requireNonNull(feetLight);
+            Objects.requireNonNull(blockLight);
         }
 
         public Map<ChunkPos, Long> residents() {

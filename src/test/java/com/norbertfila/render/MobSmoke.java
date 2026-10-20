@@ -2,6 +2,8 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.light.BlockLightState;
+import com.norbertfila.light.BlockLightVolume;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.platform.Window;
@@ -33,13 +35,13 @@ public final class MobSmoke {
                     mob(2, MobType.ZOMBIE, 0, 180),
                     mob(3, MobType.SKELETON, 1.4, 200));
             clear();
-            renderer.render(view, List.of(), 0, 0, 0, 0, fog, 0);
+            renderer.render(view, List.of(), 0, 0, 0, 0, fog, 0, BlockLightState.NONE);
             check(total(capture()) == 0, "Empty mob list drew pixels");
             renderer.environment(SkyModel.DAY);
             glEnable(GL_CULL_FACE);
             glEnable(GL_BLEND);
             glDisable(GL_DEPTH_TEST);
-            renderer.render(view, mobs, 1, 0, 0, 0, fog, 0);
+            renderer.render(view, mobs, 1, 0, 0, 0, fog, 0, BlockLightState.NONE);
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND) && !glIsEnabled(GL_DEPTH_TEST), "State leaked");
             var day = capture();
             check(columnsWithPixels(day, 0, SIZE / 3) > 20, "Creeper not visible");
@@ -53,12 +55,18 @@ public final class MobSmoke {
             write(boxed, "hitboxes");
             clear();
             renderer.environment(SkyModel.at(com.norbertfila.simulation.WorldTime.TICKS_PER_DAY * .75));
-            renderer.render(view, mobs, 1, 0, 0, 0, fog, 0);
+            renderer.render(view, mobs, 1, 0, 0, 0, fog, 0, BlockLightState.NONE);
             var night = capture();
             check(total(night) < total(day) / 2, "Night did not darken mobs");
             write(night, "night");
             clear();
-            renderer.render(view, mobs, 1, 1 << 24, 0, 0, fog, 0);
+            var torch = new BlockLightVolume(-8, -8, -8, 16, 16, 16, filled(16 * 16 * 16, (byte) 14));
+            renderer.render(view, mobs, 1, 0, 0, 0, fog, 0, new BlockLightState(torch, BlockLightVolume.EMPTY));
+            var torchLit = capture();
+            check(total(torchLit) > total(night) * 3, "Torch light did not brighten mobs at night");
+            write(torchLit, "night-torch");
+            clear();
+            renderer.render(view, mobs, 1, 1 << 24, 0, 0, fog, 0, BlockLightState.NONE);
             check(total(capture()) == 0, "Mobs behind the camera offset were drawn");
             check(glGetError() == GL_NO_ERROR, "OpenGL error");
         }
@@ -66,6 +74,12 @@ public final class MobSmoke {
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
         return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw);
+    }
+
+    private static byte[] filled(int length, byte level) {
+        var levels = new byte[length];
+        java.util.Arrays.fill(levels, level);
+        return levels;
     }
 
     private static int columnsWithPixels(ByteBuffer pixels, int from, int to) {
