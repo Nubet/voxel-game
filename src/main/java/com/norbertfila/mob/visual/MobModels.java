@@ -4,15 +4,27 @@ import com.norbertfila.mob.MobType;
 import com.norbertfila.player.visual.model.ModelCuboid;
 import com.norbertfila.player.visual.model.PartTransform;
 import com.norbertfila.player.visual.model.UvOrigin;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /** Models in the classic 64x32 mob texture layout, where left limbs reuse the right limb's texture. */
 public final class MobModels {
     private static final float ARMS_FORWARD = (float) (Math.PI / 2);
 
+    private static final Map<MobType, MobModel> MODELS = new EnumMap<>(MobType.class);
+
+    static {
+        for (var type : MobType.values()) MODELS.put(type, create(type));
+    }
+
     private MobModels() {}
 
     public static MobModel of(MobType type) {
+        return MODELS.get(type);
+    }
+
+    private static MobModel create(MobType type) {
         return switch (type) {
             case ZOMBIE -> new MobModel("refi_zombie", 64, 64, biped(4, ARMS_FORWARD));
             case SKELETON -> new MobModel("refi_skeleton", 64, 32, biped(2, 0));

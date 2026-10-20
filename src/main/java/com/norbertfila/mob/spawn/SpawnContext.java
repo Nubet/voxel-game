@@ -2,11 +2,11 @@ package com.norbertfila.mob.spawn;
 
 import com.norbertfila.mob.MobPopulation;
 import com.norbertfila.mob.PlayerPosition;
+import com.norbertfila.mob.PopulationKey;
 import java.util.List;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 
-/** Everything one spawn cycle shares between its attempts. */
 public record SpawnContext(
         SpawnEnvironment environment,
         MobPopulation population,
@@ -21,5 +21,9 @@ public record SpawnContext(
         Objects.requireNonNull(settings);
         Objects.requireNonNull(random);
         if (activeColumns < 0) throw new IllegalArgumentException("Column count is negative");
+    }
+
+    public boolean hasRoom(PopulationKey key) {
+        return population.count(key) < settings.scaledCap(key, activeColumns);
     }
 }

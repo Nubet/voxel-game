@@ -60,11 +60,9 @@ public final class SpawnAttempt {
         return blockLight;
     }
 
-    /** Positions reached by sky light count as surface, everything sealed from the sky as cave. */
     public Optional<SpawnZone> zone() {
         var sky = skyLight();
-        if (sky.isEmpty()) return Optional.empty();
-        return Optional.of(sky.getAsInt() > 0 ? SpawnZone.SURFACE : SpawnZone.CAVE);
+        return sky.isEmpty() ? Optional.empty() : Optional.of(SpawnZone.fromSkyLight(sky.getAsInt()));
     }
 
     public Optional<PopulationKey> populationKey() {

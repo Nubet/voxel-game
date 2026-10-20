@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/** Every live mob, indexed by chunk and counted per category and zone. */
 public final class MobPopulation {
     /** Hard safety limit across all categories, independent of the tunable spawn caps. */
     public static final int MAX_MOBS = 1024;
@@ -72,7 +71,7 @@ public final class MobPopulation {
         return found;
     }
 
-    /** Applies gravity and ages mobs. Mobs are not saved, so one whose chunk unloaded is gone. */
+    /** Mobs are not saved, so a mob whose chunk unloaded is dropped instead of frozen. */
     public void tick(World world, double dt) {
         if (!Double.isFinite(dt) || dt <= 0 || dt > .1) throw new IllegalArgumentException("Invalid mob tick");
         for (var mob : mobs()) {

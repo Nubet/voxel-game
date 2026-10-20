@@ -43,7 +43,6 @@ public final class NaturalSpawner {
         return settings;
     }
 
-    /** Runs one spawn cycle and returns how many mobs appeared. */
     public int spawn(
             SpawnEnvironment environment,
             MobPopulation population,
@@ -83,11 +82,8 @@ public final class NaturalSpawner {
         return activeColumns(environment, players).size();
     }
 
-    private boolean hasRoom(SpawnContext context, MobCategory category) {
-        for (var zone : SpawnZone.values()) {
-            var key = new PopulationKey(category, zone);
-            if (context.population().count(key) < settings.scaledCap(key, context.activeColumns())) return true;
-        }
+    private static boolean hasRoom(SpawnContext context, MobCategory category) {
+        for (var zone : SpawnZone.values()) if (context.hasRoom(new PopulationKey(category, zone))) return true;
         return false;
     }
 
