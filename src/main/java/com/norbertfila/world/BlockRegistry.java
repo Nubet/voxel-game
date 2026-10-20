@@ -102,6 +102,10 @@ public final class BlockRegistry {
         return definition;
     }
 
+    public boolean isRegistered(byte id) {
+        return definitions[Byte.toUnsignedInt(id)] != null;
+    }
+
     public boolean isCollidable(byte id) {
         return definition(id).collidable();
     }
