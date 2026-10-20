@@ -1,6 +1,8 @@
 package com.norbertfila.mob.spawn;
 
 import com.norbertfila.mob.MobType;
+import com.norbertfila.mob.PopulationKey;
+import com.norbertfila.mob.SpawnZone;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;

@@ -1,6 +1,5 @@
-package com.norbertfila.mob.spawn;
+package com.norbertfila.mob;
 
-import com.norbertfila.mob.MobCategory;
 import java.util.Objects;
 
 public record PopulationKey(MobCategory category, SpawnZone zone) {

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.mob.MobCategory;
 import com.norbertfila.mob.MobType;
+import com.norbertfila.mob.PopulationKey;
+import com.norbertfila.mob.SpawnZone;
 import com.norbertfila.simulation.WorldTime;
 import java.util.HashMap;
 import java.util.Map;

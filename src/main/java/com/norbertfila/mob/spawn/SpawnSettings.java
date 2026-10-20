@@ -1,6 +1,8 @@
 package com.norbertfila.mob.spawn;
 
 import com.norbertfila.mob.MobCategory;
+import com.norbertfila.mob.PopulationKey;
+import com.norbertfila.mob.SpawnZone;
 import com.norbertfila.simulation.WorldTime;
 import java.util.Map;
 
