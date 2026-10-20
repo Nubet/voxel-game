@@ -28,6 +28,7 @@ import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.PlayerRenderer;
+import com.norbertfila.render.PrecipitationRenderer;
 import com.norbertfila.render.SkinManager;
 import com.norbertfila.render.SkyModel;
 import com.norbertfila.render.SkyRenderer;
@@ -54,6 +55,7 @@ import com.norbertfila.ui.screens.PauseScreen;
 import com.norbertfila.ui.screens.SaveErrorScreen;
 import com.norbertfila.ui.screens.SessionStatusScreen;
 import com.norbertfila.ui.screens.SettingsScreen;
+import com.norbertfila.weather.WeatherSample;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -140,6 +142,7 @@ public final class GameLoop {
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
                 CloudRenderer clouds = new CloudRenderer();
+                PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
                 ScreenshotWriter screenshots = new ScreenshotWriter(Path.of("screenshots"));
                 PlayerRenderer players = skins == null ? null : new PlayerRenderer(skins)) {
@@ -159,6 +162,7 @@ public final class GameLoop {
                     effects,
                     items,
                     clouds,
+                    precipitation,
                     skyRenderer,
                     players,
                     screenshots);
@@ -181,6 +185,7 @@ public final class GameLoop {
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
             CloudRenderer clouds,
+            PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
@@ -547,7 +552,7 @@ public final class GameLoop {
                             state.worldTime(),
                             state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
             var weather = state == null
-                    ? com.norbertfila.weather.WeatherSample.CLEAR
+                    ? WeatherSample.CLEAR
                     : state.previousWeather()
                             .mix(state.weather(), state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
             sky = SkyModel.weather(sky, weather);
@@ -557,7 +562,7 @@ public final class GameLoop {
                             1,
                             state.localWeather().rain() + state.localWeather().snow());
             var distanceFog = DistanceFog.forDistances(settings.renderDistance(), settings.farDistance())
-                    .weather(new com.norbertfila.weather.WeatherSample(
+                    .weather(new WeatherSample(
                             weather.clouds(),
                             weather.precipitation() * localAmount,
                             weather.storm() * localAmount,
@@ -650,6 +655,16 @@ public final class GameLoop {
                         camera.x(),
                         camera.y(),
                         camera.z());
+                precipitation.render(
+                        viewProjection,
+                        state.precipitation(),
+                        camera.x(),
+                        camera.y(),
+                        camera.z(),
+                        effectSeconds,
+                        weather,
+                        visibility.amount(),
+                        sky);
             }
             if (!editingBlocked && state.target().isPresent())
                 outline.render(

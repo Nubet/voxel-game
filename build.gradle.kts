@@ -45,12 +45,34 @@ tasks.register<Copy>("importSkyTextures") {
     into("src/main/resources/assets/textures/environment")
 }
 
+tasks.register<Copy>("importWeatherTextures") {
+    group = "assets"
+    description = "Imports unchanged REFI precipitation textures; attribution is in WEATHER-NOTICE."
+    from("REFI_Textures-master/textures/sky_weather") {
+        include("weather_pack_rain_raindrop_1.png", "weather_pack_snow_snowflake1.png")
+        rename("weather_pack_rain_raindrop_1.png", "rain.png")
+        rename("weather_pack_snow_snowflake1.png", "snow.png")
+    }
+    into("src/main/resources/assets/textures/environment")
+}
+
+tasks.processResources { mustRunAfter("importWeatherTextures") }
+
 tasks.register<JavaExec>("smokeDayNight") {
     group = "verification"
     description = "Checks day/night sky, celestial textures, world lighting and OpenGL state."
     dependsOn(tasks.testClasses)
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.norbertfila.render.DayNightSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
+tasks.register<JavaExec>("smokeWeather") {
+    group = "verification"
+    description = "Checks weather atmosphere, precipitation, shelter, animation and OpenGL state."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.WeatherSmoke")
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
