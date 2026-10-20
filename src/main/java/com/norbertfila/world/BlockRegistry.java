@@ -110,6 +110,14 @@ public final class BlockRegistry {
         return definition(id).occludesFullFace();
     }
 
+    public int lightEmission(byte id) {
+        return definition(id).lightEmission();
+    }
+
+    public boolean transmitsLight(byte id) {
+        return definition(id).transmitsLight();
+    }
+
     public int textureLayer(String name) {
         Integer layer = textureLayers.get(Objects.requireNonNull(name));
         if (layer == null) throw new IllegalArgumentException("Unknown texture: " + name);
@@ -468,16 +476,33 @@ public final class BlockRegistry {
         blocks.add(material(textures, BlockId.PUMPKIN, "pumpkin", "pumpkin_top", "pumpkin_top", "pumpkin_side"));
         int lava = texture(textures, "lava");
         blocks.add(new BlockDefinition(
-                Byte.toUnsignedInt(BlockId.LAVA),
-                "lava",
-                lava,
-                lava,
-                lava,
+                        Byte.toUnsignedInt(BlockId.LAVA),
+                        "lava",
+                        lava,
+                        lava,
+                        lava,
+                        false,
+                        false,
+                        RenderLayer.OPAQUE,
+                        false,
+                        false)
+                .withLightEmission(15));
+        int torch = texture(textures, "torch");
+        blocks.add(new BlockDefinition(
+                Byte.toUnsignedInt(BlockId.TORCH),
+                "torch",
+                torch,
+                torch,
+                torch,
                 false,
                 false,
-                RenderLayer.OPAQUE,
+                RenderLayer.CUTOUT,
+                true,
+                true,
+                BlockShape.CROSS,
                 false,
-                false));
+                0,
+                14));
         return new BlockRegistry(blocks, textures);
     }
 
