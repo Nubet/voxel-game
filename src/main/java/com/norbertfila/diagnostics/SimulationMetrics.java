@@ -27,4 +27,6 @@ public record SimulationMetrics(
         long streamingNanos,
         long publishNanos,
         FarTerrainStreamer.Metrics far,
-        long outstandingMeshBytes) {}
+        long outstandingMeshBytes,
+        long mobNanos,
+        int mobs) {}

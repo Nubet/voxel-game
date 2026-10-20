@@ -79,6 +79,10 @@ public final class NaturalSpawner {
         return columns;
     }
 
+    public int activeColumnCount(SpawnEnvironment environment, List<PlayerPosition> players) {
+        return activeColumns(environment, players).size();
+    }
+
     private boolean hasRoom(SpawnContext context, MobCategory category) {
         for (var zone : SpawnZone.values()) {
             var key = new PopulationKey(category, zone);

@@ -697,7 +697,9 @@ public final class GameLoop {
                                 settings.renderDistance(),
                                 settings.farDistance(),
                                 settings.simulationDistance(),
-                                state.biome()),
+                                state.biome(),
+                                state.mobCensus(),
+                                state.feetLight()),
                         now);
             }
             if (runtime.state() == WorldRuntime.State.PLAYING) {

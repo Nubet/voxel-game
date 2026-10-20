@@ -62,7 +62,9 @@ class DebugOverlayTest {
                 8,
                 32,
                 4,
-                BiomeType.TAIGA);
+                BiomeType.TAIGA,
+                com.norbertfila.mob.MobCensus.EMPTY,
+                com.norbertfila.light.LightSample.UNKNOWN);
     }
 
     @ParameterizedTest

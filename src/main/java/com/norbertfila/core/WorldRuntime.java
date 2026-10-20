@@ -17,9 +17,16 @@ import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.items.ItemSystem;
 import com.norbertfila.items.ItemThrower;
+import com.norbertfila.light.LightSample;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
+import com.norbertfila.mob.MobCensus;
+import com.norbertfila.mob.MobRenderState;
+import com.norbertfila.mob.MobType;
+import com.norbertfila.mob.PlayerPosition;
+import com.norbertfila.mob.spawn.MobLifecycle;
+import com.norbertfila.mob.spawn.NaturalSpawner;
 import com.norbertfila.persistence.SaveScheduler;
 import com.norbertfila.persistence.world.*;
 import com.norbertfila.player.*;
@@ -203,9 +210,12 @@ public final class WorldRuntime implements AutoCloseable {
             growth.restore(saved.growth(), tick[0]);
             var biomeWeather = new BiomeWeather(generator);
             var precipitation = new PrecipitationField(world, biomeWeather);
+            var mobLifecycle = new MobLifecycle(world, NaturalSpawner.overworld(), identity.seed());
+            LightSample[] feetLight = {LightSample.UNKNOWN};
             world.setBlockChangeListener(mutation -> {
                 growth.onBlockChanged(mutation);
                 precipitation.onBlockChanged(mutation);
+                mobLifecycle.onBlockChanged(mutation);
             });
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
@@ -312,6 +322,37 @@ public final class WorldRuntime implements AutoCloseable {
                 public boolean locateRift() {
                     return searches.requestRift(player.state().position());
                 }
+
+                @Override
+                public Optional<PlayerState.Position> playerPosition() {
+                    return Optional.of(player.state().position());
+                }
+
+                @Override
+                public boolean summon(MobType type, PlayerState.Position position) {
+                    var block = new BlockPos((int) Math.floor(position.x()), (int) Math.floor(position.y()), (int)
+                            Math.floor(position.z()));
+                    return WorldBounds.containsY(block.y())
+                            && world.hasChunk(Coordinates.worldToChunk(block))
+                            && mobLifecycle
+                                    .summon(type, position.x(), position.y(), position.z())
+                                    .isPresent();
+                }
+
+                @Override
+                public MobCensus mobs() {
+                    return mobLifecycle.census();
+                }
+
+                @Override
+                public void setMobSpawning(boolean enabled) {
+                    mobLifecycle.setNaturalSpawning(enabled);
+                }
+
+                @Override
+                public int removeMobs() {
+                    return mobLifecycle.removeAll();
+                }
             };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
             BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
@@ -335,6 +376,7 @@ public final class WorldRuntime implements AutoCloseable {
                     water.onChunkChanged(position, tick[0]);
                     growth.onChunkChanged(position);
                     precipitation.onChunkChanged(position);
+                    mobLifecycle.onChunkChanged(position);
                 });
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};
@@ -620,6 +662,28 @@ public final class WorldRuntime implements AutoCloseable {
                                                 : null,
                                         inventory);
                             else items.pause();
+                            long mobStarted = System.nanoTime();
+                            var standing = player.state().position();
+                            if (activated && !state.paused()) {
+                                var players = player.mode() == PlayerController.Mode.SPECTATOR
+                                        ? List.<PlayerPosition>of()
+                                        : List.of(new PlayerPosition(standing.x(), standing.y(), standing.z()));
+                                mobLifecycle.tick(
+                                        tick[0],
+                                        dt,
+                                        players,
+                                        time[0],
+                                        weather.sample(tick[0]),
+                                        center,
+                                        Math.min(state.simulationDistance(), state.renderDistance()));
+                            }
+                            if (tick[0] % 15 == 0)
+                                feetLight[0] = LightSample.at(
+                                        mobLifecycle.light(),
+                                        new BlockPos(
+                                                (int) Math.floor(standing.x()), (int) Math.floor(standing.y()), (int)
+                                                        Math.floor(standing.z())));
+                            long mobNanos = System.nanoTime() - mobStarted;
                             if (activated && !state.paused() && tick[0] % 300 == 0) {
                                 long captureStarted = System.nanoTime();
                                 saves.request(capture(
@@ -708,7 +772,9 @@ public final class WorldRuntime implements AutoCloseable {
                                     streamingNanos,
                                     publishNanos,
                                     far.metrics(),
-                                    outstandingBytes);
+                                    outstandingBytes,
+                                    mobNanos,
+                                    mobLifecycle.size());
                             frame.set(new Frame(
                                     sessionId,
                                     poseReady[0],
@@ -744,7 +810,10 @@ public final class WorldRuntime implements AutoCloseable {
                                     weatherSample,
                                     localWeather,
                                     precipitation.snapshot(),
-                                    clock.tickRate()));
+                                    clock.tickRate(),
+                                    mobLifecycle.renderSnapshot(),
+                                    mobLifecycle.census(),
+                                    feetLight[0]));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1215,7 +1284,10 @@ public final class WorldRuntime implements AutoCloseable {
             WeatherSample weather,
             LocalWeather localWeather,
             List<PrecipitationColumn> precipitation,
-            double tickRate) {
+            double tickRate,
+            List<MobRenderState> mobs,
+            MobCensus mobCensus,
+            LightSample feetLight) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1234,6 +1306,9 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(weather);
             Objects.requireNonNull(localWeather);
             precipitation = List.copyOf(precipitation);
+            mobs = List.copyOf(mobs);
+            Objects.requireNonNull(mobCensus);
+            Objects.requireNonNull(feetLight);
         }
 
         public Map<ChunkPos, Long> residents() {

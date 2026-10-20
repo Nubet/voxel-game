@@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.mob.MobType;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.simulation.FixedSimulation;
@@ -140,6 +141,26 @@ public final class GameCommands {
                                 .executes(context -> give(context, 1))
                                 .then(RequiredArgumentBuilder.<Execution, Integer>argument("count", integer(1, 64))
                                         .executes(context -> give(context, getInteger(context, "count")))))));
+        var summon = LiteralArgumentBuilder.<Execution>literal("summon");
+        for (var type : MobType.values())
+            summon.then(LiteralArgumentBuilder.<Execution>literal(type.id())
+                    .executes(context -> summon(context, type, false))
+                    .then(RequiredArgumentBuilder.<Execution, Double>argument("x", doubleArg())
+                            .then(RequiredArgumentBuilder.<Execution, Double>argument("y", doubleArg())
+                                    .then(RequiredArgumentBuilder.<Execution, Double>argument("z", doubleArg())
+                                            .executes(context -> summon(context, type, true))))));
+        dispatcher.register(summon);
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("mobs").executes(GameCommands::mobs));
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("mobspawning")
+                .then(LiteralArgumentBuilder.<Execution>literal("on").executes(context -> mobSpawning(context, true)))
+                .then(LiteralArgumentBuilder.<Execution>literal("off")
+                        .executes(context -> mobSpawning(context, false))));
+        dispatcher.register(LiteralArgumentBuilder.<Execution>literal("kill")
+                .then(LiteralArgumentBuilder.<Execution>literal("mobs").executes(context -> {
+                    int removed = context.getSource().source().removeMobs();
+                    context.getSource().output().add("Removed " + removed + " mobs");
+                    return removed;
+                })));
     }
 
     public Reply execute(String input, CommandSource source) {
@@ -206,6 +227,40 @@ public final class GameCommands {
             return count - remaining;
         }
         throw error("Unknown item: " + name);
+    }
+
+    private static int summon(CommandContext<Execution> context, MobType type, boolean explicit)
+            throws CommandSyntaxException {
+        var source = context.getSource().source();
+        PlayerState.Position position;
+        if (explicit) {
+            double x = getDouble(context, "x"), y = getDouble(context, "y"), z = getDouble(context, "z");
+            if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
+                throw error("Coordinates must be finite numbers.");
+            position = new PlayerState.Position(x, y, z);
+        } else position = source.playerPosition().orElseThrow(() -> error("No position to summon at."));
+        if (!source.summon(type, position)) throw error("Cannot summon here; the area must be loaded.");
+        context.getSource().output().add("Summoned " + type.id());
+        return 1;
+    }
+
+    private static int mobs(CommandContext<Execution> context) {
+        var census = context.getSource().source().mobs();
+        var zones = census.zones().stream()
+                .map(zone -> zone.key().category().name().toLowerCase(Locale.ROOT) + " "
+                        + zone.key().zone().name().toLowerCase(Locale.ROOT) + " " + zone.count() + "/" + zone.cap())
+                .toList();
+        context.getSource()
+                .output()
+                .add("Mobs: " + (zones.isEmpty() ? "none" : String.join(", ", zones)) + "; natural spawning "
+                        + (census.naturalSpawning() ? "on" : "off"));
+        return zones.size();
+    }
+
+    private static int mobSpawning(CommandContext<Execution> context, boolean enabled) {
+        context.getSource().source().setMobSpawning(enabled);
+        context.getSource().output().add("Natural mob spawning " + (enabled ? "on" : "off"));
+        return 1;
     }
 
     private static int teleport(CommandContext<Execution> context) throws CommandSyntaxException {
