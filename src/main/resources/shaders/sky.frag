@@ -9,6 +9,9 @@ uniform float uTwilight;
 uniform float uStars;
 uniform float uUnderwater;
 uniform float uWaterLight;
+uniform float uOvercast;
+uniform vec3 uCloudColor;
+uniform float uCelestialVisibility;
 uniform sampler2D uSun;
 uniform sampler2D uMoon;
 out vec4 fragColor;
@@ -31,6 +34,9 @@ void main() {
     float glow = pow(max(ray.x * sign(uSunDirection.x) / horizontal, 0.0), 3.0);
     glow *= exp(-abs(ray.y) * 8.0) * uTwilight;
     color = mix(color, vec3(1.0, 0.39, 0.12), glow * 0.55);
+    vec2 cloudCell = floor(ray.xz / max(ray.y, 0.12) * 10.0);
+    float cloudShade = 0.85 + 0.15 * fract(sin(dot(cloudCell, vec2(12.9898, 78.233))) * 43758.5453);
+    color = mix(color, uCloudColor * cloudShade, uOvercast * smoothstep(0.0, 0.45, ray.y) * 0.65);
     vec3 grid = ray * 180.0;
     vec3 cell = floor(grid);
     float seed = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
@@ -39,8 +45,8 @@ void main() {
     vec4 sun = celestial(uSun, ray, uSunDirection, 0.18);
     vec4 moon = celestial(uMoon, ray, -uSunDirection, 0.14);
     float aboveHorizon = smoothstep(-0.025, 0.015, ray.y);
-    color = mix(color, sun.rgb, sun.a * aboveHorizon);
-    color = mix(color, moon.rgb, moon.a * aboveHorizon);
+    color = mix(color, sun.rgb, sun.a * aboveHorizon * uCelestialVisibility);
+    color = mix(color, moon.rgb, moon.a * aboveHorizon * uCelestialVisibility);
     color = mix(color, vec3(0.035, 0.20, 0.27) * uWaterLight, uUnderwater);
     fragColor = vec4(color, 1.0);
 }

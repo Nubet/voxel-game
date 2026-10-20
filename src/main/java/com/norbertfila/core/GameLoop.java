@@ -546,6 +546,13 @@ public final class GameLoop {
                             state.previousTime(),
                             state.worldTime(),
                             state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
+            var weather = state == null
+                    ? com.norbertfila.weather.WeatherSample.CLEAR
+                    : state.previousWeather()
+                            .mix(state.weather(), state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
+            sky = SkyModel.weather(sky, weather);
+            var distanceFog = DistanceFog.forDistances(settings.renderDistance(), settings.farDistance())
+                    .weather(weather);
             glViewport(0, 0, width[0], height[0]);
             glClearColor(
                     sky.horizon().red(), sky.horizon().green(), sky.horizon().blue(), 1f);
@@ -558,7 +565,7 @@ public final class GameLoop {
             items.environment(sky);
             effects.environment(sky);
             if (players != null) players.environment(sky);
-            renderer.viewDistances(settings.renderDistance(), settings.farDistance());
+            renderer.distanceFog(distanceFog);
             if (state != null) {
                 renderer.far()
                         .renderOpaque(
@@ -588,7 +595,7 @@ public final class GameLoop {
                         camera.x(),
                         camera.y(),
                         camera.z(),
-                        DistanceFog.forDistances(settings.renderDistance(), settings.farDistance()),
+                        distanceFog,
                         visibility.amount());
             if (gpuTimer != null) gpuTimer.stamp();
             double effectSeconds = state == null
