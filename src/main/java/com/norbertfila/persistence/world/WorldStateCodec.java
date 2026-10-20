@@ -9,6 +9,9 @@ import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.vegetation.PlantGrowthSnapshot;
 import com.norbertfila.vegetation.PlantGrowthState;
+import com.norbertfila.weather.WeatherState;
+import com.norbertfila.weather.WeatherSystem;
+import com.norbertfila.weather.WeatherType;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -28,7 +31,8 @@ import java.util.zip.CheckedOutputStream;
 
 public final class WorldStateCodec {
     private static final int MAGIC = 0x56585731;
-    private static final int FORMAT_VERSION = 5;
+    private static final int FORMAT_VERSION = 6;
+    private static final int WEATHER_BYTES = 49;
     private static final int PLANT_BYTES = 37;
     private static final int TIME_BYTES = Integer.BYTES + 1;
     private static final int ITEM_BYTES = 73;
@@ -148,8 +152,10 @@ public final class WorldStateCodec {
         if (fileBytes != fileBytes(identity, header.payloadBytes()))
             throw new IOException("World state length mismatch");
         if (header.payloadBytes()
-                < MIN_PAYLOAD_BYTES + (version >= 4 ? TIME_BYTES : 0) + (version >= 5 ? Integer.BYTES : 0))
-            throw new IOException("World state payload is too short");
+                < MIN_PAYLOAD_BYTES
+                        + (version >= 4 ? TIME_BYTES : 0)
+                        + (version >= 5 ? Integer.BYTES : 0)
+                        + (version >= 6 ? WEATHER_BYTES : 0)) throw new IOException("World state payload is too short");
         return new FileHeader(header, version);
     }
 
@@ -165,6 +171,7 @@ public final class WorldStateCodec {
 
     private static long payloadBytes(WorldSnapshot snapshot, int version) {
         long bytes = MIN_PAYLOAD_BYTES
+                + (version >= 6 ? WEATHER_BYTES : 0)
                 + (version >= 4 ? TIME_BYTES : 0)
                 + (version >= 5
                         ? Integer.BYTES
@@ -241,6 +248,22 @@ public final class WorldStateCodec {
             output.writeLong(plant.nextGrowthTick());
             output.writeLong(plant.cycle());
         }
+        var weather = snapshot.weather();
+        output.writeByte(
+                switch (weather.type()) {
+                    case CLEAR -> 0;
+                    case CLOUDY -> 1;
+                    case RAIN -> 2;
+                    case STORM -> 3;
+                });
+        output.writeLong(weather.startedAt());
+        output.writeInt(weather.transitionTicks());
+        output.writeLong(weather.endsAt());
+        output.writeLong(weather.cycle());
+        output.writeLong(weather.lastStormTick());
+        output.writeFloat(weather.fromClouds());
+        output.writeFloat(weather.fromPrecipitation());
+        output.writeFloat(weather.fromStorm());
     }
 
     private static WorldSnapshot readPayload(DataInputStream input, Header header, int version) throws IOException {
@@ -315,6 +338,26 @@ public final class WorldStateCodec {
                         readBlock(input), input.readByte(), input.readLong(), input.readLong(), input.readLong()));
             growth = new PlantGrowthSnapshot(plants);
         }
+        WeatherState weather;
+        if (version >= 6) {
+            var type = switch (input.readUnsignedByte()) {
+                case 0 -> WeatherType.CLEAR;
+                case 1 -> WeatherType.CLOUDY;
+                case 2 -> WeatherType.RAIN;
+                case 3 -> WeatherType.STORM;
+                default -> throw new IOException("Unknown weather type");
+            };
+            weather = new WeatherState(
+                    type,
+                    input.readLong(),
+                    input.readInt(),
+                    input.readLong(),
+                    input.readLong(),
+                    input.readLong(),
+                    input.readFloat(),
+                    input.readFloat(),
+                    input.readFloat());
+        } else weather = new WeatherSystem(header.identity().seed(), fluids.tick()).snapshot();
         return new WorldSnapshot(
                 header.identity(),
                 header.sequence(),
@@ -325,7 +368,8 @@ public final class WorldStateCodec {
                 player,
                 items,
                 time,
-                growth);
+                growth,
+                weather);
     }
 
     private static int count(DataInputStream input, int maximum) throws IOException {

@@ -32,6 +32,9 @@ import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.streaming.WorkerCounts;
 import com.norbertfila.vegetation.PlantGrowthSystem;
+import com.norbertfila.weather.WeatherSample;
+import com.norbertfila.weather.WeatherSystem;
+import com.norbertfila.weather.WeatherType;
 import com.norbertfila.world.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -187,6 +190,9 @@ public final class WorldRuntime implements AutoCloseable {
                     new FluidSimulator(world, FAR_TILE_SIZE, FluidScheduler.DEFAULT_MAX_UPDATES_PER_TICK, true);
             long[] tick = {saved.fluids().tick()}, sequence = {saved.sequence()};
             WorldTime[] time = {saved.time()}, previousTime = {saved.time()};
+            var weather = new WeatherSystem(identity.seed(), tick[0]);
+            weather.restore(saved.weather(), tick[0]);
+            WeatherSample[] previousWeather = {weather.sample(tick[0])};
             FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
             var growth = new PlantGrowthSystem(world, FAR_TILE_SIZE, identity.seed());
@@ -260,6 +266,16 @@ public final class WorldRuntime implements AutoCloseable {
                 }
 
                 @Override
+                public WeatherType weather() {
+                    return weather.snapshot().type();
+                }
+
+                @Override
+                public void setWeather(WeatherType type) {
+                    weather.set(type, tick[0]);
+                }
+
+                @Override
                 public boolean setMode(PlayerController.Mode mode) {
                     if (player.modeChangePending()) return false;
                     if (!player.setMode(world, mode)) return false;
@@ -325,9 +341,11 @@ public final class WorldRuntime implements AutoCloseable {
                             boolean movementWaiting = false;
                             Controls state = controls.get();
                             previousTime[0] = time[0];
+                            previousWeather[0] = weather.sample(tick[0]);
                             if (activated && !state.paused()) time[0] = time[0].tick();
                             if (activated && !state.paused()) tick[0] = Math.incrementExact(tick[0]);
                             growth.advanceClock(tick[0]);
+                            weather.update(tick[0]);
                             if (activated && !state.paused()) placementCooldown.tick();
                             Acknowledgement ack;
                             while ((ack = acknowledgements.poll()) != null) {
@@ -599,6 +617,7 @@ public final class WorldRuntime implements AutoCloseable {
                                         world,
                                         water,
                                         growth,
+                                        weather,
                                         tick[0],
                                         inventory,
                                         player,
@@ -706,6 +725,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     cameraEnvironment,
                                     previousTime[0],
                                     time[0],
+                                    previousWeather[0],
+                                    weather.sample(tick[0]),
                                     clock.tickRate()));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
@@ -722,6 +743,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 world,
                                 water,
                                 growth,
+                                weather,
                                 tick[0],
                                 inventory,
                                 player,
@@ -753,6 +775,7 @@ public final class WorldRuntime implements AutoCloseable {
             World world,
             FluidSimulator water,
             PlantGrowthSystem growth,
+            WeatherSystem weather,
             long tick,
             Inventory inventory,
             PlayerController player,
@@ -776,7 +799,8 @@ public final class WorldRuntime implements AutoCloseable {
                         player.flying()),
                 items.snapshot(),
                 time,
-                growth.snapshot());
+                growth.snapshot(),
+                weather.snapshot());
     }
 
     public long sessionId() {
@@ -1170,6 +1194,8 @@ public final class WorldRuntime implements AutoCloseable {
             CameraEnvironment cameraEnvironment,
             WorldTime previousTime,
             WorldTime worldTime,
+            WeatherSample previousWeather,
+            WeatherSample weather,
             double tickRate) {
         public Frame {
             Objects.requireNonNull(residency);
@@ -1185,6 +1211,8 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(cameraEnvironment);
             Objects.requireNonNull(previousTime);
             Objects.requireNonNull(worldTime);
+            Objects.requireNonNull(previousWeather);
+            Objects.requireNonNull(weather);
         }
 
         public Map<ChunkPos, Long> residents() {

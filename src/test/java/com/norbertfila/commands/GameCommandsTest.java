@@ -6,6 +6,7 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.weather.WeatherType;
 import com.norbertfila.world.BlockId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -14,6 +15,21 @@ import org.junit.jupiter.params.provider.ValueSource;
 class GameCommandsTest {
     private final GameCommands commands = new GameCommands();
     private final Source source = new Source();
+
+    @Test
+    void weatherCommandsValidateInputAndExposeAllFourStates() {
+        for (var type : WeatherType.values()) {
+            String name = type.name().toLowerCase(java.util.Locale.ROOT);
+            assertFalse(commands.execute("/weather " + name, source).error());
+            assertEquals(type, source.weather());
+            assertEquals(
+                    "Weather: " + name,
+                    commands.execute("/weather query", source).text());
+        }
+        assertTrue(commands.execute("/weather snow", source).error());
+        assertTrue(commands.execute("/weather rain extra", source).error());
+        assertEquals("storm", commands.suggest("/weather st", 11).getFirst().text());
+    }
 
     @Test
     void suggestsCommandsAndBiomesWithReplacementRanges() {
@@ -36,6 +52,18 @@ class GameCommandsTest {
         boolean allowRift;
         long seed;
         WorldTime time = WorldTime.INITIAL;
+        WeatherType weather = WeatherType.CLEAR;
+
+        @Override
+        public WeatherType weather() {
+            return weather;
+        }
+
+        @Override
+        public void setWeather(WeatherType type) {
+            weather = type;
+        }
+
         final FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
 
         @Override
