@@ -71,6 +71,27 @@ class WorldRuntimeTest {
     }
 
     @Test
+    void mobCommandsRunOnTheOwnerAndPublishMobs() throws Exception {
+        try (var runtime = start(new Flat(), directory.resolve("mobs.vxl"))) {
+            runtime.controls(controls(false, false));
+            await(runtime, f -> f.tick() > 0);
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/summon zombie")));
+            var summoned = await(runtime, f -> f.mobs().size() == 1);
+            assertEquals(
+                    com.norbertfila.mob.MobType.ZOMBIE,
+                    summoned.mobs().getFirst().type());
+            assertEquals(1, summoned.metrics().mobs());
+            runtime.controls(controls(true, true));
+            await(runtime, WorldRuntime.Frame::paused);
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/mobspawning off")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/kill mobs")));
+            var cleared =
+                    await(runtime, f -> f.mobs().isEmpty() && !f.mobCensus().naturalSpawning());
+            assertTrue(cleared.paused());
+        }
+    }
+
+    @Test
     void plantGrowthUsesSimulationTicksAndPersistsItsNextDeadline() throws Exception {
         Path save = TestWorlds.prepare(directory.resolve("plant-growth.vxl"), 42, 1);
         var base = TestWorlds.load(save);

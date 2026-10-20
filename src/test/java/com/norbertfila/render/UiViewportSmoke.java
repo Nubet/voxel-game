@@ -628,7 +628,9 @@ public final class UiViewportSmoke {
                                 8,
                                 32,
                                 4,
-                                BiomeType.TAIGA),
+                                BiomeType.TAIGA,
+                                com.norbertfila.mob.MobCensus.EMPTY,
+                                com.norbertfila.light.LightSample.UNKNOWN),
                         0);
         var geometry = FloatBuffer.allocate(canvas.floatCount());
         canvas.writeTo(geometry);
