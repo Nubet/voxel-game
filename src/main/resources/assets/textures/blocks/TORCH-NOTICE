@@ -1,0 +1,7 @@
+Torch textures are unchanged REFI_Textures assets from textures/default_mcl_core.
+refi_torch.png: default_torch_on_floor.png
+refi_torch_animated.png: mcl_torch_on_floor_animated.png (16 vertical frames)
+Source: https://github.com/MysticTempest/REFI_Textures
+Author: MysticTempest and REFI_Textures contributors.
+License: Creative Commons Attribution-ShareAlike 4.0 International.
+Full license: REFI_LICENSE.txt
