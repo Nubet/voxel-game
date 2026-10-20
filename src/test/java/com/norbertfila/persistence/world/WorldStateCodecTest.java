@@ -10,6 +10,8 @@ import com.norbertfila.player.Inventory;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.vegetation.PlantGrowthSnapshot;
+import com.norbertfila.vegetation.PlantGrowthState;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
@@ -60,20 +62,20 @@ class WorldStateCodecTest {
         byte[] original = Files.readAllBytes(file);
         for (int invalid : new int[] {-1, 72000, Integer.MAX_VALUE}) {
             byte[] bytes = original.clone();
-            ByteBuffer.wrap(bytes).putInt(bytes.length - 9, invalid);
+            ByteBuffer.wrap(bytes).putInt(bytes.length - 13, invalid);
             updatePayloadChecksum(bytes);
             Files.write(file, bytes);
             assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
         }
         byte[] bytes = original.clone();
-        bytes[bytes.length - 5] = 2;
+        bytes[bytes.length - 9] = 2;
         updatePayloadChecksum(bytes);
         Files.write(file, bytes);
         assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
     }
 
     @Test
-    void readsVersionThreeWithoutRewritingAndPublishesVersionFourOnlyOnSave() throws Exception {
+    void readsVersionThreeWithoutRewritingAndPublishesVersionFiveOnlyOnSave() throws Exception {
         var catalog = new WorldCatalog(directory, "default", 11);
         var metadata = new WorldMetadata(IDENTITY, "Legacy", SAVED_AT);
         catalog.create(metadata);
@@ -85,7 +87,7 @@ class WorldStateCodecTest {
         assertEquals(expected, catalog.open(IDENTITY.id()).snapshot());
         assertArrayEquals(legacy, Files.readAllBytes(file));
         WorldStateCodec.write(file, expected);
-        assertEquals(4, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         assertEquals(expected, catalog.open(IDENTITY.id()).snapshot());
         byte[] corrupt = legacy.clone();
         corrupt[HEADER_BYTES + 5] ^= 1;
@@ -121,6 +123,75 @@ class WorldStateCodecTest {
     }
 
     @Test
+    void readsVersionFourWithItsDayTimeAndNoPlantHistoryWithoutRewriting() throws Exception {
+        var base = withPlayer(new SavedPlayerState(1, 40, 2, 0, 0, Mode.SURVIVAL, false));
+        var time = new WorldTime(54001, false);
+        var expected = new WorldSnapshot(
+                base.identity(),
+                base.sequence(),
+                base.lastSavedAt(),
+                base.deltas(),
+                base.fluids(),
+                base.inventory(),
+                base.player(),
+                base.items(),
+                time);
+        byte[] v3 = legacyVersionThree(base);
+        byte[] v4 = Arrays.copyOf(v3, v3.length + 5);
+        var buffer = ByteBuffer.wrap(v4);
+        buffer.putInt(4, 4).putLong(HEADER_BYTES - 12, buffer.getLong(HEADER_BYTES - 12) + 5);
+        buffer.position(v3.length - 4);
+        buffer.putInt(time.tickOfDay()).put((byte) 0);
+        updateHeaderChecksum(v4);
+        updatePayloadChecksum(v4);
+        Path file = directory.resolve("v4.vxl");
+        Files.write(file, v4);
+        assertEquals(expected, WorldStateCodec.read(file, IDENTITY));
+        assertArrayEquals(v4, Files.readAllBytes(file));
+    }
+
+    @Test
+    void preservesDormantPlantDeadlinesAndRejectsMalformedGrowthWithValidChecksums() throws Exception {
+        var base = populated();
+        var growth = new PlantGrowthSnapshot(List.of(
+                new PlantGrowthState(new BlockPos(-17, 3, 2), BlockId.REED, 100, 200, 2),
+                new PlantGrowthState(new BlockPos(17, 3, 2), BlockId.REED, 300, 100000, 0)));
+        var expected = new WorldSnapshot(
+                base.identity(),
+                base.sequence(),
+                base.lastSavedAt(),
+                base.deltas(),
+                base.fluids(),
+                base.inventory(),
+                base.player(),
+                base.items(),
+                base.time(),
+                growth);
+        Path file = directory.resolve("plants.vxl");
+        WorldStateCodec.write(file, expected);
+        assertEquals(expected, WorldStateCodec.read(file, IDENTITY));
+        byte[] original = Files.readAllBytes(file);
+        int start = original.length - 4 - 2 * 37;
+        List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
+                bytes -> bytes.putInt(start - 4, -1),
+                bytes -> bytes.putInt(start - 4, Integer.MAX_VALUE),
+                bytes -> bytes.putInt(start + 4, Integer.MAX_VALUE),
+                bytes -> bytes.put(start + 12, BlockId.STONE),
+                bytes -> bytes.putLong(start + 13, -1),
+                bytes -> bytes.putLong(start + 13, 501),
+                bytes -> bytes.putLong(start + 21, 100),
+                bytes -> bytes.putLong(start + 29, -1),
+                bytes -> bytes.putInt(start + 37, -17));
+        for (var mutation : mutations) {
+            byte[] bytes = original.clone();
+            mutation.accept(ByteBuffer.wrap(bytes));
+            updatePayloadChecksum(bytes);
+            Files.write(file, bytes);
+            assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
+        }
+    }
+
+    @Test
     void roundTripPreservesFlyingDormantAndPartiallyPickedUpItemsAndRejectsMalformedEntities() throws Exception {
         var base = populated();
         var items = new ItemState(
@@ -142,7 +213,7 @@ class WorldStateCodecTest {
         WorldStateCodec.write(file, snapshot);
         assertEquals(snapshot, WorldStateCodec.read(file, IDENTITY));
         byte[] original = Files.readAllBytes(file);
-        int start = original.length - 4 - 5 - 2 * 73;
+        int start = original.length - 4 - 4 - 5 - 2 * 73;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putLong(start - 12, 1),
                 bytes -> bytes.putInt(start - 4, 4097),
@@ -176,7 +247,7 @@ class WorldStateCodecTest {
         assertEquals(SAVED_AT, header.lastSavedAt());
         assertEquals(Files.size(file) - HEADER_BYTES - 4, header.payloadBytes());
         assertEquals(0x56585731, ByteBuffer.wrap(Files.readAllBytes(file)).getInt());
-        assertEquals(4, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         Path copy = directory.resolve("copy.vxl");
         WorldStateCodec.write(copy, expected);
         assertArrayEquals(Files.readAllBytes(file), Files.readAllBytes(copy));
@@ -190,8 +261,8 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, initial);
         assertEquals(initial, WorldStateCodec.read(file, IDENTITY));
-        assertEquals(109, WorldStateCodec.readHeader(file).payloadBytes());
-        assertEquals(HEADER_BYTES + 109 + 4, Files.size(file));
+        assertEquals(113, WorldStateCodec.readHeader(file).payloadBytes());
+        assertEquals(HEADER_BYTES + 113 + 4, Files.size(file));
         assertTrue(initial.player().isEmpty());
         assertEquals(initial, WorldSnapshot.initial(IDENTITY, SAVED_AT.plusNanos(999_999)));
     }
@@ -224,7 +295,7 @@ class WorldStateCodecTest {
                 case SPECTATOR -> 2;
             };
             var bytes = Files.readAllBytes(file);
-            assertEquals(wireMode, bytes[bytes.length - 23]);
+            assertEquals(wireMode, bytes[bytes.length - 27]);
         }
     }
 
@@ -262,7 +333,7 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, withPlayer(new SavedPlayerState(1, 40, 2, 0, 0, Mode.CREATIVE, true)));
         byte[] original = Files.readAllBytes(file);
-        int player = original.length - 4 - 5 - 12 - 34;
+        int player = original.length - 4 - 4 - 5 - 12 - 34;
         int inventory = player - 1 - 75;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putInt(HEADER_BYTES, Integer.MAX_VALUE),
@@ -361,7 +432,7 @@ class WorldStateCodecTest {
                 new int[] {4, 0},
                 new int[] {4, 1},
                 new int[] {4, 2},
-                new int[] {4, 5},
+                new int[] {4, 6},
                 new int[] {4, Integer.MAX_VALUE})) {
             byte[] bytes = original.clone();
             ByteBuffer.wrap(bytes).putInt(mutation[0], mutation[1]);

@@ -119,7 +119,7 @@ class WorldCatalogTest {
         Files.delete(state(missing));
         Files.write(folder(corrupt).resolve("world.meta"), new byte[] {0});
         byte[] bytes = Files.readAllBytes(state(future));
-        ByteBuffer.wrap(bytes).putInt(4, 5);
+        ByteBuffer.wrap(bytes).putInt(4, 6);
         Files.write(state(future), bytes);
         Files.write(state(truncated), new byte[] {0});
         assertEquals(
