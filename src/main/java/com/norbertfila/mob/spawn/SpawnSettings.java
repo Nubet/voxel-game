@@ -35,7 +35,7 @@ public record SpawnSettings(
             3,
             8,
             289,
-            48,
+            32,
             3,
             4,
             6,

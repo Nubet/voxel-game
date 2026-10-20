@@ -85,6 +85,14 @@ tasks.register<JavaExec>("smokeMobs") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("benchmarkMobSpawning") {
+    group = "verification"
+    description = "Times natural spawn cycles with default caps, distances and light checks."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.mob.spawn.MobSpawnBenchmark")
+}
+
 tasks.register<JavaExec>("smokeScreenshots") {
     group = "verification"
     description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."
