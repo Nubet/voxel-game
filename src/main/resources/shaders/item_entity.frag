@@ -1,6 +1,7 @@
 #version 460 core
 
 uniform sampler2DArray uBlockTextures;
+uniform float uDaylight = 1.0;
 in vec2 vUv;
 flat in int vLayer;
 flat in float vLight;
@@ -15,5 +16,5 @@ void main() {
         color.rgb = mix(color.rgb, overlay.rgb * vec3(.32, .69, .22), overlay.a);
     }
     if (color.a < .1) discard;
-    fragColor = vec4(color.rgb * vLight, color.a);
+    fragColor = vec4(color.rgb * vLight * uDaylight, color.a);
 }

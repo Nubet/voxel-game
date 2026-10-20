@@ -29,6 +29,8 @@ import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.PlayerRenderer;
 import com.norbertfila.render.SkinManager;
+import com.norbertfila.render.SkyModel;
+import com.norbertfila.render.SkyRenderer;
 import com.norbertfila.render.TerrainRenderer;
 import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
@@ -138,6 +140,7 @@ public final class GameLoop {
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
                 CloudRenderer clouds = new CloudRenderer();
+                SkyRenderer skyRenderer = new SkyRenderer();
                 ScreenshotWriter screenshots = new ScreenshotWriter(Path.of("screenshots"));
                 PlayerRenderer players = skins == null ? null : new PlayerRenderer(skins)) {
             return run(
@@ -156,6 +159,7 @@ public final class GameLoop {
                     effects,
                     items,
                     clouds,
+                    skyRenderer,
                     players,
                     screenshots);
         }
@@ -177,6 +181,7 @@ public final class GameLoop {
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
             CloudRenderer clouds,
+            SkyRenderer skyRenderer,
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
@@ -535,11 +540,24 @@ public final class GameLoop {
                 visibility.update(medium.submerged(), medium.available(), delta);
             }
             if (gpuTimer != null) gpuTimer.beginFrame(gpuListener);
+            var sky = state == null
+                    ? SkyModel.DAY
+                    : SkyModel.interpolate(
+                            state.previousTime(),
+                            state.worldTime(),
+                            state.paused() ? 1 : state.interpolationAlpha(interpolationTime));
             glViewport(0, 0, width[0], height[0]);
-            glClearColor(visibility.backgroundRed(), visibility.backgroundGreen(), visibility.backgroundBlue(), 1f);
+            glClearColor(
+                    sky.horizon().red(), sky.horizon().green(), sky.horizon().blue(), 1f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             var viewProjection =
                     camera.relativeViewProjection(width[0], height[0], .1f, farPlane(settings.farDistance()));
+            skyRenderer.render(viewProjection, sky, visibility.amount());
+            renderer.environment(sky);
+            clouds.environment(sky);
+            items.environment(sky);
+            effects.environment(sky);
+            if (players != null) players.environment(sky);
             renderer.viewDistances(settings.renderDistance(), settings.farDistance());
             if (state != null) {
                 renderer.far()

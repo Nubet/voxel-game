@@ -38,6 +38,13 @@ application {
 }
 tasks.test { useJUnitPlatform() }
 
+tasks.register<Copy>("importSkyTextures") {
+    group = "assets"
+    description = "Imports the REFI sun and moon into the packaged game resources."
+    from("REFI_Textures-master/textures/sky_weather") { include("sun.png", "moon.png") }
+    into("src/main/resources/assets/textures/environment")
+}
+
 tasks.register<JavaExec>("smokeScreenshots") {
     group = "verification"
     description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."

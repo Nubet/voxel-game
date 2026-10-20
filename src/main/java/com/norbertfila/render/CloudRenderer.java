@@ -25,6 +25,7 @@ public final class CloudRenderer implements AutoCloseable {
     private final int periodUniform;
     private final int visibility;
     private final int fancy;
+    private final int cloudColor;
     private final double period;
     private boolean closed;
 
@@ -40,6 +41,7 @@ public final class CloudRenderer implements AutoCloseable {
             periodUniform = uniform(createdProgram, "uPeriod");
             visibility = uniform(createdProgram, "uVisibility");
             fancy = uniform(createdProgram, "uFancy");
+            cloudColor = uniform(createdProgram, "uCloudColor");
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uClouds"), 0);
             glProgramUniform1f(createdProgram, uniform(createdProgram, "uRadius"), RADIUS);
             createdVao = glGenVertexArrays();
@@ -145,6 +147,11 @@ public final class CloudRenderer implements AutoCloseable {
             glUseProgram(0);
             TerrainRenderer.restoreTerrainState();
         }
+    }
+
+    public void environment(SkyState sky) {
+        var color = sky.clouds();
+        glProgramUniform3f(program, cloudColor, color.red(), color.green(), color.blue());
     }
 
     static float phase(double position, double period) {

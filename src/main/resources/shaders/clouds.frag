@@ -9,6 +9,7 @@ uniform float uPeriod;
 uniform float uRadius;
 uniform float uVisibility;
 uniform bool uFancy;
+uniform vec3 uCloudColor = vec3(1.0);
 
 out vec4 fragColor;
 
@@ -23,5 +24,5 @@ void main() {
         if (alpha <= (float(BAYER[pixel.y * 4 + pixel.x]) + 0.5) / 16.0) discard;
         alpha = 1.0;
     }
-    fragColor = vec4(vec3(vShade), alpha);
+    fragColor = vec4(uCloudColor * vShade, alpha);
 }

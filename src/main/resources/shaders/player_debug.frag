@@ -12,6 +12,7 @@ uniform vec3 uSkyColor;
 uniform vec3 uWaterColor;
 uniform float uUnderwater;
 uniform float uOpacity;
+uniform float uDaylight = 1.0;
 out vec4 fragColor;
 
 void main() {
@@ -19,12 +20,12 @@ void main() {
     if (uOuterLayer && fragColor.a < 0.5) discard;
     fragColor.a = uOpacity;
     if (uWorldShading) {
-        fragColor.rgb *= vShade;
+        fragColor.rgb *= vShade * uDaylight;
         float haze = smoothstep(uDistanceFogRange.x, uDistanceFogRange.y, length(vCameraOffset.xz));
         fragColor.rgb = mix(fragColor.rgb, uSkyColor, haze * (1.0 - uUnderwater));
         float distanceInWater = max(length(vCameraOffset) - uWaterFogRange.x, 0.0);
         float waterHaze = (1.0 - exp(-distanceInWater * uWaterFogRange.y)) * uUnderwater;
         vec3 tinted = fragColor.rgb * mix(vec3(1.0), vec3(.78, .94, 1.0), uUnderwater);
-        fragColor.rgb = mix(tinted, uWaterColor, waterHaze);
+        fragColor.rgb = mix(tinted, uWaterColor * uDaylight, waterHaze);
     }
 }

@@ -18,6 +18,9 @@ final class TerrainProgram implements AutoCloseable {
     private final int waterTime;
     private final int waterFog;
     private final int distanceFogRange;
+    private final int distanceFogColor;
+    private final int daylight;
+    private float light = 1;
     private final int coverageOrigin;
     private final int coverageSize;
 
@@ -32,7 +35,8 @@ final class TerrainProgram implements AutoCloseable {
             waterTime = glGetUniformLocation(linked, "uWaterTime");
             waterFog = uniform(linked, "uWaterFog");
             distanceFogRange = uniform(linked, "uDistanceFogRange");
-            int distanceFogColor = uniform(linked, "uDistanceFogColor");
+            distanceFogColor = uniform(linked, "uDistanceFogColor");
+            daylight = uniform(linked, "uDaylight");
             coverageOrigin = uniform(linked, "uCoverageOrigin");
             coverageSize = uniform(linked, "uCoverageSize");
             int sampler = uniform(linked, "uBlockTextures");
@@ -66,9 +70,9 @@ final class TerrainProgram implements AutoCloseable {
         glUniform1f(waterTime, time);
         glUniform4f(
                 waterFog,
-                UnderwaterVisibility.FOG_RED,
-                UnderwaterVisibility.FOG_GREEN,
-                UnderwaterVisibility.FOG_BLUE,
+                UnderwaterVisibility.FOG_RED * light,
+                UnderwaterVisibility.FOG_GREEN * light,
+                UnderwaterVisibility.FOG_BLUE * light,
                 underwater);
         glUniform1i(coverageSize, 0);
     }
@@ -79,6 +83,13 @@ final class TerrainProgram implements AutoCloseable {
 
     void distanceFog(DistanceFog fog) {
         glProgramUniform2f(id, distanceFogRange, fog.start(), fog.end());
+    }
+
+    void environment(SkyState sky) {
+        light = sky.light();
+        glProgramUniform1f(id, daylight, light);
+        var color = sky.horizon();
+        glProgramUniform3f(id, distanceFogColor, color.red(), color.green(), color.blue());
     }
 
     /**

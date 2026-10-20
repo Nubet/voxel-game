@@ -68,6 +68,12 @@ public final class TerrainRenderer implements AutoCloseable {
         far.distanceFog(fog);
     }
 
+    public void environment(SkyState sky) {
+        solidProgram.environment(sky);
+        waterProgram.environment(sky);
+        far.environment(sky);
+    }
+
     public TerrainRenderer(BlockTextureArray blockTextures, int regionEdge, long gpuBudgetBytes) {
         this.blockTextures = Objects.requireNonNull(blockTextures);
         regionIndex = new RegionIndex(regionEdge);

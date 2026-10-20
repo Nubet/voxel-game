@@ -68,6 +68,10 @@ public final class FarTerrainRenderer implements AutoCloseable {
         program.distanceFog(fog);
     }
 
+    public void environment(SkyState sky) {
+        program.environment(sky);
+    }
+
     /**
      * Matches the GPU tiles to a newly published residency: dropped tiles are released, new ones queued so the tile
      * nearest the camera uploads first.

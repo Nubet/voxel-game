@@ -15,6 +15,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
     private final BlockTextureArray textures;
     private final Frustum frustum = new Frustum();
     private final int program, vao, vp, offset, angle, layers, cross, height;
+    private final int daylight;
     private boolean closed;
 
     public ItemEntityRenderer(BlockTextureArray textures) {
@@ -28,6 +29,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
             layers = ShaderPrograms.uniform(createdProgram, "uLayers");
             cross = ShaderPrograms.uniform(createdProgram, "uCross");
             height = ShaderPrograms.uniform(createdProgram, "uHeight");
+            daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uBlockTextures"), 0);
             createdVao = glCreateVertexArrays();
         } catch (RuntimeException | Error failure) {
@@ -120,6 +122,10 @@ public final class ItemEntityRenderer implements AutoCloseable {
             else glDisable(GL_DEPTH_TEST);
         }
         return drawn;
+    }
+
+    public void environment(SkyState sky) {
+        glProgramUniform1f(program, daylight, sky.light());
     }
 
     @Override

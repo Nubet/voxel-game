@@ -16,6 +16,7 @@ public final class BlockEffectsRenderer implements AutoCloseable {
     private final BlockTextureArray textures;
     private final int cracks, debris, vao, vbo;
     private final int crackVP, crackOffset, crackProgress, crackHeight, crackWidth, debrisVP;
+    private final int daylight;
     private FloatBuffer particles;
     private boolean closed;
 
@@ -31,6 +32,7 @@ public final class BlockEffectsRenderer implements AutoCloseable {
             crackHeight = ShaderPrograms.uniform(createdCracks, "uHeight");
             crackWidth = ShaderPrograms.uniform(createdCracks, "uWidth");
             debrisVP = ShaderPrograms.uniform(createdDebris, "uVP");
+            daylight = ShaderPrograms.uniform(createdDebris, "uDaylight");
             glProgramUniform1i(createdDebris, ShaderPrograms.uniform(createdDebris, "uBlockTextures"), 0);
             createdVao = glCreateVertexArrays();
             createdVbo = glCreateBuffers();
@@ -145,6 +147,10 @@ public final class BlockEffectsRenderer implements AutoCloseable {
             if (depth) glEnable(GL_DEPTH_TEST);
             else glDisable(GL_DEPTH_TEST);
         }
+    }
+
+    public void environment(SkyState sky) {
+        glProgramUniform1f(debris, daylight, sky.light());
     }
 
     @Override
