@@ -31,12 +31,12 @@ public final class SugarCaneGrowthRule implements GrowthRule {
 
     @Override
     public GrowthSite inspect(World world, BlockPos root) {
-        var dependencies = new HashSet<ChunkPos>();
-        var block = read(world, root, dependencies);
+        var dependencies = dependencies(root);
+        var block = read(world, root);
         if (block.isEmpty()) return site(GrowthSite.Status.UNAVAILABLE, root, dependencies);
         if (block.getAsInt() != BlockId.REED) return site(GrowthSite.Status.INVALID, root, dependencies);
         var ground = new BlockPos(root.x(), root.y() - 1, root.z());
-        var below = read(world, ground, dependencies);
+        var below = read(world, ground);
         if (below.isEmpty()) return site(GrowthSite.Status.UNAVAILABLE, root, dependencies);
         if (below.getAsInt() == BlockId.REED || !PlantRules.supports(BlockId.REED, (byte) below.getAsInt(), true))
             return site(GrowthSite.Status.INVALID, root, dependencies);
@@ -45,7 +45,7 @@ public final class SugarCaneGrowthRule implements GrowthRule {
             long x = (long) ground.x() + side[0], z = (long) ground.z() + side[1];
             if (x < Integer.MIN_VALUE || x > Integer.MAX_VALUE || z < Integer.MIN_VALUE || z > Integer.MAX_VALUE)
                 continue;
-            var neighbor = read(world, new BlockPos((int) x, ground.y(), (int) z), dependencies);
+            var neighbor = read(world, new BlockPos((int) x, ground.y(), (int) z));
             missing |= neighbor.isEmpty();
             water |= neighbor.orElse(BlockId.AIR) == BlockId.WATER;
         }
@@ -54,7 +54,7 @@ public final class SugarCaneGrowthRule implements GrowthRule {
         for (int height = 1; height < 3; height++) {
             var target = new BlockPos(root.x(), root.y() + height, root.z());
             if (!WorldBounds.containsY(target.y())) return site(GrowthSite.Status.BLOCKED, target, dependencies);
-            var above = read(world, target, dependencies);
+            var above = read(world, target);
             if (above.isEmpty()) return site(GrowthSite.Status.UNAVAILABLE, target, dependencies);
             if (above.getAsInt() != BlockId.REED)
                 return site(
@@ -65,10 +65,22 @@ public final class SugarCaneGrowthRule implements GrowthRule {
         return site(GrowthSite.Status.MATURE, root, dependencies);
     }
 
-    private static OptionalInt read(World world, BlockPos position, Set<ChunkPos> dependencies) {
+    private static OptionalInt read(World world, BlockPos position) {
         var chunk = Coordinates.worldToChunk(position);
-        dependencies.add(chunk);
         return world.hasChunk(chunk) ? world.getBlock(position) : OptionalInt.empty();
+    }
+
+    @Override
+    public Set<ChunkPos> dependencies(BlockPos root) {
+        var chunks = new HashSet<ChunkPos>();
+        for (int dy = -1; dy <= 2; dy++)
+            chunks.add(Coordinates.worldToChunk(new BlockPos(root.x(), root.y() + dy, root.z())));
+        for (int[] side : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+            long x = (long) root.x() + side[0], z = (long) root.z() + side[1];
+            if (x >= Integer.MIN_VALUE && x <= Integer.MAX_VALUE && z >= Integer.MIN_VALUE && z <= Integer.MAX_VALUE)
+                chunks.add(Coordinates.worldToChunk(new BlockPos((int) x, root.y() - 1, (int) z)));
+        }
+        return Set.copyOf(chunks);
     }
 
     private static GrowthSite site(GrowthSite.Status status, BlockPos target, Set<ChunkPos> dependencies) {
