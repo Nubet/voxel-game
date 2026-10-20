@@ -48,6 +48,12 @@ public final class MobSmoke {
             check(columnsWithPixels(day, SIZE / 3, 2 * SIZE / 3) > 20, "Zombie not visible");
             check(columnsWithPixels(day, 2 * SIZE / 3, SIZE) > 10, "Skeleton not visible");
             write(day, "day");
+            glClearColor(.2f, .4f, .8f, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderer.render(view, List.of(mobs.get(2)), 1, 1.4, 0, 0, fog, 0, BlockLightState.NONE);
+            var skeleton = capture();
+            check(backgroundPixels(skeleton, 232, 286, 236, 296) > 30, "Skeleton ribs are opaque");
+            write(skeleton, "skeleton-cutout");
             hitboxes.render(view, Hitboxes.of(mobs, List.of(), 1), 0, 0, 0);
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Hitboxes leaked state");
             var boxed = capture();
@@ -74,6 +80,17 @@ public final class MobSmoke {
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
         return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw);
+    }
+
+    private static int backgroundPixels(ByteBuffer pixels, int x0, int x1, int y0, int y1) {
+        int count = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++) {
+                int i = (y * SIZE + x) * 4;
+                if (Math.abs(Byte.toUnsignedInt(pixels.get(i + 2)) - 204) < 3
+                        && Math.abs(Byte.toUnsignedInt(pixels.get(i)) - 51) < 3) count++;
+            }
+        return count;
     }
 
     private static byte[] filled(int length, byte level) {

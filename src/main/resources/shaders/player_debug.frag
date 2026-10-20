@@ -5,6 +5,8 @@ in vec3 vCameraOffset;
 in float vShade;
 uniform sampler2D uSkin;
 uniform bool uOuterLayer;
+// Mob textures cut holes into their cuboids, such as the gaps between a skeleton's ribs.
+uniform bool uCutout;
 uniform bool uWorldShading;
 uniform vec2 uDistanceFogRange;
 uniform vec2 uWaterFogRange;
@@ -18,7 +20,7 @@ out vec4 fragColor;
 
 void main() {
     fragColor = texture(uSkin, vUV);
-    if (uOuterLayer && fragColor.a < 0.5) discard;
+    if ((uOuterLayer || uCutout) && fragColor.a < 0.5) discard;
     fragColor.a = uOpacity;
     if (uWorldShading) {
         // Same curve and tint as terrain.frag so entities match the ground they stand on.
