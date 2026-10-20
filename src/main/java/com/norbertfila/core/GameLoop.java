@@ -26,6 +26,8 @@ import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
+import com.norbertfila.render.HitboxRenderer;
+import com.norbertfila.render.Hitboxes;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.MobRenderer;
 import com.norbertfila.render.PlayerRenderer;
@@ -143,6 +145,7 @@ public final class GameLoop {
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
                 MobRenderer mobs = new MobRenderer();
+                HitboxRenderer hitboxes = new HitboxRenderer();
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
@@ -164,6 +167,7 @@ public final class GameLoop {
                     effects,
                     items,
                     mobs,
+                    hitboxes,
                     clouds,
                     precipitation,
                     skyRenderer,
@@ -188,6 +192,7 @@ public final class GameLoop {
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
             MobRenderer mobs,
+            HitboxRenderer hitboxes,
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
@@ -208,6 +213,7 @@ public final class GameLoop {
         var crosshairTransition = new CrosshairTransition();
         DebugOverlay debugOverlay = new DebugOverlay();
         boolean debugVisible = false;
+        boolean hitboxesVisible = false;
         ScreenManager screens = new ScreenManager();
         SettingsScreen settingsScreen = new SettingsScreen(
                 settings,
@@ -276,6 +282,13 @@ public final class GameLoop {
             }
             boolean debugPressed = input.debugPressed();
             if (input.focused() && debugPressed) debugVisible = !debugVisible;
+            if (input.hitboxesPressed() && input.focused()) {
+                hitboxesVisible = !hitboxesVisible;
+                chat.add(
+                        "[Debug]: Hitboxes: " + (hitboxesVisible ? "shown" : "hidden"),
+                        ChatHistory.Kind.SYSTEM,
+                        window.time());
+            }
             if (!input.leftMouseDown() && !input.rightMouseDown()) pointerReady = true;
             WorldRuntime.Frame state = runtime.frame();
             GameCommands.Reply reply;
@@ -661,6 +674,13 @@ public final class GameLoop {
                         camera.z(),
                         distanceFog,
                         visibility.amount());
+                if (hitboxesVisible) {
+                    var boxes = Hitboxes.of(state.mobs(), state.items(), itemAlpha);
+                    if (camera.perspective() != Camera.Perspective.FIRST)
+                        boxes.add(Hitboxes.player(
+                                state.playerState(), state.interpolatedEye(interpolationTime), camera.direction()));
+                    hitboxes.render(viewProjection, boxes, camera.x(), camera.y(), camera.z());
+                }
                 effects.render(
                         viewProjection,
                         mining,
