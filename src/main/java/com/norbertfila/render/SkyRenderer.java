@@ -3,11 +3,8 @@ package com.norbertfila.render;
 import static com.norbertfila.render.ShaderPrograms.uniform;
 import static org.lwjgl.opengl.GL46C.*;
 
-import java.io.IOException;
-import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
 
 public final class SkyRenderer implements AutoCloseable {
     private final int program, vao, sun, moon;
@@ -34,8 +31,8 @@ public final class SkyRenderer implements AutoCloseable {
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uSun"), 0);
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uMoon"), 1);
             createdVao = glCreateVertexArrays();
-            createdSun = texture("sun");
-            createdMoon = texture("moon");
+            createdSun = EnvironmentTexture.load("sun");
+            createdMoon = EnvironmentTexture.load("moon");
         } catch (RuntimeException | Error failure) {
             glDeleteTextures(createdSun);
             glDeleteTextures(createdMoon);
@@ -93,48 +90,6 @@ public final class SkyRenderer implements AutoCloseable {
             glBindVertexArray(0);
             glUseProgram(0);
             TerrainRenderer.restoreTerrainState();
-        }
-    }
-
-    private static int texture(String name) {
-        String resource = "/assets/textures/environment/" + name + ".png";
-        try (var stream = SkyRenderer.class.getResourceAsStream(resource)) {
-            if (stream == null) throw new IOException("Missing " + resource);
-            var image = ImageIO.read(stream);
-            if (image == null
-                    || image.getWidth() < 1
-                    || image.getWidth() > 512
-                    || image.getHeight() != image.getWidth()) throw new IOException("Invalid sky texture: " + resource);
-            int size = image.getWidth();
-            var pixels = MemoryUtil.memAlloc(size * size * 4);
-            int texture = 0;
-            try {
-                for (int y = 0; y < size; y++) {
-                    for (int x = 0; x < size; x++) {
-                        int argb = image.getRGB(x, y);
-                        pixels.put((byte) (argb >> 16))
-                                .put((byte) (argb >> 8))
-                                .put((byte) argb)
-                                .put((byte) (argb >> 24));
-                    }
-                }
-                pixels.flip();
-                texture = glCreateTextures(GL_TEXTURE_2D);
-                glTextureStorage2D(texture, 1, GL_RGBA8, size, size);
-                glTextureSubImage2D(texture, 0, 0, 0, size, size, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-                glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                return texture;
-            } catch (RuntimeException | Error failure) {
-                glDeleteTextures(texture);
-                throw failure;
-            } finally {
-                MemoryUtil.memFree(pixels);
-            }
-        } catch (IOException failure) {
-            throw new IllegalStateException("Cannot load sky texture: " + resource, failure);
         }
     }
 
