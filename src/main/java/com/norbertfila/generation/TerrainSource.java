@@ -6,6 +6,10 @@ public interface TerrainSource extends WorldGenerator {
 
     TerrainSummary sample(int worldX, int worldZ);
 
+    default float surfaceTemperature(TerrainSummary terrain) {
+        return terrain.climate().temperature();
+    }
+
     /** Selects a representative column inside the square; tile interiors and borders must use the same selection. */
     default SurfaceSample sampleArea(int originX, int originZ, int size) {
         if (size < 1 || size > 64) throw new IllegalArgumentException("Invalid terrain sample size");
