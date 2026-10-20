@@ -34,6 +34,7 @@ public final class MobRenderer implements AutoCloseable {
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
             blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uOuterLayer"), 0);
+            glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uCutout"), 1);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uWorldShading"), 1);
             glProgramUniform1f(createdProgram, ShaderPrograms.uniform(createdProgram, "uOpacity"), 1);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uSkin"), 0);
