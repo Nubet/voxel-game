@@ -1,11 +1,12 @@
 package com.norbertfila.mob.spawn;
 
+import com.norbertfila.mob.MobCategory;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.PopulationKey;
-import com.norbertfila.mob.SpawnZone;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.random.RandomGenerator;
 
 public final class SpawnTable {
@@ -26,12 +27,21 @@ public final class SpawnTable {
 
     public Optional<SpawnEntry> pick(PopulationKey key, RandomGenerator random) {
         Objects.requireNonNull(key);
+        return pick(entry -> entry.matches(key), random);
+    }
+
+    public Optional<SpawnEntry> pick(MobCategory category, RandomGenerator random) {
+        Objects.requireNonNull(category);
+        return pick(entry -> entry.type().category() == category, random);
+    }
+
+    private Optional<SpawnEntry> pick(Predicate<SpawnEntry> filter, RandomGenerator random) {
         int total = 0;
-        for (var entry : entries) if (entry.matches(key)) total += entry.weight();
+        for (var entry : entries) if (filter.test(entry)) total += entry.weight();
         if (total == 0) return Optional.empty();
         int roll = random.nextInt(total);
         for (var entry : entries) {
-            if (!entry.matches(key)) continue;
+            if (!filter.test(entry)) continue;
             roll -= entry.weight();
             if (roll < 0) return Optional.of(entry);
         }
