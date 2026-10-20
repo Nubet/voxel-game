@@ -13,7 +13,7 @@ public final class WeatherSystem {
     public WeatherSystem(long seed, long tick) {
         if (tick < 0) throw new IllegalArgumentException("Negative weather clock");
         this.seed = seed;
-        state = schedule(WeatherType.CLEAR, tick, 0, -1, new WeatherSample(.15f, 0, 0, 0));
+        state = schedule(WeatherType.CLEAR, tick, 0, -1, new WeatherSample(.15f, 0, 0, 0), false);
     }
 
     public WeatherState snapshot() {
@@ -41,11 +41,15 @@ public final class WeatherSystem {
                             : WeatherType.CLOUDY;
                 case STORM -> WeatherType.RAIN;
             };
-            set(next, nextTick);
+            set(next, nextTick, false);
         }
     }
 
     public void set(WeatherType type, long tick) {
+        set(type, tick, true);
+    }
+
+    private void set(WeatherType type, long tick, boolean instant) {
         Objects.requireNonNull(type);
         WeatherSample previous = sample(tick);
         state = schedule(
@@ -53,13 +57,14 @@ public final class WeatherSystem {
                 tick,
                 Math.incrementExact(state.cycle()),
                 type == WeatherType.STORM ? tick : state.lastStormTick(),
-                previous);
+                previous,
+                instant);
     }
 
     public WeatherSample sample(double tick) {
         if (!Double.isFinite(tick) || tick < state.startedAt())
             throw new IllegalArgumentException("Invalid weather clock");
-        double progress = (tick - state.startedAt()) / state.transitionTicks();
+        double progress = state.transitionTicks() == 0 ? 1 : (tick - state.startedAt()) / state.transitionTicks();
         float clouds = switch (state.type()) {
             case CLEAR -> .15f;
             case CLOUDY -> .8f;
@@ -92,14 +97,15 @@ public final class WeatherSystem {
         return age < 0 || age >= SECOND * .2 ? 0 : (float) (1 - age / (SECOND * .2));
     }
 
-    private WeatherState schedule(WeatherType type, long tick, long cycle, long lastStorm, WeatherSample from) {
+    private WeatherState schedule(
+            WeatherType type, long tick, long cycle, long lastStorm, WeatherSample from, boolean instant) {
         int seconds = switch (type) {
             case CLEAR -> 300 + (int) (random(cycle, 4) * 780);
             case CLOUDY -> 60 + (int) (random(cycle, 4) * 180);
             case RAIN -> 180 + (int) (random(cycle, 4) * 300);
             case STORM -> 60 + (int) (random(cycle, 4) * 120);
         };
-        int transition = (45 + (int) (random(cycle, 5) * 45)) * SECOND;
+        int transition = instant ? 0 : (45 + (int) (random(cycle, 5) * 45)) * SECOND;
         return new WeatherState(
                 type,
                 tick,
@@ -125,6 +131,6 @@ public final class WeatherSystem {
     }
 
     private static float mix(float from, float to, float alpha) {
-        return from + (to - from) * alpha;
+        return alpha == 1 ? to : from + (to - from) * alpha;
     }
 }

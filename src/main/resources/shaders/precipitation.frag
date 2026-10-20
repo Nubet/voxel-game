@@ -19,7 +19,7 @@ void main() {
     float fade = 1.0 - smoothstep(uRadius * 0.65, uRadius, length(vPosition.xz));
     fade *= smoothstep(0.5, 1.5, length(vPosition));
     fade *= 1.0 - smoothstep(10.0, 14.0, abs(vPosition.y));
-    float alpha = pixel.a * vAmount * fade * uVisibility * (vSnow == 1 ? 0.9 : 0.65);
+    float alpha = pixel.a * vAmount * fade * uVisibility * (vSnow == 1 ? 0.9 : 0.5);
     if (alpha < 0.005) discard;
     fragColor = vec4(pixel.rgb * max(uLight, 0.18), alpha);
 }

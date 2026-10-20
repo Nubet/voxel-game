@@ -31,8 +31,8 @@ void main() {
     vec2 horizontal = length(facing) < 0.001 ? vec2(1,0) : normalize(vec2(facing.y, -facing.x));
     vec3 right = vec3(horizontal.x, 0, horizontal.y);
     vec2 uv = CORNERS[gl_VertexID];
-    float width = vSnow == 1 ? 0.24 : 0.65;
-    float height = vSnow == 1 ? 0.24 : 2.0;
+    float width = vSnow == 1 ? 0.24 : 0.3;
+    float height = vSnow == 1 ? 0.24 : 1.0;
     vec3 position = center + right * ((uv.x - 0.5) * width) + vec3(0, (uv.y - 0.5) * height, 0);
     vPosition = position;
     vHeight = position.y - uOffset.y;

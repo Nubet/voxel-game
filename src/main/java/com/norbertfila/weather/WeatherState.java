@@ -15,7 +15,7 @@ public record WeatherState(
     public WeatherState {
         Objects.requireNonNull(type);
         if (startedAt < 0
-                || transitionTicks < 1
+                || transitionTicks < 0
                 || endsAt <= startedAt
                 || endsAt - startedAt < transitionTicks
                 || cycle < 0

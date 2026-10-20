@@ -39,7 +39,6 @@ public final class SkyModel {
                 .16f + .84f * daylight,
                 twilight,
                 1 - smooth(-.22f, .02f, y),
-                0,
                 1);
     }
 
@@ -68,7 +67,6 @@ public final class SkyModel {
                 daylight * (1 - cover * .2f - weather.storm() * .3f),
                 sky.twilight() * visibility,
                 sky.stars() * visibility,
-                cover,
                 visibility);
     }
 

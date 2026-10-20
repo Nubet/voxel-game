@@ -42,8 +42,17 @@ class WorldRuntimeTest {
             assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tick rate 120")));
             var frozen =
                     await(runtime, f -> f.tickRate() == 120 && f.worldTime().minecraftTime() == 18000);
-            assertEquals(paused.weather(), frozen.weather());
+            assertEquals(1, frozen.weather().storm());
+            assertEquals(.95f, frozen.weather().precipitation(), .0001);
+            assertEquals(frozen.weather(), frozen.previousWeather());
             assertEquals(paused.tick(), frozen.tick());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/weather clear")));
+            var clear = await(runtime, f -> f.weather().precipitation() == 0);
+            assertEquals(com.norbertfila.weather.WeatherSample.CLEAR, clear.weather());
+            assertEquals(clear.weather(), clear.previousWeather());
+            assertEquals(paused.tick(), clear.tick());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/weather storm")));
+            await(runtime, f -> f.weather().storm() == 1);
             runtime.controls(controls(true, false));
             await(runtime, f -> f.tick() > frozen.tick() + 10);
         }

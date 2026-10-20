@@ -282,6 +282,7 @@ public final class WorldRuntime implements AutoCloseable {
                 @Override
                 public void setWeather(WeatherType type) {
                     weather.set(type, tick[0]);
+                    previousWeather[0] = weather.sample(tick[0]);
                 }
 
                 @Override
