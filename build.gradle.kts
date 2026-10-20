@@ -361,6 +361,16 @@ tasks.register<JavaExec>("smokeCactus") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokePlantGrowth") {
+    group = "verification"
+    description = "Checks sugar cane growth, remeshing, harvesting and regrowth on OpenGL."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.PlantGrowthSmoke")
+    args(layout.buildDirectory.dir("plant-growth-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeOres") {
     group = "verification"
     description = "Renders the five ore blocks with their REFI textures."
