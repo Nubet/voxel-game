@@ -76,6 +76,15 @@ tasks.register<JavaExec>("smokeWeather") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeMobs") {
+    group = "verification"
+    description = "Checks mob models, textures, day/night shading, culling and OpenGL state."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.MobSmoke")
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeScreenshots") {
     group = "verification"
     description = "Checks screenshot PNG colors, orientation, resize and OpenGL state."

@@ -27,6 +27,7 @@ import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.ItemEntityRenderer;
+import com.norbertfila.render.MobRenderer;
 import com.norbertfila.render.PlayerRenderer;
 import com.norbertfila.render.PrecipitationRenderer;
 import com.norbertfila.render.SkinManager;
@@ -141,6 +142,7 @@ public final class GameLoop {
                 BlockOutlineRenderer outline = new BlockOutlineRenderer();
                 BlockEffectsRenderer effects = new BlockEffectsRenderer(renderer.blockTextures());
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
+                MobRenderer mobs = new MobRenderer();
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
@@ -161,6 +163,7 @@ public final class GameLoop {
                     outline,
                     effects,
                     items,
+                    mobs,
                     clouds,
                     precipitation,
                     skyRenderer,
@@ -184,6 +187,7 @@ public final class GameLoop {
             BlockOutlineRenderer outline,
             BlockEffectsRenderer effects,
             ItemEntityRenderer items,
+            MobRenderer mobs,
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
@@ -577,6 +581,7 @@ public final class GameLoop {
             renderer.environment(sky);
             clouds.environment(sky);
             items.environment(sky);
+            mobs.environment(sky);
             effects.environment(sky);
             if (players != null) players.environment(sky);
             renderer.distanceFog(distanceFog);
@@ -647,6 +652,15 @@ public final class GameLoop {
             if (state != null) {
                 double itemAlpha = state.paused() ? 0 : state.interpolationAlpha(interpolationTime);
                 items.render(viewProjection, state.items(), itemAlpha, camera.x(), camera.y(), camera.z());
+                mobs.render(
+                        viewProjection,
+                        state.mobs(),
+                        itemAlpha,
+                        camera.x(),
+                        camera.y(),
+                        camera.z(),
+                        distanceFog,
+                        visibility.amount());
                 effects.render(
                         viewProjection,
                         mining,

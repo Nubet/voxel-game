@@ -10,7 +10,11 @@ final class EnvironmentTexture {
     private EnvironmentTexture() {}
 
     static int load(String name) {
-        String resource = "/assets/textures/environment/" + name + ".png";
+        return loadResource("/assets/textures/environment/" + name + ".png");
+    }
+
+    /** Loads a classpath PNG as a nearest-filtered RGBA texture. */
+    static int loadResource(String resource) {
         try (var stream = EnvironmentTexture.class.getResourceAsStream(resource)) {
             if (stream == null) throw new IOException("Missing " + resource);
             var image = ImageIO.read(stream);
@@ -18,7 +22,7 @@ final class EnvironmentTexture {
                     || image.getWidth() < 1
                     || image.getWidth() > 512
                     || image.getHeight() < 1
-                    || image.getHeight() > 512) throw new IOException("Invalid environment texture: " + resource);
+                    || image.getHeight() > 512) throw new IOException("Invalid texture: " + resource);
             int width = image.getWidth(), height = image.getHeight();
             var pixels = MemoryUtil.memAlloc(width * height * 4);
             int texture = 0;
@@ -47,7 +51,7 @@ final class EnvironmentTexture {
                 MemoryUtil.memFree(pixels);
             }
         } catch (IOException failure) {
-            throw new IllegalStateException("Cannot load environment texture: " + resource, failure);
+            throw new IllegalStateException("Cannot load texture: " + resource, failure);
         }
     }
 }
