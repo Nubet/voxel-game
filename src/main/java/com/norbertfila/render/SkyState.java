@@ -9,7 +9,6 @@ public record SkyState(
         float light,
         float twilight,
         float stars,
-        float overcast,
         float celestialVisibility) {
     public record Color(float red, float green, float blue) {
         Color mix(Color other, float amount) {

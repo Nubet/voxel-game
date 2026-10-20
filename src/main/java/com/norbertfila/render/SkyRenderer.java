@@ -9,7 +9,7 @@ import org.lwjgl.system.MemoryStack;
 public final class SkyRenderer implements AutoCloseable {
     private final int program, vao, sun, moon;
     private final int inverseViewProjection, zenith, horizon, sunDirection, twilight, stars, underwater, waterLight;
-    private final int overcast, cloudColor, celestialVisibility;
+    private final int celestialVisibility;
     private final Matrix4f inverse = new Matrix4f();
     private boolean closed;
 
@@ -25,8 +25,6 @@ public final class SkyRenderer implements AutoCloseable {
             stars = uniform(createdProgram, "uStars");
             underwater = uniform(createdProgram, "uUnderwater");
             waterLight = uniform(createdProgram, "uWaterLight");
-            overcast = uniform(createdProgram, "uOvercast");
-            cloudColor = uniform(createdProgram, "uCloudColor");
             celestialVisibility = uniform(createdProgram, "uCelestialVisibility");
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uSun"), 0);
             glProgramUniform1i(createdProgram, uniform(createdProgram, "uMoon"), 1);
@@ -73,12 +71,6 @@ public final class SkyRenderer implements AutoCloseable {
             glUniform1f(stars, sky.stars());
             glUniform1f(underwater, water);
             glUniform1f(waterLight, sky.light());
-            glUniform1f(overcast, sky.overcast());
-            glUniform3f(
-                    cloudColor,
-                    sky.clouds().red(),
-                    sky.clouds().green(),
-                    sky.clouds().blue());
             glUniform1f(celestialVisibility, sky.celestialVisibility());
             glBindTextureUnit(0, sun);
             glBindTextureUnit(1, moon);

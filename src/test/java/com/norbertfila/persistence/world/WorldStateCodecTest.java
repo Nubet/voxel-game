@@ -43,7 +43,7 @@ class WorldStateCodecTest {
     Path directory;
 
     @Test
-    void preservesWeatherTransitionsAndRejectsInvalidWeatherWithValidChecksums() throws Exception {
+    void preservesInstantWeatherAndRejectsInvalidWeatherWithValidChecksums() throws Exception {
         var base = populated();
         var weather = new com.norbertfila.weather.WeatherSystem(IDENTITY.seed(), 0);
         weather.set(com.norbertfila.weather.WeatherType.STORM, 100);
@@ -67,7 +67,7 @@ class WorldStateCodecTest {
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.put(start, (byte) 4),
                 bytes -> bytes.putLong(start + 1, 501),
-                bytes -> bytes.putInt(start + 9, 0),
+                bytes -> bytes.putInt(start + 9, -1),
                 bytes -> bytes.putLong(start + 13, 500),
                 bytes -> bytes.putLong(start + 21, -1),
                 bytes -> bytes.putLong(start + 29, 101),
