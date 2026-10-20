@@ -1,4 +1,4 @@
-package com.norbertfila.mob.spawn;
+package com.norbertfila.mob;
 
 public enum SpawnZone {
     SURFACE,
