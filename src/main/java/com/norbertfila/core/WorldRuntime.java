@@ -212,7 +212,7 @@ public final class WorldRuntime implements AutoCloseable {
             growth.restore(saved.growth(), tick[0]);
             var biomeWeather = new BiomeWeather(generator);
             var precipitation = new PrecipitationField(world, biomeWeather);
-            var mobLifecycle = new MobLifecycle(world, NaturalSpawner.overworld(), identity.seed());
+            var mobLifecycle = new MobLifecycle(world, biomeWeather, NaturalSpawner.overworld(), identity.seed());
             LightSample[] feetLight = {LightSample.UNKNOWN};
             var blockLighting = new BlockLighting(world);
             world.setBlockChangeListener(mutation -> {

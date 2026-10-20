@@ -6,20 +6,32 @@ import java.util.Objects;
 import java.util.Optional;
 
 public enum MobType {
-    CREEPER("creeper", MobCategory.HOSTILE, .6, 1.7),
-    ZOMBIE("zombie", MobCategory.HOSTILE, .6, 1.95),
-    SKELETON("skeleton", MobCategory.HOSTILE, .6, 1.99);
+    CREEPER("creeper", MobCategory.HOSTILE, .6, 1.7, 20, false),
+    ZOMBIE("zombie", MobCategory.HOSTILE, .6, 1.95, 20, true),
+    SKELETON("skeleton", MobCategory.HOSTILE, .6, 1.99, 20, true);
 
     private final String id;
     private final MobCategory category;
     private final double width;
     private final double height;
+    private final float maxHealth;
+    private final boolean burnsInDaylight;
 
-    MobType(String id, MobCategory category, double width, double height) {
+    MobType(String id, MobCategory category, double width, double height, float maxHealth, boolean burnsInDaylight) {
         this.id = id;
         this.category = category;
         this.width = width;
         this.height = height;
+        this.maxHealth = maxHealth;
+        this.burnsInDaylight = burnsInDaylight;
+    }
+
+    public float maxHealth() {
+        return maxHealth;
+    }
+
+    public boolean burnsInDaylight() {
+        return burnsInDaylight;
     }
 
     public String id() {

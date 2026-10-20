@@ -79,7 +79,7 @@ public final class MobSmoke {
     }
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
-        return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw);
+        return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw, false, 0);
     }
 
     private static int backgroundPixels(ByteBuffer pixels, int x0, int x1, int y0, int y1) {

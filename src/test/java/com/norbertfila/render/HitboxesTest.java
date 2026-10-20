@@ -14,14 +14,15 @@ import org.junit.jupiter.api.Test;
 class HitboxesTest {
     @Test
     void mobBoxesFollowInterpolationEyeHeightAndFacing() {
-        var mob = new MobRenderState(1, MobType.ZOMBIE, 10, 64, 0, 12, 66, 0, 90);
+        var mob = new MobRenderState(1, MobType.ZOMBIE, 10, 64, 0, 12, 66, 0, 90, false, 0);
         var hitbox = Hitboxes.of(List.of(mob), List.of(), .5).getFirst();
         assertEquals(10.7, hitbox.box().minX(), 1e-9);
         assertEquals(65, hitbox.box().minY(), 1e-9);
         assertEquals(65 + 1.95 * .85, hitbox.eyeY(), 1e-9);
         assertEquals(1, hitbox.lookX(), 1e-9);
         assertEquals(0, hitbox.lookZ(), 1e-9);
-        var forward = Hitboxes.of(List.of(new MobRenderState(2, MobType.CREEPER, 0, 0, 0, 0, 0, 0, 0)), List.of(), 0)
+        var forward = Hitboxes.of(
+                        List.of(new MobRenderState(2, MobType.CREEPER, 0, 0, 0, 0, 0, 0, 0, false, 0)), List.of(), 0)
                 .getFirst();
         assertEquals(-1, forward.lookZ(), 1e-9);
     }
@@ -46,7 +47,7 @@ class HitboxesTest {
 
     @Test
     void verticesAreCameraRelativeWithWhiteBoxRedEyeAndBlueLook() {
-        var mob = new MobRenderState(1, MobType.SKELETON, 1e7, 64, 0, 1e7, 64, 0, 0);
+        var mob = new MobRenderState(1, MobType.SKELETON, 1e7, 64, 0, 1e7, 64, 0, 0, false, 0);
         var hitboxes = Hitboxes.of(List.of(mob), List.of(), 1);
         float[] vertices = HitboxRenderer.vertices(hitboxes, 1e7, 64, 0);
         assertEquals(HitboxRenderer.MAX_VERTICES_PER_HITBOX * HitboxRenderer.FLOATS_PER_VERTEX, vertices.length);

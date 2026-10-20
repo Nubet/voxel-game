@@ -12,7 +12,10 @@ import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.PlayerPosition;
 import com.norbertfila.mob.PopulationKey;
 import com.norbertfila.mob.SpawnZone;
+import com.norbertfila.mob.hazard.MobHazards;
+import com.norbertfila.mob.hazard.WorldHazardEnvironment;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.weather.BiomeWeather;
 import com.norbertfila.weather.WeatherSample;
 import com.norbertfila.world.BlockMutation;
 import com.norbertfila.world.BlockPos;
@@ -34,12 +37,15 @@ public final class MobLifecycle {
     private final LightProbe light;
     private final NaturalSpawner spawner;
     private final Despawner despawner;
+    private final MobHazards hazards = new MobHazards();
+    private final BiomeWeather biomes;
     private final SplittableRandom random;
     private boolean naturalSpawning = true;
     private int activeColumns;
 
-    public MobLifecycle(World world, NaturalSpawner spawner, long seed) {
+    public MobLifecycle(World world, BiomeWeather biomes, NaturalSpawner spawner, long seed) {
         this.world = Objects.requireNonNull(world);
+        this.biomes = Objects.requireNonNull(biomes);
         this.spawner = Objects.requireNonNull(spawner);
         despawner = new Despawner(spawner.settings());
         sky = new SkyExposure(world);
@@ -65,6 +71,7 @@ public final class MobLifecycle {
             int simulationDistance) {
         world.assertOwner();
         population.tick(world, dt);
+        hazards.tick(population, new WorldHazardEnvironment(world, sky, biomes, time, weather), random);
         if (tick % spawner.settings().cycleTicks() != 0) return;
         despawner.despawn(population, players, random);
         var environment = new WorldSpawnEnvironment(world, sky, light, time, weather, center, simulationDistance);
