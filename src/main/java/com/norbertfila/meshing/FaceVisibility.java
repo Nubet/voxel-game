@@ -21,14 +21,21 @@ final class FaceVisibility {
         int ny = y + VisibleFaceMesher.NORMALS[face][1];
         int nz = z + VisibleFaceMesher.NORMALS[face][2];
         if (nx >= 0 && ny >= 0 && nz >= 0 && nx < Chunk.SIZE && ny < Chunk.SIZE && nz < Chunk.SIZE)
-            return isVisible(block, snapshot.get(nx, ny, nz));
+            return isVisible(block, snapshot.get(nx, ny, nz), face);
         ChunkSnapshot neighbor = neighborhood.neighbor(SIDES[face]).orElse(null);
         // Unknown neighbors retain temporary faces until streaming supplies a new neighborhood.
         if (neighbor == null) return true;
         return isVisible(
                 block,
                 neighbor.get(
-                        Math.floorMod(nx, Chunk.SIZE), Math.floorMod(ny, Chunk.SIZE), Math.floorMod(nz, Chunk.SIZE)));
+                        Math.floorMod(nx, Chunk.SIZE), Math.floorMod(ny, Chunk.SIZE), Math.floorMod(nz, Chunk.SIZE)),
+                face);
+    }
+
+    private static boolean isVisible(byte block, byte neighbor, int face) {
+        if (block == BlockId.CACTUS)
+            return face != 2 && face != 3 || neighbor != BlockId.CACTUS && isVisible(block, neighbor);
+        return isVisible(block, neighbor);
     }
 
     private FaceVisibility() {}

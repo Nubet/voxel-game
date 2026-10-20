@@ -45,6 +45,9 @@ void main() {
         bool alongV = corner == 1 || corner == 2;
         bool alongU = corner >= 2;
         local = vec3(base + (alongV ? FACE_V[face] * height : ivec3(0)) + (alongU ? FACE_U[face] * width : ivec3(0)));
+        // Match QuadCodec: inset cactus sides behind the transparent one-pixel texture border.
+        if (((material >> 16) & 255u) == 31u && face != 2 && face != 3)
+            local -= cross(vec3(FACE_V[face]), vec3(FACE_U[face])) / 16.0;
         uint top = (material >> 24) & 7u;
         if (top != 0u && (face == 2 || (face != 3 && alongV))) local.y -= 1.0 - float(top) / 8.0;
         uint geometry = material >> 27;

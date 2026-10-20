@@ -113,6 +113,11 @@ public final class QuadCodec {
             int top = material >>> 24 & 7;
             if (top != 0 && (face == 2 || face != 3 && alongV)) py -= 1 - top / 8f;
             pz = cz * Chunk.SIZE + z + offset[2];
+            // Inset side planes meet behind the cactus texture's transparent one-pixel border.
+            if (block == com.norbertfila.world.BlockId.CACTUS && face != 2 && face != 3) {
+                px -= VisibleFaceMesher.NORMALS[face][0] / 16f;
+                pz -= VisibleFaceMesher.NORMALS[face][2] / 16f;
+            }
             if ((material >>> 27) != 0) {
                 var model = com.norbertfila.world.BlockRegistry.DEFAULT
                         .definition(block)

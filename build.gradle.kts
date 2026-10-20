@@ -335,6 +335,16 @@ tasks.register<JavaExec>("smokeClassicWater") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeCactus") {
+    group = "verification"
+    description = "Checks cactus corners from four sides and stacked geometry across a chunk boundary."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.generation.CactusSmoke")
+    args(layout.buildDirectory.dir("cactus-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeOres") {
     group = "verification"
     description = "Renders the five ore blocks with their REFI textures."

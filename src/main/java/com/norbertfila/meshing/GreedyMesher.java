@@ -98,8 +98,12 @@ public final class GreedyMesher implements ChunkMesher {
                     boolean visible = block != BlockId.AIR
                             && CUBE[id]
                             && !(excludeWater && BlockId.isFluid(block))
-                            && !OCCLUDES[Byte.toUnsignedInt(neighbor)]
-                            && !(block == neighbor && (BlockId.isFluid(block) || block == BlockId.ICE));
+                            && (block == BlockId.CACTUS && face != 2 && face != 3
+                                    || !OCCLUDES[Byte.toUnsignedInt(neighbor)])
+                            && !(block == neighbor
+                                    && (BlockId.isFluid(block)
+                                            || block == BlockId.ICE
+                                            || block == BlockId.CACTUS && (face == 2 || face == 3)));
                     int tint = com.norbertfila.generation.biome.BiomeTint.tintedTexture(TEXTURE[id][face])
                             ? scratch.snapshot.tintIndex(cell[0], cell[2])
                             : 0;
