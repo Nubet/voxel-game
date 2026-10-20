@@ -7,6 +7,8 @@ import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.vegetation.PlantGrowthSnapshot;
+import com.norbertfila.vegetation.PlantGrowthState;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.Chunk;
 import com.norbertfila.world.ChunkPos;
@@ -26,7 +28,8 @@ import java.util.zip.CheckedOutputStream;
 
 public final class WorldStateCodec {
     private static final int MAGIC = 0x56585731;
-    private static final int FORMAT_VERSION = 4;
+    private static final int FORMAT_VERSION = 5;
+    private static final int PLANT_BYTES = 37;
     private static final int TIME_BYTES = Integer.BYTES + 1;
     private static final int ITEM_BYTES = 73;
     private static final long MAX_FILE_BYTES = 64L * 1024 * 1024;
@@ -56,8 +59,11 @@ public final class WorldStateCodec {
 
     public static void write(Path target, WorldSnapshot snapshot) throws IOException {
         Objects.requireNonNull(snapshot);
-        Header header =
-                new Header(snapshot.identity(), snapshot.sequence(), snapshot.lastSavedAt(), payloadBytes(snapshot));
+        Header header = new Header(
+                snapshot.identity(),
+                snapshot.sequence(),
+                snapshot.lastSavedAt(),
+                payloadBytes(snapshot, FORMAT_VERSION));
         AtomicFile.replace(target, channel -> {
             var output = new DataOutputStream(new BufferedOutputStream(Channels.newOutputStream(channel)));
             byte[] headerBytes = encodeHeader(header, FORMAT_VERSION);
@@ -92,7 +98,7 @@ public final class WorldStateCodec {
             var checksum = new CRC32C();
             var payload = new DataInputStream(new CheckedInputStream(input, checksum));
             WorldSnapshot snapshot = readPayload(payload, header, fileHeader.version());
-            long expectedBytes = payloadBytes(snapshot) - (fileHeader.version() == 3 ? TIME_BYTES : 0);
+            long expectedBytes = payloadBytes(snapshot, fileHeader.version());
             if (expectedBytes != header.payloadBytes() || input.readInt() != (int) checksum.getValue())
                 throw new IOException("World state payload length/checksum mismatch");
             if (input.read() != -1) throw new IOException("Trailing world state bytes");
@@ -127,7 +133,7 @@ public final class WorldStateCodec {
         if (fileBytes > MAX_FILE_BYTES) throw new IOException("World state exceeds size limit");
         if (input.readInt() != MAGIC) throw new IOException("Invalid world state magic");
         int version = input.readInt();
-        if (version != 3 && version != FORMAT_VERSION)
+        if (version < 3 || version > FORMAT_VERSION)
             throw new UnsupportedWorldFormatException("Unsupported world state format");
         UUID id = new UUID(input.readLong(), input.readLong());
         long seed = input.readLong();
@@ -141,7 +147,8 @@ public final class WorldStateCodec {
             throw new IOException("World state header checksum mismatch");
         if (fileBytes != fileBytes(identity, header.payloadBytes()))
             throw new IOException("World state length mismatch");
-        if (version == FORMAT_VERSION && header.payloadBytes() < MIN_PAYLOAD_BYTES + TIME_BYTES)
+        if (header.payloadBytes()
+                < MIN_PAYLOAD_BYTES + (version >= 4 ? TIME_BYTES : 0) + (version >= 5 ? Integer.BYTES : 0))
             throw new IOException("World state payload is too short");
         return new FileHeader(header, version);
     }
@@ -156,9 +163,14 @@ public final class WorldStateCodec {
         return (int) checksum.getValue();
     }
 
-    private static long payloadBytes(WorldSnapshot snapshot) {
+    private static long payloadBytes(WorldSnapshot snapshot, int version) {
         long bytes = MIN_PAYLOAD_BYTES
-                + TIME_BYTES
+                + (version >= 4 ? TIME_BYTES : 0)
+                + (version >= 5
+                        ? Integer.BYTES
+                                + (long) PLANT_BYTES
+                                        * snapshot.growth().plants().size()
+                        : 0)
                 + (snapshot.player().isPresent() ? PLAYER_BYTES : 0)
                 + (long) ITEM_BYTES * snapshot.items().entities().size();
         for (var delta : snapshot.deltas()) bytes += 16L + 4L * delta.size();
@@ -221,6 +233,14 @@ public final class WorldStateCodec {
         }
         output.writeInt(snapshot.time().tickOfDay());
         output.writeBoolean(snapshot.time().cycleEnabled());
+        output.writeInt(snapshot.growth().plants().size());
+        for (var plant : snapshot.growth().plants()) {
+            writeBlock(output, plant.root());
+            output.writeByte(plant.blockId());
+            output.writeLong(plant.startedAt());
+            output.writeLong(plant.nextGrowthTick());
+            output.writeLong(plant.cycle());
+        }
     }
 
     private static WorldSnapshot readPayload(DataInputStream input, Header header, int version) throws IOException {
@@ -285,6 +305,16 @@ public final class WorldStateCodec {
                     readBoolean(input)));
         var items = new ItemState(nextId, entities);
         var time = version == 3 ? WorldTime.INITIAL : new WorldTime(input.readInt(), readBoolean(input));
+        var growth = PlantGrowthSnapshot.EMPTY;
+        if (version >= 5) {
+            int plantCount =
+                    count(input, Math.min(PlantGrowthSnapshot.MAX_PLANTS, (int) (header.payloadBytes() / PLANT_BYTES)));
+            var plants = new ArrayList<PlantGrowthState>();
+            for (int i = 0; i < plantCount; i++)
+                plants.add(new PlantGrowthState(
+                        readBlock(input), input.readByte(), input.readLong(), input.readLong(), input.readLong()));
+            growth = new PlantGrowthSnapshot(plants);
+        }
         return new WorldSnapshot(
                 header.identity(),
                 header.sequence(),
@@ -294,7 +324,8 @@ public final class WorldStateCodec {
                 inventory,
                 player,
                 items,
-                time);
+                time,
+                growth);
     }
 
     private static int count(DataInputStream input, int maximum) throws IOException {
