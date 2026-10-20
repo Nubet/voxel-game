@@ -403,6 +403,11 @@ public final class TerrainGenerator implements TerrainSource {
                         boundedLandscape(worldX, worldZ).classicness()));
     }
 
+    @Override
+    public float surfaceTemperature(TerrainSummary terrain) {
+        return ClimateRules.temperature(terrain.climate(), terrain.surfaceHeight(), config.baseHeight());
+    }
+
     private TerrainSummary sampleFoundation(int worldX, int worldZ) {
         ColumnSample column = columnSample(worldX, worldZ);
         int height = (int) Math.floor(column.elevation());
