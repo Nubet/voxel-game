@@ -3,6 +3,7 @@ package com.norbertfila.server;
 import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
+import com.norbertfila.vegetation.PlantGrowthSystem;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -19,6 +20,7 @@ public final class HeadlessWorldRunner implements AutoCloseable {
     private final World world;
     private final ChunkManager chunks;
     private final WorldEdit edits;
+    private final PlantGrowthSystem growth;
     private long tick;
     private boolean closed;
 
@@ -30,8 +32,12 @@ public final class HeadlessWorldRunner implements AutoCloseable {
         this.world = Objects.requireNonNull(world);
         this.chunks = new ChunkManager(world, Objects.requireNonNull(generator), Objects.requireNonNull(demand));
         this.edits = new WorldEdit(world, farTileSize);
+        growth = new PlantGrowthSystem(world, farTileSize, generator.seed());
+        world.setBlockChangeListener(growth::onBlockChanged);
+        for (var position : world.residentPositions()) growth.onChunkChanged(position);
         chunks.setChunkLifecycleListener(position -> {
             chunks.requestRemesh(edits.validatePlants(position));
+            growth.onChunkChanged(position);
         });
     }
 
@@ -40,6 +46,8 @@ public final class HeadlessWorldRunner implements AutoCloseable {
         if (closed) throw new IllegalStateException("Headless runner is closed");
         Objects.requireNonNull(center);
         Objects.requireNonNull(commands);
+        tick = Math.incrementExact(tick);
+        growth.advanceClock(tick);
         ChunkManager.UpdateResult update = chunks.update(center);
         int generated;
         try {
@@ -60,7 +68,10 @@ public final class HeadlessWorldRunner implements AutoCloseable {
                 }
             }
         }
-        tick++;
+        var grown = growth.update(tick, true);
+        changed += grown.changedBlocks();
+        dirty.addAll(grown.dirtyChunks());
+        chunks.requestRemesh(grown.dirtyChunks());
         return new TickResult(tick, generated, changed, List.copyOf(dirty), world.residentCount());
     }
 
