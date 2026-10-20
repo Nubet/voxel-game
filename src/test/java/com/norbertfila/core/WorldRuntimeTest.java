@@ -32,6 +32,57 @@ import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
     @Test
+    void plantGrowthUsesSimulationTicksAndPersistsItsNextDeadline() throws Exception {
+        Path save = TestWorlds.prepare(directory.resolve("plant-growth.vxl"), 42, 1);
+        var base = TestWorlds.load(save);
+        var world = new World();
+        var root = new BlockPos(6, 1, 6);
+        world.setBlock(new BlockPos(6, 0, 6), BlockId.SAND, 64);
+        world.setBlock(new BlockPos(7, 0, 6), BlockId.WATER, 64);
+        world.setBlock(root, BlockId.REED, 64);
+        var growth = new com.norbertfila.vegetation.PlantGrowthSnapshot(
+                java.util.List.of(new com.norbertfila.vegetation.PlantGrowthState(root, BlockId.REED, 0, 20, 0)));
+        var initial = new com.norbertfila.persistence.world.WorldSnapshot(
+                base.identity(),
+                1,
+                base.lastSavedAt(),
+                world.changes().deltas(),
+                base.fluids(),
+                base.inventory(),
+                java.util.Optional.of(new com.norbertfila.persistence.world.SavedPlayerState(
+                        .5, 1, .5, 0, 0, PlayerController.Mode.SURVIVAL, false)),
+                base.items(),
+                base.time(),
+                growth);
+        WorldStateCodec.write(save, initial);
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(0, paused.tick());
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/time set midnight")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tick rate 120")));
+            var stillPaused =
+                    await(runtime, f -> f.tickRate() == 120 && f.worldTime().minecraftTime() == 18000);
+            assertEquals(0, stillPaused.tick());
+            assertEquals(BlockId.AIR, stillPaused.cameraEnvironment().blocks().block(6, 2, 6));
+            runtime.controls(controls(true, false));
+            await(runtime, f -> f.tick() >= 25 && f.cameraEnvironment().blocks().block(6, 2, 6) == BlockId.REED);
+        }
+        var saved = TestWorlds.load(save);
+        assertEquals(20, saved.growth().plants().getFirst().startedAt());
+        assertEquals(1, saved.growth().plants().getFirst().cycle());
+        assertTrue(saved.growth().plants().getFirst().nextGrowthTick()
+                > saved.fluids().tick());
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var restored = await(runtime, WorldRuntime.Frame::paused);
+            assertEquals(saved.fluids().tick(), restored.tick());
+            assertEquals(BlockId.REED, restored.cameraEnvironment().blocks().block(6, 2, 6));
+        }
+        assertEquals(saved.growth(), TestWorlds.load(save).growth());
+    }
+
+    @Test
     void timeAndTickCommandsRunOnTheOwnerAndSaveTimeButResetTheSessionRate() throws Exception {
         Path save = directory.resolve("time-commands.vxl");
         try (var runtime = start(new Flat(), save)) {

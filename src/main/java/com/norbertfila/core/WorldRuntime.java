@@ -31,6 +31,7 @@ import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.streaming.WorkerCounts;
+import com.norbertfila.vegetation.PlantGrowthSystem;
 import com.norbertfila.world.*;
 import java.nio.file.Path;
 import java.util.*;
@@ -188,6 +189,9 @@ public final class WorldRuntime implements AutoCloseable {
             WorldTime[] time = {saved.time()}, previousTime = {saved.time()};
             FixedSimulation clock = new FixedSimulation(FixedSimulation.TICK_SECONDS, 5);
             WorldSnapshots.restore(world, saved, FAR_TILE_SIZE);
+            var growth = new PlantGrowthSystem(world, FAR_TILE_SIZE, identity.seed());
+            growth.restore(saved.growth(), tick[0]);
+            world.setBlockChangeListener(growth::onBlockChanged);
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
             var playerVisuals = new PlayerRenderStateExtractor();
@@ -303,6 +307,7 @@ public final class WorldRuntime implements AutoCloseable {
                 chunks.setChunkLifecycleListener(position -> {
                     chunks.requestRemesh(plantEdits.validatePlants(position));
                     water.onChunkChanged(position, tick[0]);
+                    growth.onChunkChanged(position);
                 });
                 HeldPlacementCooldown placementCooldown = new HeldPlacementCooldown();
                 long[] lastPlacePress = {0};
@@ -322,6 +327,7 @@ public final class WorldRuntime implements AutoCloseable {
                             previousTime[0] = time[0];
                             if (activated && !state.paused()) time[0] = time[0].tick();
                             if (activated && !state.paused()) tick[0] = Math.incrementExact(tick[0]);
+                            growth.advanceClock(tick[0]);
                             if (activated && !state.paused()) placementCooldown.tick();
                             Acknowledgement ack;
                             while ((ack = acknowledgements.poll()) != null) {
@@ -571,6 +577,8 @@ public final class WorldRuntime implements AutoCloseable {
                                             });
                                 }
                             } else breaking.cancel();
+                            var growthResult = growth.update(tick[0], activated && !state.paused());
+                            chunks.requestRemesh(growthResult.dirtyChunks());
                             if (activated && !state.paused())
                                 items.tick(
                                         world,
@@ -590,6 +598,7 @@ public final class WorldRuntime implements AutoCloseable {
                                         ++sequence[0],
                                         world,
                                         water,
+                                        growth,
                                         tick[0],
                                         inventory,
                                         player,
@@ -712,6 +721,7 @@ public final class WorldRuntime implements AutoCloseable {
                                 ++sequence[0],
                                 world,
                                 water,
+                                growth,
                                 tick[0],
                                 inventory,
                                 player,
@@ -742,6 +752,7 @@ public final class WorldRuntime implements AutoCloseable {
             long sequence,
             World world,
             FluidSimulator water,
+            PlantGrowthSystem growth,
             long tick,
             Inventory inventory,
             PlayerController player,
@@ -764,7 +775,8 @@ public final class WorldRuntime implements AutoCloseable {
                         player.mode(),
                         player.flying()),
                 items.snapshot(),
-                time);
+                time,
+                growth.snapshot());
     }
 
     public long sessionId() {
