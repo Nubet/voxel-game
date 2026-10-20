@@ -37,9 +37,58 @@ class WorldStateCodecTest {
             new WorldIdentity(UUID.fromString("a1111111-2222-4333-8444-555555555555"), Long.MIN_VALUE, "default", 11);
     private static final Instant SAVED_AT = Instant.parse("2026-10-14T12:34:56.789Z");
     private static final int HEADER_BYTES = 72;
+    private static final int WEATHER_BYTES = 49;
 
     @TempDir
     Path directory;
+
+    @Test
+    void preservesWeatherTransitionsAndRejectsInvalidWeatherWithValidChecksums() throws Exception {
+        var base = populated();
+        var weather = new com.norbertfila.weather.WeatherSystem(IDENTITY.seed(), 0);
+        weather.set(com.norbertfila.weather.WeatherType.STORM, 100);
+        var expected = new WorldSnapshot(
+                base.identity(),
+                base.sequence(),
+                base.lastSavedAt(),
+                base.deltas(),
+                base.fluids(),
+                base.inventory(),
+                base.player(),
+                base.items(),
+                base.time(),
+                base.growth(),
+                weather.snapshot());
+        Path file = directory.resolve("weather.vxl");
+        WorldStateCodec.write(file, expected);
+        assertEquals(expected, WorldStateCodec.read(file, IDENTITY));
+        byte[] original = Files.readAllBytes(file);
+        int start = original.length - 4 - WEATHER_BYTES;
+        List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
+                bytes -> bytes.put(start, (byte) 4),
+                bytes -> bytes.putLong(start + 1, 501),
+                bytes -> bytes.putInt(start + 9, 0),
+                bytes -> bytes.putLong(start + 13, 500),
+                bytes -> bytes.putLong(start + 21, -1),
+                bytes -> bytes.putLong(start + 29, 101),
+                bytes -> bytes.putFloat(start + 37, Float.NaN),
+                bytes -> bytes.putFloat(start + 41, 2));
+        for (var mutation : mutations) {
+            byte[] bytes = original.clone();
+            mutation.accept(ByteBuffer.wrap(bytes));
+            updatePayloadChecksum(bytes);
+            Files.write(file, bytes);
+            assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
+        }
+        byte[] v5 = Arrays.copyOf(original, original.length - WEATHER_BYTES);
+        var buffer = ByteBuffer.wrap(v5);
+        buffer.putInt(4, 5).putLong(HEADER_BYTES - 12, buffer.getLong(HEADER_BYTES - 12) - WEATHER_BYTES);
+        updateHeaderChecksum(v5);
+        updatePayloadChecksum(v5);
+        Files.write(file, v5);
+        assertEquals(base, WorldStateCodec.read(file, IDENTITY));
+        assertArrayEquals(v5, Files.readAllBytes(file));
+    }
 
     @Test
     void preservesTimeAndCycleRuleAndRejectsInvalidTimeEvenWithValidChecksum() throws Exception {
@@ -62,20 +111,20 @@ class WorldStateCodecTest {
         byte[] original = Files.readAllBytes(file);
         for (int invalid : new int[] {-1, 72000, Integer.MAX_VALUE}) {
             byte[] bytes = original.clone();
-            ByteBuffer.wrap(bytes).putInt(bytes.length - 13, invalid);
+            ByteBuffer.wrap(bytes).putInt(bytes.length - WEATHER_BYTES - 13, invalid);
             updatePayloadChecksum(bytes);
             Files.write(file, bytes);
             assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
         }
         byte[] bytes = original.clone();
-        bytes[bytes.length - 9] = 2;
+        bytes[bytes.length - WEATHER_BYTES - 9] = 2;
         updatePayloadChecksum(bytes);
         Files.write(file, bytes);
         assertThrows(IOException.class, () -> WorldStateCodec.read(file, IDENTITY));
     }
 
     @Test
-    void readsVersionThreeWithoutRewritingAndPublishesVersionFiveOnlyOnSave() throws Exception {
+    void readsVersionThreeWithoutRewritingAndPublishesVersionSixOnlyOnSave() throws Exception {
         var catalog = new WorldCatalog(directory, "default", 11);
         var metadata = new WorldMetadata(IDENTITY, "Legacy", SAVED_AT);
         catalog.create(metadata);
@@ -87,7 +136,7 @@ class WorldStateCodecTest {
         assertEquals(expected, catalog.open(IDENTITY.id()).snapshot());
         assertArrayEquals(legacy, Files.readAllBytes(file));
         WorldStateCodec.write(file, expected);
-        assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         assertEquals(expected, catalog.open(IDENTITY.id()).snapshot());
         byte[] corrupt = legacy.clone();
         corrupt[HEADER_BYTES + 5] ^= 1;
@@ -171,7 +220,7 @@ class WorldStateCodecTest {
         WorldStateCodec.write(file, expected);
         assertEquals(expected, WorldStateCodec.read(file, IDENTITY));
         byte[] original = Files.readAllBytes(file);
-        int start = original.length - 4 - 2 * 37;
+        int start = original.length - WEATHER_BYTES - 4 - 2 * 37;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putInt(start - 4, -1),
                 bytes -> bytes.putInt(start - 4, Integer.MAX_VALUE),
@@ -213,7 +262,7 @@ class WorldStateCodecTest {
         WorldStateCodec.write(file, snapshot);
         assertEquals(snapshot, WorldStateCodec.read(file, IDENTITY));
         byte[] original = Files.readAllBytes(file);
-        int start = original.length - 4 - 4 - 5 - 2 * 73;
+        int start = original.length - WEATHER_BYTES - 4 - 4 - 5 - 2 * 73;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putLong(start - 12, 1),
                 bytes -> bytes.putInt(start - 4, 4097),
@@ -247,7 +296,7 @@ class WorldStateCodecTest {
         assertEquals(SAVED_AT, header.lastSavedAt());
         assertEquals(Files.size(file) - HEADER_BYTES - 4, header.payloadBytes());
         assertEquals(0x56585731, ByteBuffer.wrap(Files.readAllBytes(file)).getInt());
-        assertEquals(5, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
+        assertEquals(6, ByteBuffer.wrap(Files.readAllBytes(file)).getInt(4));
         Path copy = directory.resolve("copy.vxl");
         WorldStateCodec.write(copy, expected);
         assertArrayEquals(Files.readAllBytes(file), Files.readAllBytes(copy));
@@ -261,8 +310,8 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, initial);
         assertEquals(initial, WorldStateCodec.read(file, IDENTITY));
-        assertEquals(113, WorldStateCodec.readHeader(file).payloadBytes());
-        assertEquals(HEADER_BYTES + 113 + 4, Files.size(file));
+        assertEquals(113 + WEATHER_BYTES, WorldStateCodec.readHeader(file).payloadBytes());
+        assertEquals(HEADER_BYTES + 113 + WEATHER_BYTES + 4, Files.size(file));
         assertTrue(initial.player().isEmpty());
         assertEquals(initial, WorldSnapshot.initial(IDENTITY, SAVED_AT.plusNanos(999_999)));
     }
@@ -295,7 +344,7 @@ class WorldStateCodecTest {
                 case SPECTATOR -> 2;
             };
             var bytes = Files.readAllBytes(file);
-            assertEquals(wireMode, bytes[bytes.length - 27]);
+            assertEquals(wireMode, bytes[bytes.length - WEATHER_BYTES - 27]);
         }
     }
 
@@ -333,7 +382,7 @@ class WorldStateCodecTest {
         Path file = directory.resolve("state.vxl");
         WorldStateCodec.write(file, withPlayer(new SavedPlayerState(1, 40, 2, 0, 0, Mode.CREATIVE, true)));
         byte[] original = Files.readAllBytes(file);
-        int player = original.length - 4 - 4 - 5 - 12 - 34;
+        int player = original.length - WEATHER_BYTES - 4 - 4 - 5 - 12 - 34;
         int inventory = player - 1 - 75;
         List<java.util.function.Consumer<ByteBuffer>> mutations = List.of(
                 bytes -> bytes.putInt(HEADER_BYTES, Integer.MAX_VALUE),
@@ -432,7 +481,7 @@ class WorldStateCodecTest {
                 new int[] {4, 0},
                 new int[] {4, 1},
                 new int[] {4, 2},
-                new int[] {4, 6},
+                new int[] {4, 7},
                 new int[] {4, Integer.MAX_VALUE})) {
             byte[] bytes = original.clone();
             ByteBuffer.wrap(bytes).putInt(mutation[0], mutation[1]);

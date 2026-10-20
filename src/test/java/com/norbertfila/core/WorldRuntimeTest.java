@@ -32,6 +32,36 @@ import org.junit.jupiter.api.io.TempDir;
 
 class WorldRuntimeTest {
     @Test
+    void weatherStopsOnPauseIgnoresTimeCommandsAndContinuesAfterSave() throws Exception {
+        Path save = directory.resolve("weather.vxl");
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var paused = await(runtime, WorldRuntime.Frame::paused);
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/weather storm")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/time set midnight")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/tick rate 120")));
+            var frozen =
+                    await(runtime, f -> f.tickRate() == 120 && f.worldTime().minecraftTime() == 18000);
+            assertEquals(paused.weather(), frozen.weather());
+            assertEquals(paused.tick(), frozen.tick());
+            runtime.controls(controls(true, false));
+            await(runtime, f -> f.tick() > frozen.tick() + 10);
+        }
+        var saved = TestWorlds.load(save);
+        assertEquals(com.norbertfila.weather.WeatherType.STORM, saved.weather().type());
+        var reference = new com.norbertfila.weather.WeatherSystem(
+                saved.identity().seed(), saved.fluids().tick());
+        reference.restore(saved.weather(), saved.fluids().tick());
+        try (var runtime = start(new Flat(), save)) {
+            runtime.controls(controls(true, true));
+            var restored = await(runtime, WorldRuntime.Frame::paused);
+            reference.update(restored.tick());
+            assertEquals(reference.sample(restored.tick()), restored.weather());
+        }
+        assertEquals(saved.weather(), TestWorlds.load(save).weather());
+    }
+
+    @Test
     void plantGrowthUsesSimulationTicksAndPersistsItsNextDeadline() throws Exception {
         Path save = TestWorlds.prepare(directory.resolve("plant-growth.vxl"), 42, 1);
         var base = TestWorlds.load(save);

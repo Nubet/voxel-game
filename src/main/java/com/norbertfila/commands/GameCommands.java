@@ -17,6 +17,7 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.weather.WeatherType;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockRegistry;
 import java.util.ArrayList;
@@ -37,6 +38,23 @@ public final class GameCommands {
     private final CommandDispatcher<Execution> dispatcher = new CommandDispatcher<>();
 
     public GameCommands() {
+        var weather = LiteralArgumentBuilder.<Execution>literal("weather");
+        weather.then(LiteralArgumentBuilder.<Execution>literal("query").executes(context -> {
+            context.getSource()
+                    .output()
+                    .add("Weather: "
+                            + context.getSource().source().weather().name().toLowerCase(Locale.ROOT));
+            return 1;
+        }));
+        for (var type : WeatherType.values()) {
+            String name = type.name().toLowerCase(Locale.ROOT);
+            weather.then(LiteralArgumentBuilder.<Execution>literal(name).executes(context -> {
+                context.getSource().source().setWeather(type);
+                context.getSource().output().add("Weather changing to: " + name);
+                return 1;
+            }));
+        }
+        dispatcher.register(weather);
         var timeSet = LiteralArgumentBuilder.<Execution>literal("set");
         String[] times = {"day", "noon", "night", "midnight"};
         int[] values = {1000, 6000, 13000, 18000};

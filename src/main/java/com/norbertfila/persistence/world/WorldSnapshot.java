@@ -6,6 +6,8 @@ import com.norbertfila.persistence.ChunkDelta;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.vegetation.PlantGrowthSnapshot;
+import com.norbertfila.weather.WeatherState;
+import com.norbertfila.weather.WeatherSystem;
 import com.norbertfila.world.ChunkPos;
 import java.time.Instant;
 import java.util.HashSet;
@@ -23,7 +25,33 @@ public record WorldSnapshot(
         Optional<SavedPlayerState> player,
         ItemState items,
         WorldTime time,
-        PlantGrowthSnapshot growth) {
+        PlantGrowthSnapshot growth,
+        WeatherState weather) {
+    public WorldSnapshot(
+            WorldIdentity identity,
+            long sequence,
+            Instant lastSavedAt,
+            List<ChunkDelta> deltas,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory,
+            Optional<SavedPlayerState> player,
+            ItemState items,
+            WorldTime time,
+            PlantGrowthSnapshot growth) {
+        this(
+                identity,
+                sequence,
+                lastSavedAt,
+                deltas,
+                fluids,
+                inventory,
+                player,
+                items,
+                time,
+                growth,
+                new WeatherSystem(identity.seed(), fluids.tick()).snapshot());
+    }
+
     public WorldSnapshot(
             WorldIdentity identity,
             long sequence,
@@ -79,6 +107,9 @@ public record WorldSnapshot(
         Objects.requireNonNull(items);
         Objects.requireNonNull(time);
         Objects.requireNonNull(growth);
+        Objects.requireNonNull(weather);
+        if (weather.startedAt() > fluids.tick() || weather.endsAt() <= fluids.tick())
+            throw new IllegalArgumentException("Weather schedule does not contain the world clock");
         for (var plant : growth.plants())
             if (plant.startedAt() > fluids.tick())
                 throw new IllegalArgumentException("Plant starts after the world clock");
@@ -96,7 +127,8 @@ public record WorldSnapshot(
                         || !inventory.equals(InventorySnapshot.EMPTY)
                         || !items.equals(ItemState.EMPTY)
                         || !time.equals(WorldTime.INITIAL)
-                        || !growth.equals(PlantGrowthSnapshot.EMPTY)))
+                        || !growth.equals(PlantGrowthSnapshot.EMPTY)
+                        || !weather.equals(new WeatherSystem(identity.seed(), 0).snapshot())))
             throw new IllegalArgumentException("An unstarted world must have an empty initial snapshot");
     }
 

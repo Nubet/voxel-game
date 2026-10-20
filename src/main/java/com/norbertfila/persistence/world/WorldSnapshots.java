@@ -5,6 +5,8 @@ import com.norbertfila.items.ItemState;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.vegetation.PlantGrowthSnapshot;
+import com.norbertfila.weather.WeatherState;
+import com.norbertfila.weather.WeatherSystem;
 import com.norbertfila.world.*;
 import java.time.Instant;
 import java.util.*;
@@ -55,9 +57,43 @@ public final class WorldSnapshots {
             ItemState items,
             WorldTime time,
             PlantGrowthSnapshot growth) {
+        return capture(
+                identity,
+                sequence,
+                world,
+                fluids,
+                inventory,
+                player,
+                items,
+                time,
+                growth,
+                new WeatherSystem(identity.seed(), fluids.tick()).snapshot());
+    }
+
+    public static WorldSnapshot capture(
+            WorldIdentity identity,
+            long sequence,
+            World world,
+            FluidSnapshot fluids,
+            InventorySnapshot inventory,
+            SavedPlayerState player,
+            ItemState items,
+            WorldTime time,
+            PlantGrowthSnapshot growth,
+            WeatherState weather) {
         var deltas = world.changes().deltas();
         return new WorldSnapshot(
-                identity, sequence, Instant.now(), deltas, fluids, inventory, Optional.of(player), items, time, growth);
+                identity,
+                sequence,
+                Instant.now(),
+                deltas,
+                fluids,
+                inventory,
+                Optional.of(player),
+                items,
+                time,
+                growth,
+                weather);
     }
 
     public static void restore(World world, WorldSnapshot snapshot, int farTileSize) {

@@ -4,6 +4,7 @@ import com.norbertfila.generation.biome.BiomeType;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.weather.WeatherType;
 
 public interface CommandSource {
     long seed();
@@ -19,6 +20,10 @@ public interface CommandSource {
     double tickRate();
 
     void setTickRate(double rate);
+
+    WeatherType weather();
+
+    void setWeather(WeatherType type);
 
     default boolean teleport(PlayerState.Position position) {
         return false;

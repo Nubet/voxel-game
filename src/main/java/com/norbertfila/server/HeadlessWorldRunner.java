@@ -4,6 +4,9 @@ import com.norbertfila.generation.WorldGenerator;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.streaming.ViewDemand;
 import com.norbertfila.vegetation.PlantGrowthSystem;
+import com.norbertfila.weather.WeatherState;
+import com.norbertfila.weather.WeatherSystem;
+import com.norbertfila.weather.WeatherType;
 import com.norbertfila.world.BlockChangeResult;
 import com.norbertfila.world.BlockId;
 import com.norbertfila.world.BlockPos;
@@ -21,6 +24,7 @@ public final class HeadlessWorldRunner implements AutoCloseable {
     private final ChunkManager chunks;
     private final WorldEdit edits;
     private final PlantGrowthSystem growth;
+    private final WeatherSystem weather;
     private long tick;
     private boolean closed;
 
@@ -33,6 +37,7 @@ public final class HeadlessWorldRunner implements AutoCloseable {
         this.chunks = new ChunkManager(world, Objects.requireNonNull(generator), Objects.requireNonNull(demand));
         this.edits = new WorldEdit(world, farTileSize);
         growth = new PlantGrowthSystem(world, farTileSize, generator.seed());
+        weather = new WeatherSystem(generator.seed(), 0);
         world.setBlockChangeListener(growth::onBlockChanged);
         for (var position : world.residentPositions()) growth.onChunkChanged(position);
         chunks.setChunkLifecycleListener(position -> {
@@ -48,6 +53,7 @@ public final class HeadlessWorldRunner implements AutoCloseable {
         Objects.requireNonNull(commands);
         tick = Math.incrementExact(tick);
         growth.advanceClock(tick);
+        weather.update(tick);
         ChunkManager.UpdateResult update = chunks.update(center);
         int generated;
         try {
@@ -83,6 +89,16 @@ public final class HeadlessWorldRunner implements AutoCloseable {
     public long tickCount() {
         assertOwner();
         return tick;
+    }
+
+    public WeatherState weather() {
+        assertOwner();
+        return weather.snapshot();
+    }
+
+    public void setWeather(WeatherType type) {
+        assertOwner();
+        weather.set(type, tick);
     }
 
     private void assertOwner() {
