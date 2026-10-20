@@ -85,6 +85,7 @@ public final class MobPopulation {
             }
             physics.step(world, mob, dt);
             mob.ticksAwayFromPlayers++;
+            mob.ageHurt();
             ChunkPos after = mob.chunk();
             if (!after.equals(before)) {
                 unindex(before, mob);

@@ -11,9 +11,12 @@ public record MobRenderState(
         double x,
         double y,
         double z,
-        float yaw) {
+        float yaw,
+        boolean burning,
+        float hurt) {
     public MobRenderState {
         Objects.requireNonNull(type);
+        if (!(hurt >= 0 && hurt <= 1)) throw new IllegalArgumentException("Hurt fade must be in [0, 1]");
     }
 
     public double interpolatedX(double alpha) {
