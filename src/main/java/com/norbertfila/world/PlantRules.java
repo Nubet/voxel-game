@@ -19,7 +19,8 @@ public final class PlantRules {
                     BlockId.REED,
                     BlockId.MUSHROOM,
                     BlockId.BERRY_BUSH,
-                    BlockId.ALPINE_GRASS -> true;
+                    BlockId.ALPINE_GRASS,
+                    BlockId.TORCH -> true;
             case BlockId.SNOW_LAYER -> true;
             default -> false;
         };
@@ -63,6 +64,7 @@ public final class PlantRules {
                         || ground == BlockId.JUNGLE_LEAVES
                         || ground == BlockId.AZALEA_LEAVES
                         || ground == BlockId.FLOWERING_AZALEA_LEAVES;
+            case BlockId.TORCH -> BlockRegistry.DEFAULT.occludesFullFace(ground);
             case BlockId.CACTUS -> ground == BlockId.SAND || ground == BlockId.RED_SAND || ground == BlockId.CACTUS;
             case BlockId.DEAD_BUSH -> supportsDry(ground) || supports(ground);
             case BlockId.REED ->

@@ -15,7 +15,39 @@ public record BlockDefinition(
         boolean targetable,
         BlockShape shape,
         boolean replaceable,
-        double breakSeconds) {
+        double breakSeconds,
+        int lightEmission) {
+    public BlockDefinition(
+            int id,
+            String name,
+            int topTexture,
+            int bottomTexture,
+            int sideTexture,
+            boolean collidable,
+            boolean occludesFullFace,
+            RenderLayer renderLayer,
+            boolean breakable,
+            boolean targetable,
+            BlockShape shape,
+            boolean replaceable,
+            double breakSeconds) {
+        this(
+                id,
+                name,
+                topTexture,
+                bottomTexture,
+                sideTexture,
+                collidable,
+                occludesFullFace,
+                renderLayer,
+                breakable,
+                targetable,
+                shape,
+                replaceable,
+                breakSeconds,
+                0);
+    }
+
     public BlockDefinition(
             int id,
             String name,
@@ -102,6 +134,31 @@ public record BlockDefinition(
         Objects.requireNonNull(shape);
         if (!Double.isFinite(breakSeconds) || breakSeconds < 0)
             throw new IllegalArgumentException("Block breaking time must be finite and non-negative");
+        if (lightEmission < 0 || lightEmission > 15)
+            throw new IllegalArgumentException("Light emission must be in [0, 15]");
+    }
+
+    public BlockDefinition withLightEmission(int level) {
+        return new BlockDefinition(
+                id,
+                name,
+                topTexture,
+                bottomTexture,
+                sideTexture,
+                collidable,
+                occludesFullFace,
+                renderLayer,
+                breakable,
+                targetable,
+                shape,
+                replaceable,
+                breakSeconds,
+                level);
+    }
+
+    /** Light passes through every block that does not cover a full face, matching the mesher's occlusion. */
+    public boolean transmitsLight() {
+        return !occludesFullFace;
     }
 
     public int textureLayer(int face) {
