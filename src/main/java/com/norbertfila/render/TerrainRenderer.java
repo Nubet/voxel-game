@@ -62,7 +62,10 @@ public final class TerrainRenderer implements AutoCloseable {
     }
 
     public void viewDistances(int detailChunks, int landscapeChunks) {
-        var fog = DistanceFog.forDistances(detailChunks, landscapeChunks);
+        distanceFog(DistanceFog.forDistances(detailChunks, landscapeChunks));
+    }
+
+    public void distanceFog(DistanceFog fog) {
         solidProgram.distanceFog(fog);
         waterProgram.distanceFog(fog);
         far.distanceFog(fog);

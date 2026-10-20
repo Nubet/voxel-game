@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import com.norbertfila.render.SkyState.Color;
 import com.norbertfila.simulation.WorldTime;
+import com.norbertfila.weather.WeatherSample;
 
 public final class SkyModel {
     private static final Color DAY_ZENITH = new Color(.22f, .49f, .88f);
@@ -37,7 +38,38 @@ public final class SkyModel {
                 y,
                 .16f + .84f * daylight,
                 twilight,
-                1 - smooth(-.22f, .02f, y));
+                1 - smooth(-.22f, .02f, y),
+                0,
+                1);
+    }
+
+    public static SkyState weather(SkyState sky, WeatherSample weather) {
+        float cover = smooth(.2f, 1, weather.clouds());
+        float visibility = 1 - cover;
+        float daylight = sky.light();
+        var grey = new Color(.38f * daylight, .41f * daylight, .46f * daylight);
+        var storm = new Color(.14f * daylight, .16f * daylight, .20f * daylight);
+        var flash = new Color(.8f, .84f, .9f);
+        return new SkyState(
+                sky.zenith()
+                        .mix(grey, cover * .8f)
+                        .mix(storm, weather.storm() * .7f)
+                        .mix(flash, weather.flash() * .8f),
+                sky.horizon()
+                        .mix(grey, cover * .7f)
+                        .mix(storm, weather.storm() * .65f)
+                        .mix(flash, weather.flash() * .65f),
+                sky.clouds()
+                        .mix(grey, cover * .8f)
+                        .mix(storm, weather.storm() * .65f)
+                        .mix(flash, weather.flash() * .8f),
+                sky.sunX(),
+                sky.sunY(),
+                daylight * (1 - cover * .2f - weather.storm() * .3f),
+                sky.twilight() * visibility,
+                sky.stars() * visibility,
+                cover,
+                visibility);
     }
 
     private static float smooth(float start, float end, float value) {

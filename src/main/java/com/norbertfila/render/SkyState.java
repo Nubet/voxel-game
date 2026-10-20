@@ -1,7 +1,16 @@
 package com.norbertfila.render;
 
 public record SkyState(
-        Color zenith, Color horizon, Color clouds, float sunX, float sunY, float light, float twilight, float stars) {
+        Color zenith,
+        Color horizon,
+        Color clouds,
+        float sunX,
+        float sunY,
+        float light,
+        float twilight,
+        float stars,
+        float overcast,
+        float celestialVisibility) {
     public record Color(float red, float green, float blue) {
         Color mix(Color other, float amount) {
             return new Color(
