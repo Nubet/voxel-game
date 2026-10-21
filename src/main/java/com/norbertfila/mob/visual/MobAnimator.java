@@ -1,5 +1,6 @@
 package com.norbertfila.mob.visual;
 
+import com.norbertfila.mob.Mob;
 import com.norbertfila.mob.MobAction;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.simulation.FixedSimulation;
@@ -26,6 +27,16 @@ public final class MobAnimator {
     public record Pose(float[] pitch, float[] yaw, float scaleXZ, float scaleY, boolean flash) {}
 
     private MobAnimator() {}
+
+    /**
+     * Minecraft's death roll about the body's long axis: sqrt(1.6 t) of a quarter turn, where t counts from one
+     * 20 Hz tick after death, so the mob tips over quickly and settles on its side.
+     */
+    public static float deathRoll(MobRenderState state, double alpha) {
+        if (state.death() == 0) return 0;
+        double since = state.death() - (1 - alpha) / Mob.DEATH_TICKS - 1 / 20.0;
+        return (float) (Math.min(1, Math.sqrt(Math.max(0, since) * 1.6)) * Math.PI / 2);
+    }
 
     public static Pose pose(MobRenderState state, double alpha) {
         var model = MobModels.of(state.type());

@@ -101,6 +101,34 @@ public final class MobSmoke {
             write(stars, "critical-hit");
             clear();
             renderer.environment(SkyModel.DAY);
+            for (float death : new float[] {0, .3f, 1}) {
+                var zombie = mob(2, MobType.ZOMBIE, 0, 180);
+                var dying = new MobRenderState(
+                        2,
+                        MobType.ZOMBIE,
+                        zombie.previousX(),
+                        zombie.previousY(),
+                        zombie.previousZ(),
+                        zombie.x(),
+                        zombie.y(),
+                        zombie.z(),
+                        zombie.previousYaw(),
+                        zombie.yaw(),
+                        0,
+                        0,
+                        false,
+                        0,
+                        MobAction.NONE,
+                        0,
+                        death);
+                clear();
+                renderer.render(view, List.of(dying), 1, 0, 0, 0, fog, 0, BlockLightState.NONE);
+                var frame = capture();
+                check(death == 0 || redPixels(frame) > 500, "Dying zombie is not tinted red");
+                write(frame, "death-" + (int) (death * 100));
+            }
+            clear();
+            renderer.environment(SkyModel.DAY);
             var posed = List.of(
                     new MobRenderState(
                             1,
