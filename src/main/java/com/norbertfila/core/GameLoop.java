@@ -26,6 +26,7 @@ import com.norbertfila.render.ArrowRenderer;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
+import com.norbertfila.render.CriticalHitRenderer;
 import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.EntityFireRenderer;
 import com.norbertfila.render.FramebufferCapture;
@@ -154,6 +155,7 @@ public final class GameLoop {
                 HitboxRenderer hitboxes = new HitboxRenderer();
                 EntityFireRenderer entityFire = new EntityFireRenderer();
                 ArrowRenderer arrows = new ArrowRenderer();
+                CriticalHitRenderer criticalHits = new CriticalHitRenderer();
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
@@ -178,6 +180,7 @@ public final class GameLoop {
                     hitboxes,
                     entityFire,
                     arrows,
+                    criticalHits,
                     clouds,
                     precipitation,
                     skyRenderer,
@@ -205,6 +208,7 @@ public final class GameLoop {
             HitboxRenderer hitboxes,
             EntityFireRenderer entityFire,
             ArrowRenderer arrows,
+            CriticalHitRenderer criticalHits,
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
@@ -697,6 +701,14 @@ public final class GameLoop {
                 entityFire.render(
                         viewProjection, state.mobs(), itemAlpha, camera.x(), camera.y(), camera.z(), effectSeconds);
                 arrows.render(viewProjection, state.arrows(), itemAlpha, camera.x(), camera.y(), camera.z());
+                criticalHits.render(
+                        viewProjection,
+                        state.criticalHits(),
+                        effectSeconds,
+                        camera.x(),
+                        camera.y(),
+                        camera.z(),
+                        camera.direction());
                 if (hitboxesVisible) {
                     var boxes = Hitboxes.of(state.mobs(), state.items(), itemAlpha);
                     if (camera.perspective() != Camera.Perspective.FIRST)

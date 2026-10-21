@@ -27,7 +27,8 @@ public final class MobSmoke {
                 var renderer = new MobRenderer();
                 var hitboxes = new HitboxRenderer();
                 var fire = new EntityFireRenderer();
-                var arrows = new ArrowRenderer()) {
+                var arrows = new ArrowRenderer();
+                var crits = new CriticalHitRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
             var view = new Matrix4f()
                     .perspective((float) Math.toRadians(60), 1, .1f, 128)
@@ -90,6 +91,14 @@ public final class MobSmoke {
             var flames = capture();
             check(orangePixels(flames) > 2000, "Burning mobs show no flames");
             write(flames, "burning");
+            clear();
+            var hit = new com.norbertfila.combat.CriticalHitEvent(
+                    60, new com.norbertfila.world.Aabb(-.3, 0, -.3, .3, 1.95, .3));
+            crits.render(relative, List.of(hit), 1.05, 0, 1.2, 4.5, new org.joml.Vector3f(0, -.2f, -4.5f).normalize());
+            check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Critical hit particles leaked state");
+            var stars = capture();
+            check(total(stars) > 0, "Critical hit shows no particles");
+            write(stars, "critical-hit");
             clear();
             renderer.environment(SkyModel.DAY);
             var posed = List.of(

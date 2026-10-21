@@ -2,8 +2,8 @@ package com.norbertfila.core;
 
 import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.combat.AttackTarget;
+import com.norbertfila.combat.CriticalHitEvent;
 import com.norbertfila.combat.Health;
-import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.commands.LocationSearch;
@@ -383,6 +383,7 @@ public final class WorldRuntime implements AutoCloseable {
                 }
             };
             Deque<BlockBreakEvent> brokenBlocks = new ArrayDeque<>();
+            Deque<CriticalHitEvent> criticalHits = new ArrayDeque<>();
             BlockInteraction interaction = new BlockInteraction(world, FAR_TILE_SIZE, position -> {
                 water.onBlockChanged(position, tick[0]);
                 breaking.blockChanged(position);
@@ -662,12 +663,19 @@ public final class WorldRuntime implements AutoCloseable {
                                         boolean inWater = WaterContact.sample(world, player.state())
                                                         .submergedFraction()
                                                 > 0;
+                                        var target = struck.get().target();
                                         combat.attack(
-                                                        struck.get().target(),
+                                                        target,
                                                         PlayerCombat.attacker(player, mining.yaw(), inWater),
                                                         mobLifecycle::near)
-                                                .filter(MeleeAttack.Outcome::sprintHit)
-                                                .ifPresent(hit -> player.endSprintByAttack());
+                                                .ifPresent(hit -> {
+                                                    if (hit.sprintHit()) player.endSprintByAttack();
+                                                    if (hit.critical()) {
+                                                        criticalHits.addLast(
+                                                                new CriticalHitEvent(tick[0], target.body()));
+                                                        if (criticalHits.size() > 32) criticalHits.removeFirst();
+                                                    }
+                                                });
                                         playerVisuals.swing(tick[0], true);
                                     }
                                 } else {
@@ -820,6 +828,7 @@ public final class WorldRuntime implements AutoCloseable {
                             var validMeshes = Map.copyOf(valid);
                             var inventorySnapshot = inventory.snapshot();
                             var breaks = List.copyOf(brokenBlocks);
+                            var crits = List.copyOf(criticalHits);
                             var itemSnapshot = items.renderSnapshot(world);
                             var cameraEnvironment = cameraEnvironment(world, player.renderEyePosition(1));
                             var weatherSample = weather.sample(tick[0]);
@@ -887,6 +896,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     (float) combat.charge(),
                                     breaking.progress(),
                                     breaks,
+                                    crits,
                                     itemSnapshot,
                                     biome,
                                     playerRenderState,
@@ -1389,6 +1399,7 @@ public final class WorldRuntime implements AutoCloseable {
             float attackCharge,
             Optional<BlockBreaking.Progress> breaking,
             List<BlockBreakEvent> brokenBlocks,
+            List<CriticalHitEvent> criticalHits,
             List<ItemRenderState> items,
             BiomeType biome,
             PlayerRenderState playerRenderState,
@@ -1416,6 +1427,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(target);
             Objects.requireNonNull(breaking);
             brokenBlocks = List.copyOf(brokenBlocks);
+            criticalHits = List.copyOf(criticalHits);
             items = List.copyOf(items);
             Objects.requireNonNull(playerRenderState);
             Objects.requireNonNull(cameraEnvironment);
