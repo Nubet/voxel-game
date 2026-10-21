@@ -1,0 +1,18 @@
+Textures in this directory are unchanged REFI_Textures assets.
+From textures/default_mcl_core/tools:
+wooden_pickaxe.png: default_tool_woodpick.png
+wooden_axe.png: default_tool_woodaxe.png
+wooden_sword.png: default_tool_woodsword.png
+stone_pickaxe.png: default_tool_stonepick.png
+stone_axe.png: default_tool_stoneaxe.png
+stone_sword.png: default_tool_stonesword.png
+iron_pickaxe.png: default_tool_steelpick.png
+iron_axe.png: default_tool_steelaxe.png
+iron_sword.png: default_tool_steelsword.png
+diamond_pickaxe.png: default_tool_diamondpick.png
+diamond_axe.png: default_tool_diamondaxe.png
+diamond_sword.png: default_tool_diamondsword.png
+Source: https://github.com/MysticTempest/REFI_Textures
+Author: MysticTempest and REFI_Textures contributors.
+License: Creative Commons Attribution-ShareAlike 4.0 International.
+Full license: ../blocks/REFI_LICENSE.txt
