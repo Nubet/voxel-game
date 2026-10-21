@@ -7,14 +7,15 @@ import org.junit.jupiter.api.Test;
 
 class MeleeAttackTest {
     private static final MeleeWeapon SWORD = MeleeWeapon.of(Tool.DIAMOND_SWORD.id());
-    private static final Attacker STANDING = Attacker.standing(0, 0);
-    private static final Attacker FALLING = new Attacker(0, 0, false, true, false, false);
+    private static final Attacker STANDING = Attacker.standing(0, 0, 0);
+    private static final Attacker FALLING = new Attacker(0, 0, 0, false, true, false, false);
 
     @Test
     void scalesWeaponDamageByTheCharge() {
         var charge = new AttackCharge();
         assertEquals(
-                new MeleeAttack.Outcome(7, MeleeAttack.KNOCKBACK, false), MeleeAttack.resolve(SWORD, charge, STANDING));
+                new MeleeAttack.Outcome(7, MeleeAttack.KNOCKBACK, 0, false),
+                MeleeAttack.resolve(SWORD, charge, STANDING));
         charge.reset();
         assertEquals(7 * .20128f, MeleeAttack.resolve(SWORD, charge, STANDING).damage(), 1e-5);
         charge.tick(.3);
@@ -34,14 +35,27 @@ class MeleeAttackTest {
                 1e-5);
         for (var blocked : new Attacker[] {
             STANDING,
-            new Attacker(0, 0, false, false, false, false),
-            new Attacker(0, 0, false, true, true, false),
-            new Attacker(0, 0, false, true, false, true)
+            new Attacker(0, 0, 0, false, false, false, false),
+            new Attacker(0, 0, 0, false, true, true, false),
+            new Attacker(0, 0, 0, false, true, false, true)
         }) assertFalse(MeleeAttack.resolve(SWORD, charge, blocked).critical());
         charge.reset();
         charge.tick(.5);
         assertFalse(MeleeAttack.resolve(SWORD, charge, FALLING).critical());
         charge.tick(.04);
         assertTrue(MeleeAttack.resolve(SWORD, charge, FALLING).critical());
+    }
+
+    @Test
+    void sprintingWithAnAlmostFullChargeAddsKnockback() {
+        var sprinting = new Attacker(0, 0, 0, true, false, true, false);
+        var charge = new AttackCharge();
+        var hit = MeleeAttack.resolve(SWORD, charge, sprinting);
+        assertTrue(hit.sprintHit());
+        assertEquals(MeleeAttack.SPRINT_KNOCKBACK, hit.sprintKnockback());
+        assertFalse(hit.critical());
+        assertFalse(MeleeAttack.resolve(SWORD, charge, STANDING).sprintHit());
+        charge.reset();
+        assertFalse(MeleeAttack.resolve(SWORD, charge, sprinting).sprintHit());
     }
 }

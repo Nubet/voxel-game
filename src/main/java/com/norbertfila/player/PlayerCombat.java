@@ -7,6 +7,7 @@ import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.combat.MeleeWeapon;
 import java.util.Objects;
+import java.util.Optional;
 
 /** The local player's melee swings: the weapon in hand, its recharge and the hits it lands. */
 public final class PlayerCombat {
@@ -36,26 +37,34 @@ public final class PlayerCombat {
     }
 
     /** Creative flight never counts as falling, so it cannot land critical hits. */
-    public static Attacker attacker(PlayerController player, boolean inWater) {
+    public static Attacker attacker(PlayerController player, double yawDegrees, boolean inWater) {
         var state = player.state();
         return new Attacker(
                 state.position().x(),
                 state.position().z(),
+                yawDegrees,
                 state.grounded(),
                 !state.grounded() && !player.flying() && state.velocityY() < 0,
                 player.sprinting(),
                 inWater);
     }
 
-    public boolean attack(AttackTarget target, Attacker attacker) {
+    /** The outcome of a hit the target took, or empty when it ignored the hit. */
+    public Optional<MeleeAttack.Outcome> attack(AttackTarget target, Attacker attacker) {
         Objects.requireNonNull(target);
         Objects.requireNonNull(attacker);
         var outcome = MeleeAttack.resolve(MeleeWeapon.of(heldItem), charge, attacker);
         charge.reset();
+        double pushX = attacker.facingX() * outcome.sprintKnockback(),
+                pushZ = attacker.facingZ() * outcome.sprintKnockback();
         double dx = target.x() - attacker.x(), dz = target.z() - attacker.z();
         double length = Math.hypot(dx, dz);
-        double pushX = length < 1e-9 ? 0 : dx / length * outcome.knockback();
-        double pushZ = length < 1e-9 ? 0 : dz / length * outcome.knockback();
-        return target.hurt(DamageSource.PLAYER_ATTACK, outcome.damage(), pushX, pushZ);
+        if (length > 1e-9) {
+            pushX += dx / length * outcome.knockback();
+            pushZ += dz / length * outcome.knockback();
+        }
+        return target.hurt(DamageSource.PLAYER_ATTACK, outcome.damage(), pushX, pushZ)
+                ? Optional.of(outcome)
+                : Optional.empty();
     }
 }

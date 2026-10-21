@@ -3,6 +3,7 @@ package com.norbertfila.core;
 import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.combat.AttackTarget;
 import com.norbertfila.combat.Health;
+import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.commands.LocationSearch;
@@ -661,7 +662,11 @@ public final class WorldRuntime implements AutoCloseable {
                                         boolean inWater = WaterContact.sample(world, player.state())
                                                         .submergedFraction()
                                                 > 0;
-                                        combat.attack(struck.get().target(), PlayerCombat.attacker(player, inWater));
+                                        combat.attack(
+                                                        struck.get().target(),
+                                                        PlayerCombat.attacker(player, mining.yaw(), inWater))
+                                                .filter(MeleeAttack.Outcome::sprintHit)
+                                                .ifPresent(hit -> player.endSprintByAttack());
                                         playerVisuals.swing(tick[0], true);
                                     }
                                 } else {
