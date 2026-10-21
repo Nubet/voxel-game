@@ -1,6 +1,5 @@
 package com.norbertfila.ui;
 
-/** Minecraft's attack cooldown bar: a 16x4 strip under the crosshair while a swing recharges. */
 public final class AttackIndicator {
     static final int WIDTH = 16, HEIGHT = 4;
     private static final int GAP_BELOW_CROSSHAIR = 2;

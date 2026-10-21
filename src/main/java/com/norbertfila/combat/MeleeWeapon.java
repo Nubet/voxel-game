@@ -30,7 +30,6 @@ public record MeleeWeapon(float damage, float attackSpeed, boolean sweeps) {
         };
     }
 
-    /** Seconds until a swing regains full strength. */
     public double cooldownSeconds() {
         return 1 / attackSpeed;
     }

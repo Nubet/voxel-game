@@ -12,7 +12,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
-/** The local player's melee swings: the weapon in hand, its recharge and the hits it lands. */
 public final class PlayerCombat {
     private final AttackCharge charge = new AttackCharge();
     private byte heldItem;
@@ -55,9 +54,8 @@ public final class PlayerCombat {
     }
 
     /**
-     * Strikes the target and, for a sweep, the bodies that {@code nearby} returns around it. Returns the outcome when
-     * the target took the hit, or empty when it ignored it. Sprint knockback lands separately, as in Minecraft, so a
-     * stronger hit during the hurt cooldown still pushes.
+     * Empty when the target ignored the hit. Sprint knockback is applied separately, as in Minecraft, so that a hit
+     * which only tops up damage during the hurt cooldown still pushes.
      */
     public Optional<MeleeAttack.Outcome> attack(
             AttackTarget target,

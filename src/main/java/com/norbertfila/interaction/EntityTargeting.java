@@ -6,7 +6,6 @@ import com.norbertfila.world.Aabb;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Finds the attackable body nearest along the view ray, as Minecraft picks the entity under the crosshair. */
 public final class EntityTargeting {
     public static final double SURVIVAL_REACH = 3;
     public static final double CREATIVE_REACH = 5;
@@ -50,7 +49,7 @@ public final class EntityTargeting {
         return Optional.ofNullable(nearest);
     }
 
-    /** Slab test; an origin inside the body counts as distance zero and a miss as infinity. */
+    /** An origin inside the body counts as distance zero. */
     private static double entry(Aabb body, Ray ray) {
         double near = 0, far = Double.POSITIVE_INFINITY;
         double[] origin = {ray.originX(), ray.originY(), ray.originZ()};
@@ -71,7 +70,6 @@ public final class EntityTargeting {
         return near;
     }
 
-    /** A view ray with a unit direction. */
     public record Ray(
             double originX, double originY, double originZ, double directionX, double directionY, double directionZ) {
         public Ray {

@@ -3,7 +3,6 @@ package com.norbertfila.items;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Hand tools stored in the item ids above every block id. */
 public enum Tool {
     WOODEN_PICKAXE(Type.PICKAXE, Tier.WOOD),
     WOODEN_AXE(Type.AXE, Tier.WOOD),
@@ -55,7 +54,6 @@ public enum Tool {
         SWORD
     }
 
-    /** Minecraft tool materials: harvest level and mining speed multiplier. */
     public enum Tier {
         WOOD(0, 2),
         STONE(1, 4),
