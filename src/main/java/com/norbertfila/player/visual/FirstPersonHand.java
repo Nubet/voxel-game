@@ -59,6 +59,27 @@ public final class FirstPersonHand {
                 .rotateZ(PI);
     }
 
+    /**
+     * Maps an item model over unit space to view space, with Minecraft's first-person display transform for a block
+     * model or for a generated (sprite) model.
+     */
+    public static Matrix4f rightHandItem(boolean block, float swing, float equip) {
+        float root = (float) Math.sqrt(swing);
+        var matrix = new Matrix4f()
+                .translation(-.4f * sin(root * PI), .2f * sin(root * 2 * PI), -.2f * sin(swing * PI))
+                .translate(.56f, -.52f - equip * .6f, -.72f)
+                .rotateY(radians(45 + sin(swing * swing * PI) * -20))
+                .rotateZ(radians(sin(root * PI) * -20))
+                .rotateX(radians(sin(root * PI) * -80))
+                .rotateY(radians(-45));
+        if (block) matrix.rotateXYZ(0, radians(45), 0).scale(.4f);
+        else
+            matrix.translate(1.13f / 16, 3.2f / 16, 1.13f / 16)
+                    .rotateXYZ(0, radians(-90), radians(25))
+                    .scale(.68f);
+        return matrix.translate(-.5f, -.5f, -.5f);
+    }
+
     private static float sin(float radians) {
         return (float) Math.sin(radians);
     }
