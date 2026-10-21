@@ -1,6 +1,7 @@
 package com.norbertfila.interaction;
 
 import com.norbertfila.items.Mining;
+import com.norbertfila.items.Tool;
 import com.norbertfila.items.ToolContext;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.world.*;
@@ -50,6 +51,8 @@ public final class BlockBreaking {
             return false;
         }
         if (mode == Mode.CREATIVE) {
+            // Minecraft swords cannot break blocks in creative, so that fighting near terrain leaves it intact.
+            if (tool.tool().filter(item -> item.type() == Tool.Type.SWORD).isPresent()) return false;
             creativeCooldown = Math.max(0, creativeCooldown - seconds);
             if (creativeCooldown > TIME_EPSILON) return false;
             creativeCooldown = CREATIVE_REPEAT_SECONDS;
