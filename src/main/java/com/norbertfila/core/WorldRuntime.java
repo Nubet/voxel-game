@@ -658,9 +658,10 @@ public final class WorldRuntime implements AutoCloseable {
                                 if (struck.isPresent()) {
                                     breaking.cancel();
                                     if (breakPress != null) {
-                                        combat.attack(
-                                                struck.get().target(),
-                                                player.state().position());
+                                        boolean inWater = WaterContact.sample(world, player.state())
+                                                        .submergedFraction()
+                                                > 0;
+                                        combat.attack(struck.get().target(), PlayerCombat.attacker(player, inWater));
                                         playerVisuals.swing(tick[0], true);
                                     }
                                 } else {

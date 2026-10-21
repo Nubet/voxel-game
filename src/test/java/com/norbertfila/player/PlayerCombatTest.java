@@ -3,6 +3,7 @@ package com.norbertfila.player;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.combat.AttackTarget;
+import com.norbertfila.combat.Attacker;
 import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.items.Tool;
@@ -13,7 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PlayerCombatTest {
-    private static final PlayerState.Position ORIGIN = new PlayerState.Position(0, 0, 0);
+    private static final Attacker ORIGIN = Attacker.standing(0, 0);
 
     private static final class Target implements AttackTarget {
         final List<float[]> hits = new ArrayList<>();

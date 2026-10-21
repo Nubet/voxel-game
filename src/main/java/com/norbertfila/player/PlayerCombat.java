@@ -2,6 +2,7 @@ package com.norbertfila.player;
 
 import com.norbertfila.combat.AttackCharge;
 import com.norbertfila.combat.AttackTarget;
+import com.norbertfila.combat.Attacker;
 import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.combat.MeleeWeapon;
@@ -34,10 +35,22 @@ public final class PlayerCombat {
         charge.reset();
     }
 
-    public boolean attack(AttackTarget target, PlayerState.Position attacker) {
+    /** Creative flight never counts as falling, so it cannot land critical hits. */
+    public static Attacker attacker(PlayerController player, boolean inWater) {
+        var state = player.state();
+        return new Attacker(
+                state.position().x(),
+                state.position().z(),
+                state.grounded(),
+                !state.grounded() && !player.flying() && state.velocityY() < 0,
+                player.sprinting(),
+                inWater);
+    }
+
+    public boolean attack(AttackTarget target, Attacker attacker) {
         Objects.requireNonNull(target);
         Objects.requireNonNull(attacker);
-        var outcome = MeleeAttack.resolve(MeleeWeapon.of(heldItem), charge);
+        var outcome = MeleeAttack.resolve(MeleeWeapon.of(heldItem), charge, attacker);
         charge.reset();
         double dx = target.x() - attacker.x(), dz = target.z() - attacker.z();
         double length = Math.hypot(dx, dz);
