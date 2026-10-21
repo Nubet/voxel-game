@@ -6,8 +6,11 @@ import com.norbertfila.combat.Attacker;
 import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.MeleeAttack;
 import com.norbertfila.combat.MeleeWeapon;
+import com.norbertfila.world.Aabb;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 /** The local player's melee swings: the weapon in hand, its recharge and the hits it lands. */
 public final class PlayerCombat {
@@ -41,18 +44,27 @@ public final class PlayerCombat {
         var state = player.state();
         return new Attacker(
                 state.position().x(),
+                state.position().y(),
                 state.position().z(),
                 yawDegrees,
                 state.grounded(),
                 !state.grounded() && !player.flying() && state.velocityY() < 0,
                 player.sprinting(),
-                inWater);
+                inWater,
+                Math.hypot(state.velocityX(), state.velocityZ()));
     }
 
-    /** The outcome of a hit the target took, or empty when it ignored the hit. */
-    public Optional<MeleeAttack.Outcome> attack(AttackTarget target, Attacker attacker) {
+    /**
+     * Strikes the target and, for a sweep, the bodies that {@code nearby} returns around it. Returns the outcome when
+     * the target took the hit, or empty when it ignored it.
+     */
+    public Optional<MeleeAttack.Outcome> attack(
+            AttackTarget target,
+            Attacker attacker,
+            Function<Aabb, ? extends Collection<? extends AttackTarget>> nearby) {
         Objects.requireNonNull(target);
         Objects.requireNonNull(attacker);
+        Objects.requireNonNull(nearby);
         var outcome = MeleeAttack.resolve(MeleeWeapon.of(heldItem), charge, attacker);
         charge.reset();
         double pushX = attacker.facingX() * outcome.sprintKnockback(),
@@ -63,8 +75,33 @@ public final class PlayerCombat {
             pushX += dx / length * outcome.knockback();
             pushZ += dz / length * outcome.knockback();
         }
-        return target.hurt(DamageSource.PLAYER_ATTACK, outcome.damage(), pushX, pushZ)
-                ? Optional.of(outcome)
-                : Optional.empty();
+        if (!target.hurt(DamageSource.PLAYER_ATTACK, outcome.damage(), pushX, pushZ)) return Optional.empty();
+        if (outcome.sweep()) sweep(target, attacker, nearby);
+        return Optional.of(outcome);
+    }
+
+    private static void sweep(
+            AttackTarget target,
+            Attacker attacker,
+            Function<Aabb, ? extends Collection<? extends AttackTarget>> nearby) {
+        var body = target.body();
+        var area = new Aabb(
+                body.minX() - MeleeAttack.SWEEP_HORIZONTAL,
+                body.minY() - MeleeAttack.SWEEP_VERTICAL,
+                body.minZ() - MeleeAttack.SWEEP_HORIZONTAL,
+                body.maxX() + MeleeAttack.SWEEP_HORIZONTAL,
+                body.maxY() + MeleeAttack.SWEEP_VERTICAL,
+                body.maxZ() + MeleeAttack.SWEEP_HORIZONTAL);
+        for (var other : nearby.apply(area)) {
+            double dx = other.x() - attacker.x(), dy = other.y() - attacker.y(), dz = other.z() - attacker.z();
+            if (other == target
+                    || !other.attackable()
+                    || dx * dx + dy * dy + dz * dz >= MeleeAttack.SWEEP_REACH * MeleeAttack.SWEEP_REACH) continue;
+            other.hurt(
+                    DamageSource.PLAYER_ATTACK,
+                    MeleeAttack.SWEEP_DAMAGE,
+                    attacker.facingX() * MeleeAttack.KNOCKBACK,
+                    attacker.facingZ() * MeleeAttack.KNOCKBACK);
+        }
     }
 }

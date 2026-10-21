@@ -7,14 +7,14 @@ import org.junit.jupiter.api.Test;
 
 class MeleeAttackTest {
     private static final MeleeWeapon SWORD = MeleeWeapon.of(Tool.DIAMOND_SWORD.id());
-    private static final Attacker STANDING = Attacker.standing(0, 0, 0);
-    private static final Attacker FALLING = new Attacker(0, 0, 0, false, true, false, false);
+    private static final Attacker STANDING = Attacker.standing(0, 0, 0, 0);
+    private static final Attacker FALLING = new Attacker(0, 0, 0, 0, false, true, false, false, 0);
 
     @Test
     void scalesWeaponDamageByTheCharge() {
         var charge = new AttackCharge();
         assertEquals(
-                new MeleeAttack.Outcome(7, MeleeAttack.KNOCKBACK, 0, false),
+                new MeleeAttack.Outcome(7, MeleeAttack.KNOCKBACK, 0, false, true),
                 MeleeAttack.resolve(SWORD, charge, STANDING));
         charge.reset();
         assertEquals(7 * .20128f, MeleeAttack.resolve(SWORD, charge, STANDING).damage(), 1e-5);
@@ -35,9 +35,9 @@ class MeleeAttackTest {
                 1e-5);
         for (var blocked : new Attacker[] {
             STANDING,
-            new Attacker(0, 0, 0, false, false, false, false),
-            new Attacker(0, 0, 0, false, true, true, false),
-            new Attacker(0, 0, 0, false, true, false, true)
+            new Attacker(0, 0, 0, 0, false, false, false, false, 0),
+            new Attacker(0, 0, 0, 0, false, true, true, false, 0),
+            new Attacker(0, 0, 0, 0, false, true, false, true, 0)
         }) assertFalse(MeleeAttack.resolve(SWORD, charge, blocked).critical());
         charge.reset();
         charge.tick(.5);
@@ -48,7 +48,7 @@ class MeleeAttackTest {
 
     @Test
     void sprintingWithAnAlmostFullChargeAddsKnockback() {
-        var sprinting = new Attacker(0, 0, 0, true, false, true, false);
+        var sprinting = new Attacker(0, 0, 0, 0, true, false, true, false, 5);
         var charge = new AttackCharge();
         var hit = MeleeAttack.resolve(SWORD, charge, sprinting);
         assertTrue(hit.sprintHit());
@@ -57,5 +57,20 @@ class MeleeAttackTest {
         assertFalse(MeleeAttack.resolve(SWORD, charge, STANDING).sprintHit());
         charge.reset();
         assertFalse(MeleeAttack.resolve(SWORD, charge, sprinting).sprintHit());
+    }
+
+    @Test
+    void onlyAStillGroundedFullyChargedSwordSweeps() {
+        var charge = new AttackCharge();
+        assertTrue(MeleeAttack.resolve(SWORD, charge, STANDING).sweep());
+        assertFalse(MeleeAttack.resolve(MeleeWeapon.of(Tool.DIAMOND_AXE.id()), charge, STANDING)
+                .sweep());
+        assertFalse(MeleeAttack.resolve(SWORD, charge, FALLING).sweep());
+        assertFalse(MeleeAttack.resolve(SWORD, charge, new Attacker(0, 0, 0, 0, true, false, false, false, 4.3))
+                .sweep());
+        assertTrue(MeleeAttack.resolve(SWORD, charge, new Attacker(0, 0, 0, 0, true, false, false, false, 1.3))
+                .sweep());
+        charge.reset();
+        assertFalse(MeleeAttack.resolve(SWORD, charge, STANDING).sweep());
     }
 }
