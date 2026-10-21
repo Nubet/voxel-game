@@ -15,8 +15,14 @@ public final class MobAnimator {
     // Minecraft's swing strength is four times the speed in blocks per 20 TPS tick, capped at one.
     static final double STRENGTH_PER_SPEED = 4 / 20.0;
     private static final float QUARTER_TURN = (float) (Math.PI / 2);
+    // Minecraft lifts an arm that holds an item by 0.31 radians.
+    static final float HOLD_ITEM_PITCH = .31f;
+    static final float BOW_ARM_YAW = .35f, STRING_ARM_YAW = .5f;
 
-    /** Extra rotation in radians per model part, in model order, plus whole-body scale and a white flash. */
+    /**
+     * Extra rotation in radians per model part, in model order, plus whole-body scale and a white flash. Pitch is
+     * applied before yaw, as in Minecraft's model parts, so yaw swings an already raised arm sideways.
+     */
     public record Pose(float[] pitch, float[] yaw, float scaleXZ, float scaleY, boolean flash) {}
 
     private MobAnimator() {}
@@ -35,13 +41,20 @@ public final class MobAnimator {
                 case RIGHT_LEG, FRONT_RIGHT_LEG, BACK_LEFT_LEG -> pitch[i] = swing;
                 case LEFT_LEG, FRONT_LEFT_LEG, BACK_RIGHT_LEG -> pitch[i] = -swing;
                 case RIGHT_ARM, LEFT_ARM -> {
-                    boolean right = model.parts().get(i).limb() == MobModel.Limb.RIGHT_ARM;
+                    var limb = model.parts().get(i).limb();
+                    boolean right = limb == MobModel.Limb.RIGHT_ARM;
+                    boolean holding =
+                            model.heldItem().map(item -> item.limb() == limb).orElse(false);
+                    // Positive yaw swings a right arm toward the body's middle, negative a left one.
+                    float inward = right ? 1 : -1;
                     pitch[i] = (right ? -swing : swing) * .5f;
                     if (state.action() == MobAction.AIMING) {
-                        // Arms level with the shoulders; the bow arm reaches across the body like Minecraft's pose.
-                        pitch[i] = QUARTER_TURN + (right ? .1f : 0);
-                        yaw[i] = right ? -.1f : .4f;
-                    } else if (state.action() == MobAction.ATTACKING && progress < .25f)
+                        // Minecraft's bow pose: the bow arm points at the target, the other reaches across to
+                        // the string, so both hands meet in front of the face.
+                        pitch[i] = QUARTER_TURN;
+                        yaw[i] = inward * (holding ? BOW_ARM_YAW : STRING_ARM_YAW);
+                    } else if (holding) pitch[i] += HOLD_ITEM_PITCH;
+                    else if (state.action() == MobAction.ATTACKING && progress < .25f)
                         pitch[i] -= (float) Math.sin(progress / .25f * Math.PI) * .6f;
                 }
                 default -> {}

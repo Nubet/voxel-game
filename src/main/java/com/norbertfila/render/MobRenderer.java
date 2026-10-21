@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.light.BlockLightState;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
+import com.norbertfila.mob.visual.HeldItems;
 import com.norbertfila.mob.visual.MobAnimator;
 import com.norbertfila.mob.visual.MobModel;
 import com.norbertfila.mob.visual.MobModels;
@@ -21,6 +22,8 @@ public final class MobRenderer implements AutoCloseable {
     private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight, hurt, flash;
     private final Map<MobType, Integer> textures = new EnumMap<>(MobType.class);
     private final Map<MobType, Integer> firstVertex = new EnumMap<>(MobType.class);
+    private final Map<MobType, int[]> itemTextures = new EnumMap<>(MobType.class);
+    private int itemFirstVertex;
     private boolean closed;
 
     public MobRenderer() {
@@ -68,11 +71,20 @@ public final class MobRenderer implements AutoCloseable {
             glVertexArrayAttribFormat(createdVao, 1, 2, GL_FLOAT, false, 3 * Float.BYTES);
             glVertexArrayAttribBinding(createdVao, 1, 0);
             glEnableVertexArrayAttrib(createdVao, 1);
-            for (var type : MobType.values())
-                textures.put(
-                        type, EnvironmentTexture.loadResource(MobModels.of(type).textureResource()));
+            for (var type : MobType.values()) {
+                var mobModel = MobModels.of(type);
+                textures.put(type, EnvironmentTexture.loadResource(mobModel.textureResource()));
+                if (mobModel.heldItem().isPresent()) {
+                    var item = mobModel.heldItem().get();
+                    int[] frames = new int[item.textures().size()];
+                    itemTextures.put(type, frames);
+                    for (int frame = 0; frame < frames.length; frame++)
+                        frames[frame] = EnvironmentTexture.loadResource(item.textureResource(frame));
+                }
+            }
         } catch (RuntimeException | Error failure) {
             textures.values().forEach(texture -> glDeleteTextures(texture));
+            itemTextures.values().forEach(frames -> glDeleteTextures(frames));
             glDeleteBuffers(createdVbo);
             glDeleteVertexArrays(createdVao);
             glDeleteProgram(createdProgram);
@@ -151,13 +163,22 @@ public final class MobRenderer implements AutoCloseable {
                         .scale(pose.scaleXZ() / 16, pose.scaleY() / 16, pose.scaleXZ() / 16);
                 var mobModel = MobModels.of(mob.type());
                 int first = firstVertex.get(mob.type());
+                var heldLimb = mobModel.heldItem().map(MobModel.HeldItem::limb).orElse(null);
                 for (int i = 0; i < mobModel.parts().size(); i++) {
-                    var pivot = mobModel.parts().get(i).pivot();
+                    var definition = mobModel.parts().get(i);
+                    var pivot = definition.pivot();
+                    // Z, Y, X order like Minecraft's model parts: pitch first, then yaw swings the raised limb.
                     base.get(part)
                             .translate(pivot.x(), pivot.y(), pivot.z())
-                            .rotateXYZ(pivot.pitch() + pose.pitch()[i], pivot.yaw() + pose.yaw()[i], pivot.roll());
+                            .rotateZYX(pivot.roll(), pivot.yaw() + pose.yaw()[i], pivot.pitch() + pose.pitch()[i]);
                     glUniformMatrix4fv(model, false, part.get(buffer));
                     glDrawArrays(GL_TRIANGLES, first + i * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
+                    if (definition.limb() == heldLimb) {
+                        int frame = HeldItems.frame(mob.action(), mob.actionProgress());
+                        glBindTexture(GL_TEXTURE_2D, itemTextures.get(mob.type())[frame]);
+                        glDrawArrays(GL_TRIANGLES, itemFirstVertex, HeldItems.VERTICES);
+                        glBindTexture(GL_TEXTURE_2D, textures.get(mob.type()));
+                    }
                 }
             }
         } finally {
@@ -181,7 +202,8 @@ public final class MobRenderer implements AutoCloseable {
         int partFloats = CuboidMesh.VERTEX_COUNT * CuboidMesh.FLOATS_PER_VERTEX;
         int total = 0;
         for (var type : MobType.values()) total += MobModels.of(type).parts().size();
-        var vertices = new float[total * partFloats];
+        // One extra part slot holds the shared held-item quad, aligned like a part so the shader picks a side normal.
+        var vertices = new float[(total + 1) * partFloats];
         int part = 0;
         for (var type : MobType.values()) {
             MobModel mobModel = MobModels.of(type);
@@ -192,6 +214,9 @@ public final class MobRenderer implements AutoCloseable {
                 System.arraycopy(mesh, 0, vertices, part++ * partFloats, partFloats);
             }
         }
+        itemFirstVertex = part * CuboidMesh.VERTEX_COUNT;
+        var item = HeldItems.quad();
+        System.arraycopy(item, 0, vertices, part * partFloats, item.length);
         return vertices;
     }
 
@@ -200,6 +225,7 @@ public final class MobRenderer implements AutoCloseable {
         if (closed) return;
         closed = true;
         textures.values().forEach(texture -> glDeleteTextures(texture));
+        itemTextures.values().forEach(frames -> glDeleteTextures(frames));
         glDeleteBuffers(vbo);
         glDeleteVertexArrays(vao);
         glDeleteProgram(program);

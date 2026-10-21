@@ -8,6 +8,7 @@ import com.norbertfila.player.visual.model.UvOrigin;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Models in the classic 64x32 mob texture layout, where left limbs reuse the right limb's texture. */
 public final class MobModels {
@@ -28,7 +29,19 @@ public final class MobModels {
     private static MobModel create(MobType type) {
         return switch (type) {
             case ZOMBIE -> new MobModel("refi_zombie", 64, 64, biped(4, ARMS_FORWARD));
-            case SKELETON -> new MobModel("refi_skeleton", 64, 32, biped(2, 0));
+            case SKELETON ->
+                new MobModel(
+                        "refi_skeleton",
+                        64,
+                        32,
+                        biped(2, 0),
+                        Optional.of(new MobModel.HeldItem(
+                                Limb.RIGHT_ARM,
+                                List.of(
+                                        "refi_bow",
+                                        "refi_bow_pulling_0",
+                                        "refi_bow_pulling_1",
+                                        "refi_bow_pulling_2"))));
             case CREEPER -> new MobModel("refi_creeper", 64, 32, creeper());
         };
     }
