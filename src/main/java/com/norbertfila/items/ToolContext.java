@@ -3,7 +3,6 @@ package com.norbertfila.items;
 import com.norbertfila.world.BlockId;
 import java.util.Optional;
 
-/** The item held while breaking a block. */
 public record ToolContext(byte item) {
     public static final ToolContext HAND = new ToolContext(BlockId.AIR);
 

@@ -1,6 +1,6 @@
 package com.norbertfila.combat;
 
-/** The attacker's position, facing and movement at the moment of a swing; speed is horizontal, in blocks/s. */
+/** Speed is horizontal, in blocks per second. */
 public record Attacker(
         double x,
         double y,

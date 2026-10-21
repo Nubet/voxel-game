@@ -4,7 +4,7 @@ import java.util.Objects;
 
 /** Health points with Minecraft's hurt cooldown, shared by players and mobs. */
 public final class Health {
-    /** Minecraft ignores further damage for half a second after a hit. */
+    /** Minecraft's half-second hurt cooldown. */
     public static final int HURT_TICKS = 30;
 
     private final float max;

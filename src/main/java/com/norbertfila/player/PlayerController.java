@@ -321,10 +321,7 @@ public final class PlayerController {
         return new Movement(x, y, z, nextFlying, toggled);
     }
 
-    /**
-     * A sprinting hit ends the sprint and slows the player, as in Minecraft; sprinting resumes only after the sprint
-     * or forward key is released and pressed again.
-     */
+    /** As in Minecraft, sprinting resumes only after the sprint or forward key is pressed again. */
     public void endSprintByAttack() {
         sprinting = false;
         sprintSpent = true;
