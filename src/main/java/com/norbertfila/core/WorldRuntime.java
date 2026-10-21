@@ -664,7 +664,8 @@ public final class WorldRuntime implements AutoCloseable {
                                                 > 0;
                                         combat.attack(
                                                         struck.get().target(),
-                                                        PlayerCombat.attacker(player, mining.yaw(), inWater))
+                                                        PlayerCombat.attacker(player, mining.yaw(), inWater),
+                                                        mobLifecycle::near)
                                                 .filter(MeleeAttack.Outcome::sprintHit)
                                                 .ifPresent(hit -> player.endSprintByAttack());
                                         playerVisuals.swing(tick[0], true);
