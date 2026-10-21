@@ -1,5 +1,6 @@
 package com.norbertfila.mob;
 
+import com.norbertfila.combat.AttackTarget;
 import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.Health;
 import com.norbertfila.world.Aabb;
@@ -12,7 +13,7 @@ import java.util.Objects;
  * A living mob; its position is the center of its feet. AI only states intents (walk, jump, look) and
  * {@link MobPhysics} turns them into motion on the next tick.
  */
-public final class Mob {
+public final class Mob implements AttackTarget {
     /** Body turn rate in degrees per tick; Minecraft turns mobs by up to 30 degrees per 20 TPS tick. */
     static final float MAX_TURN = 10;
 
@@ -62,20 +63,47 @@ public final class Mob {
         return new PopulationKey(type.category(), zone);
     }
 
+    @Override
     public double x() {
         return x;
     }
 
+    @Override
     public double y() {
         return y;
     }
 
+    @Override
     public double z() {
         return z;
     }
 
+    @Override
     public double eyeY() {
         return y + type.eyeHeight();
+    }
+
+    @Override
+    public double eyeHeight() {
+        return type.eyeHeight();
+    }
+
+    @Override
+    public boolean attackable() {
+        return !dead();
+    }
+
+    /** Damage with a push in blocks per second, lifting the mob like Minecraft knockback. */
+    @Override
+    public boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ) {
+        if (!damage(source, amount)) return false;
+        if (knockbackX != 0 || knockbackZ != 0) knockback(knockbackX, KNOCKBACK_LIFT, knockbackZ);
+        return true;
+    }
+
+    /** Removes the mob on the next hazard pass, as when a creeper is consumed by its own blast. */
+    public void kill() {
+        health.kill();
     }
 
     public float yaw() {
@@ -244,6 +272,7 @@ public final class Mob {
         health.tick();
     }
 
+    @Override
     public Aabb body() {
         return type.body(x, y, z);
     }

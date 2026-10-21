@@ -1,6 +1,8 @@
 package com.norbertfila.mob.spawn;
 
 import com.norbertfila.combat.AttackTarget;
+import com.norbertfila.explosion.BlockSink;
+import com.norbertfila.explosion.Explosion;
 import com.norbertfila.light.LightLevels;
 import com.norbertfila.light.LightProbe;
 import com.norbertfila.light.SkyExposure;
@@ -42,12 +44,14 @@ public final class MobLifecycle {
     private final Despawner despawner;
     private final MobHazards hazards = new MobHazards();
     private final MobAi ai = MobAi.standard();
+    private final Explosion explosion;
     private final BiomeWeather biomes;
     private final SplittableRandom random;
     private boolean naturalSpawning = true;
     private int activeColumns;
 
-    public MobLifecycle(World world, BiomeWeather biomes, NaturalSpawner spawner, long seed) {
+    public MobLifecycle(World world, BiomeWeather biomes, NaturalSpawner spawner, long seed, BlockSink blocks) {
+        explosion = new Explosion(world, blocks);
         this.world = Objects.requireNonNull(world);
         this.biomes = Objects.requireNonNull(biomes);
         this.spawner = Objects.requireNonNull(spawner);
@@ -75,7 +79,7 @@ public final class MobLifecycle {
             ChunkPos center,
             int simulationDistance) {
         world.assertOwner();
-        ai.tick(population, new WorldMobWorld(world, targets), random);
+        ai.tick(population, new WorldMobWorld(world, population, targets, explosion, random), random);
         population.tick(world, dt);
         hazards.tick(population, new WorldHazardEnvironment(world, sky, biomes, time, weather), random);
         if (tick % spawner.settings().cycleTicks() != 0) return;

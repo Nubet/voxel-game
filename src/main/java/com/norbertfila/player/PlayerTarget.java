@@ -9,8 +9,6 @@ import java.util.Objects;
 /** The local player as seen by attackers: only survival players take damage, as in Minecraft. */
 public final class PlayerTarget implements AttackTarget {
     public static final float MAX_HEALTH = 20;
-    // Minecraft knockback lifts the target by 0.4 blocks per tick at 20 ticks per second.
-    private static final double KNOCKBACK_LIFT = 8;
     private final PlayerController player;
     private final Health health;
 
