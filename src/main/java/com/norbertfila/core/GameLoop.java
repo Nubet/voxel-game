@@ -775,7 +775,7 @@ public final class GameLoop {
                     || state.mode() == PlayerController.Mode.SPECTATOR) crosshairTransition.reset();
             else
                 crosshairTransition.update(
-                        CrosshairPolicy.select(settings.crosshair(), state.target()),
+                        CrosshairPolicy.select(settings.crosshair(), state.target(), state.entityTargeted()),
                         settings.crosshair().smooth(),
                         delta);
             crosshair.render(canvas, viewport, crosshairTransition, settings.crosshair());

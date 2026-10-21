@@ -37,6 +37,10 @@ class CrosshairPolicyTest {
         assertEquals(
                 CrosshairStyle.DEFAULT,
                 CrosshairPolicy.select(new CrosshairSettings(true, false, true, 1, 100), distant));
+        assertEquals(CrosshairStyle.ENTITY, CrosshairPolicy.select(settings, distant, true));
+        assertEquals(
+                CrosshairStyle.DEFAULT,
+                CrosshairPolicy.select(new CrosshairSettings(false, true, true, 1, 100), distant, true));
     }
 
     @Test
