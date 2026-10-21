@@ -47,6 +47,17 @@ public final class GameSettings {
     public static final int GUI_SCALE_AUTO = 0;
     public static final int MIN_GUI_SCALE = 1;
     public static final int MAX_GUI_SCALE = 4;
+    public static final int MIN_BRIGHTNESS = 0;
+    public static final int MAX_BRIGHTNESS = 100;
+    public static final int DEFAULT_BRIGHTNESS = 50;
+    public static final int MIN_CONTRAST = 50;
+    public static final int MAX_CONTRAST = 150;
+    public static final int DEFAULT_CONTRAST = 100;
+    /** Display gamma in hundredths, so 100 leaves the image unchanged. */
+    public static final int MIN_GAMMA = 50;
+
+    public static final int MAX_GAMMA = 250;
+    public static final int DEFAULT_GAMMA = 100;
 
     private int renderDistance = DEFAULT_RENDER_DISTANCE;
     private int simulationDistance = Math.min(DEFAULT_SIMULATION_DISTANCE, renderDistance);
@@ -57,6 +68,9 @@ public final class GameSettings {
     private float mouseSensitivity = DEFAULT_MOUSE_SENSITIVITY;
     private float zoomSpeed = DEFAULT_ZOOM_SPEED;
     private int guiScale = GUI_SCALE_AUTO;
+    private int brightness = DEFAULT_BRIGHTNESS;
+    private int contrast = DEFAULT_CONTRAST;
+    private int gamma = DEFAULT_GAMMA;
     private CloudMode clouds = CloudMode.FANCY;
     private CrosshairSettings crosshair = CrosshairSettings.DEFAULT;
     private ModelVariant modelVariant = ModelVariant.CLASSIC;
@@ -197,6 +211,50 @@ public final class GameSettings {
         if (guiScale == value) return false;
         guiScale = value;
         return true;
+    }
+
+    public int brightness() {
+        return brightness;
+    }
+
+    public boolean setBrightness(int value) {
+        checkRange("Brightness", value, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+        if (brightness == value) return false;
+        brightness = value;
+        return true;
+    }
+
+    public int contrast() {
+        return contrast;
+    }
+
+    public boolean setContrast(int value) {
+        checkRange("Contrast", value, MIN_CONTRAST, MAX_CONTRAST);
+        if (contrast == value) return false;
+        contrast = value;
+        return true;
+    }
+
+    public int gamma() {
+        return gamma;
+    }
+
+    public boolean setGamma(int value) {
+        checkRange("Gamma", value, MIN_GAMMA, MAX_GAMMA);
+        if (gamma == value) return false;
+        gamma = value;
+        return true;
+    }
+
+    public void resetDisplay() {
+        brightness = DEFAULT_BRIGHTNESS;
+        contrast = DEFAULT_CONTRAST;
+        gamma = DEFAULT_GAMMA;
+    }
+
+    private static void checkRange(String name, int value, int min, int max) {
+        if (value < min || value > max)
+            throw new IllegalArgumentException(name + " must be between " + min + " and " + max);
     }
 
     private static void validateFieldOfView(float value) {

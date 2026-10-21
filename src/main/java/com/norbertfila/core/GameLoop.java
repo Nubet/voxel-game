@@ -30,6 +30,7 @@ import com.norbertfila.render.ArrowRenderer;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
+import com.norbertfila.render.DisplayAdjustment;
 import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.EntityFireRenderer;
 import com.norbertfila.render.FirstPersonRenderer;
@@ -165,6 +166,7 @@ public final class GameLoop {
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
+                DisplayAdjustment displayAdjustment = new DisplayAdjustment();
                 ScreenshotWriter screenshots = new ScreenshotWriter(Path.of("screenshots"));
                 PlayerRenderer players = skins == null ? null : new PlayerRenderer(skins)) {
             return run(
@@ -190,6 +192,7 @@ public final class GameLoop {
                     clouds,
                     precipitation,
                     skyRenderer,
+                    displayAdjustment,
                     players,
                     screenshots);
         }
@@ -218,6 +221,7 @@ public final class GameLoop {
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
+            DisplayAdjustment displayAdjustment,
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
         var firstPerson = new FirstPersonRenderer(players, items);
@@ -789,6 +793,7 @@ public final class GameLoop {
                         blockLight.level((int) Math.floor(camera.x()), (int) Math.floor(camera.y()), (int)
                                 Math.floor(camera.z())));
             }
+            displayAdjustment.apply(width[0], height[0], settings);
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);

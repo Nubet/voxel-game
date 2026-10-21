@@ -7,6 +7,7 @@ import com.norbertfila.i18n.Translations;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.AppearancePreferences;
 import com.norbertfila.persistence.CrosshairPreferences;
+import com.norbertfila.persistence.DisplayPreferences;
 import com.norbertfila.persistence.FrameRatePreferences;
 import com.norbertfila.persistence.LanguagePreferences;
 import com.norbertfila.persistence.ViewDistancePreferences;
@@ -36,6 +37,8 @@ public final class Game {
         distancePreferences.loadInto(settings);
         var frameRatePreferences = new FrameRatePreferences();
         frameRatePreferences.loadInto(settings);
+        var displayPreferences = new DisplayPreferences();
+        displayPreferences.loadInto(settings);
         var appearancePreferences = new AppearancePreferences();
         settings.setModelVariant(appearancePreferences.load());
         try (Window window = new Window(1280, 720, "Voxel Engine");
@@ -74,6 +77,7 @@ public final class Game {
             crosshairPreferences.save(settings.crosshair());
             distancePreferences.save(settings);
             frameRatePreferences.save(settings);
+            displayPreferences.save(settings);
             appearancePreferences.save(settings.modelVariant());
         }
     }

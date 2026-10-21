@@ -66,6 +66,21 @@ class SettingsScreenTest {
     }
 
     @Test
+    void displayOpensFromSettingsAndBackReturnsToSettings() {
+        var settings = new GameSettings();
+        var screen = new SettingsScreen(settings);
+        screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.NEXT);
+        assertTrue(screen.displayButton().focused());
+        screen.keyPress(UiKey.ACTIVATE);
+        screen.keyPress(UiKey.NEXT);
+        screen.keyPress(UiKey.INCREASE);
+        assertEquals(GameSettings.DEFAULT_BRIGHTNESS + 1, settings.brightness());
+        assertEquals(Screen.Action.NONE, screen.keyPress(UiKey.BACK));
+        assertEquals(Screen.Action.CLOSE, screen.keyPress(UiKey.BACK));
+    }
+
+    @Test
     void localizedLabelsFitAndLayoutRemainsInsidePanel() {
         var settings = new GameSettings();
         var screen = new SettingsScreen(settings);
@@ -76,6 +91,8 @@ class SettingsScreenTest {
             assertTrue(canvas.vertexCount() > 54);
             assertTrue(BitmapFont.DEFAULT.width(settings.translations().text("distance.title")) + 8
                     < screen.distancesButton().bounds().width());
+            assertTrue(BitmapFont.DEFAULT.width(settings.translations().text("display.title")) + 8
+                    < screen.displayButton().bounds().width());
             for (String key : new String[] {
                 "settings.auto",
                 "settings.size.small",
