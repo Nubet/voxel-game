@@ -1,11 +1,12 @@
 package com.norbertfila.render;
 
 import com.norbertfila.items.Tool;
+import com.norbertfila.player.visual.HeldModel;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.BlockShape;
 
 /** How item_entity.vert draws an item; layers index the block or the item texture array. */
-record ItemModel(Shape shape, boolean itemTexture, int side, int top, int bottom, float height) {
+public record ItemModel(Shape shape, boolean itemTexture, int side, int top, int bottom, float height) {
     enum Shape {
         CUBE(36),
         CROSS(12),
@@ -40,6 +41,11 @@ record ItemModel(Shape shape, boolean itemTexture, int side, int top, int bottom
         return model.shape == Shape.CUBE
                 ? model
                 : new ItemModel(Shape.EXTRUDED, model.itemTexture, model.side, 0, 0, 1);
+    }
+
+    public static HeldModel heldModel(byte item) {
+        if (Tool.of(item).isPresent()) return HeldModel.HANDHELD;
+        return held(item).shape == Shape.CUBE ? HeldModel.BLOCK : HeldModel.GENERATED;
     }
 
     private static boolean flat(BlockShape shape) {

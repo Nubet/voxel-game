@@ -67,7 +67,31 @@ public final class FirstPersonSmoke {
                     write(held, output.resolve(tool.itemName() + "-swing-" + (int) (swing * 100) + ".png"));
                 }
             }
-            System.out.println("PASS first-person arm, held blocks and tools");
+            var view = new org.joml.Matrix4f()
+                    .perspective((float) Math.toRadians(50), (float) WIDTH / HEIGHT, .05f, 50)
+                    .lookAt(-2.2f, 1.4f, -1.6f, 0, .9f, 0, 0, 1, 0);
+            var model = new org.joml.Matrix4f().rotateY((float) Math.toRadians(180));
+            var pose = com.norbertfila.player.visual.model.PlayerPose.NEUTRAL.with(
+                    com.norbertfila.player.visual.model.PlayerModel.Part.RIGHT_ARM,
+                    new com.norbertfila.player.visual.model.PartTransform(0, 0, 0, (float) Math.PI / 10, 0, 0));
+            for (byte held : new byte[] {com.norbertfila.items.Tool.DIAMOND_SWORD.id(), BlockId.GRASS, BlockId.POPPY}) {
+                clear();
+                players.render(view, model, pose);
+                var empty = capture();
+                items.renderHeld(
+                        view,
+                        com.norbertfila.player.visual.ThirdPersonHand.rightHandItem(
+                                model,
+                                com.norbertfila.player.visual.model.ModelVariant.CLASSIC,
+                                pose,
+                                ItemModel.heldModel(held)),
+                        held,
+                        0);
+                var holding = capture();
+                check(!holding.equals(empty), "Third-person hand shows no " + held);
+                write(holding, output.resolve("third-person-" + Byte.toUnsignedInt(held) + ".png"));
+            }
+            System.out.println("PASS first-person arm, held blocks and tools; third-person held items");
         }
     }
 

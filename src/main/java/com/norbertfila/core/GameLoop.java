@@ -25,6 +25,7 @@ import com.norbertfila.player.visual.HandSway;
 import com.norbertfila.player.visual.HeldItemMotion;
 import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
+import com.norbertfila.player.visual.ThirdPersonHand;
 import com.norbertfila.render.ArrowRenderer;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
@@ -38,6 +39,7 @@ import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.HitboxRenderer;
 import com.norbertfila.render.Hitboxes;
 import com.norbertfila.render.ItemEntityRenderer;
+import com.norbertfila.render.ItemModel;
 import com.norbertfila.render.MobRenderer;
 import com.norbertfila.render.PlayerRenderer;
 import com.norbertfila.render.PrecipitationRenderer;
@@ -644,21 +646,36 @@ public final class GameLoop {
                     && state != null
                     && state.ready()
                     && (camera.perspective() != Camera.Perspective.FIRST
-                            || localPlayerVisible(state, interpolationTime, camera)))
+                            || localPlayerVisible(state, interpolationTime, camera))) {
+                double playerAlpha = state.interpolationAlpha(interpolationTime);
+                var inventory = state.inventory();
+                byte heldItem = inventory.block(inventory.selectedSlot());
+                var playerState = state.playerRenderState();
+                var pose = PlayerAnimator.pose(
+                        playerState, playerAlpha, camera.yaw(), camera.pitch(), heldItem != BlockId.AIR);
                 players.render(
                         viewProjection,
-                        state.playerRenderState(),
-                        PlayerAnimator.pose(
-                                state.playerRenderState(),
-                                state.interpolationAlpha(interpolationTime),
-                                camera.yaw(),
-                                camera.pitch()),
-                        state.interpolationAlpha(interpolationTime),
+                        playerState,
+                        pose,
+                        playerAlpha,
                         camera.x(),
                         camera.y(),
                         camera.z(),
                         distanceFog,
                         visibility.amount());
+                if (heldItem != BlockId.AIR && state.mode() != PlayerController.Mode.SPECTATOR)
+                    items.renderHeld(
+                            viewProjection,
+                            ThirdPersonHand.rightHandItem(
+                                    PlayerRenderer.modelToWorld(
+                                            playerState, playerAlpha, camera.x(), camera.y(), camera.z()),
+                                    playerState.appearance().model(),
+                                    pose,
+                                    ItemModel.heldModel(heldItem)),
+                            heldItem,
+                            blockLight.level((int) Math.floor(camera.x()), (int) Math.floor(camera.y()), (int)
+                                    Math.floor(camera.z())));
+            }
             if (gpuTimer != null) gpuTimer.stamp();
             double effectSeconds = state == null
                     ? 0
