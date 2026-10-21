@@ -17,7 +17,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class MobRenderer implements AutoCloseable {
-    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight;
+    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight, hurt;
     private final Map<MobType, Integer> textures = new EnumMap<>(MobType.class);
     private final Map<MobType, Integer> firstVertex = new EnumMap<>(MobType.class);
     private boolean closed;
@@ -33,6 +33,7 @@ public final class MobRenderer implements AutoCloseable {
             skyColor = ShaderPrograms.uniform(createdProgram, "uSkyColor");
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
             blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
+            hurt = ShaderPrograms.uniform(createdProgram, "uHurt");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uOuterLayer"), 0);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uCutout"), 1);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uWorldShading"), 1);
@@ -133,6 +134,7 @@ public final class MobRenderer implements AutoCloseable {
                 float reach = (float) mob.type().height();
                 if (!frustum.testAab(x - reach, y, z - reach, x + reach, y + reach, z + reach)) continue;
                 glBindTexture(GL_TEXTURE_2D, textures.get(mob.type()));
+                glUniform1i(hurt, mob.hurt() > 0 ? 1 : 0);
                 glUniform1f(
                         blockLight,
                         light.level(

@@ -16,12 +16,15 @@ uniform float uUnderwater;
 uniform float uOpacity;
 uniform float uDaylight = 1.0;
 uniform float uBlockLight = 0.0;
+// Minecraft tints a mob red for the half second after it takes damage.
+uniform bool uHurt;
 out vec4 fragColor;
 
 void main() {
     fragColor = texture(uSkin, vUV);
     if ((uOuterLayer || uCutout) && fragColor.a < 0.5) discard;
     fragColor.a = uOpacity;
+    if (uHurt) fragColor.rgb = mix(fragColor.rgb, vec3(1.0, 0.0, 0.0), 0.4);
     if (uWorldShading) {
         // Same curve and tint as terrain.frag so entities match the ground they stand on.
         float fraction = uBlockLight / 15.0;

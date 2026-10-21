@@ -24,7 +24,8 @@ public final class MobSmoke {
         Files.createDirectories(OUTPUT);
         try (var window = new Window(SIZE, SIZE, "Mob regression");
                 var renderer = new MobRenderer();
-                var hitboxes = new HitboxRenderer()) {
+                var hitboxes = new HitboxRenderer();
+                var fire = new EntityFireRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
             var view = new Matrix4f()
                     .perspective((float) Math.toRadians(60), 1, .1f, 128)
@@ -54,6 +55,34 @@ public final class MobSmoke {
             var skeleton = capture();
             check(backgroundPixels(skeleton, 232, 286, 236, 296) > 30, "Skeleton ribs are opaque");
             write(skeleton, "skeleton-cutout");
+            clear();
+            renderer.environment(SkyModel.DAY);
+            var burning = mobs.stream()
+                    .map(m -> new MobRenderState(
+                            m.id(),
+                            m.type(),
+                            m.previousX(),
+                            0,
+                            0,
+                            m.x(),
+                            0,
+                            0,
+                            m.yaw(),
+                            m.type() != MobType.CREEPER,
+                            1))
+                    .toList();
+            // The game passes a camera-relative view, which camera-facing flames depend on.
+            var relative = new Matrix4f()
+                    .perspective((float) Math.toRadians(60), 1, .1f, 128)
+                    .lookAt(0, 0, 0, 0, -.2f, -4.5f, 0, 1, 0);
+            renderer.render(relative, burning, 1, 0, 1.2, 4.5, fog, 0, BlockLightState.NONE);
+            var hurt = capture();
+            check(redPixels(hurt) > redPixels(day) + 2000, "Hurt mobs are not tinted red");
+            fire.render(relative, burning, 1, 0, 1.2, 4.5, .3);
+            check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Fire leaked state");
+            var flames = capture();
+            check(orangePixels(flames) > 2000, "Burning mobs show no flames");
+            write(flames, "burning");
             hitboxes.render(view, Hitboxes.of(mobs, List.of(), 1), 0, 0, 0);
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Hitboxes leaked state");
             var boxed = capture();
@@ -80,6 +109,25 @@ public final class MobSmoke {
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
         return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw, false, 0);
+    }
+
+    private static int redPixels(ByteBuffer pixels) {
+        int count = 0;
+        for (int i = 0; i < pixels.capacity(); i += 4) {
+            int r = Byte.toUnsignedInt(pixels.get(i)), g = Byte.toUnsignedInt(pixels.get(i + 1));
+            if (r > 2 * g + 20) count++;
+        }
+        return count;
+    }
+
+    private static int orangePixels(ByteBuffer pixels) {
+        int count = 0;
+        for (int i = 0; i < pixels.capacity(); i += 4) {
+            int r = Byte.toUnsignedInt(pixels.get(i)), g = Byte.toUnsignedInt(pixels.get(i + 1));
+            int b = Byte.toUnsignedInt(pixels.get(i + 2));
+            if (r > 200 && g > 80 && b < 100) count++;
+        }
+        return count;
     }
 
     private static int backgroundPixels(ByteBuffer pixels, int x0, int x1, int y0, int y1) {
