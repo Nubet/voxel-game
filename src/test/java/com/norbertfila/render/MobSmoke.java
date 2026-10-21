@@ -26,7 +26,8 @@ public final class MobSmoke {
         try (var window = new Window(SIZE, SIZE, "Mob regression");
                 var renderer = new MobRenderer();
                 var hitboxes = new HitboxRenderer();
-                var fire = new EntityFireRenderer()) {
+                var fire = new EntityFireRenderer();
+                var arrows = new ArrowRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
             var view = new Matrix4f()
                     .perspective((float) Math.toRadians(60), 1, .1f, 128)
@@ -89,6 +90,57 @@ public final class MobSmoke {
             var flames = capture();
             check(orangePixels(flames) > 2000, "Burning mobs show no flames");
             write(flames, "burning");
+            clear();
+            renderer.environment(SkyModel.DAY);
+            var posed = List.of(
+                    new MobRenderState(
+                            1,
+                            MobType.CREEPER,
+                            -1.4,
+                            0,
+                            0,
+                            -1.4,
+                            0,
+                            0,
+                            160,
+                            160,
+                            .3,
+                            .34,
+                            false,
+                            0,
+                            MobAction.CHARGING,
+                            .95f),
+                    new MobRenderState(
+                            2, MobType.ZOMBIE, 0, 0, 0, 0, 0, 0, 180, 180, .5, .54, false, 0, MobAction.ATTACKING, .1f),
+                    new MobRenderState(
+                            3,
+                            MobType.SKELETON,
+                            1.4,
+                            0,
+                            0,
+                            1.4,
+                            0,
+                            0,
+                            200,
+                            200,
+                            0,
+                            0,
+                            false,
+                            0,
+                            MobAction.AIMING,
+                            .6f));
+            renderer.render(relative, posed, 1, 0, 1.2, 4.5, fog, 0, BlockLightState.NONE);
+            arrows.render(
+                    relative,
+                    List.of(new com.norbertfila.projectile.ArrowRenderState(1, -.6, 1.6, 2, -.6, 1.6, 2, 1, .1, 0)),
+                    1,
+                    0,
+                    1.2,
+                    4.5);
+            check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Arrows leaked state");
+            var poses = capture();
+            check(total(poses) > total(day) / 2, "Posed mobs are missing");
+            write(poses, "poses");
             hitboxes.render(view, Hitboxes.of(mobs, List.of(), 1), 0, 0, 0);
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Hitboxes leaked state");
             var boxed = capture();
