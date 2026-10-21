@@ -8,6 +8,8 @@ import java.util.EnumMap;
 
 public final class PlayerAnimator {
     public static final int SWING_TICKS = 12;
+    /** Horizontal speed in blocks per second at which the gait reaches full intensity. */
+    public static final double FULL_GAIT_SPEED = 5.6;
 
     public record Swing(long sequence, long startTick) {
         public static final Swing NONE = new Swing(0, 0);
@@ -44,7 +46,7 @@ public final class PlayerAnimator {
         var to = player.state().position();
         double distance = Math.hypot(to.x() - from.x(), to.z() - from.z());
         boolean flying = player.flying() || player.mode() == PlayerController.Mode.SPECTATOR;
-        double target = !flying ? Math.min(1, distance * 60 / 5.6) : 0;
+        double target = !flying ? Math.min(1, distance * 60 / FULL_GAIT_SPEED) : 0;
         double intensity = reset ? 0 : approach(last.intensity(), target, .22);
         double phase = reset ? 0 : last.phase() + (flying ? 0 : distance * 2.5);
         double airborne = reset ? 0 : approach(last.airborne(), !player.state().grounded() && !flying ? 1 : 0, .25);

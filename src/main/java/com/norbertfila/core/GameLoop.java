@@ -21,6 +21,7 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerTarget;
 import com.norbertfila.player.visual.FirstPersonHand;
+import com.norbertfila.player.visual.HandSway;
 import com.norbertfila.player.visual.HeldItemMotion;
 import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
@@ -219,6 +220,7 @@ public final class GameLoop {
             ScreenshotWriter screenshots) {
         var firstPerson = new FirstPersonRenderer(players, items);
         var heldMotion = new HeldItemMotion();
+        var handSway = new HandSway();
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -756,9 +758,12 @@ public final class GameLoop {
                 var inventory = state.inventory();
                 heldMotion.update(
                         inventory.block(inventory.selectedSlot()), state.attackCharge(), state.paused() ? 0 : delta);
+                double handAlpha = state.interpolationAlpha(interpolationTime);
+                handSway.update(camera.yaw(), camera.pitch(), delta);
                 firstPerson.render(
                         width[0],
                         height[0],
+                        handSway.transform(state.playerRenderState(), handAlpha, camera.yaw(), camera.pitch()),
                         state.playerRenderState().appearance(),
                         heldMotion.shownItem(),
                         FirstPersonHand.swing(state.playerRenderState(), state.interpolationAlpha(interpolationTime)),

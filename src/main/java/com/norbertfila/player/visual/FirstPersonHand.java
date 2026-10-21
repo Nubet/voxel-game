@@ -37,11 +37,11 @@ public final class FirstPersonHand {
      * Maps the right arm's cuboid, in this model's pixel units around its shoulder pivot, to view space. Swing and
      * equip are in [0, 1]; equip 1 hides the arm below the screen.
      */
-    public static Matrix4f rightArm(ModelVariant variant, float swing, float equip) {
+    public static Matrix4f rightArm(Matrix4f view, ModelVariant variant, float swing, float equip) {
         Objects.requireNonNull(variant);
         float root = (float) Math.sqrt(swing);
-        return new Matrix4f()
-                .translation(
+        return new Matrix4f(view)
+                .translate(
                         -.3f * sin(root * PI) + .64f,
                         .4f * sin(root * 2 * PI) - .6f - equip * .6f,
                         -.4f * sin(swing * PI) - .72f)
@@ -63,10 +63,10 @@ public final class FirstPersonHand {
      * Maps an item model over unit space to view space, with Minecraft's first-person display transform for a block
      * model or for a generated (sprite) model.
      */
-    public static Matrix4f rightHandItem(boolean block, float swing, float equip) {
+    public static Matrix4f rightHandItem(Matrix4f view, boolean block, float swing, float equip) {
         float root = (float) Math.sqrt(swing);
-        var matrix = new Matrix4f()
-                .translation(-.4f * sin(root * PI), .2f * sin(root * 2 * PI), -.2f * sin(swing * PI))
+        var matrix = new Matrix4f(view)
+                .translate(-.4f * sin(root * PI), .2f * sin(root * 2 * PI), -.2f * sin(swing * PI))
                 .translate(.56f, -.52f - equip * .6f, -.72f)
                 .rotateY(radians(45 + sin(swing * swing * PI) * -20))
                 .rotateZ(radians(sin(root * PI) * -20))
