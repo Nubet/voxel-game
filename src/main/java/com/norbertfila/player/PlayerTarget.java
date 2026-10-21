@@ -33,6 +33,11 @@ public final class PlayerTarget implements AttackTarget {
     }
 
     @Override
+    public void knockback(double pushX, double pushZ) {
+        if (attackable()) player.knockback(pushX, KNOCKBACK_LIFT, pushZ);
+    }
+
+    @Override
     public boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ) {
         if (!attackable()) return false;
         var hit = health.damage(source, amount);

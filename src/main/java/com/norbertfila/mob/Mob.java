@@ -102,6 +102,11 @@ public final class Mob implements AttackTarget {
         return hit.landed();
     }
 
+    @Override
+    public void knockback(double pushX, double pushZ) {
+        knockback(pushX, KNOCKBACK_LIFT, pushZ);
+    }
+
     /** Removes the mob on the next hazard pass, as when a creeper is consumed by its own blast. */
     public void kill() {
         health.kill();

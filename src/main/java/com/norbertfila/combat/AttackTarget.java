@@ -32,6 +32,12 @@ public interface AttackTarget {
     /** False for targets that cannot be hurt right now, such as creative players or the dead. */
     boolean attackable();
 
-    /** Applies damage with a horizontal push in blocks per second; returns false when the hit was ignored. */
+    /**
+     * Applies damage with a horizontal push in blocks per second; returns false when the hit was ignored. The push is
+     * skipped when the hit only tops up an earlier one during the hurt cooldown.
+     */
     boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ);
+
+    /** A push in blocks per second that lands regardless of the hurt cooldown, such as sprint or sweep knockback. */
+    void knockback(double pushX, double pushZ);
 }

@@ -98,5 +98,8 @@ class ExplosionTest {
             this.knockbackX = knockbackX;
             return true;
         }
+
+        @Override
+        public void knockback(double pushX, double pushZ) {}
     }
 }

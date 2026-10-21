@@ -41,4 +41,7 @@ final class FakeTarget implements AttackTarget {
         hits.add(new Hit(source, amount, knockbackX, knockbackZ));
         return true;
     }
+
+    @Override
+    public void knockback(double pushX, double pushZ) {}
 }

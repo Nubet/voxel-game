@@ -27,6 +27,9 @@ class EntityTargetingTest {
         public boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ) {
             return false;
         }
+
+        @Override
+        public void knockback(double pushX, double pushZ) {}
     }
 
     @Test

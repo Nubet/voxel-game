@@ -56,7 +56,8 @@ public final class PlayerCombat {
 
     /**
      * Strikes the target and, for a sweep, the bodies that {@code nearby} returns around it. Returns the outcome when
-     * the target took the hit, or empty when it ignored it.
+     * the target took the hit, or empty when it ignored it. Sprint knockback lands separately, as in Minecraft, so a
+     * stronger hit during the hurt cooldown still pushes.
      */
     public Optional<MeleeAttack.Outcome> attack(
             AttackTarget target,
@@ -67,15 +68,14 @@ public final class PlayerCombat {
         Objects.requireNonNull(nearby);
         var outcome = MeleeAttack.resolve(MeleeWeapon.of(heldItem), charge, attacker);
         charge.reset();
-        double pushX = attacker.facingX() * outcome.sprintKnockback(),
-                pushZ = attacker.facingZ() * outcome.sprintKnockback();
         double dx = target.x() - attacker.x(), dz = target.z() - attacker.z();
         double length = Math.hypot(dx, dz);
-        if (length > 1e-9) {
-            pushX += dx / length * outcome.knockback();
-            pushZ += dz / length * outcome.knockback();
-        }
+        double pushX = length > 1e-9 ? dx / length * outcome.knockback() : 0;
+        double pushZ = length > 1e-9 ? dz / length * outcome.knockback() : 0;
         if (!target.hurt(DamageSource.PLAYER_ATTACK, outcome.damage(), pushX, pushZ)) return Optional.empty();
+        if (outcome.sprintHit())
+            target.knockback(
+                    attacker.facingX() * outcome.sprintKnockback(), attacker.facingZ() * outcome.sprintKnockback());
         if (outcome.sweep()) sweep(target, attacker, nearby);
         return Optional.of(outcome);
     }
@@ -97,11 +97,8 @@ public final class PlayerCombat {
             if (other == target
                     || !other.attackable()
                     || dx * dx + dy * dy + dz * dz >= MeleeAttack.SWEEP_REACH * MeleeAttack.SWEEP_REACH) continue;
-            other.hurt(
-                    DamageSource.PLAYER_ATTACK,
-                    MeleeAttack.SWEEP_DAMAGE,
-                    attacker.facingX() * MeleeAttack.KNOCKBACK,
-                    attacker.facingZ() * MeleeAttack.KNOCKBACK);
+            other.knockback(attacker.facingX() * MeleeAttack.KNOCKBACK, attacker.facingZ() * MeleeAttack.KNOCKBACK);
+            other.hurt(DamageSource.PLAYER_ATTACK, MeleeAttack.SWEEP_DAMAGE, 0, 0);
         }
     }
 }
