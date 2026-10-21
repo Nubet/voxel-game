@@ -210,6 +210,16 @@ tasks.register<JavaExec>("smokePlayerModel") {
     if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
 }
 
+tasks.register<JavaExec>("smokeFirstPerson") {
+    group = "verification"
+    description = "Renders the first-person hand and held items."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.norbertfila.render.FirstPersonSmoke")
+    args(layout.buildDirectory.dir("first-person-smoke").get().asFile.absolutePath)
+    if (os.contains("mac")) jvmArgs("-XstartOnFirstThread")
+}
+
 tasks.register<JavaExec>("smokeTerrainUniforms") {
     group = "verification"
     description = "Checks active and optimized-out uniforms in all terrain shader variants."
