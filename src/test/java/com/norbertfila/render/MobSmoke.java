@@ -4,6 +4,7 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.light.BlockLightState;
 import com.norbertfila.light.BlockLightVolume;
+import com.norbertfila.mob.MobAction;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.platform.Window;
@@ -68,8 +69,13 @@ public final class MobSmoke {
                             0,
                             0,
                             m.yaw(),
+                            m.yaw(),
+                            0,
+                            0,
                             m.type() != MobType.CREEPER,
-                            1))
+                            1,
+                            MobAction.NONE,
+                            0))
                     .toList();
             // The game passes a camera-relative view, which camera-facing flames depend on.
             var relative = new Matrix4f()
@@ -108,7 +114,7 @@ public final class MobSmoke {
     }
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
-        return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw, false, 0);
+        return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw, yaw, 0, 0, false, 0, MobAction.NONE, 0);
     }
 
     private static int redPixels(ByteBuffer pixels) {

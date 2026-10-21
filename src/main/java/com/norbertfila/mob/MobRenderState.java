@@ -11,12 +11,35 @@ public record MobRenderState(
         double x,
         double y,
         double z,
+        float previousYaw,
         float yaw,
+        double previousWalkDistance,
+        double walkDistance,
         boolean burning,
-        float hurt) {
+        float hurt,
+        MobAction action,
+        float actionProgress) {
     public MobRenderState {
         Objects.requireNonNull(type);
+        Objects.requireNonNull(action);
         if (!(hurt >= 0 && hurt <= 1)) throw new IllegalArgumentException("Hurt fade must be in [0, 1]");
+        if (!(actionProgress >= 0 && actionProgress <= 1))
+            throw new IllegalArgumentException("Action progress must be in [0, 1]");
+    }
+
+    /** A standing mob, for tools and tests that only place models. */
+    public static MobRenderState standing(long id, MobType type, double x, double y, double z, float yaw) {
+        return new MobRenderState(id, type, x, y, z, x, y, z, yaw, yaw, 0, 0, false, 0, MobAction.NONE, 0);
+    }
+
+    /** Interpolates along the shorter way around, so turning across 180 degrees does not spin the model. */
+    public float interpolatedYaw(double alpha) {
+        float delta = Mob.wrapDegrees(yaw - previousYaw);
+        return (float) (previousYaw + delta * alpha);
+    }
+
+    public double interpolatedWalkDistance(double alpha) {
+        return previousWalkDistance + (walkDistance - previousWalkDistance) * alpha;
     }
 
     public double interpolatedX(double alpha) {

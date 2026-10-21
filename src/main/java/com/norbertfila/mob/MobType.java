@@ -6,32 +6,31 @@ import java.util.Objects;
 import java.util.Optional;
 
 public enum MobType {
-    CREEPER("creeper", MobCategory.HOSTILE, .6, 1.7, 20, false),
-    ZOMBIE("zombie", MobCategory.HOSTILE, .6, 1.95, 20, true),
-    SKELETON("skeleton", MobCategory.HOSTILE, .6, 1.99, 20, true);
+    CREEPER("creeper", MobCategory.HOSTILE, .6, 1.7, new MobAttributes(20, 2.5, 16, false)),
+    ZOMBIE("zombie", MobCategory.HOSTILE, .6, 1.95, new MobAttributes(20, 2.3, 35, true)),
+    SKELETON("skeleton", MobCategory.HOSTILE, .6, 1.99, new MobAttributes(20, 2.5, 16, true));
 
     private final String id;
     private final MobCategory category;
     private final double width;
     private final double height;
-    private final float maxHealth;
-    private final boolean burnsInDaylight;
+    private final MobAttributes attributes;
 
-    MobType(String id, MobCategory category, double width, double height, float maxHealth, boolean burnsInDaylight) {
+    MobType(String id, MobCategory category, double width, double height, MobAttributes attributes) {
         this.id = id;
         this.category = category;
         this.width = width;
         this.height = height;
-        this.maxHealth = maxHealth;
-        this.burnsInDaylight = burnsInDaylight;
+        this.attributes = attributes;
     }
 
-    public float maxHealth() {
-        return maxHealth;
+    public MobAttributes attributes() {
+        return attributes;
     }
 
-    public boolean burnsInDaylight() {
-        return burnsInDaylight;
+    /** Minecraft places an entity's eyes at 85% of its height. */
+    public double eyeHeight() {
+        return height * .85;
     }
 
     public String id() {
