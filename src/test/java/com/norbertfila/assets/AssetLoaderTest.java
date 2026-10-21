@@ -30,6 +30,22 @@ class AssetLoaderTest {
     }
 
     @Test
+    void toolTexturesLoadInToolOrderWithTransparentBackgrounds() throws IOException {
+        var textures = new AssetLoader(BlockRegistry.DEFAULT).loadToolTextures();
+        var tools = com.norbertfila.items.Tool.values();
+        assertEquals(tools.length, textures.layerCount());
+        for (var tool : tools) {
+            var texture = textures.layer(tool.ordinal());
+            try (var input = getClass().getResourceAsStream("/assets/textures/items/" + tool.itemName() + ".png")) {
+                var image = ImageIO.read(input);
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++) assertEquals(image.getRGB(x, y) >>> 24, texture.rgbaAt(x, y, 3));
+            }
+            assertEquals(0, texture.rgbaAt(0, 0, 3));
+        }
+    }
+
+    @Test
     void shippedOreTexturesDecodeExactlyWithoutFallback() throws IOException {
         var textures = new AssetLoader(BlockRegistry.DEFAULT).loadBlockTextures();
         for (String ore : java.util.List.of("coal", "iron", "gold", "diamond", "lapis")) {
