@@ -1,6 +1,8 @@
 package com.norbertfila.ui.screens;
 
 import com.norbertfila.i18n.*;
+import com.norbertfila.items.ItemId;
+import com.norbertfila.items.Tool;
 import com.norbertfila.player.Inventory;
 import com.norbertfila.player.InventorySnapshot;
 import com.norbertfila.ui.*;
@@ -57,6 +59,7 @@ public final class InventoryScreen implements Screen {
                 BlockRegistry.DEFAULT.definition((byte) id);
                 blocks.add((byte) id);
             }
+        for (var tool : Tool.values()) blocks.add(tool.id());
         return List.copyOf(blocks);
     }
 
@@ -228,9 +231,7 @@ public final class InventoryScreen implements Screen {
                     : inventory.block(slot);
             int count = creative && cell < catalogCells() ? 0 : inventory.count(slot);
             ItemIcons.render(canvas, box.x(), box.y(), CELL - 2, block, count);
-            if (hover && block != BlockId.AIR)
-                hovered = translations.text(
-                        "block." + BlockRegistry.DEFAULT.definition(block).name());
+            if (hover && block != BlockId.AIR) hovered = translations.text(ItemId.translationKey(block));
         }
         canvas.textWithShadow(
                 FONT,

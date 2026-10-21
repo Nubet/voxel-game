@@ -2,6 +2,7 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
+import com.norbertfila.items.ItemId;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.BlockShape;
@@ -80,6 +81,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
             glUniformMatrix4fv(vp, false, viewProjection.get(stack.mallocFloat(16)));
             for (var state : items) {
                 var item = state.item();
+                if (!ItemId.isBlock((byte) item.itemId())) continue;
                 double x = state.previousX() + (item.x() - state.previousX()) * alpha - cameraX;
                 double y = state.previousY() + (item.y() - state.previousY()) * alpha - cameraY;
                 double z = state.previousZ() + (item.z() - state.previousZ()) * alpha - cameraZ;

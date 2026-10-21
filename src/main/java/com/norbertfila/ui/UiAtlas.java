@@ -9,7 +9,7 @@ public final class UiAtlas {
     public static final int HEIGHT = 512;
     public static final int ITEM_Y = 256;
     public static final int ITEM_SIZE = 16;
-    public static final int LAST_ITEM = Byte.toUnsignedInt(com.norbertfila.world.BlockId.TORCH);
+    public static final int LAST_ITEM = 255;
     public static final Region HOTBAR = new Region(0, 176, 182, 22);
     public static final Region SELECTION = new Region(0, 200, 24, 23);
     public static final Region CROSSHAIR = new Region(32, 200, 15, 15);
@@ -68,7 +68,7 @@ public final class UiAtlas {
 
     public static Region item(byte block) {
         int id = Byte.toUnsignedInt(block);
-        if (id > LAST_ITEM || !com.norbertfila.world.BlockId.isValid(block)) id = 0;
+        if (!com.norbertfila.items.ItemId.isValid(block)) id = 0;
         return new Region(id % 16 * ITEM_SIZE, ITEM_Y + id / 16 * ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
     }
 

@@ -1,5 +1,6 @@
 package com.norbertfila.player;
 
+import com.norbertfila.items.ItemId;
 import com.norbertfila.items.ItemStack;
 import com.norbertfila.world.BlockId;
 import java.util.Optional;
@@ -27,8 +28,13 @@ public final class Inventory {
         return new InventorySnapshot(blocks, counts, selectedSlot);
     }
 
-    public byte selectedBlock() {
+    public byte selectedItem() {
         return blocks[selectedSlot];
+    }
+
+    /** The selected item when it can be placed, otherwise air. */
+    public byte selectedBlock() {
+        return ItemId.isBlock(blocks[selectedSlot]) ? blocks[selectedSlot] : BlockId.AIR;
     }
 
     public Optional<ItemStack> stack(int slot) {
@@ -52,10 +58,9 @@ public final class Inventory {
 
     public void creativePick(int slot, byte block) {
         checkHotbar(slot);
-        if (!BlockId.isValid(block) || block == BlockId.AIR)
-            throw new IllegalArgumentException("Invalid catalog block");
+        if (!ItemId.isValid(block) || block == BlockId.AIR) throw new IllegalArgumentException("Invalid catalog item");
         blocks[slot] = block;
-        counts[slot] = MAX_STACK;
+        counts[slot] = ItemId.maxStack(block);
     }
 
     public boolean add(byte block) {
@@ -63,13 +68,14 @@ public final class Inventory {
     }
 
     public int insert(int itemId, int count) {
-        if (itemId <= 0 || itemId > 255 || !BlockId.isValid((byte) itemId) || count < 0)
+        if (itemId <= 0 || itemId > 255 || !ItemId.isValid((byte) itemId) || count < 0)
             throw new IllegalArgumentException("Invalid insertion");
         byte block = (byte) itemId;
+        int max = ItemId.maxStack(block);
         for (int pass = 0; pass < 2 && count > 0; pass++)
             for (int i = 0; i < SLOTS && count > 0; i++)
-                if (pass == 0 ? blocks[i] == block && counts[i] < MAX_STACK : counts[i] == 0) {
-                    int move = Math.min(count, MAX_STACK - counts[i]);
+                if (pass == 0 ? blocks[i] == block && counts[i] < max : counts[i] == 0) {
+                    int move = Math.min(count, max - counts[i]);
                     blocks[i] = block;
                     counts[i] += move;
                     count -= move;
@@ -95,8 +101,8 @@ public final class Inventory {
             counts[CARRIED] = take;
             counts[slot] -= take;
             clearEmpty(slot);
-        } else if (counts[slot] == 0 || blocks[slot] == blocks[CARRIED]) {
-            int move = Math.min(right ? 1 : counts[CARRIED], MAX_STACK - counts[slot]);
+        } else if (counts[slot] == 0 || blocks[slot] == blocks[CARRIED] && ItemId.maxStack(blocks[slot]) > 1) {
+            int move = Math.min(right ? 1 : counts[CARRIED], ItemId.maxStack(blocks[CARRIED]) - counts[slot]);
             if (move == 0) return;
             blocks[slot] = blocks[CARRIED];
             counts[slot] += move;
@@ -121,7 +127,7 @@ public final class Inventory {
         for (int pass = 0; pass < 2 && counts[source] > 0; pass++)
             for (int i = first; i < end && counts[source] > 0; i++) {
                 if (i == source || (pass == 0 ? blocks[i] != blocks[source] : counts[i] != 0)) continue;
-                int move = Math.min(counts[source], MAX_STACK - counts[i]);
+                int move = Math.min(counts[source], ItemId.maxStack(blocks[source]) - counts[i]);
                 if (move == 0) continue;
                 blocks[i] = blocks[source];
                 counts[i] += move;

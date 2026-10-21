@@ -206,9 +206,9 @@ public final class ItemSystem {
             if (id <= item.id
                     || !other.moving
                     || item.itemId != other.itemId
-                    || item.count == Inventory.MAX_STACK
+                    || item.count >= ItemId.maxStack((byte) item.itemId)
                     || !range.intersects(other.body())) continue;
-            int move = Math.min(other.count, Inventory.MAX_STACK - item.count);
+            int move = Math.min(other.count, ItemId.maxStack((byte) item.itemId) - item.count);
             item.count += move;
             other.count -= move;
             item.ageTicks = Math.max(item.ageTicks, other.ageTicks);
