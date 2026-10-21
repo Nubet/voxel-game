@@ -31,6 +31,7 @@ import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
 import com.norbertfila.mob.Mob;
 import com.norbertfila.mob.MobCensus;
+import com.norbertfila.mob.MobDeathEvent;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.PlayerPosition;
@@ -897,6 +898,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     breaking.progress(),
                                     breaks,
                                     crits,
+                                    mobLifecycle.deaths(),
                                     itemSnapshot,
                                     biome,
                                     playerRenderState,
@@ -1400,6 +1402,7 @@ public final class WorldRuntime implements AutoCloseable {
             Optional<BlockBreaking.Progress> breaking,
             List<BlockBreakEvent> brokenBlocks,
             List<CriticalHitEvent> criticalHits,
+            List<MobDeathEvent> mobDeaths,
             List<ItemRenderState> items,
             BiomeType biome,
             PlayerRenderState playerRenderState,
@@ -1428,6 +1431,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(breaking);
             brokenBlocks = List.copyOf(brokenBlocks);
             criticalHits = List.copyOf(criticalHits);
+            mobDeaths = List.copyOf(mobDeaths);
             items = List.copyOf(items);
             Objects.requireNonNull(playerRenderState);
             Objects.requireNonNull(cameraEnvironment);

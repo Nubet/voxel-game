@@ -30,7 +30,6 @@ import com.norbertfila.render.ArrowRenderer;
 import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
-import com.norbertfila.render.CriticalHitRenderer;
 import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.EntityFireRenderer;
 import com.norbertfila.render.FirstPersonRenderer;
@@ -41,6 +40,7 @@ import com.norbertfila.render.Hitboxes;
 import com.norbertfila.render.ItemEntityRenderer;
 import com.norbertfila.render.ItemModel;
 import com.norbertfila.render.MobRenderer;
+import com.norbertfila.render.ParticleRenderer;
 import com.norbertfila.render.PlayerRenderer;
 import com.norbertfila.render.PrecipitationRenderer;
 import com.norbertfila.render.SkinManager;
@@ -161,7 +161,7 @@ public final class GameLoop {
                 HitboxRenderer hitboxes = new HitboxRenderer();
                 EntityFireRenderer entityFire = new EntityFireRenderer();
                 ArrowRenderer arrows = new ArrowRenderer();
-                CriticalHitRenderer criticalHits = new CriticalHitRenderer();
+                ParticleRenderer particles = new ParticleRenderer();
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
@@ -186,7 +186,7 @@ public final class GameLoop {
                     hitboxes,
                     entityFire,
                     arrows,
-                    criticalHits,
+                    particles,
                     clouds,
                     precipitation,
                     skyRenderer,
@@ -214,7 +214,7 @@ public final class GameLoop {
             HitboxRenderer hitboxes,
             EntityFireRenderer entityFire,
             ArrowRenderer arrows,
-            CriticalHitRenderer criticalHits,
+            ParticleRenderer particles,
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
@@ -725,9 +725,10 @@ public final class GameLoop {
                 entityFire.render(
                         viewProjection, state.mobs(), itemAlpha, camera.x(), camera.y(), camera.z(), effectSeconds);
                 arrows.render(viewProjection, state.arrows(), itemAlpha, camera.x(), camera.y(), camera.z());
-                criticalHits.render(
+                particles.render(
                         viewProjection,
                         state.criticalHits(),
+                        state.mobDeaths(),
                         effectSeconds,
                         camera.x(),
                         camera.y(),

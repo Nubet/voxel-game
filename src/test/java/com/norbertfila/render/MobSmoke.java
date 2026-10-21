@@ -28,7 +28,7 @@ public final class MobSmoke {
                 var hitboxes = new HitboxRenderer();
                 var fire = new EntityFireRenderer();
                 var arrows = new ArrowRenderer();
-                var crits = new CriticalHitRenderer()) {
+                var crits = new ParticleRenderer()) {
             glViewport(0, 0, SIZE, SIZE);
             var view = new Matrix4f()
                     .perspective((float) Math.toRadians(60), 1, .1f, 128)
@@ -94,12 +94,37 @@ public final class MobSmoke {
             clear();
             var hit = new com.norbertfila.combat.CriticalHitEvent(
                     60, new com.norbertfila.world.Aabb(-.3, 0, -.3, .3, 1.95, .3));
-            crits.render(relative, List.of(hit), 1.05, 0, 1.2, 4.5, new org.joml.Vector3f(0, -.2f, -4.5f).normalize());
+            crits.render(
+                    relative,
+                    List.of(hit),
+                    List.of(),
+                    1.05,
+                    0,
+                    1.2,
+                    4.5,
+                    new org.joml.Vector3f(0, -.2f, -4.5f).normalize());
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Critical hit particles leaked state");
             var stars = capture();
             check(total(stars) > 0, "Critical hit shows no particles");
             write(stars, "critical-hit");
             clear();
+            var removal = new com.norbertfila.mob.MobDeathEvent(
+                    60, new com.norbertfila.world.Aabb(-.3, 0, -.3, .3, 1.95, .3));
+            for (double age : new double[] {.1, 1.5}) {
+                crits.render(
+                        relative,
+                        List.of(),
+                        List.of(removal),
+                        1 + age,
+                        0,
+                        1.2,
+                        4.5,
+                        new org.joml.Vector3f(0, -.2f, -4.5f).normalize());
+                var smoke = capture();
+                check(total(smoke) > 0, "Mob death shows no smoke");
+                write(smoke, "poof-" + (int) (age * 10));
+                clear();
+            }
             renderer.environment(SkyModel.DAY);
             for (float death : new float[] {0, .3f, 1}) {
                 var zombie = mob(2, MobType.ZOMBIE, 0, 180);
