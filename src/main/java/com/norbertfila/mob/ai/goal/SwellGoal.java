@@ -52,7 +52,7 @@ public final class SwellGoal implements Goal {
         mob.act(swell > 0 ? MobAction.CHARGING : MobAction.NONE, Math.min(1, swell / (float) FUSE_TICKS));
         if (swell >= FUSE_TICKS) {
             context.world().explode(mob.x(), mob.y(), mob.z(), power);
-            mob.kill();
+            mob.discard();
             swell = 0;
         }
     }

@@ -3,6 +3,7 @@ package com.norbertfila.mob;
 import com.norbertfila.combat.AttackTarget;
 import com.norbertfila.combat.DamageSource;
 import com.norbertfila.combat.Health;
+import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
@@ -27,7 +28,12 @@ public final class Mob implements AttackTarget {
     double walkDistance, previousWalkDistance;
     boolean onGround, horizontalCollision, inWater;
     int ticksAwayFromPlayers;
+    /** Minecraft plays a slain mob's death for 20 of its ticks before removing it. */
+    public static final int DEATH_TICKS = FixedSimulation.TICKS_PER_SECOND;
+
     double moveX, moveZ, moveSpeed;
+    int deathTicks;
+    boolean discarded;
     boolean jumpRequested;
     private double lookX, lookZ;
     private boolean looking;
@@ -107,9 +113,14 @@ public final class Mob implements AttackTarget {
         knockback(pushX, KNOCKBACK_LIFT, pushZ);
     }
 
-    /** Removes the mob on the next hazard pass, as when a creeper is consumed by its own blast. */
-    public void kill() {
-        health.kill();
+    /** Removes the mob on the next tick without a death animation, as when a creeper is consumed by its blast. */
+    public void discard() {
+        discarded = true;
+    }
+
+    /** Progress of the death animation in [0, 1]; 0 while alive. */
+    public float deathProgress() {
+        return Math.min(1, deathTicks / (float) DEATH_TICKS);
     }
 
     public float yaw() {

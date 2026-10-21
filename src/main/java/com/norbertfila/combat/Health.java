@@ -54,10 +54,6 @@ public final class Health {
         return Hit.FRESH;
     }
 
-    public void kill() {
-        value = 0;
-    }
-
     public void tick() {
         if (hurtTicks > 0) hurtTicks--;
     }
