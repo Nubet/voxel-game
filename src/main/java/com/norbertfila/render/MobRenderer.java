@@ -148,7 +148,7 @@ public final class MobRenderer implements AutoCloseable {
                 float reach = (float) mob.type().height();
                 if (!frustum.testAab(x - reach, y, z - reach, x + reach, y + reach, z + reach)) continue;
                 glBindTexture(GL_TEXTURE_2D, textures.get(mob.type()));
-                glUniform1i(hurt, mob.hurt() > 0 ? 1 : 0);
+                glUniform1i(hurt, mob.hurt() > 0 || mob.death() > 0 ? 1 : 0);
                 glUniform1f(
                         blockLight,
                         light.level(
@@ -160,6 +160,7 @@ public final class MobRenderer implements AutoCloseable {
                 glUniform1i(flash, pose.flash() ? 1 : 0);
                 base.translation(x, y, z)
                         .rotateY((float) Math.toRadians(-mob.interpolatedYaw(alpha)))
+                        .rotateZ(MobAnimator.deathRoll(mob, alpha))
                         .scale(pose.scaleXZ() / 16, pose.scaleY() / 16, pose.scaleXZ() / 16);
                 var mobModel = MobModels.of(mob.type());
                 int first = firstVertex.get(mob.type());

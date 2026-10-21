@@ -315,6 +315,7 @@ public final class Mob implements AttackTarget {
                 burning(),
                 health.hurtTicks() / (float) Health.HURT_TICKS,
                 action,
-                actionProgress);
+                actionProgress,
+                deathProgress());
     }
 }
