@@ -21,7 +21,8 @@ record ItemModel(Shape shape, boolean itemTexture, int side, int top, int bottom
 
     static ItemModel dropped(byte item) {
         var tool = Tool.of(item);
-        if (tool.isPresent()) return new ItemModel(Shape.FLAT, true, tool.get().ordinal(), 0, 0, 1);
+        if (tool.isPresent())
+            return new ItemModel(Shape.EXTRUDED, true, tool.get().ordinal(), 0, 0, 1);
         var block = BlockRegistry.DEFAULT.definition(item);
         var shape = flat(block.model().shape()) ? Shape.CROSS : Shape.CUBE;
         return new ItemModel(

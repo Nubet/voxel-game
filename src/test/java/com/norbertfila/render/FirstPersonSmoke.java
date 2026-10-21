@@ -55,7 +55,18 @@ public final class FirstPersonSmoke {
                     write(held, output.resolve("block-" + block + "-swing-" + (int) (swing * 100) + ".png"));
                 }
             }
-            System.out.println("PASS first-person arm and held blocks");
+            for (var tool : new com.norbertfila.items.Tool[] {
+                com.norbertfila.items.Tool.DIAMOND_SWORD, com.norbertfila.items.Tool.IRON_PICKAXE
+            }) {
+                for (float swing : new float[] {0, .5f}) {
+                    clear();
+                    hand.render(WIDTH, HEIGHT, PlayerAppearance.DEFAULT, tool.id(), swing, 0);
+                    var held = capture();
+                    check(pixels(held, WIDTH / 2, WIDTH, 0, HEIGHT) > 300, "Held " + tool + " not visible");
+                    write(held, output.resolve(tool.itemName() + "-swing-" + (int) (swing * 100) + ".png"));
+                }
+            }
+            System.out.println("PASS first-person arm, held blocks and tools");
         }
     }
 
