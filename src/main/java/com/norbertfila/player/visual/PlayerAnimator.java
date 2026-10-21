@@ -77,6 +77,12 @@ public final class PlayerAnimator {
     }
 
     public static PlayerPose pose(PlayerRenderState state, double alpha, double lookYaw, double lookPitch) {
+        return pose(state, alpha, lookYaw, lookPitch, false);
+    }
+
+    /** A held item raises the right arm a little, as Minecraft's item arm pose does. */
+    public static PlayerPose pose(
+            PlayerRenderState state, double alpha, double lookYaw, double lookPitch, boolean holding) {
         var sample = state.interpolate(alpha);
         if (!Double.isFinite(lookYaw) || !Double.isFinite(lookPitch))
             throw new IllegalArgumentException("Invalid look angles");
@@ -117,6 +123,7 @@ public final class PlayerAnimator {
             rightLeg = (float) (rightLeg * (1 - air * .1) + tuck * air - impact * .25);
             leftLeg = (float) (leftLeg * (1 - air * .1) - tuck * air - impact * .25);
         }
+        if (holding && !flying) rightArm = rightArm * .5f + (float) Math.PI / 10;
         double age = time - state.animation().swing().startTick();
         if (state.animation().swing().sequence() > 0 && age >= 0 && age < SWING_TICKS)
             rightArm += (float) (Math.sin(Math.PI * age / SWING_TICKS) * 1.8);

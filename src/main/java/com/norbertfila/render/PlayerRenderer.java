@@ -105,7 +105,7 @@ public final class PlayerRenderer implements AutoCloseable {
         float x = (float) (feet.x() - cameraX), y = (float) (feet.y() - cameraY), z = (float) (feet.z() - cameraZ);
         // Encloses fully rotated limbs, swimming, crouching and inflated outer layers.
         if (!new FrustumIntersection(viewProjection).testAab(x - 2, y - 2, z - 2, x + 2, y + 3, z + 2)) return false;
-        var transform = new Matrix4f().translation(x, y, z).rotateY((float) Math.toRadians(-sample.yaw() - 90));
+        var transform = modelToWorld(state, alpha, cameraX, cameraY, cameraZ);
         render(
                 viewProjection,
                 transform,
@@ -115,6 +115,16 @@ public final class PlayerRenderer implements AutoCloseable {
                 water,
                 state.mode() == PlayerController.Mode.SPECTATOR);
         return true;
+    }
+
+    /** Places the player's model space, feet at the origin, relative to the camera. */
+    public static Matrix4f modelToWorld(
+            PlayerRenderState state, double alpha, double cameraX, double cameraY, double cameraZ) {
+        var sample = state.interpolate(alpha);
+        var feet = sample.feet();
+        return new Matrix4f()
+                .translation((float) (feet.x() - cameraX), (float) (feet.y() - cameraY), (float) (feet.z() - cameraZ))
+                .rotateY((float) Math.toRadians(-sample.yaw() - 90));
     }
 
     public void render(Matrix4f viewProjection, Matrix4f modelToWorld, PlayerPose pose) {

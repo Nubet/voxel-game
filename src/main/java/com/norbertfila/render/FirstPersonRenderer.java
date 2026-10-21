@@ -33,9 +33,9 @@ public final class FirstPersonRenderer {
         glClear(GL_DEPTH_BUFFER_BIT);
         var projection = FirstPersonHand.projection(width, height);
         if (heldItem != BlockId.AIR) {
-            boolean block = ItemModel.held(heldItem).shape() == ItemModel.Shape.CUBE;
+            var model = ItemModel.heldModel(heldItem);
             items.renderHeld(
-                    projection, FirstPersonHand.rightHandItem(sway, block, swing, equip), heldItem, blockLight);
+                    projection, FirstPersonHand.rightHandItem(sway, model, swing, equip), heldItem, blockLight);
         } else if (players != null)
             players.renderArm(projection, FirstPersonHand.rightArm(sway, appearance.model(), swing, equip), appearance);
     }
