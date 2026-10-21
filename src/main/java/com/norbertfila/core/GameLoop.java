@@ -29,6 +29,7 @@ import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.CriticalHitRenderer;
 import com.norbertfila.render.DistanceFog;
 import com.norbertfila.render.EntityFireRenderer;
+import com.norbertfila.render.FirstPersonRenderer;
 import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.HitboxRenderer;
@@ -214,6 +215,7 @@ public final class GameLoop {
             SkyRenderer skyRenderer,
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
+        var firstPerson = new FirstPersonRenderer(players);
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -743,6 +745,18 @@ public final class GameLoop {
                         camera.x(),
                         camera.y(),
                         camera.z());
+            if (state != null
+                    && state.ready()
+                    && state.mode() != PlayerController.Mode.SPECTATOR
+                    && camera.perspective() == Camera.Perspective.FIRST
+                    && !localPlayerVisible(state, interpolationTime, camera)) {
+                var inventory = state.inventory();
+                firstPerson.render(
+                        width[0],
+                        height[0],
+                        state.playerRenderState().appearance(),
+                        inventory.block(inventory.selectedSlot()));
+            }
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
             profiler.mark(Segment.RENDER);

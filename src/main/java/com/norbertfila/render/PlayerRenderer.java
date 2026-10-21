@@ -143,10 +143,56 @@ public final class PlayerRenderer implements AutoCloseable {
             DistanceFog fog,
             float water,
             boolean spectator) {
-        if (closed) throw new IllegalStateException("Player renderer is closed");
-        Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(modelToWorld);
         Objects.requireNonNull(pose);
+        draw(viewProjection, appearance, spectator, fog, water, (stack, firstVertex) -> {
+            var buffer = stack.mallocFloat(16);
+            var partMatrix = new Matrix4f();
+            var worldMatrix = new Matrix4f();
+            for (var part : PlayerModel.parts(appearance.model())) {
+                if (spectator && part.part() != PlayerModel.Part.HEAD) continue;
+                PlayerModel.partMatrix(appearance.model(), part.part(), pose, partMatrix);
+                modelToWorld.mul(partMatrix, worldMatrix);
+                glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
+                boolean overlay = appearance.outerLayers().contains(part.part());
+                for (int pass = 0; pass < (spectator ? 2 : 1); pass++) {
+                    boolean backFaces = spectator && pass == 0;
+                    if (spectator) glCullFace(backFaces ? GL_FRONT : GL_BACK);
+                    if (overlay && backFaces) drawPart(firstVertex, part.part(), true);
+                    drawPart(firstVertex, part.part(), false);
+                    if (overlay && !backFaces) drawPart(firstVertex, part.part(), true);
+                }
+            }
+        });
+    }
+
+    /** Draws the right arm with its sleeve, already placed in view space by {@code armToView}. */
+    public void renderArm(Matrix4f projection, Matrix4f armToView, PlayerAppearance appearance) {
+        Objects.requireNonNull(armToView);
+        draw(projection, appearance, false, null, 0, (stack, firstVertex) -> {
+            glUniformMatrix4fv(model, false, armToView.get(stack.mallocFloat(16)));
+            // The hand is a few centimeters from the eye, so world fog must not reach it.
+            glUniform2f(fogRange, Float.MAX_VALUE / 2, Float.MAX_VALUE);
+            glUniform1i(worldShading, 1);
+            drawPart(firstVertex, PlayerModel.Part.RIGHT_ARM, false);
+            if (appearance.outerLayers().contains(PlayerModel.Part.RIGHT_ARM))
+                drawPart(firstVertex, PlayerModel.Part.RIGHT_ARM, true);
+        });
+    }
+
+    private interface Draw {
+        void run(MemoryStack stack, int firstVertex);
+    }
+
+    private void draw(
+            Matrix4f viewProjection,
+            PlayerAppearance appearance,
+            boolean spectator,
+            DistanceFog fog,
+            float water,
+            Draw body) {
+        if (closed) throw new IllegalStateException("Player renderer is closed");
+        Objects.requireNonNull(viewProjection);
         Objects.requireNonNull(appearance);
         int texture = skins.texture();
         if (texture == 0) return;
@@ -185,25 +231,8 @@ public final class PlayerRenderer implements AutoCloseable {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
             glBindSampler(0, 0);
-            var buffer = stack.mallocFloat(16);
-            glUniformMatrix4fv(vp, false, viewProjection.get(buffer));
-            var partMatrix = new Matrix4f();
-            var worldMatrix = new Matrix4f();
-            int firstVertex = appearance.model().ordinal() * VERTICES_PER_MODEL;
-            for (var part : PlayerModel.parts(appearance.model())) {
-                if (spectator && part.part() != PlayerModel.Part.HEAD) continue;
-                PlayerModel.partMatrix(appearance.model(), part.part(), pose, partMatrix);
-                modelToWorld.mul(partMatrix, worldMatrix);
-                glUniformMatrix4fv(model, false, worldMatrix.get(buffer));
-                boolean overlay = appearance.outerLayers().contains(part.part());
-                for (int pass = 0; pass < (spectator ? 2 : 1); pass++) {
-                    boolean backFaces = spectator && pass == 0;
-                    if (spectator) glCullFace(backFaces ? GL_FRONT : GL_BACK);
-                    if (overlay && backFaces) drawPart(firstVertex, part.part(), true);
-                    drawPart(firstVertex, part.part(), false);
-                    if (overlay && !backFaces) drawPart(firstVertex, part.part(), true);
-                }
-            }
+            glUniformMatrix4fv(vp, false, viewProjection.get(stack.mallocFloat(16)));
+            body.run(stack, appearance.model().ordinal() * VERTICES_PER_MODEL);
         } finally {
             glBindTexture(GL_TEXTURE_2D, previousTexture);
             glActiveTexture(previousActiveTexture);
