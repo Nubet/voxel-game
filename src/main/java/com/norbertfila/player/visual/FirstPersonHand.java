@@ -1,6 +1,7 @@
 package com.norbertfila.player.visual;
 
 import com.norbertfila.player.visual.model.ModelVariant;
+import com.norbertfila.simulation.FixedSimulation;
 import java.util.Objects;
 import org.joml.Matrix4f;
 
@@ -10,6 +11,9 @@ public final class FirstPersonHand {
     public static final float FIELD_OF_VIEW = 70;
 
     public static final float NEAR = .05f, FAR = 16;
+    /** Minecraft's six-tick swing. */
+    public static final double SWING_SECONDS = .3;
+
     private static final float PI = (float) Math.PI;
 
     private FirstPersonHand() {}
@@ -17,6 +21,16 @@ public final class FirstPersonHand {
     public static Matrix4f projection(int width, int height) {
         return new Matrix4f()
                 .perspective((float) Math.toRadians(FIELD_OF_VIEW), (float) width / Math.max(1, height), NEAR, FAR);
+    }
+
+    /** Progress of the latest swing in [0, 1]; 0 once it has finished. */
+    public static float swing(PlayerRenderState state, double alpha) {
+        var animation = state.animation();
+        if (animation.swing().sequence() == 0) return 0;
+        double time = animation.previous().time()
+                + (animation.current().time() - animation.previous().time()) * alpha;
+        double progress = (time - animation.swing().startTick()) * FixedSimulation.TICK_SECONDS / SWING_SECONDS;
+        return progress < 0 || progress >= 1 ? 0 : (float) progress;
     }
 
     /**

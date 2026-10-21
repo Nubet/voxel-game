@@ -15,12 +15,12 @@ public final class FirstPersonRenderer {
         this.players = players;
     }
 
-    public void render(int width, int height, PlayerAppearance appearance, byte heldItem) {
+    public void render(int width, int height, PlayerAppearance appearance, byte heldItem, float swing) {
         Objects.requireNonNull(appearance);
         // The hand is drawn over the world with its own depth so that it never clips into nearby blocks.
         glClear(GL_DEPTH_BUFFER_BIT);
         var projection = FirstPersonHand.projection(width, height);
         if (heldItem == BlockId.AIR && players != null)
-            players.renderArm(projection, FirstPersonHand.rightArm(appearance.model(), 0, 0), appearance);
+            players.renderArm(projection, FirstPersonHand.rightArm(appearance.model(), swing, 0), appearance);
     }
 }
