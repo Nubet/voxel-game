@@ -78,6 +78,8 @@ public final class MobPopulation {
             mob.previousX = mob.x;
             mob.previousY = mob.y;
             mob.previousZ = mob.z;
+            mob.previousYaw = mob.yaw;
+            mob.previousWalkDistance = mob.walkDistance;
             ChunkPos before = mob.chunk();
             if (!world.hasChunk(before)) {
                 remove(mob);

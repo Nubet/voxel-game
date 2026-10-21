@@ -143,7 +143,7 @@ public final class MobRenderer implements AutoCloseable {
                                         mob.interpolatedY(alpha) + mob.type().height() * .5),
                                 (int) Math.floor(mob.interpolatedZ(alpha))));
                 base.translation(x, y, z)
-                        .rotateY((float) Math.toRadians(-mob.yaw()))
+                        .rotateY((float) Math.toRadians(-mob.interpolatedYaw(alpha)))
                         .scale(1f / 16);
                 var mobModel = MobModels.of(mob.type());
                 int first = firstVertex.get(mob.type());

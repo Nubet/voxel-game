@@ -6,18 +6,32 @@ import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
+import java.util.Objects;
 
-/** A living mob; its position is the center of its feet. */
+/**
+ * A living mob; its position is the center of its feet. AI only states intents (walk, jump, look) and
+ * {@link MobPhysics} turns them into motion on the next tick.
+ */
 public final class Mob {
+    /** Body turn rate in degrees per tick; Minecraft turns mobs by up to 30 degrees per 20 TPS tick. */
+    static final float MAX_TURN = 10;
 
     private final long id;
     private final MobType type;
     private final SpawnZone zone;
-    private final float yaw;
-    double x, y, z, previousX, previousY, previousZ, verticalVelocity;
-    boolean onGround;
-    int ticksAwayFromPlayers;
     private final Health health;
+    double x, y, z, previousX, previousY, previousZ;
+    double velocityX, velocityY, velocityZ;
+    float yaw, previousYaw;
+    double walkDistance, previousWalkDistance;
+    boolean onGround, horizontalCollision, inWater;
+    int ticksAwayFromPlayers;
+    double moveX, moveZ, moveSpeed;
+    boolean jumpRequested;
+    private double lookX, lookZ;
+    private boolean looking;
+    private MobAction action = MobAction.NONE;
+    private float actionProgress;
     private int fireTicks, burnedTicks;
 
     Mob(long id, MobType type, SpawnZone zone, double x, double y, double z, float yaw) {
@@ -27,8 +41,8 @@ public final class Mob {
         this.x = previousX = x;
         this.y = previousY = y;
         this.z = previousZ = z;
-        this.yaw = yaw;
-        health = new Health(type.maxHealth());
+        this.yaw = previousYaw = yaw;
+        health = new Health(type.attributes().maxHealth());
     }
 
     public long id() {
@@ -60,8 +74,28 @@ public final class Mob {
         return z;
     }
 
+    public double eyeY() {
+        return y + type.eyeHeight();
+    }
+
+    public float yaw() {
+        return yaw;
+    }
+
     public boolean onGround() {
         return onGround;
+    }
+
+    public boolean horizontalCollision() {
+        return horizontalCollision;
+    }
+
+    public boolean inWater() {
+        return inWater;
+    }
+
+    public double horizontalSpeed() {
+        return Math.hypot(velocityX, velocityZ);
     }
 
     public int ticksAwayFromPlayers() {
@@ -70,6 +104,86 @@ public final class Mob {
 
     public void markNearPlayer() {
         ticksAwayFromPlayers = 0;
+    }
+
+    /** Walks toward a point at the given multiple of the type's walk speed until told otherwise. */
+    public void walkToward(double targetX, double targetZ, double speedFactor) {
+        double dx = targetX - x, dz = targetZ - z, distance = Math.hypot(dx, dz);
+        if (distance < 1e-4) {
+            stop();
+            return;
+        }
+        walk(dx / distance, dz / distance, speedFactor);
+    }
+
+    /** Walks along a unit direction, independent of where the mob looks, which lets it strafe or back away. */
+    public void walk(double directionX, double directionZ, double speedFactor) {
+        if (!Double.isFinite(directionX) || !Double.isFinite(directionZ) || !(speedFactor >= 0))
+            throw new IllegalArgumentException("Invalid walk");
+        moveX = directionX;
+        moveZ = directionZ;
+        moveSpeed = type.attributes().walkSpeed() * speedFactor;
+    }
+
+    public void stop() {
+        moveSpeed = 0;
+    }
+
+    public boolean moving() {
+        return moveSpeed > 0;
+    }
+
+    public void jump() {
+        jumpRequested = true;
+    }
+
+    /** Turns the body toward a point; without a look target the body turns toward where it walks. */
+    public void lookAt(double targetX, double targetZ) {
+        lookX = targetX;
+        lookZ = targetZ;
+        looking = true;
+    }
+
+    public void stopLooking() {
+        looking = false;
+    }
+
+    /** What the mob is visibly doing, for animation; progress is in [0, 1]. */
+    public void act(MobAction action, float progress) {
+        if (!(progress >= 0 && progress <= 1)) throw new IllegalArgumentException("Action progress must be in [0, 1]");
+        this.action = Objects.requireNonNull(action);
+        actionProgress = progress;
+    }
+
+    public MobAction action() {
+        return action;
+    }
+
+    public float actionProgress() {
+        return actionProgress;
+    }
+
+    void turn() {
+        double dx, dz;
+        if (looking) {
+            dx = lookX - x;
+            dz = lookZ - z;
+        } else if (moving()) {
+            dx = moveX;
+            dz = moveZ;
+        } else return;
+        if (Math.abs(dx) < 1e-6 && Math.abs(dz) < 1e-6) return;
+        // Yaw 0 faces -Z and positive yaw turns toward +X, matching the model and the hitbox look line.
+        float target = (float) Math.toDegrees(Math.atan2(dx, -dz));
+        float delta = wrapDegrees(target - yaw);
+        yaw = wrapDegrees(yaw + Math.clamp(delta, -MAX_TURN, MAX_TURN));
+    }
+
+    static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360;
+        if (wrapped >= 180) wrapped -= 360;
+        if (wrapped < -180) wrapped += 360;
+        return wrapped;
     }
 
     public float health() {
@@ -118,6 +232,14 @@ public final class Mob {
         return health.damage(source, amount);
     }
 
+    /** Pushes the mob in blocks per second, lifting it off the ground like Minecraft knockback. */
+    public void knockback(double pushX, double pushY, double pushZ) {
+        velocityX = velocityX * .5 + pushX;
+        velocityY = Math.max(velocityY, pushY);
+        velocityZ = velocityZ * .5 + pushZ;
+        onGround = false;
+    }
+
     void ageHurt() {
         health.tick();
     }
@@ -140,8 +262,13 @@ public final class Mob {
                 x,
                 y,
                 z,
+                previousYaw,
                 yaw,
+                previousWalkDistance,
+                walkDistance,
                 burning(),
-                health.hurtTicks() / (float) Health.HURT_TICKS);
+                health.hurtTicks() / (float) Health.HURT_TICKS,
+                action,
+                actionProgress);
     }
 }

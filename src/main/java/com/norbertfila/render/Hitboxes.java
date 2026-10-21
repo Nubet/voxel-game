@@ -24,10 +24,10 @@ public final class Hitboxes {
 
     static Hitbox mob(MobRenderState mob, double alpha) {
         double y = mob.interpolatedY(alpha);
-        double yaw = Math.toRadians(mob.yaw());
+        double yaw = Math.toRadians(mob.interpolatedYaw(alpha));
         return new Hitbox(
                 mob.type().body(mob.interpolatedX(alpha), y, mob.interpolatedZ(alpha)),
-                y + mob.type().height() * DEFAULT_EYE_FRACTION,
+                y + mob.type().eyeHeight(),
                 Math.sin(yaw),
                 0,
                 -Math.cos(yaw));

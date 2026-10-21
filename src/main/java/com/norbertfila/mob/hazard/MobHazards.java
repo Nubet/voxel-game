@@ -38,7 +38,7 @@ public final class MobHazards {
     }
 
     private static boolean inSunlight(Mob mob, BlockPos eye, HazardEnvironment environment) {
-        return mob.type().burnsInDaylight()
+        return mob.type().attributes().burnsInDaylight()
                 && environment.daylight()
                 && environment.seesSky(eye)
                 && !environment.rainingAt(eye);
@@ -46,7 +46,7 @@ public final class MobHazards {
 
     private static BlockPos eye(Mob mob) {
         return new BlockPos(
-                (int) Math.floor(mob.x()), (int) Math.floor(mob.y() + mob.type().height() * .85), (int)
+                (int) Math.floor(mob.x()), (int) Math.floor(mob.y() + mob.type().eyeHeight()), (int)
                         Math.floor(mob.z()));
     }
 }

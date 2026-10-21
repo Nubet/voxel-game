@@ -23,8 +23,8 @@ class MobHazardsTest {
         run(new Sky(), 600);
         assertTrue(zombie.burning() && skeleton.burning());
         assertFalse(creeper.burning());
-        assertTrue(zombie.health() < MobType.ZOMBIE.maxHealth());
-        assertEquals(MobType.CREEPER.maxHealth(), creeper.health());
+        assertTrue(zombie.health() < MobType.ZOMBIE.attributes().maxHealth());
+        assertEquals(MobType.CREEPER.attributes().maxHealth(), creeper.health());
     }
 
     @Test
