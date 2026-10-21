@@ -251,6 +251,7 @@ public final class WorldRuntime implements AutoCloseable {
             List<AttackTarget> attackTargets = List.of(new PlayerTarget(player, playerHealth));
             var playerVisuals = new PlayerRenderStateExtractor();
             Inventory inventory = new Inventory(saved.inventory());
+            var combat = new PlayerCombat(inventory.selectedItem());
             ItemSystem items = new ItemSystem(saved.items());
             ItemThrower thrower = new ItemThrower(world, inventory, items);
             if (saved.player().isPresent()) {
@@ -652,28 +653,46 @@ public final class WorldRuntime implements AutoCloseable {
                                         ? new Edit(true, BlockId.AIR, state.yaw(), state.pitch())
                                         : breakPress;
                                 var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
-                                var tool = new ToolContext(inventory.selectedItem());
-                                boolean completed = breaking.tick(
-                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, tool, dt);
-                                if (player.mode() != PlayerController.Mode.SPECTATOR
-                                        && (breakPress != null
-                                                || completed
-                                                || breaking.progress().isPresent()
-                                                || (player.mode() == PlayerController.Mode.CREATIVE
-                                                        && miningTarget.isPresent())))
-                                    playerVisuals.swing(tick[0], breakPress != null);
-                                if (completed) {
-                                    remove(interaction, player, mining, items, tool)
-                                            .filter(BlockChangeResult::changed)
-                                            .ifPresent(result -> {
-                                                chunks.requestRemesh(result);
-                                                var hit = miningTarget.orElseThrow();
-                                                brokenBlocks.addLast(new BlockBreakEvent(
-                                                        tick[0],
-                                                        hit.block(),
-                                                        result.previous().orElseThrow()));
-                                                if (brokenBlocks.size() > 32) brokenBlocks.removeFirst();
-                                            });
+                                var struck =
+                                        targetMob(mobLifecycle, player, mining.yaw(), mining.pitch(), miningTarget);
+                                if (struck.isPresent()) {
+                                    breaking.cancel();
+                                    if (breakPress != null) {
+                                        combat.attack(
+                                                struck.get().target(),
+                                                player.state().position());
+                                        playerVisuals.swing(tick[0], true);
+                                    }
+                                } else {
+                                    if (breakPress != null && miningTarget.isEmpty()) combat.miss();
+                                    var tool = new ToolContext(inventory.selectedItem());
+                                    boolean completed = breaking.tick(
+                                            player.mode(),
+                                            miningTarget,
+                                            state.breakHeld(),
+                                            breakPress != null,
+                                            tool,
+                                            dt);
+                                    if (player.mode() != PlayerController.Mode.SPECTATOR
+                                            && (breakPress != null
+                                                    || completed
+                                                    || breaking.progress().isPresent()
+                                                    || (player.mode() == PlayerController.Mode.CREATIVE
+                                                            && miningTarget.isPresent())))
+                                        playerVisuals.swing(tick[0], breakPress != null);
+                                    if (completed) {
+                                        remove(interaction, player, mining, items, tool)
+                                                .filter(BlockChangeResult::changed)
+                                                .ifPresent(result -> {
+                                                    chunks.requestRemesh(result);
+                                                    var hit = miningTarget.orElseThrow();
+                                                    brokenBlocks.addLast(new BlockBreakEvent(
+                                                            tick[0],
+                                                            hit.block(),
+                                                            result.previous().orElseThrow()));
+                                                    if (brokenBlocks.size() > 32) brokenBlocks.removeFirst();
+                                                });
+                                    }
                                 }
                             } else breaking.cancel();
                             var growthResult = growth.update(tick[0], activated && !state.paused());
@@ -692,6 +711,7 @@ public final class WorldRuntime implements AutoCloseable {
                             else items.pause();
                             if (activated && !state.paused()) {
                                 playerHealth.tick();
+                                combat.tick(dt, inventory.selectedItem());
                                 if (playerHealth.dead()) {
                                     playerHealth.restore();
                                     teleports.cancel();
@@ -1029,15 +1049,24 @@ public final class WorldRuntime implements AutoCloseable {
                 Math.sin(yaw) * Math.cos(pitch));
     }
 
-    /** A mob counts only when it is nearer than the targeted block, so walls hide mobs behind them. */
     private static Optional<EntityTargeting.Hit<Mob>> targetMob(
             MobLifecycle mobs, PlayerController player, Controls controls, Optional<VoxelRaycaster.Hit> block) {
         if (controls.blocked() || controls.paused() || player.modeChangePending()) return Optional.empty();
+        return targetMob(mobs, player, controls.yaw(), controls.pitch(), block);
+    }
+
+    /** A mob counts only when it is nearer than the targeted block, so walls hide mobs behind them. */
+    private static Optional<EntityTargeting.Hit<Mob>> targetMob(
+            MobLifecycle mobs,
+            PlayerController player,
+            double yawDegrees,
+            double pitchDegrees,
+            Optional<VoxelRaycaster.Hit> block) {
         double reach = block.map(hit -> Math.min(hit.distance(), EntityTargeting.reach(player.mode())))
                 .orElse(EntityTargeting.reach(player.mode()));
         if (reach == 0) return Optional.empty();
         var eye = player.renderEyePosition(1);
-        var ray = EntityTargeting.Ray.look(eye.x(), eye.y(), eye.z(), controls.yaw(), controls.pitch());
+        var ray = EntityTargeting.Ray.look(eye.x(), eye.y(), eye.z(), yawDegrees, pitchDegrees);
         return EntityTargeting.find(mobs.near(EntityTargeting.sweep(ray, reach)), ray, reach);
     }
 

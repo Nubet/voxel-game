@@ -93,6 +93,25 @@ class WorldRuntimeTest {
     }
 
     @Test
+    void clickingAMobUnderTheCrosshairHurtsItInsteadOfMining() throws Exception {
+        try (var runtime = start(new Flat(), directory.resolve("melee.vxl"))) {
+            var active = new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0);
+            runtime.controls(active);
+            await(runtime, f -> f.tick() > 0);
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/mobspawning off")));
+            assertTrue(runtime.offer(new WorldRuntime.ChatCommand("/summon zombie 2 1 0.5")));
+            await(
+                    runtime,
+                    f -> f.mobs().size() == 1
+                            && f.entityTargeted()
+                            && f.target().isEmpty());
+            assertTrue(runtime.offer(new WorldRuntime.Edit(true, BlockId.AIR, 0, 0)));
+            var struck = await(runtime, f -> f.mobs().getFirst().hurt() > 0);
+            assertTrue(struck.breaking().isEmpty());
+        }
+    }
+
+    @Test
     void plantGrowthUsesSimulationTicksAndPersistsItsNextDeadline() throws Exception {
         Path save = TestWorlds.prepare(directory.resolve("plant-growth.vxl"), 42, 1);
         var base = TestWorlds.load(save);
