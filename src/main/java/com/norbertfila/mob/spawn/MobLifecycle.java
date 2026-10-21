@@ -19,6 +19,7 @@ import com.norbertfila.mob.ai.MobAi;
 import com.norbertfila.mob.ai.WorldMobWorld;
 import com.norbertfila.mob.hazard.MobHazards;
 import com.norbertfila.mob.hazard.WorldHazardEnvironment;
+import com.norbertfila.projectile.ArrowSystem;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.weather.BiomeWeather;
 import com.norbertfila.weather.WeatherSample;
@@ -45,12 +46,15 @@ public final class MobLifecycle {
     private final MobHazards hazards = new MobHazards();
     private final MobAi ai = MobAi.standard();
     private final Explosion explosion;
+    private final ArrowSystem arrows;
     private final BiomeWeather biomes;
     private final SplittableRandom random;
     private boolean naturalSpawning = true;
     private int activeColumns;
 
-    public MobLifecycle(World world, BiomeWeather biomes, NaturalSpawner spawner, long seed, BlockSink blocks) {
+    public MobLifecycle(
+            World world, BiomeWeather biomes, NaturalSpawner spawner, long seed, BlockSink blocks, ArrowSystem arrows) {
+        this.arrows = Objects.requireNonNull(arrows);
         explosion = new Explosion(world, blocks);
         this.world = Objects.requireNonNull(world);
         this.biomes = Objects.requireNonNull(biomes);
@@ -79,8 +83,11 @@ public final class MobLifecycle {
             ChunkPos center,
             int simulationDistance) {
         world.assertOwner();
-        ai.tick(population, new WorldMobWorld(world, population, targets, explosion, random), random);
+        ai.tick(population, new WorldMobWorld(world, population, targets, explosion, arrows, random), random);
         population.tick(world, dt);
+        var victims = new ArrayList<AttackTarget>(targets);
+        victims.addAll(population.mobs());
+        arrows.tick(world, victims, dt);
         hazards.tick(population, new WorldHazardEnvironment(world, sky, biomes, time, weather), random);
         if (tick % spawner.settings().cycleTicks() != 0) return;
         despawner.despawn(population, players, random);

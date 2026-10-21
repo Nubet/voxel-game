@@ -37,6 +37,8 @@ import com.norbertfila.player.*;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.player.visual.PlayerRenderState;
 import com.norbertfila.player.visual.PlayerRenderStateExtractor;
+import com.norbertfila.projectile.ArrowRenderState;
+import com.norbertfila.projectile.ArrowSystem;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.streaming.ChunkManager;
@@ -216,15 +218,21 @@ public final class WorldRuntime implements AutoCloseable {
             var precipitation = new PrecipitationField(world, biomeWeather);
             var explosionEdits = new WorldEdit(world, FAR_TILE_SIZE);
             List<ChunkPos> explosionDirty = new ArrayList<>();
-            var mobLifecycle =
-                    new MobLifecycle(world, biomeWeather, NaturalSpawner.overworld(), identity.seed(), destroyed -> {
+            var arrows = new ArrowSystem();
+            var mobLifecycle = new MobLifecycle(
+                    world,
+                    biomeWeather,
+                    NaturalSpawner.overworld(),
+                    identity.seed(),
+                    destroyed -> {
                         for (var position : destroyed) {
                             var result = explosionEdits.setBlock(position, BlockId.AIR);
                             if (!result.changed()) continue;
                             explosionDirty.addAll(result.dirtyChunks());
                             water.onBlockChanged(position, tick[0]);
                         }
-                    });
+                    },
+                    arrows);
             LightSample[] feetLight = {LightSample.UNKNOWN};
             var blockLighting = new BlockLighting(world);
             world.setBlockChangeListener(mutation -> {
@@ -857,7 +865,8 @@ public final class WorldRuntime implements AutoCloseable {
                                     feetLight[0],
                                     blockLight,
                                     playerHealth.value(),
-                                    playerHealth.hurtTicks() / (float) Health.HURT_TICKS));
+                                    playerHealth.hurtTicks() / (float) Health.HURT_TICKS,
+                                    arrows.renderSnapshot()));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1334,7 +1343,8 @@ public final class WorldRuntime implements AutoCloseable {
             LightSample feetLight,
             BlockLightState blockLight,
             float health,
-            float hurt) {
+            float hurt,
+            List<ArrowRenderState> arrows) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);
@@ -1357,6 +1367,7 @@ public final class WorldRuntime implements AutoCloseable {
             Objects.requireNonNull(mobCensus);
             Objects.requireNonNull(feetLight);
             Objects.requireNonNull(blockLight);
+            arrows = List.copyOf(arrows);
         }
 
         public Map<ChunkPos, Long> residents() {

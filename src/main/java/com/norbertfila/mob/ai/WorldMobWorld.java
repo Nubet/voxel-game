@@ -6,6 +6,7 @@ import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.mob.MobPopulation;
 import com.norbertfila.mob.ai.navigation.PathTerrain;
 import com.norbertfila.mob.ai.navigation.WorldPathTerrain;
+import com.norbertfila.projectile.ArrowSystem;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.World;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ public final class WorldMobWorld implements MobWorld {
     private final MobPopulation population;
     private final List<AttackTarget> targets;
     private final Explosion explosion;
+    private final ArrowSystem arrows;
     private final RandomGenerator random;
     private final VoxelRaycaster raycaster = new VoxelRaycaster();
 
@@ -28,12 +30,14 @@ public final class WorldMobWorld implements MobWorld {
             MobPopulation population,
             List<AttackTarget> targets,
             Explosion explosion,
+            ArrowSystem arrows,
             RandomGenerator random) {
         this.world = Objects.requireNonNull(world);
         terrain = new WorldPathTerrain(world);
         this.population = Objects.requireNonNull(population);
         this.targets = List.copyOf(targets);
         this.explosion = Objects.requireNonNull(explosion);
+        this.arrows = Objects.requireNonNull(arrows);
         this.random = Objects.requireNonNull(random);
     }
 
@@ -72,5 +76,10 @@ public final class WorldMobWorld implements MobWorld {
         var victims = new ArrayList<AttackTarget>(targets);
         victims.addAll(population.mobs());
         explosion.explode(x, y, z, power, victims, random);
+    }
+
+    @Override
+    public void shootArrow(AttackTarget shooter, double x, double y, double z, double vx, double vy, double vz) {
+        arrows.shoot(shooter, x, y, z, vx, vy, vz);
     }
 }

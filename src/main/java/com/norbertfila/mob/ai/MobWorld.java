@@ -16,4 +16,7 @@ public interface MobWorld {
 
     /** Blows up at the point with Minecraft explosion power, hurting players and mobs and breaking blocks. */
     void explode(double x, double y, double z, float power);
+
+    /** Launches an arrow from the point with a velocity in blocks per second. */
+    void shootArrow(AttackTarget shooter, double x, double y, double z, double vx, double vy, double vz);
 }

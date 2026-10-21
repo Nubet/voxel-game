@@ -18,7 +18,8 @@ class GoalSelectorTest {
 
     GoalSelectorTest() {
         context.update(
-                new WorldMobWorld(test.world, test.population, List.of(), test.explosion, test.random), test.random);
+                new WorldMobWorld(test.world, test.population, List.of(), test.explosion, test.arrows, test.random),
+                test.random);
     }
 
     @Test
