@@ -4,11 +4,10 @@ import static org.lwjgl.opengl.GL46C.*;
 
 import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.items.ItemRenderState;
-import com.norbertfila.items.Tool;
 import com.norbertfila.world.BlockRegistry;
-import com.norbertfila.world.BlockShape;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
@@ -17,8 +16,8 @@ public final class ItemEntityRenderer implements AutoCloseable {
     private final BlockTextureArray textures;
     private final BlockTextureArray tools;
     private final Frustum frustum = new Frustum();
-    private final int program, vao, vp, offset, angle, layers, cross, sprite, height;
-    private final int daylight;
+    private final int program, vao, vp, offset, angle, layers, shape, itemTexture, height, held, model;
+    private final int daylight, blockLight;
     private boolean closed;
 
     public ItemEntityRenderer(BlockTextureArray textures) {
@@ -32,10 +31,13 @@ public final class ItemEntityRenderer implements AutoCloseable {
             offset = ShaderPrograms.uniform(createdProgram, "uOffset");
             angle = ShaderPrograms.uniform(createdProgram, "uAngle");
             layers = ShaderPrograms.uniform(createdProgram, "uLayers");
-            cross = ShaderPrograms.uniform(createdProgram, "uCross");
-            sprite = ShaderPrograms.uniform(createdProgram, "uSprite");
+            shape = ShaderPrograms.uniform(createdProgram, "uShape");
+            itemTexture = ShaderPrograms.uniform(createdProgram, "uItemTexture");
             height = ShaderPrograms.uniform(createdProgram, "uHeight");
+            held = ShaderPrograms.uniform(createdProgram, "uHeld");
+            model = ShaderPrograms.uniform(createdProgram, "uModel");
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
+            blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uBlockTextures"), 0);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uItemTextures"), 1);
             createdVao = glCreateVertexArrays();
@@ -66,30 +68,8 @@ public final class ItemEntityRenderer implements AutoCloseable {
                 || !Double.isFinite(cameraZ)) throw new IllegalArgumentException("Invalid item render position/time");
         if (items.isEmpty()) return 0;
         frustum.set(viewProjection);
-        boolean depth = glIsEnabled(GL_DEPTH_TEST), mask = glGetBoolean(GL_DEPTH_WRITEMASK);
-        boolean blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
-        int depthFunction = glGetInteger(GL_DEPTH_FUNC);
-        int previousProgram = glGetInteger(GL_CURRENT_PROGRAM), previousVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
-        int srcRGB = glGetInteger(GL_BLEND_SRC_RGB), dstRGB = glGetInteger(GL_BLEND_DST_RGB);
-        int srcAlpha = glGetInteger(GL_BLEND_SRC_ALPHA), dstAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
-        int activeTexture = glGetInteger(GL_ACTIVE_TEXTURE);
-        glActiveTexture(GL_TEXTURE1);
-        int previousItemTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
-        glActiveTexture(GL_TEXTURE0);
-        int previousTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
-        int drawn = 0;
-        try (var stack = MemoryStack.stackPush()) {
-            glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_LEQUAL);
-            glDepthMask(true);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDisable(GL_CULL_FACE);
-            glUseProgram(program);
-            glBindVertexArray(vao);
-            tools.bind(1);
-            textures.bind(0);
-            glUniformMatrix4fv(vp, false, viewProjection.get(stack.mallocFloat(16)));
+        int[] drawn = {0};
+        draw(viewProjection, false, 0, stack -> {
             for (var state : items) {
                 var item = state.item();
                 double x = state.previousX() + (item.x() - state.previousX()) * alpha - cameraX;
@@ -108,24 +88,58 @@ public final class ItemEntityRenderer implements AutoCloseable {
                         (float) z + .25f)) continue;
                 glUniform3f(offset, (float) x, (float) y, (float) z);
                 glUniform1f(angle, (float) (time * 1.5 + phase));
-                var tool = Tool.of((byte) item.itemId());
-                glUniform1i(sprite, tool.isPresent() ? 1 : 0);
-                if (tool.isPresent()) {
-                    glUniform3i(layers, tool.get().ordinal(), 0, 0);
-                    glDrawArrays(GL_TRIANGLES, 0, 6);
-                    drawn++;
-                    continue;
-                }
-                var block = BlockRegistry.DEFAULT.definition((byte) item.itemId());
-                boolean isCross = block.model().shape() == BlockShape.CROSS
-                        || block.model().shape().geometryIndex() > 0
-                                && block.model().shape().geometryIndex() < 5;
-                glUniform3i(layers, block.sideTexture(), block.topTexture(), block.bottomTexture());
-                glUniform1i(cross, isCross ? 1 : 0);
-                glUniform1f(height, block.model().maxY());
-                glDrawArrays(GL_TRIANGLES, 0, isCross ? 12 : 36);
-                drawn++;
+                drawModel(ItemModel.dropped((byte) item.itemId()));
+                drawn[0]++;
             }
+        });
+        return drawn[0];
+    }
+
+    /** Draws an item placed over unit space by {@code itemToView}, lit like the player who holds it. */
+    public void renderHeld(Matrix4f projection, Matrix4f itemToView, byte item, int blockLightLevel) {
+        if (closed) throw new IllegalStateException("Item renderer is closed");
+        Objects.requireNonNull(itemToView);
+        draw(projection, true, blockLightLevel, stack -> {
+            glUniformMatrix4fv(model, false, itemToView.get(stack.mallocFloat(16)));
+            drawModel(ItemModel.held(item));
+        });
+    }
+
+    private void drawModel(ItemModel item) {
+        glUniform1i(shape, item.shape().ordinal());
+        glUniform1i(itemTexture, item.itemTexture() ? 1 : 0);
+        glUniform3i(layers, item.side(), item.top(), item.bottom());
+        glUniform1f(height, item.height());
+        glDrawArrays(GL_TRIANGLES, 0, item.shape().vertices);
+    }
+
+    private void draw(Matrix4f viewProjection, boolean heldItem, int blockLightLevel, Consumer<MemoryStack> body) {
+        boolean depth = glIsEnabled(GL_DEPTH_TEST), mask = glGetBoolean(GL_DEPTH_WRITEMASK);
+        boolean blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
+        int depthFunction = glGetInteger(GL_DEPTH_FUNC);
+        int previousProgram = glGetInteger(GL_CURRENT_PROGRAM), previousVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+        int srcRGB = glGetInteger(GL_BLEND_SRC_RGB), dstRGB = glGetInteger(GL_BLEND_DST_RGB);
+        int srcAlpha = glGetInteger(GL_BLEND_SRC_ALPHA), dstAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
+        int activeTexture = glGetInteger(GL_ACTIVE_TEXTURE);
+        glActiveTexture(GL_TEXTURE1);
+        int previousItemTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
+        glActiveTexture(GL_TEXTURE0);
+        int previousTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
+        try (var stack = MemoryStack.stackPush()) {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            glDepthMask(true);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_CULL_FACE);
+            glUseProgram(program);
+            glBindVertexArray(vao);
+            tools.bind(1);
+            textures.bind(0);
+            glUniformMatrix4fv(vp, false, viewProjection.get(stack.mallocFloat(16)));
+            glUniform1i(held, heldItem ? 1 : 0);
+            glUniform1f(blockLight, blockLightLevel);
+            body.accept(stack);
         } finally {
             glBindTexture(GL_TEXTURE_2D_ARRAY, previousTexture);
             glActiveTexture(GL_TEXTURE1);
@@ -143,7 +157,6 @@ public final class ItemEntityRenderer implements AutoCloseable {
             if (depth) glEnable(GL_DEPTH_TEST);
             else glDisable(GL_DEPTH_TEST);
         }
-        return drawn;
     }
 
     public void environment(SkyState sky) {

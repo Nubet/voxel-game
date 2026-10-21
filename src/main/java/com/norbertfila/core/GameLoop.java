@@ -216,7 +216,7 @@ public final class GameLoop {
             SkyRenderer skyRenderer,
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
-        var firstPerson = new FirstPersonRenderer(players);
+        var firstPerson = new FirstPersonRenderer(players, items);
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -757,7 +757,9 @@ public final class GameLoop {
                         height[0],
                         state.playerRenderState().appearance(),
                         inventory.block(inventory.selectedSlot()),
-                        FirstPersonHand.swing(state.playerRenderState(), state.interpolationAlpha(interpolationTime)));
+                        FirstPersonHand.swing(state.playerRenderState(), state.interpolationAlpha(interpolationTime)),
+                        blockLight.level((int) Math.floor(camera.x()), (int) Math.floor(camera.y()), (int)
+                                Math.floor(camera.z())));
             }
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
