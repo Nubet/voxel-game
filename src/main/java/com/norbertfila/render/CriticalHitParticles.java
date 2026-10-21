@@ -56,7 +56,7 @@ final class CriticalHitParticles {
         return at == out.length ? out : Arrays.copyOf(out, at);
     }
 
-    private static int quad(float[] out, int at, double x, double y, double z, float half, float[] right, float[] up) {
+    static int quad(float[] out, int at, double x, double y, double z, float half, float[] right, float[] up) {
         float[][] corners = {{-1, -1, 0, 1}, {1, -1, 1, 1}, {1, 1, 1, 0}, {-1, 1, 0, 0}};
         for (int corner : new int[] {0, 1, 2, 0, 2, 3}) {
             float sx = corners[corner][0] * half, sy = corners[corner][1] * half;
