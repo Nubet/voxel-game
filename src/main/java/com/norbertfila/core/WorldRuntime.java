@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.combat.AttackTarget;
 import com.norbertfila.combat.Health;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
@@ -225,6 +226,7 @@ public final class WorldRuntime implements AutoCloseable {
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
             var playerHealth = new Health(PlayerTarget.MAX_HEALTH);
+            List<AttackTarget> attackTargets = List.of(new PlayerTarget(player, playerHealth));
             var playerVisuals = new PlayerRenderStateExtractor();
             Inventory inventory = new Inventory(saved.inventory());
             ItemSystem items = new ItemSystem(saved.items());
@@ -684,6 +686,7 @@ public final class WorldRuntime implements AutoCloseable {
                                         tick[0],
                                         dt,
                                         players,
+                                        attackTargets,
                                         time[0],
                                         weather.sample(tick[0]),
                                         center,

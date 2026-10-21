@@ -1,5 +1,6 @@
 package com.norbertfila.mob.spawn;
 
+import com.norbertfila.combat.AttackTarget;
 import com.norbertfila.light.LightLevels;
 import com.norbertfila.light.LightProbe;
 import com.norbertfila.light.SkyExposure;
@@ -12,6 +13,8 @@ import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.PlayerPosition;
 import com.norbertfila.mob.PopulationKey;
 import com.norbertfila.mob.SpawnZone;
+import com.norbertfila.mob.ai.MobAi;
+import com.norbertfila.mob.ai.WorldMobWorld;
 import com.norbertfila.mob.hazard.MobHazards;
 import com.norbertfila.mob.hazard.WorldHazardEnvironment;
 import com.norbertfila.simulation.WorldTime;
@@ -38,6 +41,7 @@ public final class MobLifecycle {
     private final NaturalSpawner spawner;
     private final Despawner despawner;
     private final MobHazards hazards = new MobHazards();
+    private final MobAi ai = MobAi.standard();
     private final BiomeWeather biomes;
     private final SplittableRandom random;
     private boolean naturalSpawning = true;
@@ -65,11 +69,13 @@ public final class MobLifecycle {
             long tick,
             double dt,
             List<PlayerPosition> players,
+            List<AttackTarget> targets,
             WorldTime time,
             WeatherSample weather,
             ChunkPos center,
             int simulationDistance) {
         world.assertOwner();
+        ai.tick(population, new WorldMobWorld(world, targets), random);
         population.tick(world, dt);
         hazards.tick(population, new WorldHazardEnvironment(world, sky, biomes, time, weather), random);
         if (tick % spawner.settings().cycleTicks() != 0) return;

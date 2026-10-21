@@ -109,7 +109,7 @@ public final class PathFinder {
     }
 
     /** Feet and head cells are free, and there is ground below or water to swim in. */
-    static boolean standable(PathTerrain terrain, int x, int y, int z, int height) {
+    public static boolean standable(PathTerrain terrain, int x, int y, int z, int height) {
         if (!clear(terrain, x, y, z, height)) return false;
         Cell feet = terrain.cell(x, y, z);
         return feet == Cell.WATER || terrain.cell(x, y - 1, z) == Cell.SOLID;
