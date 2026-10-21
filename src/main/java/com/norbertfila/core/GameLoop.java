@@ -25,6 +25,7 @@ import com.norbertfila.render.BlockEffectsRenderer;
 import com.norbertfila.render.BlockOutlineRenderer;
 import com.norbertfila.render.CloudRenderer;
 import com.norbertfila.render.DistanceFog;
+import com.norbertfila.render.EntityFireRenderer;
 import com.norbertfila.render.FramebufferCapture;
 import com.norbertfila.render.GpuFrameTimer;
 import com.norbertfila.render.HitboxRenderer;
@@ -147,6 +148,7 @@ public final class GameLoop {
                 ItemEntityRenderer items = new ItemEntityRenderer(renderer.blockTextures());
                 MobRenderer mobs = new MobRenderer();
                 HitboxRenderer hitboxes = new HitboxRenderer();
+                EntityFireRenderer entityFire = new EntityFireRenderer();
                 CloudRenderer clouds = new CloudRenderer();
                 PrecipitationRenderer precipitation = new PrecipitationRenderer();
                 SkyRenderer skyRenderer = new SkyRenderer();
@@ -169,6 +171,7 @@ public final class GameLoop {
                     items,
                     mobs,
                     hitboxes,
+                    entityFire,
                     clouds,
                     precipitation,
                     skyRenderer,
@@ -194,6 +197,7 @@ public final class GameLoop {
             ItemEntityRenderer items,
             MobRenderer mobs,
             HitboxRenderer hitboxes,
+            EntityFireRenderer entityFire,
             CloudRenderer clouds,
             PrecipitationRenderer precipitation,
             SkyRenderer skyRenderer,
@@ -681,6 +685,8 @@ public final class GameLoop {
                         distanceFog,
                         visibility.amount(),
                         blockLight);
+                entityFire.render(
+                        viewProjection, state.mobs(), itemAlpha, camera.x(), camera.y(), camera.z(), effectSeconds);
                 if (hitboxesVisible) {
                     var boxes = Hitboxes.of(state.mobs(), state.items(), itemAlpha);
                     if (camera.perspective() != Camera.Perspective.FIRST)

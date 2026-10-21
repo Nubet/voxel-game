@@ -1,7 +1,10 @@
-Mob textures in this directory are unchanged REFI_Textures assets from textures/mobs_mc.
+Textures in this directory are unchanged REFI_Textures assets.
+From textures/mobs_mc:
 refi_creeper.png: mobs_mc_creeper.png
 refi_zombie.png: mobs_mc_zombie.png
 refi_skeleton.png: mobs_mc_skeleton.png
+From textures/fire_mcl_fire:
+refi_fire_animated.png: fire_basic_flame_animated.png (8 vertical frames)
 Source: https://github.com/MysticTempest/REFI_Textures
 Author: MysticTempest and REFI_Textures contributors.
 License: Creative Commons Attribution-ShareAlike 4.0 International.
