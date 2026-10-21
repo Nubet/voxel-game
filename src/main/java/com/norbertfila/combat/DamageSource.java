@@ -4,5 +4,6 @@ public enum DamageSource {
     FIRE,
     MOB_ATTACK,
     EXPLOSION,
-    ARROW
+    ARROW,
+    PLAYER_ATTACK
 }

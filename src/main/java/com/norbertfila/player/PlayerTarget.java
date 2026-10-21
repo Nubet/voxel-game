@@ -34,8 +34,10 @@ public final class PlayerTarget implements AttackTarget {
 
     @Override
     public boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ) {
-        if (!attackable() || !health.damage(source, amount)) return false;
-        if (knockbackX != 0 || knockbackZ != 0) player.knockback(knockbackX, KNOCKBACK_LIFT, knockbackZ);
-        return true;
+        if (!attackable()) return false;
+        var hit = health.damage(source, amount);
+        if (hit == Health.Hit.FRESH && (knockbackX != 0 || knockbackZ != 0))
+            player.knockback(knockbackX, KNOCKBACK_LIFT, knockbackZ);
+        return hit.landed();
     }
 }
