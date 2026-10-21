@@ -96,9 +96,10 @@ public final class Mob implements AttackTarget {
     /** Damage with a push in blocks per second, lifting the mob like Minecraft knockback. */
     @Override
     public boolean hurt(DamageSource source, float amount, double knockbackX, double knockbackZ) {
-        if (!damage(source, amount)) return false;
-        if (knockbackX != 0 || knockbackZ != 0) knockback(knockbackX, KNOCKBACK_LIFT, knockbackZ);
-        return true;
+        var hit = health.damage(source, amount);
+        if (hit == Health.Hit.FRESH && (knockbackX != 0 || knockbackZ != 0))
+            knockback(knockbackX, KNOCKBACK_LIFT, knockbackZ);
+        return hit.landed();
     }
 
     /** Removes the mob on the next hazard pass, as when a creeper is consumed by its own blast. */
@@ -255,9 +256,9 @@ public final class Mob implements AttackTarget {
         return ++burnedTicks;
     }
 
-    /** Returns false when the hit landed during the hurt cooldown and was ignored. */
+    /** Returns false when the hit was ignored by the hurt cooldown. */
     public boolean damage(DamageSource source, float amount) {
-        return health.damage(source, amount);
+        return health.damage(source, amount).landed();
     }
 
     /** Pushes the mob in blocks per second, lifting it off the ground like Minecraft knockback. */
