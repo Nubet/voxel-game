@@ -5,6 +5,7 @@ import static org.lwjgl.opengl.GL46C.*;
 import com.norbertfila.light.BlockLightState;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
+import com.norbertfila.mob.visual.MobAnimator;
 import com.norbertfila.mob.visual.MobModel;
 import com.norbertfila.mob.visual.MobModels;
 import com.norbertfila.player.visual.model.CuboidMesh;
@@ -17,7 +18,7 @@ import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
 public final class MobRenderer implements AutoCloseable {
-    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight, hurt;
+    private final int program, vao, vbo, vp, model, fogRange, underwater, skyColor, daylight, blockLight, hurt, flash;
     private final Map<MobType, Integer> textures = new EnumMap<>(MobType.class);
     private final Map<MobType, Integer> firstVertex = new EnumMap<>(MobType.class);
     private boolean closed;
@@ -34,6 +35,7 @@ public final class MobRenderer implements AutoCloseable {
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
             blockLight = ShaderPrograms.uniform(createdProgram, "uBlockLight");
             hurt = ShaderPrograms.uniform(createdProgram, "uHurt");
+            flash = ShaderPrograms.uniform(createdProgram, "uFlash");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uOuterLayer"), 0);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uCutout"), 1);
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uWorldShading"), 1);
@@ -142,13 +144,18 @@ public final class MobRenderer implements AutoCloseable {
                                 (int) Math.floor(
                                         mob.interpolatedY(alpha) + mob.type().height() * .5),
                                 (int) Math.floor(mob.interpolatedZ(alpha))));
+                var pose = MobAnimator.pose(mob, alpha);
+                glUniform1i(flash, pose.flash() ? 1 : 0);
                 base.translation(x, y, z)
                         .rotateY((float) Math.toRadians(-mob.interpolatedYaw(alpha)))
-                        .scale(1f / 16);
+                        .scale(pose.scaleXZ() / 16, pose.scaleY() / 16, pose.scaleXZ() / 16);
                 var mobModel = MobModels.of(mob.type());
                 int first = firstVertex.get(mob.type());
                 for (int i = 0; i < mobModel.parts().size(); i++) {
-                    mobModel.parts().get(i).pivot().apply(base.get(part));
+                    var pivot = mobModel.parts().get(i).pivot();
+                    base.get(part)
+                            .translate(pivot.x(), pivot.y(), pivot.z())
+                            .rotateXYZ(pivot.pitch() + pose.pitch()[i], pivot.yaw() + pose.yaw()[i], pivot.roll());
                     glUniformMatrix4fv(model, false, part.get(buffer));
                     glDrawArrays(GL_TRIANGLES, first + i * CuboidMesh.VERTEX_COUNT, CuboidMesh.VERTEX_COUNT);
                 }

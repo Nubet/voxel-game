@@ -8,8 +8,23 @@ import java.util.Objects;
 
 /** Cuboid model in pixels with feet at Y = 0 and forward along -Z; each cuboid is relative to its part's pivot. */
 public record MobModel(String texture, int textureWidth, int textureHeight, List<Part> parts) {
-    public record Part(PartTransform pivot, ModelCuboid cuboid, UvOrigin uv) {
+    /** What a part is, so that animation can move it without knowing the mob type. */
+    public enum Limb {
+        HEAD,
+        BODY,
+        RIGHT_ARM,
+        LEFT_ARM,
+        RIGHT_LEG,
+        LEFT_LEG,
+        FRONT_RIGHT_LEG,
+        FRONT_LEFT_LEG,
+        BACK_RIGHT_LEG,
+        BACK_LEFT_LEG
+    }
+
+    public record Part(Limb limb, PartTransform pivot, ModelCuboid cuboid, UvOrigin uv) {
         public Part {
+            Objects.requireNonNull(limb);
             Objects.requireNonNull(pivot);
             Objects.requireNonNull(cuboid);
             Objects.requireNonNull(uv);
