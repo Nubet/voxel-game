@@ -94,6 +94,7 @@ public final class GenerateHudAtlas {
             copy(icon, atlas, region.x(), region.y());
         }
         drawHotbar(atlas);
+        drawHearts(atlas);
         var selection = UiAtlas.SELECTION;
         border(atlas, selection.x(), selection.y(), selection.width(), selection.height(), 0xfff5cc4c);
         for (int i = 0; i < 4; i++) {
@@ -124,6 +125,35 @@ public final class GenerateHudAtlas {
                             alpha = Math.max(alpha, sprite.getRGB(x + dx, y + dy) >>> 24);
                 int pixel = sprite.getRGB(x, y);
                 atlas.setRGB(region.x() + x, region.y() + y, (pixel >>> 24) > 0 ? pixel : alpha << 24 | 0x141414);
+            }
+    }
+
+    private static final String[] HEART = {
+        ".##...##.",
+        "#rr#.#rr#",
+        "#rwrrrrr#",
+        "#rrrrrrr#",
+        ".#rrrrr#.",
+        "..#rrr#..",
+        "...#r#...",
+        "....#....",
+        "........."
+    };
+
+    private static void drawHearts(BufferedImage atlas) {
+        for (int y = 0; y < HEART.length; y++)
+            for (int x = 0; x < HEART[y].length(); x++) {
+                char pixel = HEART[y].charAt(x);
+                if (pixel == '.') continue;
+                boolean outline = pixel == '#';
+                int full = pixel == 'w' ? 0xffffc8c8 : 0xffd42020;
+                int empty = outline ? 0xff1c0606 : 0xff3c1010;
+                atlas.setRGB(UiAtlas.HEART_EMPTY.x() + x, UiAtlas.HEART_EMPTY.y() + y, empty);
+                atlas.setRGB(UiAtlas.HEART_FLASH.x() + x, UiAtlas.HEART_FLASH.y() + y, outline ? 0xffffffff : empty);
+                // Fill sprites leave the outline to the container so that the hurt flash stays visible.
+                if (outline) continue;
+                atlas.setRGB(UiAtlas.HEART_FULL.x() + x, UiAtlas.HEART_FULL.y() + y, full);
+                if (x < 5) atlas.setRGB(UiAtlas.HEART_HALF.x() + x, UiAtlas.HEART_HALF.y() + y, full);
             }
     }
 

@@ -17,6 +17,10 @@ public final class UiAtlas {
     public static final Region CROSSHAIR_ENTITY = new Region(64, 200, 15, 15);
     public static final Region CROSSHAIR_RANGED = new Region(80, 200, 15, 15);
     public static final Region CROSSHAIR_DOT = new Region(96, 200, 15, 15);
+    public static final Region HEART_EMPTY = new Region(0, 232, 9, 9);
+    public static final Region HEART_FULL = new Region(9, 232, 9, 9);
+    public static final Region HEART_HALF = new Region(18, 232, 9, 9);
+    public static final Region HEART_FLASH = new Region(27, 232, 9, 9);
     private final byte[] pixels;
 
     private UiAtlas(byte[] pixels) {
