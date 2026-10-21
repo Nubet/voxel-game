@@ -44,6 +44,7 @@ import com.norbertfila.render.UiRenderer;
 import com.norbertfila.render.UnderwaterVisibility;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
+import com.norbertfila.ui.AttackIndicator;
 import com.norbertfila.ui.ChatOverlay;
 import com.norbertfila.ui.DebugOverlay;
 import com.norbertfila.ui.HealthBar;
@@ -221,6 +222,7 @@ public final class GameLoop {
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
         HealthBar healthBar = new HealthBar();
+        AttackIndicator attackIndicator = new AttackIndicator();
         var crosshair = new CrosshairRenderer();
         var crosshairTransition = new CrosshairTransition();
         DebugOverlay debugOverlay = new DebugOverlay();
@@ -779,6 +781,16 @@ public final class GameLoop {
                         settings.crosshair().smooth(),
                         delta);
             crosshair.render(canvas, viewport, crosshairTransition, settings.crosshair());
+            if (!editingBlocked
+                    && state != null
+                    && state.ready()
+                    && !state.modePending()
+                    && state.mode() != PlayerController.Mode.SPECTATOR)
+                attackIndicator.render(
+                        canvas,
+                        viewport,
+                        state.attackCharge(),
+                        settings.crosshair().scale());
             if (screens.current() instanceof ChatScreen) hud.render(canvas, hotbar, viewport);
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
