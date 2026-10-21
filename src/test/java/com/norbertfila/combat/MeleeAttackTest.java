@@ -73,4 +73,27 @@ class MeleeAttackTest {
         charge.reset();
         assertFalse(MeleeAttack.resolve(SWORD, charge, STANDING).sweep());
     }
+
+    @Test
+    void aFullyChargedAxeHitsHarderThanASwordOfTheSameTierButRechargesSlower() {
+        var charged = new AttackCharge();
+        for (var tier : Tool.Tier.values()) {
+            var axe = MeleeWeapon.of(
+                    Tool.valueOf(tier.name().replace("WOOD", "WOODEN") + "_AXE").id());
+            var sword = MeleeWeapon.of(Tool.valueOf(tier.name().replace("WOOD", "WOODEN") + "_SWORD")
+                    .id());
+            assertTrue(
+                    MeleeAttack.resolve(axe, charged, STANDING).damage()
+                            > MeleeAttack.resolve(sword, charged, STANDING).damage(),
+                    tier.name());
+            assertTrue(axe.cooldownSeconds() > sword.cooldownSeconds(), tier.name());
+            var spammed = new AttackCharge();
+            spammed.reset();
+            spammed.tick(sword.cooldownSeconds());
+            assertTrue(
+                    MeleeAttack.resolve(axe, spammed, STANDING).damage()
+                            < MeleeAttack.resolve(axe, charged, STANDING).damage(),
+                    tier.name());
+        }
+    }
 }
