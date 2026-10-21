@@ -6,6 +6,7 @@ import com.norbertfila.mob.ai.goal.LookAtPlayerGoal;
 import com.norbertfila.mob.ai.goal.MeleeAttackGoal;
 import com.norbertfila.mob.ai.goal.NearestTargetGoal;
 import com.norbertfila.mob.ai.goal.RandomStrollGoal;
+import com.norbertfila.mob.ai.goal.RangedBowAttackGoal;
 import com.norbertfila.mob.ai.goal.SwellGoal;
 
 /** The goal lists that make each mob type behave like its Minecraft counterpart. */
@@ -13,6 +14,9 @@ public final class MobBehaviors {
     // Minecraft zombies deal 3 damage on normal difficulty.
     static final float ZOMBIE_DAMAGE = 3;
     static final float CREEPER_EXPLOSION_POWER = 3;
+    static final double SKELETON_RANGE = 15;
+    // Minecraft skeletons rest 40 of its ticks between shots below hard difficulty.
+    static final int SKELETON_COOLDOWN = 120;
 
     private MobBehaviors() {}
 
@@ -23,7 +27,9 @@ public final class MobBehaviors {
                 hostile(GoalSelector.builder()
                         .add(2, new SwellGoal(CREEPER_EXPLOSION_POWER))
                         .add(4, new ChaseTargetGoal(1)));
-            case SKELETON -> hostile(GoalSelector.builder());
+            case SKELETON ->
+                hostile(GoalSelector.builder()
+                        .add(4, new RangedBowAttackGoal(1, SKELETON_RANGE, SKELETON_COOLDOWN, new SkeletonBow())));
         };
     }
 
