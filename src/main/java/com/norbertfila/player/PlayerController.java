@@ -12,10 +12,12 @@ public final class PlayerController {
     private static final double SPECTATOR_WALK_SPEED = 12.0;
     private static final double SPECTATOR_SPRINT_SPEED = 45.0;
     private static final double DOUBLE_TAP_SECONDS = .35;
+    private static final double SPRINT_HIT_SLOWDOWN = .6;
     private Mode mode = Mode.SURVIVAL;
     private Mode requestedMode;
     private boolean flying;
     private boolean sprinting;
+    private boolean sprintSpent;
     private long interpolationResetRevision;
     private double lastJumpPressSeconds = Double.NaN;
     private Position previous = new Position(0, 22, 34);
@@ -171,11 +173,12 @@ public final class PlayerController {
                     move.z,
                     !move.toggled && (input.jumpHeld() || input.jumpPressed()),
                     input.sneakHeld(),
-                    sprinting(input),
+                    canSprint(input),
                     yawDegrees,
                     fixedDeltaSeconds,
                     water);
         }
+        if (!sprinting(input)) sprintSpent = false;
         if (result == start) {
             pauseInterpolation();
             return;
@@ -184,7 +187,7 @@ public final class PlayerController {
         previousEyeHeight = current.eyeHeight();
         current = result;
         sprinting =
-                !result.crouching() && (move.flying || mode == Mode.SPECTATOR ? input.sprintHeld() : sprinting(input));
+                !result.crouching() && (move.flying || mode == Mode.SPECTATOR ? input.sprintHeld() : canSprint(input));
         flying = move.flying && !result.grounded();
         if (move.flying && !flying) clearInputGestures();
         else if (mode == Mode.CREATIVE && input.jumpPressed())
@@ -232,7 +235,7 @@ public final class PlayerController {
                         move.z,
                         !move.toggled && (input.jumpHeld() || input.jumpPressed()),
                         input.sneakHeld(),
-                        sprinting(input),
+                        canSprint(input),
                         yawDegrees,
                         fixedDeltaSeconds,
                         water));
@@ -245,7 +248,7 @@ public final class PlayerController {
                         move.x,
                         move.z,
                         !move.toggled && (input.jumpHeld() || input.jumpPressed()),
-                        sprinting(input),
+                        canSprint(input),
                         yawDegrees,
                         fixedDeltaSeconds);
     }
@@ -316,6 +319,27 @@ public final class PlayerController {
             if (input.sneakHeld()) y -= speed;
         }
         return new Movement(x, y, z, nextFlying, toggled);
+    }
+
+    /**
+     * A sprinting hit ends the sprint and slows the player, as in Minecraft; sprinting resumes only after the sprint
+     * or forward key is released and pressed again.
+     */
+    public void endSprintByAttack() {
+        sprinting = false;
+        sprintSpent = true;
+        current = new PlayerState(
+                current.position(),
+                current.velocityX() * SPRINT_HIT_SLOWDOWN,
+                current.velocityY(),
+                current.velocityZ() * SPRINT_HIT_SLOWDOWN,
+                current.grounded(),
+                current.jumpCooldownSeconds(),
+                current.crouching());
+    }
+
+    private boolean canSprint(PlayerInput input) {
+        return !sprintSpent && sprinting(input);
     }
 
     private static boolean sprinting(PlayerInput input) {

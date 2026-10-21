@@ -14,7 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PlayerCombatTest {
-    private static final Attacker ORIGIN = Attacker.standing(0, 0);
+    private static final Attacker ORIGIN = Attacker.standing(0, 0, 0);
 
     private static final class Target implements AttackTarget {
         final List<float[]> hits = new ArrayList<>();
@@ -46,10 +46,21 @@ class PlayerCombatTest {
     void hitsWithTheHeldWeaponAndPushesAwayFromTheAttacker() {
         var combat = new PlayerCombat(Tool.IRON_SWORD.id());
         var target = new Target();
-        assertTrue(combat.attack(target, ORIGIN));
+        assertTrue(combat.attack(target, ORIGIN).isPresent());
         assertArrayEquals(new float[] {6, (float) MeleeAttack.KNOCKBACK, 0}, target.hits.getFirst(), 1e-5f);
         combat.attack(target, ORIGIN);
         assertEquals(6 * .2f, target.hits.get(1)[0], .05f);
+    }
+
+    @Test
+    void sprintHitsAlsoPushAlongTheAttackersFacing() {
+        var combat = new PlayerCombat(Tool.STONE_SWORD.id());
+        var target = new Target();
+        var sprinting = new Attacker(0, 0, 90, true, false, true, false);
+        assertTrue(combat.attack(target, sprinting).orElseThrow().sprintHit());
+        float[] hit = target.hits.getFirst();
+        assertEquals(MeleeAttack.KNOCKBACK, hit[1], 1e-5);
+        assertEquals(MeleeAttack.SPRINT_KNOCKBACK, hit[2], 1e-5);
     }
 
     @Test
