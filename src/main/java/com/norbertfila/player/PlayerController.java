@@ -40,6 +40,21 @@ public final class PlayerController {
         return true;
     }
 
+    /** Adds a push in blocks per second; the push lifts a grounded player so that it carries them. */
+    public void knockback(double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
+            throw new IllegalArgumentException("Knockback must be finite");
+        if (mode == Mode.SPECTATOR) return;
+        current = new PlayerState(
+                current.position(),
+                current.velocityX() * .5 + x,
+                Math.max(current.velocityY(), y),
+                current.velocityZ() * .5 + z,
+                false,
+                current.jumpCooldownSeconds(),
+                current.crouching());
+    }
+
     public void requestNextMode() {
         requestedMode = switch (requestedMode == null ? mode : requestedMode) {
             case SURVIVAL -> Mode.CREATIVE;

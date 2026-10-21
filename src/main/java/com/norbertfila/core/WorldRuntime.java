@@ -1,6 +1,7 @@
 package com.norbertfila.core;
 
 import com.norbertfila.chat.ChatHistory;
+import com.norbertfila.combat.Health;
 import com.norbertfila.commands.CommandSource;
 import com.norbertfila.commands.GameCommands;
 import com.norbertfila.commands.LocationSearch;
@@ -223,6 +224,7 @@ public final class WorldRuntime implements AutoCloseable {
             });
             water.restore(saved.fluids());
             PlayerController player = new PlayerController();
+            var playerHealth = new Health(PlayerTarget.MAX_HEALTH);
             var playerVisuals = new PlayerRenderStateExtractor();
             Inventory inventory = new Inventory(saved.inventory());
             ItemSystem items = new ItemSystem(saved.items());
@@ -663,6 +665,15 @@ public final class WorldRuntime implements AutoCloseable {
                                                 : null,
                                         inventory);
                             else items.pause();
+                            if (activated && !state.paused()) {
+                                playerHealth.tick();
+                                if (playerHealth.dead()) {
+                                    playerHealth.restore();
+                                    teleports.cancel();
+                                    teleports.request(new SpawnResolver(generator).resolve(0, 0), System.nanoTime());
+                                    commandReplies.offer(new GameCommands.Reply("You died!", true));
+                                }
+                            }
                             long mobStarted = System.nanoTime();
                             var standing = player.state().position();
                             if (activated && !state.paused()) {
@@ -827,7 +838,9 @@ public final class WorldRuntime implements AutoCloseable {
                                     mobLifecycle.renderSnapshot(),
                                     mobLifecycle.census(),
                                     feetLight[0],
-                                    blockLight));
+                                    blockLight,
+                                    playerHealth.value(),
+                                    playerHealth.hurtTicks() / (float) Health.HURT_TICKS));
                             for (var mesh : ready) {
                                 if (!meshes.offer(new SessionMesh(sessionId, mesh)))
                                     throw new IllegalStateException("Mesh publication capacity exceeded");
@@ -1302,7 +1315,9 @@ public final class WorldRuntime implements AutoCloseable {
             List<MobRenderState> mobs,
             MobCensus mobCensus,
             LightSample feetLight,
-            BlockLightState blockLight) {
+            BlockLightState blockLight,
+            float health,
+            float hurt) {
         public Frame {
             Objects.requireNonNull(residency);
             Objects.requireNonNull(far);

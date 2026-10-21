@@ -2,6 +2,8 @@ package com.norbertfila.mob.hazard;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.combat.DamageSource;
+import com.norbertfila.combat.Health;
 import com.norbertfila.mob.*;
 import com.norbertfila.world.*;
 import java.util.SplittableRandom;
@@ -80,7 +82,7 @@ class MobHazardsTest {
         assertTrue(zombie.damage(DamageSource.FIRE, 3));
         assertFalse(zombie.damage(DamageSource.FIRE, 3));
         assertEquals(17, zombie.health());
-        for (int i = 0; i < Mob.HURT_TICKS; i++) population.tick(world, 1 / 60.0);
+        for (int i = 0; i < Health.HURT_TICKS; i++) population.tick(world, 1 / 60.0);
         assertTrue(zombie.damage(DamageSource.FIRE, 3));
         assertEquals(1, population.renderSnapshot().getFirst().hurt(), 1e-6);
     }

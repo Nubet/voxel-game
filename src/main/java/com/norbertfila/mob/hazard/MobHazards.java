@@ -1,6 +1,6 @@
 package com.norbertfila.mob.hazard;
 
-import com.norbertfila.mob.DamageSource;
+import com.norbertfila.combat.DamageSource;
 import com.norbertfila.mob.Mob;
 import com.norbertfila.mob.MobPopulation;
 import com.norbertfila.simulation.FixedSimulation;
