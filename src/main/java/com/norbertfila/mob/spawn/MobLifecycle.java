@@ -9,6 +9,7 @@ import com.norbertfila.light.SkyExposure;
 import com.norbertfila.mob.Mob;
 import com.norbertfila.mob.MobCategory;
 import com.norbertfila.mob.MobCensus;
+import com.norbertfila.mob.MobDeathEvent;
 import com.norbertfila.mob.MobPopulation;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
@@ -30,7 +31,9 @@ import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
 import com.norbertfila.world.World;
 import com.norbertfila.world.WorldBounds;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,6 +53,8 @@ public final class MobLifecycle {
     private final ArrowSystem arrows;
     private final BiomeWeather biomes;
     private final SplittableRandom random;
+    private static final int MAX_DEATHS = 32;
+    private final Deque<MobDeathEvent> deaths = new ArrayDeque<>();
     private boolean naturalSpawning = true;
     private int activeColumns;
 
@@ -85,7 +90,10 @@ public final class MobLifecycle {
             int simulationDistance) {
         world.assertOwner();
         ai.tick(population, new WorldMobWorld(world, population, targets, explosion, arrows, random), random);
-        population.tick(world, dt);
+        for (var mob : population.tick(world, dt)) {
+            deaths.addLast(new MobDeathEvent(tick, mob.body()));
+            if (deaths.size() > MAX_DEATHS) deaths.removeFirst();
+        }
         var victims = new ArrayList<AttackTarget>(targets);
         victims.addAll(population.mobs());
         arrows.tick(world, victims, dt);
@@ -138,6 +146,11 @@ public final class MobLifecycle {
 
     public List<Mob> near(Aabb region) {
         return population.near(region);
+    }
+
+    /** The latest mobs that finished dying, oldest first. */
+    public List<MobDeathEvent> deaths() {
+        return List.copyOf(deaths);
     }
 
     public List<MobRenderState> renderSnapshot() {

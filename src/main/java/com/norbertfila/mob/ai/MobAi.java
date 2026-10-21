@@ -1,6 +1,7 @@
 package com.norbertfila.mob.ai;
 
 import com.norbertfila.mob.Mob;
+import com.norbertfila.mob.MobAction;
 import com.norbertfila.mob.MobPopulation;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.mob.ai.navigation.PathFinder;
@@ -34,6 +35,11 @@ public final class MobAi {
     public void tick(MobPopulation population, MobWorld world, RandomGenerator random) {
         var alive = new HashSet<Long>();
         for (Mob mob : population.mobs()) {
+            if (mob.dead()) {
+                mob.stop();
+                mob.act(MobAction.NONE, 0);
+                continue;
+            }
             alive.add(mob.id());
             var mind = minds.computeIfAbsent(
                     mob.id(),

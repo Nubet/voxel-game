@@ -71,10 +71,18 @@ public final class MobPopulation {
         return found;
     }
 
-    /** Mobs are not saved, so a mob whose chunk unloaded is dropped instead of frozen. */
-    public void tick(World world, double dt) {
+    /**
+     * Mobs are not saved, so a mob whose chunk unloaded is dropped instead of frozen. Returns the slain mobs whose
+     * death animation ended this tick; they are removed.
+     */
+    public List<Mob> tick(World world, double dt) {
         if (!Double.isFinite(dt) || dt <= 0 || dt > .1) throw new IllegalArgumentException("Invalid mob tick");
+        var finished = new ArrayList<Mob>();
         for (var mob : mobs()) {
+            if (mob.discarded) {
+                remove(mob);
+                continue;
+            }
             mob.previousX = mob.x;
             mob.previousY = mob.y;
             mob.previousZ = mob.z;
@@ -93,7 +101,12 @@ public final class MobPopulation {
                 unindex(before, mob);
                 buckets.computeIfAbsent(after, ignored -> new LinkedHashSet<>()).add(mob);
             }
+            if (mob.dead() && ++mob.deathTicks >= Mob.DEATH_TICKS) {
+                remove(mob);
+                finished.add(mob);
+            }
         }
+        return finished;
     }
 
     public List<MobRenderState> renderSnapshot() {
