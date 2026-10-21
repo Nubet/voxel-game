@@ -1,15 +1,14 @@
 package com.norbertfila.mob;
 
+import com.norbertfila.combat.DamageSource;
+import com.norbertfila.combat.Health;
 import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
 import com.norbertfila.world.Coordinates;
-import java.util.Objects;
 
 /** A living mob; its position is the center of its feet. */
 public final class Mob {
-    /** Minecraft ignores further damage for half a second after a hit. */
-    public static final int HURT_TICKS = 30;
 
     private final long id;
     private final MobType type;
@@ -18,8 +17,8 @@ public final class Mob {
     double x, y, z, previousX, previousY, previousZ, verticalVelocity;
     boolean onGround;
     int ticksAwayFromPlayers;
-    private float health;
-    private int fireTicks, burnedTicks, hurtTicks;
+    private final Health health;
+    private int fireTicks, burnedTicks;
 
     Mob(long id, MobType type, SpawnZone zone, double x, double y, double z, float yaw) {
         this.id = id;
@@ -29,7 +28,7 @@ public final class Mob {
         this.y = previousY = y;
         this.z = previousZ = z;
         this.yaw = yaw;
-        health = type.maxHealth();
+        health = new Health(type.maxHealth());
     }
 
     public long id() {
@@ -74,11 +73,11 @@ public final class Mob {
     }
 
     public float health() {
-        return health;
+        return health.value();
     }
 
     public boolean dead() {
-        return health <= 0;
+        return health.dead();
     }
 
     public boolean burning() {
@@ -90,7 +89,7 @@ public final class Mob {
     }
 
     public int hurtTicks() {
-        return hurtTicks;
+        return health.hurtTicks();
     }
 
     /** Sets the mob on fire for at least the given time; a longer fire already burning is kept. */
@@ -116,16 +115,11 @@ public final class Mob {
 
     /** Returns false when the hit landed during the hurt cooldown and was ignored. */
     public boolean damage(DamageSource source, float amount) {
-        if (!Float.isFinite(amount) || amount < 0) throw new IllegalArgumentException("Invalid damage");
-        Objects.requireNonNull(source);
-        if (dead() || hurtTicks > 0) return false;
-        health = Math.max(0, health - amount);
-        hurtTicks = HURT_TICKS;
-        return true;
+        return health.damage(source, amount);
     }
 
     void ageHurt() {
-        if (hurtTicks > 0) hurtTicks--;
+        health.tick();
     }
 
     public Aabb body() {
@@ -138,6 +132,16 @@ public final class Mob {
 
     MobRenderState renderState() {
         return new MobRenderState(
-                id, type, previousX, previousY, previousZ, x, y, z, yaw, burning(), hurtTicks / (float) HURT_TICKS);
+                id,
+                type,
+                previousX,
+                previousY,
+                previousZ,
+                x,
+                y,
+                z,
+                yaw,
+                burning(),
+                health.hurtTicks() / (float) Health.HURT_TICKS);
     }
 }
