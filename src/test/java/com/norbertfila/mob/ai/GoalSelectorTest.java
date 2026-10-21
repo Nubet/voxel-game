@@ -17,7 +17,8 @@ class GoalSelectorTest {
             new MobContext(test.spawn(MobType.ZOMBIE, 0, 0), new PathNavigator(new PathFinder(10)));
 
     GoalSelectorTest() {
-        context.update(new WorldMobWorld(test.world, List.of()), test.random);
+        context.update(
+                new WorldMobWorld(test.world, test.population, List.of(), test.explosion, test.random), test.random);
     }
 
     @Test

@@ -13,4 +13,7 @@ public interface MobWorld {
 
     /** Everything mobs may attack, attackable or not; goals filter with {@link AttackTarget#attackable()}. */
     List<AttackTarget> targets();
+
+    /** Blows up at the point with Minecraft explosion power, hurting players and mobs and breaking blocks. */
+    void explode(double x, double y, double z, float power);
 }

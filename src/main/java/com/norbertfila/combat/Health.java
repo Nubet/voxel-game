@@ -43,6 +43,10 @@ public final class Health {
         return true;
     }
 
+    public void kill() {
+        value = 0;
+    }
+
     public void tick() {
         if (hurtTicks > 0) hurtTicks--;
     }

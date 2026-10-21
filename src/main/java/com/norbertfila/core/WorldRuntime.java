@@ -214,7 +214,17 @@ public final class WorldRuntime implements AutoCloseable {
             growth.restore(saved.growth(), tick[0]);
             var biomeWeather = new BiomeWeather(generator);
             var precipitation = new PrecipitationField(world, biomeWeather);
-            var mobLifecycle = new MobLifecycle(world, biomeWeather, NaturalSpawner.overworld(), identity.seed());
+            var explosionEdits = new WorldEdit(world, FAR_TILE_SIZE);
+            List<ChunkPos> explosionDirty = new ArrayList<>();
+            var mobLifecycle =
+                    new MobLifecycle(world, biomeWeather, NaturalSpawner.overworld(), identity.seed(), destroyed -> {
+                        for (var position : destroyed) {
+                            var result = explosionEdits.setBlock(position, BlockId.AIR);
+                            if (!result.changed()) continue;
+                            explosionDirty.addAll(result.dirtyChunks());
+                            water.onBlockChanged(position, tick[0]);
+                        }
+                    });
             LightSample[] feetLight = {LightSample.UNKNOWN};
             var blockLighting = new BlockLighting(world);
             world.setBlockChangeListener(mutation -> {
@@ -691,6 +701,10 @@ public final class WorldRuntime implements AutoCloseable {
                                         weather.sample(tick[0]),
                                         center,
                                         Math.min(state.simulationDistance(), state.renderDistance()));
+                                if (!explosionDirty.isEmpty()) {
+                                    chunks.requestRemesh(List.copyOf(explosionDirty));
+                                    explosionDirty.clear();
+                                }
                             }
                             if (tick[0] % 15 == 0)
                                 feetLight[0] = LightSample.at(

@@ -1,6 +1,7 @@
 package com.norbertfila.mob.ai;
 
 import com.norbertfila.combat.AttackTarget;
+import com.norbertfila.explosion.Explosion;
 import com.norbertfila.mob.*;
 import com.norbertfila.world.*;
 import java.util.ArrayList;
@@ -14,6 +15,11 @@ class AiTestWorld {
     final List<AttackTarget> targets = new ArrayList<>();
     final SplittableRandom random = new SplittableRandom(1);
     final MobAi ai;
+    final List<BlockPos> destroyed = new ArrayList<>();
+    final Explosion explosion = new Explosion(world, blocks -> {
+        for (var position : blocks) world.setBlock(position, BlockId.AIR, 64);
+        destroyed.addAll(blocks);
+    });
 
     AiTestWorld() {
         this(MobAi.standard());
@@ -33,7 +39,7 @@ class AiTestWorld {
 
     void run(int ticks) {
         for (int i = 0; i < ticks; i++) {
-            ai.tick(population, new WorldMobWorld(world, targets), random);
+            ai.tick(population, new WorldMobWorld(world, population, targets, explosion, random), random);
             population.tick(world, 1 / 60.0);
         }
     }

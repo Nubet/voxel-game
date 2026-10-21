@@ -4,6 +4,9 @@ import com.norbertfila.world.Aabb;
 
 /** Something mobs can attack, such as a player. */
 public interface AttackTarget {
+    /** Minecraft knockback lifts the target by 0.4 blocks per tick at 20 ticks per second. */
+    double KNOCKBACK_LIFT = 8;
+
     Aabb body();
 
     double eyeHeight();
