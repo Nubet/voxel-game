@@ -18,6 +18,7 @@ class PlayerCombatTest {
 
     private static final class Target implements AttackTarget {
         final List<float[]> hits = new ArrayList<>();
+        final List<double[]> pushes = new ArrayList<>();
         final double x, z;
 
         Target(double x, double z) {
@@ -46,6 +47,11 @@ class PlayerCombatTest {
             hits.add(new float[] {amount, (float) knockbackX, (float) knockbackZ});
             return true;
         }
+
+        @Override
+        public void knockback(double pushX, double pushZ) {
+            pushes.add(new double[] {pushX, pushZ});
+        }
     }
 
     private static List<Target> none(Aabb ignored) {
@@ -70,9 +76,8 @@ class PlayerCombatTest {
         assertTrue(combat.attack(target, sprinting, PlayerCombatTest::none)
                 .orElseThrow()
                 .sprintHit());
-        float[] hit = target.hits.getFirst();
-        assertEquals(MeleeAttack.KNOCKBACK, hit[1], 1e-5);
-        assertEquals(MeleeAttack.SPRINT_KNOCKBACK, hit[2], 1e-5);
+        assertArrayEquals(new float[] {5, (float) MeleeAttack.KNOCKBACK, 0}, target.hits.getFirst(), 1e-5f);
+        assertArrayEquals(new double[] {0, MeleeAttack.SPRINT_KNOCKBACK}, target.pushes.getFirst(), 1e-9);
     }
 
     @Test
@@ -85,10 +90,8 @@ class PlayerCombatTest {
                 .orElseThrow()
                 .sweep());
         assertEquals(4, target.hits.getFirst()[0]);
-        assertArrayEquals(
-                new float[] {MeleeAttack.SWEEP_DAMAGE, (float) MeleeAttack.KNOCKBACK, 0},
-                beside.hits.getFirst(),
-                1e-5f);
+        assertArrayEquals(new float[] {MeleeAttack.SWEEP_DAMAGE, 0, 0}, beside.hits.getFirst(), 1e-5f);
+        assertArrayEquals(new double[] {MeleeAttack.KNOCKBACK, 0}, beside.pushes.getFirst(), 1e-9);
         assertTrue(beyond.hits.isEmpty());
         assertEquals(1, target.hits.size());
     }
