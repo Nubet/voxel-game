@@ -24,8 +24,13 @@ class MobAnimatorTest {
     @Test
     void skeletonsRaiseArmsToAimAndZombiesLungeWhenTheyHit() {
         var aiming = MobAnimator.pose(state(MobType.SKELETON, 0, 0, MobAction.AIMING, .5f), 1);
-        assertEquals(Math.PI / 2, aiming.pitch()[3], .01);
-        assertEquals(Math.PI / 2 + .1, aiming.pitch()[2], .01);
+        assertEquals(Math.PI / 2, aiming.pitch()[2], 1e-6);
+        assertEquals(Math.PI / 2, aiming.pitch()[3], 1e-6);
+        assertTrue(aiming.yaw()[2] > 0 && aiming.yaw()[3] < 0, "both arms turn toward the middle");
+        assertTrue(-aiming.yaw()[3] > aiming.yaw()[2], "the string arm reaches further across");
+        var idle = MobAnimator.pose(state(MobType.SKELETON, 0, 0, MobAction.NONE, 0), 1);
+        assertEquals(MobAnimator.HOLD_ITEM_PITCH, idle.pitch()[2], 1e-6);
+        assertEquals(0, idle.pitch()[3], 1e-6);
         var lunge = MobAnimator.pose(state(MobType.ZOMBIE, 0, 0, MobAction.ATTACKING, .12f), 1);
         assertTrue(lunge.pitch()[2] < -.3f);
         var resting = MobAnimator.pose(state(MobType.ZOMBIE, 0, 0, MobAction.ATTACKING, .8f), 1);

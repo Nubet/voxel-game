@@ -141,6 +141,31 @@ public final class MobSmoke {
             var poses = capture();
             check(total(poses) > total(day) / 2, "Posed mobs are missing");
             write(poses, "poses");
+            clear();
+            var archers = List.of(
+                    new MobRenderState(
+                            4, MobType.SKELETON, -.8, 0, 1.5, -.8, 0, 1.5, 150, 150, 0, 0, false, 0, MobAction.NONE, 0),
+                    new MobRenderState(
+                            5,
+                            MobType.SKELETON,
+                            .8,
+                            0,
+                            1.5,
+                            .8,
+                            0,
+                            1.5,
+                            120,
+                            120,
+                            0,
+                            0,
+                            false,
+                            0,
+                            MobAction.AIMING,
+                            1));
+            renderer.render(relative, archers, 1, 0, 1.2, 4.5, fog, 0, BlockLightState.NONE);
+            var bows = capture();
+            check(brownPixels(bows) > 40, "Skeletons hold no bow");
+            write(bows, "skeleton-bow");
             hitboxes.render(view, Hitboxes.of(mobs, List.of(), 1), 0, 0, 0);
             check(glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_BLEND), "Hitboxes leaked state");
             var boxed = capture();
@@ -167,6 +192,16 @@ public final class MobSmoke {
 
     private static MobRenderState mob(long id, MobType type, double x, float yaw) {
         return new MobRenderState(id, type, x, 0, 0, x, 0, 0, yaw, yaw, 0, 0, false, 0, MobAction.NONE, 0);
+    }
+
+    private static int brownPixels(ByteBuffer pixels) {
+        int count = 0;
+        for (int i = 0; i < pixels.capacity(); i += 4) {
+            int r = Byte.toUnsignedInt(pixels.get(i)), g = Byte.toUnsignedInt(pixels.get(i + 1));
+            int b = Byte.toUnsignedInt(pixels.get(i + 2));
+            if (r > b + 15 && g > b && r < 200 && Math.abs(r - g) > 8) count++;
+        }
+        return count;
     }
 
     private static int redPixels(ByteBuffer pixels) {
