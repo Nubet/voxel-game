@@ -21,6 +21,7 @@ import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerTarget;
 import com.norbertfila.player.visual.FirstPersonHand;
+import com.norbertfila.player.visual.HeldItemMotion;
 import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.ArrowRenderer;
@@ -217,6 +218,7 @@ public final class GameLoop {
             PlayerRenderer players,
             ScreenshotWriter screenshots) {
         var firstPerson = new FirstPersonRenderer(players, items);
+        var heldMotion = new HeldItemMotion();
         FrameProfiler.GpuPass[] gpuPasses = FrameProfiler.GpuPass.values();
         GpuFrameTimer.Listener gpuListener = (pass, nanos) -> profiler.recordGpu(gpuPasses[pass], nanos);
         long frameStarted = System.nanoTime();
@@ -752,12 +754,15 @@ public final class GameLoop {
                     && camera.perspective() == Camera.Perspective.FIRST
                     && !localPlayerVisible(state, interpolationTime, camera)) {
                 var inventory = state.inventory();
+                heldMotion.update(
+                        inventory.block(inventory.selectedSlot()), state.attackCharge(), state.paused() ? 0 : delta);
                 firstPerson.render(
                         width[0],
                         height[0],
                         state.playerRenderState().appearance(),
-                        inventory.block(inventory.selectedSlot()),
+                        heldMotion.shownItem(),
                         FirstPersonHand.swing(state.playerRenderState(), state.interpolationAlpha(interpolationTime)),
+                        heldMotion.equip(),
                         blockLight.level((int) Math.floor(camera.x()), (int) Math.floor(camera.y()), (int)
                                 Math.floor(camera.z())));
             }
