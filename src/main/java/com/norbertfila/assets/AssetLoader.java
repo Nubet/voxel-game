@@ -2,6 +2,7 @@ package com.norbertfila.assets;
 
 import static org.lwjgl.stb.STBImage.*;
 
+import com.norbertfila.items.Tool;
 import com.norbertfila.world.BlockRegistry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,6 +41,13 @@ public final class AssetLoader {
         }
         for (int index = 0; index < layers.size(); index++)
             if (layers.get(index) == null) layers.set(index, checkerboard());
+        return new TextureSet(layers);
+    }
+
+    /** One layer per tool, in {@link Tool} order. */
+    public TextureSet loadToolTextures() {
+        var layers = new ArrayList<TextureSet.Texture>();
+        for (var tool : Tool.values()) layers.add(load("/assets/textures/items/" + tool.itemName() + ".png"));
         return new TextureSet(layers);
     }
 

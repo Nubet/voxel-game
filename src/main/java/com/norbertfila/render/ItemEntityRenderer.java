@@ -2,8 +2,9 @@ package com.norbertfila.render;
 
 import static org.lwjgl.opengl.GL46C.*;
 
-import com.norbertfila.items.ItemId;
+import com.norbertfila.assets.AssetLoader;
 import com.norbertfila.items.ItemRenderState;
+import com.norbertfila.items.Tool;
 import com.norbertfila.world.BlockRegistry;
 import com.norbertfila.world.BlockShape;
 import java.util.List;
@@ -14,30 +15,37 @@ import org.lwjgl.system.MemoryStack;
 public final class ItemEntityRenderer implements AutoCloseable {
     private static final double RENDER_DISTANCE = 64;
     private final BlockTextureArray textures;
+    private final BlockTextureArray tools;
     private final Frustum frustum = new Frustum();
-    private final int program, vao, vp, offset, angle, layers, cross, height;
+    private final int program, vao, vp, offset, angle, layers, cross, sprite, height;
     private final int daylight;
     private boolean closed;
 
     public ItemEntityRenderer(BlockTextureArray textures) {
         this.textures = Objects.requireNonNull(textures);
         int createdProgram = 0, createdVao = 0;
+        BlockTextureArray createdTools = null;
         try {
+            createdTools = new BlockTextureArray(new AssetLoader(BlockRegistry.DEFAULT).loadToolTextures());
             createdProgram = ShaderPrograms.create("/shaders/item_entity.vert", "/shaders/item_entity.frag");
             vp = ShaderPrograms.uniform(createdProgram, "uVP");
             offset = ShaderPrograms.uniform(createdProgram, "uOffset");
             angle = ShaderPrograms.uniform(createdProgram, "uAngle");
             layers = ShaderPrograms.uniform(createdProgram, "uLayers");
             cross = ShaderPrograms.uniform(createdProgram, "uCross");
+            sprite = ShaderPrograms.uniform(createdProgram, "uSprite");
             height = ShaderPrograms.uniform(createdProgram, "uHeight");
             daylight = ShaderPrograms.uniform(createdProgram, "uDaylight");
             glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uBlockTextures"), 0);
+            glProgramUniform1i(createdProgram, ShaderPrograms.uniform(createdProgram, "uItemTextures"), 1);
             createdVao = glCreateVertexArrays();
         } catch (RuntimeException | Error failure) {
+            if (createdTools != null) createdTools.close();
             glDeleteProgram(createdProgram);
             glDeleteVertexArrays(createdVao);
             throw failure;
         }
+        tools = createdTools;
         program = createdProgram;
         vao = createdVao;
     }
@@ -65,6 +73,8 @@ public final class ItemEntityRenderer implements AutoCloseable {
         int srcRGB = glGetInteger(GL_BLEND_SRC_RGB), dstRGB = glGetInteger(GL_BLEND_DST_RGB);
         int srcAlpha = glGetInteger(GL_BLEND_SRC_ALPHA), dstAlpha = glGetInteger(GL_BLEND_DST_ALPHA);
         int activeTexture = glGetInteger(GL_ACTIVE_TEXTURE);
+        glActiveTexture(GL_TEXTURE1);
+        int previousItemTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
         glActiveTexture(GL_TEXTURE0);
         int previousTexture = glGetInteger(GL_TEXTURE_BINDING_2D_ARRAY);
         int drawn = 0;
@@ -77,11 +87,11 @@ public final class ItemEntityRenderer implements AutoCloseable {
             glDisable(GL_CULL_FACE);
             glUseProgram(program);
             glBindVertexArray(vao);
+            tools.bind(1);
             textures.bind(0);
             glUniformMatrix4fv(vp, false, viewProjection.get(stack.mallocFloat(16)));
             for (var state : items) {
                 var item = state.item();
-                if (!ItemId.isBlock((byte) item.itemId())) continue;
                 double x = state.previousX() + (item.x() - state.previousX()) * alpha - cameraX;
                 double y = state.previousY() + (item.y() - state.previousY()) * alpha - cameraY;
                 double z = state.previousZ() + (item.z() - state.previousZ()) * alpha - cameraZ;
@@ -96,12 +106,20 @@ public final class ItemEntityRenderer implements AutoCloseable {
                         (float) x + .25f,
                         (float) y + .25f,
                         (float) z + .25f)) continue;
+                glUniform3f(offset, (float) x, (float) y, (float) z);
+                glUniform1f(angle, (float) (time * 1.5 + phase));
+                var tool = Tool.of((byte) item.itemId());
+                glUniform1i(sprite, tool.isPresent() ? 1 : 0);
+                if (tool.isPresent()) {
+                    glUniform3i(layers, tool.get().ordinal(), 0, 0);
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                    drawn++;
+                    continue;
+                }
                 var block = BlockRegistry.DEFAULT.definition((byte) item.itemId());
                 boolean isCross = block.model().shape() == BlockShape.CROSS
                         || block.model().shape().geometryIndex() > 0
                                 && block.model().shape().geometryIndex() < 5;
-                glUniform3f(offset, (float) x, (float) y, (float) z);
-                glUniform1f(angle, (float) (time * 1.5 + phase));
                 glUniform3i(layers, block.sideTexture(), block.topTexture(), block.bottomTexture());
                 glUniform1i(cross, isCross ? 1 : 0);
                 glUniform1f(height, block.model().maxY());
@@ -110,6 +128,8 @@ public final class ItemEntityRenderer implements AutoCloseable {
             }
         } finally {
             glBindTexture(GL_TEXTURE_2D_ARRAY, previousTexture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, previousItemTexture);
             glActiveTexture(activeTexture);
             glUseProgram(previousProgram);
             glBindVertexArray(previousVao);
@@ -134,6 +154,7 @@ public final class ItemEntityRenderer implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
+        tools.close();
         glDeleteProgram(program);
         glDeleteVertexArrays(vao);
     }

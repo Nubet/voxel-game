@@ -292,12 +292,20 @@ public final class BlockOutlineSmoke {
             byte[] reference = null;
             for (int origin : new int[] {0, 30_000_000}) {
                 var view = view(new BlockPos(origin, 0, origin), 0, 0, 1);
-                for (int id : new int[] {BlockId.COBBLE, BlockId.POPPY, BlockId.SNOW_LAYER, BlockId.PINE_LOG}) {
+                for (int id : new int[] {
+                    BlockId.COBBLE,
+                    BlockId.POPPY,
+                    BlockId.SNOW_LAYER,
+                    BlockId.PINE_LOG,
+                    Byte.toUnsignedInt(com.norbertfila.items.Tool.DIAMOND_SWORD.id()),
+                    Byte.toUnsignedInt(com.norbertfila.items.Tool.WOODEN_PICKAXE.id())
+                }) {
                     glDepthMask(true);
                     glClearColor(.4f, .6f, .8f, 1);
                     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                     byte[] before = pixels();
-                    var item = new ItemSnapshot(1, id, 7, origin + .5, .5, origin + .5, 0, 0, 0, 0, 60, true);
+                    var item = new ItemSnapshot(
+                            1, id, id >= 200 ? 1 : 7, origin + .5, .5, origin + .5, 0, 0, 0, 0, 60, true);
                     var state = new ItemRenderState(item, item.x(), item.y(), item.z(), false);
                     glDisable(GL_DEPTH_TEST);
                     glDepthMask(false);
