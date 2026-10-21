@@ -8,6 +8,7 @@ import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.items.ItemSnapshot;
 import com.norbertfila.items.ItemState;
 import com.norbertfila.items.ItemSystem;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.persistence.TestWorlds;
 import com.norbertfila.persistence.world.WorldStateCodec;
@@ -793,7 +794,7 @@ class WorldRuntimeTest {
         Path save = directory.resolve("mining-full.vxl");
         World world = new World();
         BlockPos block = new BlockPos(3, 2, 0);
-        world.setBlock(block, BlockId.STONE, 64);
+        world.setBlock(block, BlockId.SAND, 64);
         byte[] blocks = new byte[Inventory.SLOTS + 1];
         int[] counts = new int[Inventory.SLOTS + 1];
         java.util.Arrays.fill(blocks, 0, Inventory.SLOTS, BlockId.DIRT);
@@ -807,10 +808,10 @@ class WorldRuntimeTest {
             assertTrue(after.target().isEmpty());
             assertEquals(inventory, after.inventory());
             assertEquals(1, after.brokenBlocks().size());
-            assertEquals(BlockId.COBBLE, after.items().getFirst().item().itemId());
+            assertEquals(BlockId.SAND, after.items().getFirst().item().itemId());
         }
         assertEquals(
-                BlockId.COBBLE,
+                BlockId.SAND,
                 TestWorlds.load(save).items().entities().getFirst().itemId());
     }
 
@@ -823,7 +824,7 @@ class WorldRuntimeTest {
         Path save = directory.resolve("target.vxl");
         World world = new World();
         BlockPos near = new BlockPos(3, 2, 0), far = new BlockPos(6, 2, 0);
-        world.setBlock(near, BlockId.STONE, 64);
+        world.setBlock(near, BlockId.SAND, 64);
         world.setBlock(far, BlockId.STONE, 64);
         TestWorlds.save(save, 42, 1, world);
         var active = new WorldRuntime.Controls(PlayerInput.NONE, 0, 0, false, false, 0);
@@ -1279,7 +1280,7 @@ class WorldRuntimeTest {
                 .isEmpty());
         var remove = new WorldRuntime.Edit(true, BlockId.AIR, 180, 0);
         var items = new ItemSystem();
-        assertTrue(WorldRuntime.remove(interaction, player, remove, items)
+        assertTrue(WorldRuntime.remove(interaction, player, remove, items, ToolContext.HAND)
                 .orElseThrow()
                 .changed());
         assertEquals(0, inventory.snapshot().count(0));
@@ -1290,7 +1291,8 @@ class WorldRuntimeTest {
             inventory.click(0, false, true);
             inventory.creativePick(0, BlockId.DIRT);
         }
-        assertTrue(WorldRuntime.remove(interaction, player, remove, items)
+        var pickaxe = new ToolContext(com.norbertfila.items.Tool.WOODEN_PICKAXE.id());
+        assertTrue(WorldRuntime.remove(interaction, player, remove, items, pickaxe)
                 .orElseThrow()
                 .changed());
         assertEquals(BlockId.AIR, world.getBlock(new BlockPos(1, 2, 0)).orElseThrow());

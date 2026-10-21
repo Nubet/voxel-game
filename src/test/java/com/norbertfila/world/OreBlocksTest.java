@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.norbertfila.items.BlockDropResolver;
 import com.norbertfila.items.ItemStack;
+import com.norbertfila.items.Tool;
 import com.norbertfila.items.ToolContext;
 import com.norbertfila.ui.screens.InventoryScreen;
 import java.util.List;
@@ -23,6 +24,8 @@ class OreBlocksTest {
         assertTrue(definition.breakable());
         assertEquals(1, definition.breakSeconds());
         assertTrue(InventoryScreen.catalogBlocks().contains((byte) id));
-        assertEquals(List.of(new ItemStack(id, 1)), new BlockDropResolver().getDrops(id, ToolContext.HAND));
+        assertEquals(
+                List.of(new ItemStack(id, 1)),
+                new BlockDropResolver().getDrops(id, new ToolContext(Tool.DIAMOND_PICKAXE.id())));
     }
 }

@@ -20,6 +20,7 @@ import com.norbertfila.items.ItemId;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.items.ItemSystem;
 import com.norbertfila.items.ItemThrower;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.light.BlockLightState;
 import com.norbertfila.light.BlockLighting;
 import com.norbertfila.light.LightSample;
@@ -649,8 +650,9 @@ public final class WorldRuntime implements AutoCloseable {
                                         ? new Edit(true, BlockId.AIR, state.yaw(), state.pitch())
                                         : breakPress;
                                 var miningTarget = target(targeting, player, mining.yaw(), mining.pitch());
+                                var tool = new ToolContext(inventory.selectedItem());
                                 boolean completed = breaking.tick(
-                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, dt);
+                                        player.mode(), miningTarget, state.breakHeld(), breakPress != null, tool, dt);
                                 if (player.mode() != PlayerController.Mode.SPECTATOR
                                         && (breakPress != null
                                                 || completed
@@ -659,7 +661,7 @@ public final class WorldRuntime implements AutoCloseable {
                                                         && miningTarget.isPresent())))
                                     playerVisuals.swing(tick[0], breakPress != null);
                                 if (completed) {
-                                    remove(interaction, player, mining, items)
+                                    remove(interaction, player, mining, items, tool)
                                             .filter(BlockChangeResult::changed)
                                             .ifPresent(result -> {
                                                 chunks.requestRemesh(result);
@@ -1039,7 +1041,7 @@ public final class WorldRuntime implements AutoCloseable {
     }
 
     static Optional<BlockChangeResult> remove(
-            BlockInteraction interaction, PlayerController player, Edit edit, ItemSystem items) {
+            BlockInteraction interaction, PlayerController player, Edit edit, ItemSystem items, ToolContext tool) {
         double yaw = Math.toRadians(edit.yaw()), pitch = Math.toRadians(edit.pitch());
         var eye = player.renderEyePosition(1);
         return interaction.remove(
@@ -1050,7 +1052,8 @@ public final class WorldRuntime implements AutoCloseable {
                 Math.cos(yaw) * Math.cos(pitch),
                 Math.sin(pitch),
                 Math.sin(yaw) * Math.cos(pitch),
-                items);
+                items,
+                tool);
     }
 
     static Optional<BlockChangeResult> placeInventory(

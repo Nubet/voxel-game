@@ -8,6 +8,8 @@ import com.norbertfila.i18n.Language;
 import com.norbertfila.i18n.Translations;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.items.ItemSystem;
+import com.norbertfila.items.Tool;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.meshing.BlockNeighborhood;
 import com.norbertfila.meshing.WaterMesher;
 import com.norbertfila.player.Inventory;
@@ -30,7 +32,7 @@ class BuildingBlocksTest {
             var items = new ItemSystem();
             var interaction = new BlockInteraction(world, 8);
             assertTrue(interaction
-                    .remove(Mode.SURVIVAL, 1.5, 2.5, 3.5, 1, 0, 0, items)
+                    .remove(Mode.SURVIVAL, 1.5, 2.5, 3.5, 1, 0, 0, items, new ToolContext(Tool.WOODEN_PICKAXE.id()))
                     .orElseThrow()
                     .changed());
             var inventory = new Inventory();
