@@ -93,6 +93,10 @@ public final class GenerateHudAtlas {
             var region = UiAtlas.item((byte) id);
             copy(icon, atlas, region.x(), region.y());
         }
+        for (var tool : com.norbertfila.items.Tool.values()) {
+            var region = UiAtlas.item(tool.id());
+            copy(read("/assets/textures/items/" + tool.itemName() + ".png", 16, 16), atlas, region.x(), region.y());
+        }
         drawHotbar(atlas);
         drawHearts(atlas);
         var selection = UiAtlas.SELECTION;

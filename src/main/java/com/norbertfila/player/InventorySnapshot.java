@@ -1,5 +1,6 @@
 package com.norbertfila.player;
 
+import com.norbertfila.items.ItemId;
 import com.norbertfila.world.BlockId;
 import java.util.Arrays;
 
@@ -12,9 +13,9 @@ public record InventorySnapshot(byte[] blocks, int[] counts, int selectedSlot) {
         blocks = blocks.clone();
         counts = counts.clone();
         for (int i = 0; i < 37; i++)
-            if (!BlockId.isValid(blocks[i])
+            if (!ItemId.isValid(blocks[i])
                     || counts[i] < 0
-                    || counts[i] > 64
+                    || counts[i] > ItemId.maxStack(blocks[i])
                     || (blocks[i] == BlockId.AIR) != (counts[i] == 0))
                 throw new IllegalArgumentException("Invalid inventory stack");
     }

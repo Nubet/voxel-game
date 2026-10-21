@@ -2,11 +2,31 @@ package com.norbertfila.player;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.items.Tool;
 import com.norbertfila.world.BlockId;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class InventoryTest {
+    @Test
+    void toolsNeverStackAndAreNotPlaceable() {
+        var inventory = new Inventory();
+        byte pickaxe = Tool.IRON_PICKAXE.id();
+        assertEquals(0, inventory.insert(Byte.toUnsignedInt(pickaxe), 2));
+        assertEquals(1, inventory.snapshot().count(0));
+        assertEquals(1, inventory.snapshot().count(1));
+        assertEquals(pickaxe, inventory.selectedItem());
+        assertEquals(BlockId.AIR, inventory.selectedBlock());
+        inventory.click(0, false, false);
+        inventory.click(1, false, false);
+        assertEquals(pickaxe, inventory.snapshot().block(1));
+        assertEquals(1, inventory.snapshot().count(1));
+        assertEquals(1, inventory.snapshot().count(Inventory.CARRIED));
+        inventory.creativePick(2, Tool.DIAMOND_SWORD.id());
+        assertEquals(1, inventory.snapshot().count(2));
+        assertEquals(inventory.snapshot(), new Inventory(inventory.snapshot()).snapshot());
+    }
+
     @Test
     void extractsExactCountsFromStorageHotbarAndCursorWithoutChangingOtherSlots() {
         var inventory = new Inventory();

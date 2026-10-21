@@ -2,9 +2,9 @@ package com.norbertfila.i18n;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.items.ItemId;
 import com.norbertfila.ui.BitmapFont;
 import com.norbertfila.ui.screens.InventoryScreen;
-import com.norbertfila.world.BlockRegistry;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -47,7 +47,7 @@ class TranslationsTest {
         for (Language language : Language.values()) {
             var translations = new Translations(language);
             for (byte block : InventoryScreen.catalogBlocks()) {
-                String key = "block." + BlockRegistry.DEFAULT.definition(block).name();
+                String key = ItemId.translationKey(block);
                 assertFalse(translations.text(key).isBlank(), key);
             }
         }

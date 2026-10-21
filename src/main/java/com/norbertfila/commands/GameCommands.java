@@ -13,14 +13,13 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.norbertfila.chat.ChatHistory;
 import com.norbertfila.chat.ChatLink;
 import com.norbertfila.generation.biome.BiomeType;
+import com.norbertfila.items.ItemId;
 import com.norbertfila.mob.MobType;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerState;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.weather.WeatherType;
-import com.norbertfila.world.BlockId;
-import com.norbertfila.world.BlockRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -216,17 +215,13 @@ public final class GameCommands {
 
     private static int give(CommandContext<Execution> context, int count) throws CommandSyntaxException {
         String name = getString(context, "item");
-        for (int id = 1; id <= 255; id++) {
-            if (!BlockId.isValid((byte) id)) continue;
-            if (!BlockRegistry.DEFAULT.definition((byte) id).name().equals(name)) continue;
-            int remaining = context.getSource().source().give((byte) id, count);
-            context.getSource()
-                    .output()
-                    .add("Added " + (count - remaining) + " x " + name
-                            + (remaining == 0 ? "" : "; no space for " + remaining));
-            return count - remaining;
-        }
-        throw error("Unknown item: " + name);
+        byte id = ItemId.byName(name).orElseThrow(() -> error("Unknown item: " + name));
+        int remaining = context.getSource().source().give(id, count);
+        context.getSource()
+                .output()
+                .add("Added " + (count - remaining) + " x " + name
+                        + (remaining == 0 ? "" : "; no space for " + remaining));
+        return count - remaining;
     }
 
     private static int summon(CommandContext<Execution> context, MobType type, boolean explicit)

@@ -16,6 +16,7 @@ import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.interaction.BlockTargeting;
 import com.norbertfila.interaction.VoxelRaycaster;
+import com.norbertfila.items.ItemId;
 import com.norbertfila.items.ItemRenderState;
 import com.norbertfila.items.ItemSystem;
 import com.norbertfila.items.ItemThrower;
@@ -1270,7 +1271,7 @@ public final class WorldRuntime implements AutoCloseable {
 
     public record PickCreative(int slot, byte block) implements InventoryAction {
         public PickCreative {
-            if (slot < 0 || slot >= 9 || block == BlockId.AIR || !BlockId.isValid(block))
+            if (slot < 0 || slot >= 9 || block == BlockId.AIR || !ItemId.isValid(block))
                 throw new IllegalArgumentException("Invalid creative selection");
         }
     }

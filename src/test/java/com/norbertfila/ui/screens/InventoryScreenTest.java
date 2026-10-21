@@ -2,6 +2,7 @@ package com.norbertfila.ui.screens;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.items.ItemId;
 import com.norbertfila.player.*;
 import com.norbertfila.ui.*;
 import com.norbertfila.world.BlockId;
@@ -84,7 +85,7 @@ class InventoryScreenTest {
                 BlockId.TALL_GRASS_TOP,
                 BlockId.LARGE_FERN_TOP);
         for (int id = 1; id < 256; id++)
-            assertEquals(BlockId.isValid((byte) id) && !hidden.contains((byte) id), catalog.contains((byte) id));
+            assertEquals(ItemId.isValid((byte) id) && !hidden.contains((byte) id), catalog.contains((byte) id));
         for (int i = 0; i < catalog.size(); i++) {
             if (i > 0 && i % 27 == 0) screen.keyPress(UiKey.PAGE_DOWN);
             var box = screen.bounds(i % 27);
