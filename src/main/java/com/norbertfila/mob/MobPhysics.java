@@ -34,7 +34,9 @@ final class MobPhysics {
         else mob.velocityY = Math.max(-MAX_FALL_SPEED, mob.velocityY - GRAVITY * dt);
         if (mob.jumpRequested && mob.onGround && !mob.inWater) mob.velocityY = JUMP_SPEED;
         mob.jumpRequested = false;
-        var moved = collision.move(world, body, mob.velocityX * dt, mob.velocityY * dt, mob.velocityZ * dt);
+        // Grounded mobs step up low blocks such as snow layers, like Minecraft's 0.6 block step height.
+        var moved = collision.move(
+                world, body, mob.velocityX * dt, mob.velocityY * dt, mob.velocityZ * dt, false, mob.onGround);
         if (!moved.available()) return false;
         var result = moved.body();
         double newX = (result.minX() + result.maxX()) * .5, newZ = (result.minZ() + result.maxZ()) * .5;
