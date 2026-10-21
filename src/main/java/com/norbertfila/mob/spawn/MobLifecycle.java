@@ -23,6 +23,7 @@ import com.norbertfila.projectile.ArrowSystem;
 import com.norbertfila.simulation.WorldTime;
 import com.norbertfila.weather.BiomeWeather;
 import com.norbertfila.weather.WeatherSample;
+import com.norbertfila.world.Aabb;
 import com.norbertfila.world.BlockMutation;
 import com.norbertfila.world.BlockPos;
 import com.norbertfila.world.ChunkPos;
@@ -133,6 +134,10 @@ public final class MobLifecycle {
 
     public int size() {
         return population.size();
+    }
+
+    public List<Mob> near(Aabb region) {
+        return population.near(region);
     }
 
     public List<MobRenderState> renderSnapshot() {

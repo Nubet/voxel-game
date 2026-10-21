@@ -15,6 +15,7 @@ import com.norbertfila.interaction.BlockBreakEvent;
 import com.norbertfila.interaction.BlockBreaking;
 import com.norbertfila.interaction.BlockInteraction;
 import com.norbertfila.interaction.BlockTargeting;
+import com.norbertfila.interaction.EntityTargeting;
 import com.norbertfila.interaction.VoxelRaycaster;
 import com.norbertfila.items.ItemId;
 import com.norbertfila.items.ItemRenderState;
@@ -27,6 +28,7 @@ import com.norbertfila.light.LightSample;
 import com.norbertfila.lod.FarTerrainStreamer;
 import com.norbertfila.lod.FarTerrainTile;
 import com.norbertfila.meshing.LayeredMesher;
+import com.norbertfila.mob.Mob;
 import com.norbertfila.mob.MobCensus;
 import com.norbertfila.mob.MobRenderState;
 import com.norbertfila.mob.MobType;
@@ -776,9 +778,13 @@ public final class WorldRuntime implements AutoCloseable {
                                     state.appearance(),
                                     tick[0]);
                             long contactNanos = System.nanoTime() - contactStarted;
-                            var target = activated && poseReady[0] && !interactionBlocked
+                            var blockTarget = activated && poseReady[0] && !interactionBlocked
                                     ? target(targeting, player, state)
                                     : Optional.<VoxelRaycaster.Hit>empty();
+                            var mobTarget = activated && poseReady[0] && !interactionBlocked
+                                    ? targetMob(mobLifecycle, player, state, blockTarget)
+                                    : Optional.<EntityTargeting.Hit<Mob>>empty();
+                            var target = mobTarget.isPresent() ? Optional.<VoxelRaycaster.Hit>empty() : blockTarget;
                             long oldestAck =
                                     issuedAt.isEmpty() ? 0 : System.nanoTime() - Collections.min(issuedAt.values());
                             var residents = chunks.residency();
@@ -850,6 +856,7 @@ public final class WorldRuntime implements AutoCloseable {
                                     metrics,
                                     inventorySnapshot,
                                     target,
+                                    mobTarget.isPresent(),
                                     breaking.progress(),
                                     breaks,
                                     itemSnapshot,
@@ -1020,6 +1027,18 @@ public final class WorldRuntime implements AutoCloseable {
                 Math.cos(yaw) * Math.cos(pitch),
                 Math.sin(pitch),
                 Math.sin(yaw) * Math.cos(pitch));
+    }
+
+    /** A mob counts only when it is nearer than the targeted block, so walls hide mobs behind them. */
+    private static Optional<EntityTargeting.Hit<Mob>> targetMob(
+            MobLifecycle mobs, PlayerController player, Controls controls, Optional<VoxelRaycaster.Hit> block) {
+        if (controls.blocked() || controls.paused() || player.modeChangePending()) return Optional.empty();
+        double reach = block.map(hit -> Math.min(hit.distance(), EntityTargeting.reach(player.mode())))
+                .orElse(EntityTargeting.reach(player.mode()));
+        if (reach == 0) return Optional.empty();
+        var eye = player.renderEyePosition(1);
+        var ray = EntityTargeting.Ray.look(eye.x(), eye.y(), eye.z(), controls.yaw(), controls.pitch());
+        return EntityTargeting.find(mobs.near(EntityTargeting.sweep(ray, reach)), ray, reach);
     }
 
     static Optional<BlockChangeResult> edit(
@@ -1329,6 +1348,7 @@ public final class WorldRuntime implements AutoCloseable {
             SimulationMetrics metrics,
             InventorySnapshot inventory,
             Optional<VoxelRaycaster.Hit> target,
+            boolean entityTargeted,
             Optional<BlockBreaking.Progress> breaking,
             List<BlockBreakEvent> brokenBlocks,
             List<ItemRenderState> items,
