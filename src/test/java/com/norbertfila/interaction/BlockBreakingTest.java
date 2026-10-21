@@ -2,6 +2,8 @@ package com.norbertfila.interaction;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.norbertfila.items.Tool;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.world.*;
@@ -146,6 +148,15 @@ class BlockBreakingTest {
         var hit = hit(position, BlockId.DIRT);
         assertThrows(IllegalArgumentException.class, () -> breaking.tick(Mode.SURVIVAL, hit, true, true, seconds));
         assertTrue(breaking.progress().isEmpty());
+    }
+
+    @Test
+    void creativeSwordsNeverBreakBlocksButOtherItemsDo() {
+        var hit = hit(position, BlockId.DIRT);
+        var sword = new ToolContext(Tool.DIAMOND_SWORD.id());
+        assertFalse(breaking.tick(Mode.CREATIVE, hit, true, true, sword, 0));
+        assertFalse(breaking.tick(Mode.CREATIVE, hit, true, false, sword, 1));
+        assertTrue(breaking.tick(Mode.CREATIVE, hit, true, true, new ToolContext(Tool.DIAMOND_AXE.id()), 0));
     }
 
     private Optional<VoxelRaycaster.Hit> hit(BlockPos position, byte block) {
