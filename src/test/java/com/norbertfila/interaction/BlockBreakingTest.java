@@ -17,22 +17,22 @@ class BlockBreakingTest {
 
     @Test
     void survivalRequiresAFullSecondOfContinuousHoldingWithoutEditingTheWorld() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         for (int tick = 0; tick < FixedSimulation.TICKS_PER_SECOND - 1; tick++)
             assertFalse(breaking.tick(Mode.SURVIVAL, hit, true, tick == 0, FixedSimulation.TICK_SECONDS));
         var progress = breaking.progress().orElseThrow();
         assertEquals(position, progress.block());
         assertEquals(59 / 60d, progress.fraction(), 1e-12);
-        assertEquals(BlockId.STONE, world.getBlock(position).orElseThrow());
+        assertEquals(BlockId.DIRT, world.getBlock(position).orElseThrow());
         assertTrue(breaking.tick(Mode.SURVIVAL, hit, true, false, FixedSimulation.TICK_SECONDS));
         assertTrue(breaking.progress().isEmpty());
-        assertEquals(BlockId.STONE, world.getBlock(position).orElseThrow());
+        assertEquals(BlockId.DIRT, world.getBlock(position).orElseThrow());
         assertEquals(59 / 60d, progress.fraction(), 1e-12);
     }
 
     @Test
     void releaseMissAndNewPressEachDiscardPartialProgress() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         for (int reset = 0; reset < 3; reset++) {
             breaking.tick(Mode.SURVIVAL, hit, true, true, .75);
             if (reset == 0) assertFalse(breaking.tick(Mode.SURVIVAL, hit, false, false, .25));
@@ -46,26 +46,26 @@ class BlockBreakingTest {
 
     @Test
     void changingPositionBlockTypeOrChunkIdentityRestartsMining() {
-        var first = hit(position, BlockId.STONE);
+        var first = hit(position, BlockId.DIRT);
         breaking.tick(Mode.SURVIVAL, first, true, true, .75);
-        var other = hit(new BlockPos(4, 1, 1), BlockId.STONE);
+        var other = hit(new BlockPos(4, 1, 1), BlockId.DIRT);
         assertFalse(breaking.tick(Mode.SURVIVAL, other, true, false, .25));
         assertEquals(.25, breaking.progress().orElseThrow().fraction(), 1e-12);
-        var dirt = hit(other.orElseThrow().block(), BlockId.DIRT);
-        assertFalse(breaking.tick(Mode.SURVIVAL, dirt, true, false, .25));
+        var sand = hit(other.orElseThrow().block(), BlockId.SAND);
+        assertFalse(breaking.tick(Mode.SURVIVAL, sand, true, false, .25));
         assertEquals(.25, breaking.progress().orElseThrow().fraction(), 1e-12);
         world.removeChunk(new ChunkPos(0, 0, 0));
-        var reloaded = hit(other.orElseThrow().block(), BlockId.DIRT);
+        var reloaded = hit(other.orElseThrow().block(), BlockId.SAND);
         assertFalse(breaking.tick(Mode.SURVIVAL, reloaded, true, false, .25));
         assertEquals(.25, breaking.progress().orElseThrow().fraction(), 1e-12);
     }
 
     @Test
     void editsToOtherBlocksDoNotResetProgressButReplacingTheTargetDoes() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         breaking.tick(Mode.SURVIVAL, hit, true, true, .5);
         BlockPos neighbor = new BlockPos(4, 1, 1);
-        hit(neighbor, BlockId.DIRT);
+        hit(neighbor, BlockId.SAND);
         breaking.blockChanged(neighbor);
         assertFalse(breaking.tick(Mode.SURVIVAL, hit, true, false, .25));
         assertEquals(.75, breaking.progress().orElseThrow().fraction(), 1e-12);
@@ -76,9 +76,9 @@ class BlockBreakingTest {
 
     @Test
     void staleAndUnavailableHitsCannotFinishMining() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         breaking.tick(Mode.SURVIVAL, hit, true, true, .75);
-        hit(position, BlockId.DIRT);
+        hit(position, BlockId.SAND);
         assertFalse(breaking.tick(Mode.SURVIVAL, hit, true, false, .25));
         assertTrue(breaking.progress().isEmpty());
         world.removeChunk(new ChunkPos(0, 0, 0));
@@ -87,7 +87,7 @@ class BlockBreakingTest {
 
     @Test
     void creativeClicksAreImmediateEvenIfReleasedBeforeTheSimulationTick() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         assertTrue(breaking.tick(Mode.CREATIVE, hit, false, true, 0));
         assertTrue(breaking.progress().isEmpty());
         assertTrue(breaking.tick(Mode.CREATIVE, hit, true, true, 0));
@@ -96,7 +96,7 @@ class BlockBreakingTest {
 
     @Test
     void heldCreativeMiningRepeatsAfterTwelveTicksInsteadOfDeletingEveryTick() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         assertTrue(breaking.tick(Mode.CREATIVE, hit, true, true, FixedSimulation.TICK_SECONDS));
         for (int tick = 1; tick < 12; tick++)
             assertFalse(breaking.tick(Mode.CREATIVE, hit, true, false, FixedSimulation.TICK_SECONDS));
@@ -105,7 +105,7 @@ class BlockBreakingTest {
 
     @Test
     void changingModeAndExplicitCancellationNeverCarrySurvivalProgress() {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         breaking.tick(Mode.SURVIVAL, hit, true, true, .75);
         assertFalse(breaking.tick(Mode.SPECTATOR, hit, true, true, 1));
         assertTrue(breaking.progress().isEmpty());
@@ -143,7 +143,7 @@ class BlockBreakingTest {
     @ParameterizedTest
     @ValueSource(doubles = {-1, Double.NaN, Double.POSITIVE_INFINITY})
     void rejectsInvalidSimulationTime(double seconds) {
-        var hit = hit(position, BlockId.STONE);
+        var hit = hit(position, BlockId.DIRT);
         assertThrows(IllegalArgumentException.class, () -> breaking.tick(Mode.SURVIVAL, hit, true, true, seconds));
         assertTrue(breaking.progress().isEmpty());
     }

@@ -9,6 +9,7 @@ public final class BlockDropResolver {
         Objects.requireNonNull(tool);
         if (blockId < 0 || blockId > 255 || !BlockId.isValid((byte) blockId))
             throw new IllegalArgumentException("Unknown block");
+        if (!Mining.canHarvest((byte) blockId, tool)) return List.of();
         return switch (blockId) {
             case BlockId.AIR, BlockId.WATER, BlockId.LAVA & 255, BlockId.BEDROCK -> List.of();
             case BlockId.STONE -> List.of(new ItemStack(BlockId.COBBLE, 1));

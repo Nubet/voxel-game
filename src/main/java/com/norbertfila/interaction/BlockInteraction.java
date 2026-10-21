@@ -60,12 +60,26 @@ public final class BlockInteraction {
             double directionY,
             double directionZ,
             ItemSystem items) {
+        return remove(mode, originX, originY, originZ, directionX, directionY, directionZ, items, ToolContext.HAND);
+    }
+
+    public Optional<BlockChangeResult> remove(
+            PlayerController.Mode mode,
+            double originX,
+            double originY,
+            double originZ,
+            double directionX,
+            double directionY,
+            double directionZ,
+            ItemSystem items,
+            ToolContext tool) {
+        Objects.requireNonNull(tool);
         return targeting
                 .find(mode, originX, originY, originZ, directionX, directionY, directionZ)
                 .filter(hit -> canBreak(mode, hit.blockId()))
                 .flatMap(hit -> {
                     var stacks = mode == PlayerController.Mode.SURVIVAL
-                            ? drops.getDrops(hit.blockId(), ToolContext.HAND)
+                            ? drops.getDrops(hit.blockId(), tool)
                             : List.<ItemStack>of();
                     if (items != null && !items.canSpawn(hit.block(), stacks)) return Optional.empty();
                     var result = setBlock(hit.block(), BlockId.AIR);

@@ -59,7 +59,9 @@ class ItemSystemTest {
     @ParameterizedTest
     @CsvSource({"2,2", "3,11", "1,2", "8,8", "21,21"})
     void resolvesBlockDrops(int block, int item) {
-        assertEquals(List.of(new ItemStack(item, 1)), new BlockDropResolver().getDrops(block, ToolContext.HAND));
+        assertEquals(
+                List.of(new ItemStack(item, 1)),
+                new BlockDropResolver().getDrops(block, new ToolContext(Tool.WOODEN_PICKAXE.id())));
     }
 
     @Test
@@ -233,12 +235,12 @@ class ItemSystemTest {
         assertThrows(IllegalStateException.class, () -> items.spawn(block, List.of(new ItemStack(BlockId.DIRT, 1))));
         assertEquals(full, items.snapshot());
         var world = world();
-        world.setBlock(block, BlockId.STONE, 8);
+        world.setBlock(block, BlockId.DIRT, 8);
         var interaction = new BlockInteraction(world, 8);
         assertTrue(interaction
                 .remove(PlayerController.Mode.SURVIVAL, 8.5, 2.5, 6, 0, 0, 1, items)
                 .isEmpty());
-        assertEquals(BlockId.STONE, world.getBlock(block).orElseThrow());
+        assertEquals(BlockId.DIRT, world.getBlock(block).orElseThrow());
         assertEquals(full, items.snapshot());
         assertThrows(UnsupportedOperationException.class, () -> full.entities().clear());
     }

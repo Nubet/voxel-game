@@ -1,5 +1,7 @@
 package com.norbertfila.interaction;
 
+import com.norbertfila.items.Mining;
+import com.norbertfila.items.ToolContext;
 import com.norbertfila.player.PlayerController.Mode;
 import com.norbertfila.world.*;
 import java.util.Objects;
@@ -13,14 +15,25 @@ public final class BlockBreaking {
     private int blockId;
     private Chunk chunk;
     private Mode mode;
-    private double elapsed, creativeCooldown;
+    private double fraction, creativeCooldown;
 
     public BlockBreaking(World world) {
         this.world = Objects.requireNonNull(world);
     }
 
     public boolean tick(Mode mode, Optional<VoxelRaycaster.Hit> target, boolean held, boolean pressed, double seconds) {
+        return tick(mode, target, held, pressed, ToolContext.HAND, seconds);
+    }
+
+    public boolean tick(
+            Mode mode,
+            Optional<VoxelRaycaster.Hit> target,
+            boolean held,
+            boolean pressed,
+            ToolContext tool,
+            double seconds) {
         Objects.requireNonNull(mode);
+        Objects.requireNonNull(tool);
         Objects.requireNonNull(target);
         if (!Double.isFinite(seconds) || seconds < 0)
             throw new IllegalArgumentException("Breaking delta must be finite and non-negative");
@@ -53,16 +66,17 @@ public final class BlockBreaking {
             blockId = hit.blockId();
             chunk = currentChunk;
         }
-        elapsed += seconds;
-        if (elapsed + TIME_EPSILON < definition.breakSeconds()) return false;
+        // Progress accumulates per tick so that switching tools mid-break keeps the work already done.
+        double duration = Mining.seconds((byte) blockId, tool);
+        fraction = duration == 0 ? 1 : fraction + seconds / duration;
+        if (fraction + TIME_EPSILON < 1) return false;
         resetProgress();
         return true;
     }
 
     public Optional<Progress> progress() {
         if (block == null) return Optional.empty();
-        double duration = BlockRegistry.DEFAULT.definition((byte) blockId).breakSeconds();
-        return Optional.of(new Progress(block, blockId, Math.min(1, elapsed / duration)));
+        return Optional.of(new Progress(block, blockId, Math.min(1, fraction)));
     }
 
     public void blockChanged(BlockPos position) {
@@ -77,7 +91,7 @@ public final class BlockBreaking {
     private void resetProgress() {
         block = null;
         chunk = null;
-        elapsed = 0;
+        fraction = 0;
     }
 
     public record Progress(BlockPos block, int blockId, double fraction) {
