@@ -19,6 +19,7 @@ import com.norbertfila.platform.Input;
 import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
+import com.norbertfila.player.PlayerTarget;
 import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.BlockEffectsRenderer;
@@ -44,6 +45,7 @@ import com.norbertfila.simulation.FixedSimulation;
 import com.norbertfila.streaming.ChunkManager;
 import com.norbertfila.ui.ChatOverlay;
 import com.norbertfila.ui.DebugOverlay;
+import com.norbertfila.ui.HealthBar;
 import com.norbertfila.ui.Hud;
 import com.norbertfila.ui.Screen;
 import com.norbertfila.ui.ScreenManager;
@@ -214,6 +216,7 @@ public final class GameLoop {
         UnderwaterVisibility visibility = new UnderwaterVisibility();
         UiCanvas canvas = new UiCanvas();
         Hud hud = new Hud();
+        HealthBar healthBar = new HealthBar();
         var crosshair = new CrosshairRenderer();
         var crosshairTransition = new CrosshairTransition();
         DebugOverlay debugOverlay = new DebugOverlay();
@@ -775,6 +778,10 @@ public final class GameLoop {
             if (screens.isOpen()) screens.render(canvas, viewport);
             else if (runtime.state() == WorldRuntime.State.LOADING) loading.render(canvas, viewport);
             else hud.render(canvas, hotbar, viewport);
+            boolean hudVisible = screens.current() instanceof ChatScreen
+                    || !screens.isOpen() && runtime.state() != WorldRuntime.State.LOADING;
+            if (hudVisible && state != null && state.mode() == PlayerController.Mode.SURVIVAL)
+                healthBar.render(canvas, viewport, state.health(), PlayerTarget.MAX_HEALTH, state.hurt() > 0);
             uiRenderer.render(canvas, viewport);
             if (gpuTimer != null) {
                 gpuTimer.stamp();
