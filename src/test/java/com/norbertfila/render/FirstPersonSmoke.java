@@ -30,11 +30,18 @@ public final class FirstPersonSmoke {
             glViewport(0, 0, WIDTH, HEIGHT);
             var hand = new FirstPersonRenderer(players);
             clear();
-            hand.render(WIDTH, HEIGHT, PlayerAppearance.DEFAULT, BlockId.AIR);
+            hand.render(WIDTH, HEIGHT, PlayerAppearance.DEFAULT, BlockId.AIR, 0);
             var arm = capture();
             check(pixels(arm, WIDTH / 2, WIDTH, 0, HEIGHT / 2) > 2000, "Empty hand shows no arm");
             check(pixels(arm, 0, WIDTH / 2, 0, HEIGHT) < 200, "Arm reaches the left half of the screen");
             write(arm, output.resolve("arm.png"));
+            for (float swing : new float[] {.25f, .5f, .75f}) {
+                clear();
+                hand.render(WIDTH, HEIGHT, PlayerAppearance.DEFAULT, BlockId.AIR, swing);
+                var swung = capture();
+                check(!swung.equals(arm), "Swing does not move the arm");
+                write(swung, output.resolve("arm-swing-" + (int) (swing * 100) + ".png"));
+            }
             System.out.println("PASS first-person arm");
         }
     }

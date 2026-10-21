@@ -20,6 +20,7 @@ import com.norbertfila.platform.Window;
 import com.norbertfila.player.PlayerController;
 import com.norbertfila.player.PlayerInput;
 import com.norbertfila.player.PlayerTarget;
+import com.norbertfila.player.visual.FirstPersonHand;
 import com.norbertfila.player.visual.PlayerAnimator;
 import com.norbertfila.player.visual.PlayerAppearance;
 import com.norbertfila.render.ArrowRenderer;
@@ -755,7 +756,8 @@ public final class GameLoop {
                         width[0],
                         height[0],
                         state.playerRenderState().appearance(),
-                        inventory.block(inventory.selectedSlot()));
+                        inventory.block(inventory.selectedSlot()),
+                        FirstPersonHand.swing(state.playerRenderState(), state.interpolationAlpha(interpolationTime)));
             }
             if (gpuTimer != null) gpuTimer.stamp();
             metrics.recordCulling(stats.visible(), stats.culled(), stats.drawCalls());
